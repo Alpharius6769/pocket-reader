@@ -1076,7 +1076,8 @@ export async function loadStory(url, options = {}) {
       window.populateReaderUI(window.currentStory, window.currentStory.author || 'Unknown');
     if (!preventNavigate && typeof window.recordStoryHistory === 'function') window.recordStoryHistory(window.currentStory);
     if (!preventNavigate && typeof window.showView === 'function') window.showView('reading-view');
-    if (!preventNavigate) await _ensureCacheDecisionModal();
+    const suppressCache = window._pocketSuppressCacheDecision;
+    if (!preventNavigate && !suppressCache) await _ensureCacheDecisionModal();
   } catch (error) {
     if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
     if (!preventNavigate) showCloudflareFallback();

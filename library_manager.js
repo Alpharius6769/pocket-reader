@@ -135,10 +135,10 @@ function normalizeCompanionSetting(profile) {
 function normalizePocketVoiceSetting(profile) {
   const settings = profile?.settings;
   if (!settings || typeof settings !== 'object') return;
-  const defaultVoice = window.POCKET_DEFAULT_VOICE || 'donald_malone';
+  const defaultVoice = window.POCKET_DEFAULT_VOICE || 'rayne';
   const voices = window.POCKET_VOICES || [];
-  // Migrate old default voice of 'donald_malone' to 'rayne' once if not explicitly overridden by user
-  if ((settings.pocketVoice === 'donald_malone' || !settings.pocketVoice) && typeof localStorage !== 'undefined' && !localStorage.getItem('pr_voice_migrated_to_rayne_v1')) {
+  // Migrate old default voice of 'rayne' to 'rayne' once if not explicitly overridden by user
+  if ((settings.pocketVoice === 'rayne' || !settings.pocketVoice) && typeof localStorage !== 'undefined' && !localStorage.getItem('pr_voice_migrated_to_rayne_v1')) {
     settings.pocketVoice = 'rayne';
     localStorage.setItem('pr_voice_migrated_to_rayne_v1', 'true');
   }
@@ -350,7 +350,7 @@ function _defaultProfile() {
     displayName: "Guest Reader",
     settings: {
       voiceEngine: "pocket",
-      pocketVoice: window.POCKET_DEFAULT_VOICE || "donald_malone",
+      pocketVoice: window.POCKET_DEFAULT_VOICE || "rayne",
       speed: DEFAULT_POCKET_PLAYBACK_SPEED,
       expressiveProsody: true,
       pausePunctuation: true,

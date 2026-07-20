@@ -109,7 +109,7 @@ function _setNeuralState(nextState) {
 
 // ── Voice lists and normalization layer ──────────────────────────────────────
 const POCKET_VOICES = window.POCKET_VOICES || [];
-const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'donald_malone';
+const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'rayne';
 const POCKET_SAFE_EMOTIONS = ['neutral', 'calm', 'happy', 'sad', 'worried', 'surprised', 'tired', 'frustrated'];
 const POCKET_GATED_EMOTIONS = ['anger', 'excited', 'enthused', 'shout'];
 const POCKET_ALL_EMOTIONS = [...POCKET_SAFE_EMOTIONS, ...POCKET_GATED_EMOTIONS, 'confused'];

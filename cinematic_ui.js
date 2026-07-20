@@ -269,7 +269,7 @@ function installSettingsSystem() {
   goals.dataset.settingsSection = 'reading';
   goals.innerHTML = `<h3>Goals & Streaks</h3><label class="field-row"><span>Weekly listening minutes</span><input id="goal-weekly-minutes" class="settings-control" type="number" min="0" max="10000"></label><label class="field-row"><span>Weekly chapters</span><input id="goal-weekly-chapters" class="settings-control" type="number" min="0" max="1000"></label><label class="switch-row"><span>Track optional streaks</span><input id="goal-streak-enabled" type="checkbox"></label><button class="pr-btn-primary" onclick="saveWeeklyGoals()">${icon('target')}<span>Save goals</span></button>`;
   grid.appendChild(goals);
-  [accountSettings, personalization, experience, goals].forEach((card, index) => decorateCard(card, cards.length + index));
+  [personalization, experience, goals].forEach((card, index) => decorateCard(card, cards.length + index));
   setTimeout(() => grid.querySelectorAll('.settings-card').forEach(decorateCard), 0);
 
   const settings = profile().settings || {};

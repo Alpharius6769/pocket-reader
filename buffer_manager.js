@@ -10,7 +10,7 @@ const HARD_CAP_WORKERS   = window.HARD_CAP_WORKERS;
 const MANUAL_CAP_WORKERS = window.MANUAL_CAP_WORKERS;
 const DEFAULT_MAX_WORKERS = window.DEFAULT_MAX_WORKERS;
 const POCKET_VOICES = window.POCKET_VOICES || [];
-const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'donald_malone';
+const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'rayne';
 const _resolveActiveEngine = window._resolveActiveEngine;
 
 const FAST_NARRATION_PARAM = 'tts_fast';
@@ -234,6 +234,11 @@ async function _resumeFastNarrationCache() {
       const savedView = sessionStorage.getItem('POCKET_PRE-RELOAD_VIEW');
       if (savedView) {
         sessionStorage.removeItem('POCKET_PRE-RELOAD_VIEW');
+        window._pocketViewRestored = true;
+        for (let i = 0; i < 20; i++) {
+          if (typeof window.showView === 'function') break;
+          await new Promise(r => setTimeout(r, 50));
+        }
         if (typeof window.showView === 'function') {
           window.showView(savedView);
         }
@@ -883,9 +888,13 @@ export const BufferManager = {
     this._prefetchQueueVoices();
     const gen = ++this._generation;
     this.isActive = true;
+    this.mode = 'Permanent';
+    this.startTime = Date.now();
     this.consecutiveErrors = 0;
     this.cachedCount = 0;
     this.activeWorkers = 0;
+    const _freshModal = document.getElementById('caching-progress-modal');
+    if (_freshModal) this.cachingModalEl = _freshModal;
     if (this.cachingModalEl) {
       this.cachingModalEl.style.display = 'flex';
       this.cachingModalEl.classList.add('active');
@@ -960,7 +969,7 @@ export const BufferManager = {
 
     try {
       const jobRefs = Array.isArray(job.storyRefs) && job.storyRefs.length ? job.storyRefs : job.storyTitles;
-      if (job.mode === 'Permanent' && Array.isArray(jobRefs) && jobRefs.length > 1) {
+      if (job.mode === 'Permanent' && Array.isArray(jobRefs)) {
         window.precacheQueue = [...jobRefs];
         await this.startPrecacheQueue();
         return;
