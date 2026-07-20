@@ -1,6 +1,6 @@
 # Alpharius' Pocket Reader - Master Agent Handoff
 
-Last reviewed: 2026-07-18
+Last reviewed: 2026-07-20
 
 This is the authoritative handoff for agents working on Pocket Reader. It
 describes the current architecture, production paths, major changes, removed
@@ -82,6 +82,12 @@ WASM runtime: 1.27.0 relaxed-SIMD minimal ORT-format build
 WASM model family: english_2026-04-ort-r1
 WebGPU model family: certified R3 FP16 bundle with device-local calibration
 ```
+
+The 2026-07-20 release resolved several critical UX, narration default, and background-caching issues:
+- **Default Voice:** Rayne (`rayne`) is now the default voice for all new user profiles. The global fallback is updated and the voice select elements in the HTML default to Rayne.
+- **Away Mode and Background Caching:** Added missing script elements to `form_template.html`. Implemented a `preventNavigate` parameter in `loadStory` to allow silent background caching without force-navigating to the reader view or popping up loading modals. Pre-reload view states (like library/HMOFA) are saved to `sessionStorage` and restored after the service worker reload required for fast-narration worker isolation, preventing jumps back to the Home page.
+- **Tonight's Reading Bar UI:** Fixed Virtue's sprite head being cut off by removing the restricted parent height design and styling the image to scale cleanly, and overlaid the welcome bubble text dynamically over the sprite.
+- **Directory Clean-up:** Deleted 32 gitignored/obsolete temporary build, upload, and backup folders (like `ort-relaxed-build`, `.venv-*`, `voice-zero-pocket-pack*`, etc.) to declutter.
 
 The v120 production release retains the v117 security hardening and the
 2026-07-18 performance, reliability, and mobile-usability audit fixes (shipped
