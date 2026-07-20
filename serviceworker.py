@@ -13,7 +13,7 @@ def service_worker(**_params):
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v127';
+var CACHE_NAME = 'pocket-reader-core-v128';
 
 function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
@@ -65,7 +65,7 @@ var CORE_ASSETS = [
     '/_/theme/pocket_backend_policy.js?v=backend-v20',
     '/_/theme/pocket_performance_policy.js?v=performance-v2',
     '/_/theme/diagnostics.js?v=diag-v4',
-    '/_/theme/api_core.js?v=search-v10',
+    '/_/theme/api_core.js?v=search-v11',
     '/_/theme/experience_coordinator.js?v=experience-v4',
     '/_/theme/virtue_controller.js?v=virtue-v4',
     '/_/theme/engine_utils.js',
@@ -79,7 +79,7 @@ var CORE_ASSETS = [
     '/_/theme/sync_core.js?v=sync-v5',
     '/_/theme/cinematic_ui.js?v=cinematic-v4',
     '/_/theme/reader_features.js?v=features-v3',
-    '/_/theme/buffer_manager.js?v=buffer-v36',
+    '/_/theme/buffer_manager.js?v=buffer-v38',
     '/_/theme/audio_core.js?v=audio-v45',
     '/_/theme/pocket_worker.js?v=pocket-worker-v40',
     '/_/theme/pocket_pcm_worklet.js?v=pcm-v1',
