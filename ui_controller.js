@@ -112,11 +112,6 @@ export function showView(viewId) {
   }
 }
 window.showView = showView;
-if (window._pendingViews && window._pendingViews.length > 0) {
-  const finalView = window._pendingViews.pop();
-  window._pendingViews = [];
-  setTimeout(() => window.showView(finalView), 50);
-}
 
 // ── Mobile bottom-bar "More" popover ─────────────────────────────────────────
 // The bottom bar shows Home/Library/Reader/Profile/More; the remaining views
@@ -2006,3 +2001,5 @@ window._setControlsLocked = function(locked) {
     el.title = locked ? 'Please pause playback to change this setting' : '';
   });
 };
+
+window.uiControllerLoaded = true;

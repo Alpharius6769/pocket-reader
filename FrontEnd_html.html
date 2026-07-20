@@ -6,9 +6,7 @@
     // &quot;is not a function&quot;. A corrupt stored-settings blob must never prevent
     // the stubs from being installed. Modules overwrite these on load.
     try {
-      window._pendingViews = [];
-      window.showView = function(v) { window._pendingViews.push(v); };
-      var _stubs = ['toggleNavMore','_setupPreview','_setupAvatarUpload','_setupCloudLogin','skipFirstTimeSetup','completeFirstTimeSetup','startPocketDeviceSetup','continuePocketDeviceSetup','dismissCachingModal'];
+      var _stubs = ['showView','toggleNavMore','_setupPreview','_setupAvatarUpload','_setupCloudLogin','skipFirstTimeSetup','completeFirstTimeSetup','startPocketDeviceSetup','continuePocketDeviceSetup','dismissCachingModal'];
       for (var _i = 0; _i < _stubs.length; _i++) {
         if (!window[_stubs[_i]]) window[_stubs[_i]] = function(){};
       }
@@ -1119,6 +1117,6 @@
     <script src=&quot;_/theme/settings_manager.js?v=settings-v39&quot; type=&quot;module&quot;></script>
     <script src=&quot;_/theme/cinematic_ui.js?v=cinematic-v4&quot; type=&quot;module&quot;></script>
     <script src=&quot;_/theme/reader_features.js?v=features-v3&quot; type=&quot;module&quot;></script>
-    <script src=&quot;_/theme/ui_controller.js?v=ui-v78&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/ui_controller.js?v=ui-v79&quot; type=&quot;module&quot;></script>
   </div>
 " prop:visible="true"></anvil-form>
