@@ -6,7 +6,9 @@
     // &quot;is not a function&quot;. A corrupt stored-settings blob must never prevent
     // the stubs from being installed. Modules overwrite these on load.
     try {
-      var _stubs = ['showView','toggleNavMore','_setupPreview','_setupAvatarUpload','_setupCloudLogin','skipFirstTimeSetup','completeFirstTimeSetup','startPocketDeviceSetup','continuePocketDeviceSetup','dismissCachingModal'];
+      window._pendingViews = [];
+      window.showView = function(v) { window._pendingViews.push(v); };
+      var _stubs = ['toggleNavMore','_setupPreview','_setupAvatarUpload','_setupCloudLogin','skipFirstTimeSetup','completeFirstTimeSetup','startPocketDeviceSetup','continuePocketDeviceSetup','dismissCachingModal'];
       for (var _i = 0; _i < _stubs.length; _i++) {
         if (!window[_stubs[_i]]) window[_stubs[_i]] = function(){};
       }
