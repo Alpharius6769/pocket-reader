@@ -3436,8 +3436,9 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent-blue
 .home-command-header { position: relative; min-height: 150px; overflow: hidden; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: var(--panel-bg); }
 .home-command-header > div:first-child { max-width: min(620px, calc(100% - 230px)); }
 .home-virtue-stage { position: absolute; inset: 0 0 0 auto; display: flex; align-items: end; justify-content: center; width: 220px; overflow: hidden; pointer-events: none; }
-.home-virtue-stage img { width: 150px; max-height: 180px; object-fit: contain; object-position: bottom; filter: drop-shadow(0 14px 14px rgba(0, 0, 0, 0.45)); }
-.home-virtue-stage p { position: absolute; right: 12px; bottom: 10px; margin: 0; padding: 5px 8px; border: 1px solid var(--border-color); background: rgba(17, 18, 20, 0.88); color: var(--text-main); font-size: 0.76rem; }
+.home-virtue-wrapper { position: relative; display: inline-flex; height: 100%; align-items: flex-end; justify-content: center; }
+.home-virtue-stage img { height: 100%; max-height: 100%; width: auto; object-fit: contain; object-position: bottom; filter: drop-shadow(0 14px 14px rgba(0, 0, 0, 0.45)); }
+.home-virtue-bubble-text { position: absolute; top: 4%; left: 17%; width: 70%; height: 18%; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 0.75rem; font-weight: bold; color: #111; line-height: 1.2; padding: 0 4px; box-sizing: border-box; }
 .workflow-panel,
 .goal-panel { border: 1px solid var(--border-color); border-radius: 6px; box-shadow: var(--shadow-soft); }
 .workflow-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -3543,8 +3544,8 @@ html[data-motion='reduced'] *::after { animation-duration: 1ms !important; anima
   .profile-insights { grid-template-columns: 1fr; }
   .home-command-header > div:first-child { max-width: calc(100% - 110px); }
   .home-virtue-stage { width: 115px; }
-  .home-virtue-stage img { width: 92px; max-height: 125px; }
-  .home-virtue-stage p { display: none; }
+  .home-virtue-stage img { width: auto; height: 100%; max-height: 100%; }
+  .home-virtue-bubble-text { display: none; }
   .goal-panel { grid-column: auto; }
   .account-facts { grid-template-columns: 1fr; }
   .settings-section-nav { top: 0; margin-inline: -12px; border-inline: 0; }

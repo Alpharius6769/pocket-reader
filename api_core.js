@@ -720,14 +720,15 @@ async function _fichubDownloadEpub(epubUrl, dummyPreferredProxy, sig) {
 // currentStory / the overlay's Cancel handler.
 let _activeLoadAbort = null;
 
-export async function loadStory(url) {
+export async function loadStory(url, options = {}) {
+  const preventNavigate = options.preventNavigate || false;
   // Start each load clean: a stale cancel flag from a prior fetch must not make
   // this load's real error look like a user-initiated cancel.
   window._storyFetchCancelled = false;
   // Re-entrancy guard: abort any still-in-flight previous load (quietly).
   if (_activeLoadAbort) { try { _activeLoadAbort._superseded = true; _activeLoadAbort.abort(); } catch (e) {} }
   _activeLoadAbort = null;
-  if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_story_loading');
+  if (!preventNavigate && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_story_loading');
 
   const showCloudflareFallback = (msg) => {
     if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
@@ -807,13 +808,13 @@ export async function loadStory(url) {
             }
           }
 
-          if (typeof window.populateReaderUI === 'function')
+          if (!preventNavigate && typeof window.populateReaderUI === 'function')
             window.populateReaderUI(window.currentStory, window.currentStory.author || 'Unknown');
-          if (typeof window.recordStoryHistory === 'function') window.recordStoryHistory(window.currentStory);
-          if (typeof window.showView === 'function') window.showView('reading-view');
-          if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-          if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy');
-          await _ensureCacheDecisionModal();
+          if (!preventNavigate && typeof window.recordStoryHistory === 'function') window.recordStoryHistory(window.currentStory);
+          if (!preventNavigate && typeof window.showView === 'function') window.showView('reading-view');
+          if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+          if (!preventNavigate && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy');
+          if (!preventNavigate) await _ensureCacheDecisionModal();
           return;
         }
       } catch(e) {
@@ -827,7 +828,7 @@ export async function loadStory(url) {
   }
 
   // 2. Ask for preferred voice for new stories
-  if (!existingLibEntry) {
+  if (!existingLibEntry && !preventNavigate) {
     if (typeof window.showSettingsModal === 'function' && typeof window.renderPocketVoiceOptions === 'function') {
       try {
         await new Promise((resolve, reject) => {
@@ -921,7 +922,7 @@ export async function loadStory(url) {
       const ao3Timeout = setTimeout(() => ao3Controller.abort(), 120000);
       const _cancelFetch = () => { window._storyFetchCancelled = true; try { ao3Controller.abort(); } catch (e) {} };
 
-      if (typeof window.showLoadingOverlay === 'function')
+      if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
         window.showLoadingOverlay('Loading Story...', 'Fetching from FicHub archive...', _cancelFetch);
 
       let fichubSuccess = false;
@@ -930,7 +931,7 @@ export async function loadStory(url) {
         const resolved = await _fichubResolve(
           _fichubApiUrl(fetchUrl),
           ao3Controller.signal,
-          (pass) => { if (typeof window.showLoadingOverlay === 'function')
+          (pass) => { if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
             window.showLoadingOverlay(
               'Preparing this story...',
               'FicHub is generating this EPUB for the first time — this can take up to a minute. Hang tight...',
@@ -943,14 +944,14 @@ export async function loadStory(url) {
         if (!epubPath) throw new Error('FICHUB_NO_URL');
 
         // Step 2 — download the EPUB binary
-        if (typeof window.showLoadingOverlay === 'function')
+        if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
           window.showLoadingOverlay('Downloading...', 'Getting EPUB from FicHub archive', _cancelFetch);
         const epubUrl = 'https://fichub.net' + epubPath;
         const blob = await _fichubDownloadEpub(epubUrl, resolved.proxy, ao3Controller.signal);
         if (!blob) throw new Error('FICHUB_DL_FAILED');
 
         clearTimeout(ao3Timeout);
-        if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+        if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
 
         // Step 3 — hand off to the existing upload parser
         const title = fhData.meta?.title;
@@ -974,7 +975,7 @@ export async function loadStory(url) {
       if (fichubSuccess) return;
 
       // ── Fallback: try backend scrape (Zyte → CF Worker → direct) ──
-      if (typeof window.showLoadingOverlay === 'function')
+      if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
         window.showLoadingOverlay('Retrying...', 'FicHub unavailable — trying direct scrape via Zyte proxy...', _cancelFetch);
 
       const cookies = window._cookiesForUrl(fetchUrl);
@@ -1066,19 +1067,19 @@ export async function loadStory(url) {
       }
     }
 
-    if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+    if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
     window.currentStory = data;
     window.currentChapterIndex = 0;
     window.currentParagraphIndex = 0;
     if (typeof window.addToLibrary === 'function') window.addToLibrary(window.currentStory);
-    if (typeof window.populateReaderUI === 'function')
+    if (!preventNavigate && typeof window.populateReaderUI === 'function')
       window.populateReaderUI(window.currentStory, window.currentStory.author || 'Unknown');
-    if (typeof window.recordStoryHistory === 'function') window.recordStoryHistory(window.currentStory);
-    if (typeof window.showView === 'function') window.showView('reading-view');
-    await _ensureCacheDecisionModal();
+    if (!preventNavigate && typeof window.recordStoryHistory === 'function') window.recordStoryHistory(window.currentStory);
+    if (!preventNavigate && typeof window.showView === 'function') window.showView('reading-view');
+    if (!preventNavigate) await _ensureCacheDecisionModal();
   } catch (error) {
-    if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-    showCloudflareFallback();
+    if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+    if (!preventNavigate) showCloudflareFallback();
   } finally {
     _activeLoadAbort = null;
   }

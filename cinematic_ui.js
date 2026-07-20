@@ -390,7 +390,12 @@ function installHomeStage() {
   const stage = document.createElement('aside');
   stage.id = 'home-virtue-stage';
   stage.className = 'home-virtue-stage';
-  stage.innerHTML = '<img src="/_/theme/virtue_smile.webp" alt="Virtue"><p>Ready when you are.</p>';
+  stage.innerHTML = `
+    <div class="home-virtue-wrapper">
+      <img src="/_/theme/virtue_happy_holding_bubble.webp" alt="Virtue">
+      <span class="home-virtue-bubble-text">Welcome!</span>
+    </div>
+  `;
   intro.appendChild(stage);
 }
 

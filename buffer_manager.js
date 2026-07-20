@@ -159,6 +159,8 @@ function _requestFastNarrationReload(mode) {
       }));
     }
   }
+  const activeView = document.querySelector('.view.active')?.id || 'home-view';
+  sessionStorage.setItem('POCKET_PRE-RELOAD_VIEW', activeView);
   const target = new URL(window.location.href);
   target.searchParams.set(FAST_NARRATION_PARAM, '1');
   target.searchParams.set('tts_iso', String(Date.now()));
@@ -220,14 +222,22 @@ async function _resumeFastNarrationCache() {
       // the isolated session). Suppress the cache-decision modal during this
       // restore so loadStory cannot re-prompt, then start caching exactly once
       // below. (Issue: a second cache popup reappeared after caching finished.)
+      const isPermanent = resume.mode === 'Permanent';
       window._pocketSuppressCacheDecision = true;
       try {
-        await window.loadStory(resume.title);
+        await window.loadStory(resume.title, { preventNavigate: isPermanent });
       } finally {
         window._pocketSuppressCacheDecision = false;
       }
       window.closeCacheModal?.();
       window.hideLoadingOverlay?.();
+      const savedView = sessionStorage.getItem('POCKET_PRE-RELOAD_VIEW');
+      if (savedView) {
+        sessionStorage.removeItem('POCKET_PRE-RELOAD_VIEW');
+        if (typeof window.showView === 'function') {
+          window.showView(savedView);
+        }
+      }
       if (!_isolationReady()) {
         const reason = 'Fast narration was requested, but cross-origin isolation was not established. SharedArrayBuffer is unavailable, so Pocket TTS is limited to one WASM thread.';
         console.warn(`[PocketTTS] ${reason}`);
@@ -958,7 +968,7 @@ export const BufferManager = {
       const jobRef = job.storyRef || job.storyTitle;
       const currentRef = window.currentStory?.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory?.title;
       if (currentRef !== jobRef) {
-        await window.loadStory(jobRef);
+        await window.loadStory(jobRef, { preventNavigate: job.mode === 'Permanent' });
         window.closeCacheModal?.();
       }
       const loadedRef = window.currentStory?.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory?.title;
@@ -1381,7 +1391,7 @@ async function _ensureCachingStory(storyRef) {
     if (typeof window.loadStory !== 'function') return false;
     window._pocketSuppressCacheDecision = true;
     try {
-      await window.loadStory(requestedRef);
+      await window.loadStory(requestedRef, { preventNavigate: true });
     } finally {
       window._pocketSuppressCacheDecision = false;
     }
