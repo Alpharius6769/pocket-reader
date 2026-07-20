@@ -1,0 +1,14 @@
+{
+  "host": "127.0.0.1",
+  "port": 8787,
+  "models": [
+    {
+      "id": "pocket-tts-english",
+      "family": "pocket_tts",
+      "path": "../vendor/audiocpp-models/pocket-tts",
+      "load_options": {
+        "language": "english"
+      }
+    }
+  ]
+}

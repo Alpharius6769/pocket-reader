@@ -1,0 +1,1127 @@
+<anvil-form container="HtmlTemplate" prop:html="<script>
+  (function(){
+    // Install no-op stubs FIRST, before any parsing that could throw. Inline
+    // on*-handlers reference these before the deferred theme modules define the
+    // real implementations; an early tap must be a no-op, not an uncaught
+    // &quot;is not a function&quot;. A corrupt stored-settings blob must never prevent
+    // the stubs from being installed. Modules overwrite these on load.
+    try {
+      var _stubs = ['toggleNavMore','_setupPreview','_setupAvatarUpload','_setupCloudLogin','skipFirstTimeSetup','completeFirstTimeSetup','startPocketDeviceSetup','continuePocketDeviceSetup','dismissCachingModal'];
+      for (var _i = 0; _i < _stubs.length; _i++) {
+        if (!window[_stubs[_i]]) window[_stubs[_i]] = function(){};
+      }
+    } catch (e) {}
+    try {
+      var _d = localStorage.getItem('pocketReaderData');
+      var _t = _d ? (JSON.parse(_d).settings || {}).theme : null;
+      if (!_t || _t === 'dark') _t = 'slate';
+      if (_t !== 'dark') document.body.classList.add('theme-' + _t);
+      if (localStorage.getItem('pr_setup_complete') === 'true'
+          &amp;&amp; localStorage.getItem('pr_device_profile_handoff_v1') !== 'pending') {
+        document.documentElement.classList.add('pr-setup-complete');
+      }
+      var _deviceSetup = JSON.parse(localStorage.getItem('pr_device_setup_v2') || 'null');
+      if (_deviceSetup &amp;&amp; _deviceSetup.version === 2 &amp;&amp; _deviceSetup.completedAt) {
+        document.documentElement.classList.add('pr-device-setup-complete');
+      }
+    } catch (e) {}
+  })();
+</script>
+<style>
+  html.pr-setup-complete #first-time-setup-modal { display: none !important; }
+  html.pr-device-setup-complete #device-setup-modal { display: none !important; }
+  html:not(.pr-device-setup-complete) #first-time-setup-modal { display: none !important; }
+</style>
+<div class=&quot;app-wrapper&quot;>
+
+  <div class=&quot;pr-layout-001 device-setup-modal&quot; id=&quot;device-setup-modal&quot; role=&quot;dialog&quot; aria-modal=&quot;true&quot; aria-labelledby=&quot;device-setup-title&quot;>
+    <div class=&quot;pr-card pr-layout-002 device-setup-card&quot;>
+      <p class=&quot;device-setup-kicker&quot;>First launch on this device</p>
+      <h2 class=&quot;pr-layout-003&quot; id=&quot;device-setup-title&quot;>Preparing Pocket Reader</h2>
+      <p class=&quot;pr-layout-004&quot;>Pocket Reader will read the privacy-safe hardware details your browser makes available, then run a short local compute test. It will compare WebGPU FP16 with WASM x4, x2, and x1 where each option is available.</p>
+      <div class=&quot;device-setup-facts&quot;>
+        <div><strong>Local only</strong><span>The result stays on this device and does not follow your account.</span></div>
+        <div><strong>Short &amp;amp; bounded</strong><span>The test uses a tiny CPU/GPU workload. It does not download or initialize the narration models.</span></div>
+        <div><strong>Changeable</strong><span>You can re-run diagnostics or override the recommendation later in Settings.</span></div>
+      </div>
+      <div class=&quot;progress-container device-setup-progress&quot; aria-hidden=&quot;true&quot;>
+        <div id=&quot;device-setup-progress-fill&quot; class=&quot;progress-bar-fill&quot;></div>
+      </div>
+      <p id=&quot;device-setup-status&quot; class=&quot;device-setup-status&quot; role=&quot;status&quot; aria-live=&quot;polite&quot;>Loading device diagnostics...</p>
+      <p id=&quot;device-setup-result&quot; class=&quot;device-setup-result&quot;></p>
+      <div class=&quot;modal-buttons&quot;>
+        <button id=&quot;device-setup-start-btn&quot; class=&quot;pr-btn-primary&quot; type=&quot;button&quot; aria-busy=&quot;true&quot; disabled onclick=&quot;window.startPocketDeviceSetup()&quot;>Test &amp;amp; optimize this device</button>
+        <button id=&quot;device-setup-continue-btn&quot; class=&quot;pr-btn-primary&quot; type=&quot;button&quot; hidden onclick=&quot;window.continuePocketDeviceSetup()&quot;>Continue to profile</button>
+      </div>
+    </div>
+  </div>
+
+  <div class=&quot;pr-layout-001&quot; id=&quot;first-time-setup-modal&quot; role=&quot;dialog&quot; aria-modal=&quot;true&quot; aria-labelledby=&quot;first-time-setup-title&quot; aria-hidden=&quot;true&quot;>
+    <div class=&quot;pr-card pr-layout-002&quot;>
+      <h2 class=&quot;pr-layout-003&quot; id=&quot;first-time-setup-title&quot; tabindex=&quot;-1&quot;>Welcome to Pocket Reader!</h2>
+      <p class=&quot;pr-layout-004&quot;>Let's set up your profile. Everything here is optional - you can change any of it later in Settings.</p>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-avatar-upload&quot;>Profile picture</label>
+        <div class=&quot;pr-layout-006&quot;>
+          <img class=&quot;pr-layout-007&quot; id=&quot;setup-avatar-preview&quot; src=&quot;_/theme/profile%20512.png&quot; alt=&quot;&quot;>
+          <button class=&quot;pr-btn-sub&quot; onclick=&quot;document.getElementById('setup-avatar-upload').click()&quot;>Upload picture...</button>
+          <input class=&quot;pr-layout-008&quot; id=&quot;setup-avatar-upload&quot; type=&quot;file&quot; accept=&quot;image/*&quot; onchange=&quot;window._setupAvatarUpload(event)&quot;>
+        </div>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-username&quot;>Username</label>
+        <input class=&quot;pr-layout-009&quot; type=&quot;text&quot; id=&quot;setup-username&quot; name=&quot;setup-username&quot; placeholder=&quot;Guest&quot;>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-usertype&quot;>I am a...</label>
+        <select class=&quot;pr-layout-009&quot; id=&quot;setup-usertype&quot; name=&quot;setup-usertype&quot;>
+          <option value=&quot;&quot;>Prefer not to say</option>
+          <option value=&quot;Reader/Fan&quot;>Reader / Fan</option>
+          <option value=&quot;Writer&quot;>Writer</option>
+          <option value=&quot;Artist&quot;>Artist</option>
+          <option value=&quot;Other&quot;>Other</option>
+        </select>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-companion&quot;>Companion</label>
+        <select class=&quot;pr-layout-009&quot; id=&quot;setup-companion&quot; name=&quot;setup-companion&quot;>
+          <option value=&quot;virtue&quot;>Virtue - Maned Wolf</option>
+          <option class=&quot;pr-layout-010&quot; value=&quot;jade&quot; disabled>Jade - Spotted Hyena (Coming Later)</option>
+          <option value=&quot;none&quot;>None</option>
+        </select>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-theme&quot;>App theme</label>
+        <select class=&quot;pr-layout-009&quot; id=&quot;setup-theme&quot; name=&quot;setup-theme&quot;>
+          <option value=&quot;slate&quot; selected>Anthrostate</option>
+          <option value=&quot;dark&quot;>Midnight</option>
+          <option value=&quot;light&quot;>Paper</option>
+          <option value=&quot;high-contrast&quot;>High Contrast</option>
+          <option value=&quot;colorblind&quot;>Colorblind Safe</option>
+        </select>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-reader-font&quot;>Reader font &amp;amp; size</label>
+        <select class=&quot;pr-layout-009&quot; id=&quot;setup-reader-font&quot; name=&quot;setup-reader-font&quot; onchange=&quot;window._setupPreview()&quot;>
+          <option value=&quot;'Literata Local', Georgia, serif&quot; selected>Literata</option>
+          <option value=&quot;'IBM Plex Sans Local', Arial, sans-serif&quot;>IBM Plex Sans</option>
+          <option value=&quot;'Courier New', Courier, monospace&quot;>Courier New</option>
+          <option value=&quot;'Times New Roman', Times, serif&quot;>Times New Roman</option>
+          <option value=&quot;Georgia, serif&quot;>Georgia</option>
+          <option value=&quot;Arial, Helvetica, sans-serif&quot;>Arial</option>
+        </select>
+        <label class=&quot;pr-layout-011&quot; for=&quot;setup-reader-size&quot;>Reading text size <span class=&quot;pr-layout-012&quot; id=&quot;setup-reader-size-label&quot;>13pt</span></label>
+        <input class=&quot;pr-layout-013&quot; id=&quot;setup-reader-size&quot; type=&quot;range&quot; min=&quot;10&quot; max=&quot;20&quot; value=&quot;13&quot; oninput=&quot;window._setupPreview()&quot;>
+        <label class=&quot;pr-layout-011&quot; for=&quot;setup-app-size&quot;>App text size <span class=&quot;pr-layout-012&quot; id=&quot;setup-app-size-label&quot;>13pt</span></label>
+        <input class=&quot;pr-layout-013&quot; id=&quot;setup-app-size&quot; type=&quot;range&quot; min=&quot;10&quot; max=&quot;18&quot; value=&quot;13&quot; oninput=&quot;window._setupPreview()&quot;>
+        <div class=&quot;pr-layout-014&quot; id=&quot;setup-preview&quot;>The quick brown fox leapt over the sleeping hound, and the story began...</div>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-narrator-pref&quot;>Preferred Narrator</label>
+        <select class=&quot;pr-layout-009&quot; id=&quot;setup-narrator-pref&quot; name=&quot;setup-narrator-pref&quot;>
+          <option value=&quot;&quot;>No Preference</option>
+          <option value=&quot;Male&quot;>Male</option>
+          <option value=&quot;Female&quot;>Female</option>
+        </select>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-currently&quot;>Currently reading</label>
+        <input class=&quot;pr-layout-009&quot; type=&quot;text&quot; id=&quot;setup-currently&quot; name=&quot;setup-currently&quot; placeholder=&quot;What's on your nightstand?&quot;>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-character&quot;>Favorite story relationship</label>
+        <input class=&quot;pr-layout-009&quot; type=&quot;text&quot; id=&quot;setup-character&quot; name=&quot;setup-character&quot; placeholder=&quot;Who do you love reading about?&quot;>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-genre&quot;>Favorite genre (optional)</label>
+        <input class=&quot;pr-layout-009&quot; type=&quot;text&quot; id=&quot;setup-genre&quot; name=&quot;setup-genre&quot; placeholder=&quot;e.g. Sci-Fi, Romance, Adventure&quot;>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-005&quot;>
+        <label for=&quot;setup-fav-1&quot;>Favorite stories - up to 5 (optional)</label>
+        <input class=&quot;pr-layout-015&quot; type=&quot;text&quot; id=&quot;setup-fav-1&quot; placeholder=&quot;Favorite story #1&quot;>
+        <input class=&quot;pr-layout-016&quot; type=&quot;text&quot; id=&quot;setup-fav-2&quot; aria-label=&quot;Favorite story 2&quot; placeholder=&quot;Favorite story #2&quot;>
+        <input class=&quot;pr-layout-016&quot; type=&quot;text&quot; id=&quot;setup-fav-3&quot; aria-label=&quot;Favorite story 3&quot; placeholder=&quot;Favorite story #3&quot;>
+        <input class=&quot;pr-layout-016&quot; type=&quot;text&quot; id=&quot;setup-fav-4&quot; aria-label=&quot;Favorite story 4&quot; placeholder=&quot;Favorite story #4&quot;>
+        <input class=&quot;pr-layout-016&quot; type=&quot;text&quot; id=&quot;setup-fav-5&quot; aria-label=&quot;Favorite story 5&quot; placeholder=&quot;Favorite story #5&quot;>
+      </div>
+
+      <div class=&quot;settings-item pr-layout-017&quot;>
+        <label class=&quot;pr-layout-018&quot;>Cloud Account <span class=&quot;pr-layout-019&quot;>(optional)</span></label>
+        <p class=&quot;pr-layout-020&quot;>Back up your library, settings, and progress. Access them on any device.</p>
+        <div class=&quot;pr-layout-021&quot; id=&quot;setup-cloud-status&quot;></div>
+        <button class=&quot;pr-btn-outline pr-layout-022&quot; id=&quot;setup-cloud-btn&quot; onclick=&quot;window._setupCloudLogin()&quot;>Sign In / Create Account</button>
+        <p class=&quot;pr-layout-023&quot;>Supports email &amp;amp; password or Google. You can always do this later from Settings.</p>
+      </div>
+
+      <div class=&quot;pr-layout-024&quot;>
+        <button class=&quot;pr-btn-outline pr-layout-025&quot; id=&quot;setup-skip-btn&quot; type=&quot;button&quot; onclick=&quot;window.skipFirstTimeSetup()&quot;>Skip for now</button>
+        <button class=&quot;pr-btn-primary pr-layout-026&quot; id=&quot;setup-complete-btn&quot; type=&quot;button&quot; onclick=&quot;window.completeFirstTimeSetup()&quot;>Save &amp;amp; Start Reading</button>
+      </div>
+    </div>
+  </div>
+
+  <div class=&quot;pr-layout-027&quot; id=&quot;profile-edit-modal&quot;>
+    <div class=&quot;pr-card pr-layout-002&quot;>
+      <h2 class=&quot;pr-layout-003&quot;>Edit Profile</h2>
+      <p class=&quot;pr-layout-004&quot;>Update your &quot;About You&quot; information.</p>
+
+      <div class=&quot;profile-edit-grid pr-layout-028&quot;>
+        <div>
+          <label class=&quot;settings-label&quot; for=&quot;profile-edit-name&quot;>Display name</label>
+          <input id=&quot;profile-edit-name&quot; class=&quot;settings-control&quot; placeholder=&quot;Your name&quot;>
+        </div>
+        <div>
+          <label class=&quot;settings-label&quot; for=&quot;profile-edit-category&quot;>I am a...</label>
+          <select id=&quot;profile-edit-category&quot; class=&quot;settings-control&quot;>
+            <option value=&quot;&quot;>Prefer not to say</option>
+            <option value=&quot;Reader/Fan&quot;>Reader / Fan</option>
+            <option value=&quot;Writer&quot;>Writer</option>
+            <option value=&quot;Artist&quot;>Artist</option>
+            <option value=&quot;Other&quot;>Other</option>
+          </select>
+        </div>
+        <div>
+          <label class=&quot;settings-label&quot; for=&quot;profile-edit-genre&quot;>Favorite genre</label>
+          <input id=&quot;profile-edit-genre&quot; class=&quot;settings-control&quot; placeholder=&quot;e.g. Sci-Fi, Romance, Adventure&quot;>
+        </div>
+        <div>
+          <label class=&quot;settings-label&quot; for=&quot;profile-edit-fandom&quot;>Favorite fandom / universe</label>
+          <input id=&quot;profile-edit-fandom&quot; class=&quot;settings-control&quot; placeholder=&quot;e.g. HMOFA, Original Work&quot;>
+        </div>
+        <div>
+          <label class=&quot;settings-label&quot; for=&quot;profile-edit-character&quot;>Favorite character or pairing</label>
+          <input id=&quot;profile-edit-character&quot; class=&quot;settings-control&quot; placeholder=&quot;Who do you love reading about?&quot;>
+        </div>
+        <div>
+          <label class=&quot;settings-label&quot; for=&quot;profile-edit-length&quot;>Preferred length</label>
+          <select id=&quot;profile-edit-length&quot; class=&quot;settings-control&quot;>
+            <option value=&quot;&quot;>No preference</option>
+            <option value=&quot;One-shots&quot;>One-shots</option>
+            <option value=&quot;Short reads&quot;>Short reads</option>
+            <option value=&quot;Novellas&quot;>Novellas</option>
+            <option value=&quot;Epic sagas&quot;>Epic sagas</option>
+          </select>
+        </div>
+        <div>
+          <label class=&quot;settings-label&quot; for=&quot;profile-edit-mood&quot;>Reading vibe</label>
+          <select id=&quot;profile-edit-mood&quot; class=&quot;settings-control&quot;>
+            <option value=&quot;&quot;>Surprise me</option>
+            <option value=&quot;Cozy &amp;amp; wholesome&quot;>Cozy &amp;amp; wholesome</option>
+            <option value=&quot;Adventurous&quot;>Adventurous</option>
+            <option value=&quot;Slow burn romance&quot;>Slow burn romance</option>
+            <option value=&quot;Dark &amp;amp; gritty&quot;>Dark &amp;amp; gritty</option>
+            <option value=&quot;Funny&quot;>Funny</option>
+            <option value=&quot;Tearjerker&quot;>Tearjerker</option>
+          </select>
+        </div>
+        <div>
+          <label class=&quot;settings-label&quot; for=&quot;profile-edit-currently&quot;>Currently reading</label>
+          <input id=&quot;profile-edit-currently&quot; class=&quot;settings-control&quot; placeholder=&quot;What's on your nightstand?&quot;>
+        </div>
+      </div>
+
+      <label class=&quot;settings-label pr-layout-029&quot; for=&quot;profile-edit-fav-1&quot;>Favorite stories (up to 5)</label>
+      <input id=&quot;profile-edit-fav-1&quot; class=&quot;settings-control&quot; placeholder=&quot;Favorite story #1&quot;>
+      <input id=&quot;profile-edit-fav-2&quot; class=&quot;settings-control pr-layout-030&quot; placeholder=&quot;Favorite story #2&quot;>
+      <input id=&quot;profile-edit-fav-3&quot; class=&quot;settings-control pr-layout-030&quot; placeholder=&quot;Favorite story #3&quot;>
+      <input id=&quot;profile-edit-fav-4&quot; class=&quot;settings-control pr-layout-030&quot; placeholder=&quot;Favorite story #4&quot;>
+      <input id=&quot;profile-edit-fav-5&quot; class=&quot;settings-control pr-layout-030&quot; placeholder=&quot;Favorite story #5&quot;>
+
+      <div class=&quot;pr-layout-031&quot;>
+        <button class=&quot;pr-btn-outline pr-layout-032&quot; onclick=&quot;document.getElementById('profile-edit-modal').style.display='none'; if(typeof window.renderProfileExtras === 'function') window.renderProfileExtras();&quot;>Cancel</button>
+        <button class=&quot;pr-btn-primary pr-layout-032&quot; onclick=&quot;window.saveProfileDetails(); document.getElementById('profile-edit-modal').style.display='none';&quot;>Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <div id=&quot;pwa-install-banner&quot; class=&quot;pwa-banner pr-layout-008&quot; role=&quot;complementary&quot; aria-label=&quot;Install app prompt&quot;>
+    <div class=&quot;pwa-banner-header&quot;>
+      <span class=&quot;pwa-banner-title&quot;>Install Pocket Reader</span>
+      <button class=&quot;pwa-banner-close&quot; onclick=&quot;window.closePWASession()&quot; aria-label=&quot;Remind me later&quot; title=&quot;Remind me next time I open the app&quot;>X</button>
+    </div>
+
+    <p class=&quot;pwa-banner-lead pr-layout-033&quot;>Add Pocket Reader to your home screen - it installs like a normal app (no app store, takes a few seconds) and works much better on a phone:</p>
+
+    <div class=&quot;pwa-banner-reasons&quot;>
+      <span>Audio plays with screen locked</span>
+      <span>Lock screen controls</span>
+      <span>Cache stories offline</span>
+      <span>Faster and app-like</span>
+    </div>
+
+    <div id=&quot;pwa-banner-action&quot; class=&quot;pwa-banner-action&quot;></div>
+
+    <label class=&quot;pwa-banner-dismiss-row&quot;>
+      <input type=&quot;checkbox&quot; id=&quot;pwa-permanent-dismiss&quot; disabled
+        onchange=&quot;if(this.checked) window.dismissPWAPermanently()&quot;>
+      <span id=&quot;pwa-dismiss-label-text&quot;>Don't show again - available in <span id=&quot;pwa-countdown&quot;>3</span>s</span>
+    </label>
+  </div>
+  <aside class=&quot;sidebar&quot;>
+    <button class=&quot;nav-btn active-view&quot; onclick=&quot;showView('home-view')&quot;>
+      <img class=&quot;nav-icon&quot; src=&quot;_/theme/home%20192.png&quot; alt=&quot;&quot;>
+      <span>Home</span>
+    </button>
+    <button class=&quot;nav-btn&quot; onclick=&quot;showView('library-view')&quot;>
+      <img class=&quot;nav-icon&quot; src=&quot;_/theme/library%20192.png&quot; alt=&quot;&quot;>
+      <span>Library</span>
+    </button>
+    <button class=&quot;nav-btn&quot; onclick=&quot;showView('reading-view')&quot;>
+      <img class=&quot;nav-icon&quot; src=&quot;_/theme/reader%20192.png&quot; alt=&quot;&quot;>
+      <span>Reader</span>
+    </button>
+    <button class=&quot;nav-btn&quot; onclick=&quot;showView('profile-view')&quot;>
+      <img class=&quot;nav-icon&quot; src=&quot;_/theme/profile%20192.png&quot; alt=&quot;&quot;>
+      <span>Profile</span>
+    </button>
+    <button class=&quot;nav-btn nav-more-btn&quot; id=&quot;nav-more-btn&quot; onclick=&quot;toggleNavMore(event)&quot; aria-expanded=&quot;false&quot; aria-controls=&quot;nav-more-group&quot;>
+      <span class=&quot;nav-more-glyph&quot; aria-hidden=&quot;true&quot;>...</span>
+      <span>More</span>
+    </button>
+    <div class=&quot;nav-more-group&quot; id=&quot;nav-more-group&quot;>
+      <button class=&quot;nav-btn&quot; onclick=&quot;showView('search-view')&quot;>
+        <img class=&quot;nav-icon&quot; src=&quot;_/theme/search%20192.png&quot; alt=&quot;&quot;>
+        <span>AO3 Search</span>
+      </button>
+      <button class=&quot;nav-btn&quot; onclick=&quot;showView('hmofa-view')&quot;>
+        <img class=&quot;nav-icon&quot; src=&quot;_/theme/hmofa%20192.png&quot; alt=&quot;&quot;>
+        <span>HMOFA Masterlist</span>
+      </button>
+      <button class=&quot;nav-btn&quot; onclick=&quot;showView('settings-view')&quot;>
+        <img class=&quot;nav-icon&quot; src=&quot;_/theme/settings%20192.png&quot; alt=&quot;&quot;>
+        <span>Settings</span>
+      </button>
+      <button class=&quot;nav-btn&quot; onclick=&quot;showView('about-view')&quot;>
+        <img class=&quot;nav-icon&quot; src=&quot;_/theme/about%20192.png&quot; alt=&quot;&quot;>
+        <span>About</span>
+      </button>
+    </div>
+  </aside>
+
+  <div class=&quot;main-content&quot;>
+    <div class=&quot;top-bar&quot;>
+      <button class=&quot;pr-btn-primary pr-layout-034&quot; onclick=&quot;triggerFileUpload()&quot; aria-label=&quot;Open File&quot; title=&quot;Open File&quot;>
+        <svg class=&quot;pr-icon&quot; aria-hidden=&quot;true&quot;><use href=&quot;#icon-folder-open&quot;></use></svg>
+        <span>Open File</span>
+      </button>
+      <input class=&quot;pr-layout-008&quot; id=&quot;local-file-upload&quot; type=&quot;file&quot; aria-label=&quot;Open a local story file&quot; accept=&quot;.pdf,.epub,.html,.htm,.txt,.docx&quot; onchange=&quot;handleFileSelect(event)&quot; hidden>
+
+      <input id=&quot;global-search&quot; class=&quot;search-input&quot; type=&quot;search&quot; aria-label=&quot;Search stories or paste a story URL&quot; placeholder=&quot;Search AO3 (titles, authors) or paste any story URL&quot; onkeydown=&quot;if (event.key === 'Enter') { event.preventDefault(); handleTopBarSearch(); }&quot;>
+      <button class=&quot;pr-btn-primary&quot; onclick=&quot;handleTopBarSearch()&quot;>Go</button>
+      <div class=&quot;topbar-title&quot;>Pocket Reader</div>
+
+      <div class=&quot;topbar-user pr-layout-035&quot; onclick=&quot;showView('profile-view')&quot;>
+        <span id=&quot;user-display-name&quot; class=&quot;topbar-user-name&quot;>Guest Reader</span>
+        <img id=&quot;topbar-avatar-img&quot; class=&quot;topbar-user-avatar&quot; src=&quot;_/theme/profile%20192.png&quot; alt=&quot;&quot;>
+      </div>
+    </div>
+
+    <div class=&quot;view-container&quot;>
+      <div id=&quot;home-view&quot; class=&quot;view active-view&quot;>
+        <div class=&quot;panel&quot;>
+          <div class=&quot;pr-layout-036&quot;>
+            <img class=&quot;pr-layout-037&quot; src=&quot;_/theme/home%20512.png&quot; alt=&quot;&quot;>
+            <div>
+              <h1 class=&quot;pr-layout-038&quot;>Welcome back.</h1>
+              <p class=&quot;pr-layout-039&quot;>Your personalized auto-narration hub.</p>
+            </div>
+          </div>
+        </div>
+        <h2 class=&quot;pr-layout-040&quot;>Continue Reading</h2>
+        <div class=&quot;pr-layout-041&quot; id=&quot;continue-reading-panel&quot;></div>
+
+        <details class=&quot;bookmarks-folder&quot; id=&quot;home-bookmarks-folder&quot;>
+          <summary>All Bookmarks</summary>
+          <div class=&quot;bookmarks-list&quot; id=&quot;home-bookmarks-list&quot;>
+            <p class=&quot;pr-layout-042&quot;>Loading bookmarks...</p>
+          </div>
+        </details>
+      </div>
+
+      <div id=&quot;library-view&quot; class=&quot;view&quot;>
+        <div class=&quot;library-header&quot;>
+          <h1 class=&quot;pr-layout-043&quot;>
+            <img class=&quot;pr-layout-044&quot; src=&quot;_/theme/library%20512.png&quot; alt=&quot;&quot;>
+            Library
+            <button id=&quot;start-precache-btn&quot; class=&quot;away-mode-lib-btn pr-layout-045&quot;
+              onclick=&quot;if(window.BufferManager) window.BufferManager.startPrecacheQueue()&quot;
+              title=&quot;1. Add stories with Queue Away in each story menu. 2. Start Away Mode here. 3. Minimize the progress panel while Pocket Reader prepares offline audio. Keep the app open while it works; a paused phone may resume caching when you return.&quot;>
+              Away Mode &amp;nbsp;<span id=&quot;precache-count&quot; class=&quot;away-mode-badge&quot;>0 queued</span>
+            </button>
+          </h1>
+          <div class=&quot;library-filters&quot;>
+            <button class=&quot;filter-chip active&quot; data-filter=&quot;all&quot; onclick=&quot;setLibraryFilter('all')&quot;>All</button>
+            <button class=&quot;filter-chip&quot; data-filter=&quot;in-progress&quot; onclick=&quot;setLibraryFilter('in-progress')&quot;>In Progress</button>
+            <button class=&quot;filter-chip&quot; data-filter=&quot;not-started&quot; onclick=&quot;setLibraryFilter('not-started')&quot;>Not Started</button>
+            <button class=&quot;filter-chip&quot; data-filter=&quot;finished&quot; onclick=&quot;setLibraryFilter('finished')&quot;>Finished</button>
+            <button class=&quot;filter-chip&quot; data-filter=&quot;favorites&quot; onclick=&quot;setLibraryFilter('favorites')&quot;>Favorites</button>
+          </div>
+          <div class=&quot;library-view-mode&quot;>
+            <button id=&quot;library-mode-grid&quot; class=&quot;view-mode-btn active&quot; onclick=&quot;setLibraryView('grid')&quot; aria-label=&quot;Grid view&quot;>Grid</button>
+            <button id=&quot;library-mode-list&quot; class=&quot;view-mode-btn&quot; onclick=&quot;setLibraryView('list')&quot; aria-label=&quot;List view&quot;>List</button>
+          </div>
+        </div>
+        <div class=&quot;library-search-container pr-layout-046&quot;>
+          <input class=&quot;pr-layout-047&quot; type=&quot;text&quot; id=&quot;library-search-input&quot; placeholder=&quot;Search library by title, author, fandom, or tags...&quot;
+            oninput=&quot;renderLibrary(true)&quot;>
+        </div>
+        <div id=&quot;library-grid&quot; class=&quot;grid-layout&quot;></div>
+      </div>
+
+      <div id=&quot;search-view&quot; class=&quot;view&quot;>
+        <div class=&quot;search-layout search-layout-horizontal pr-layout-048&quot;>
+
+          <!-- Main Panel: Search (primary focus) -->
+          <div class=&quot;search-main pr-layout-049&quot;>
+            <div class=&quot;panel pr-layout-050&quot;>
+              <h1 class=&quot;pr-layout-051&quot;>
+                AO3 Advanced Search
+              </h1>
+              <div class=&quot;pr-layout-052&quot;>
+                <input id=&quot;ao3-page-search&quot; class=&quot;search-big-input pr-layout-053&quot; type=&quot;search&quot; placeholder=&quot;Search general tags, characters, relationships...&quot; onkeydown=&quot;if (event.key === 'Enter') { event.preventDefault(); handlePageSearch(); }&quot;>
+                <button class=&quot;pr-btn-primary pr-layout-054&quot; onclick=&quot;handlePageSearch()&quot;>Search</button>
+              </div>
+
+              <!-- Refine / Sorting Row -->
+              <div class=&quot;pr-layout-055&quot;>
+                <div class=&quot;pr-layout-056&quot;>
+                  <span class=&quot;pr-layout-057&quot;>Sort by:</span>
+                  <select id=&quot;ao3-search-sort&quot; class=&quot;settings-control pr-layout-058&quot; onchange=&quot;handlePageSearch()&quot;>
+                    <option value=&quot;revised_at&quot; selected>Last Updated</option>
+                    <option value=&quot;word_count&quot;>Word Count</option>
+                    <option value=&quot;kudos&quot;>Kudos</option>
+                    <option value=&quot;hits&quot;>Hits</option>
+                    <option value=&quot;bookmarks&quot;>Bookmarks</option>
+                    <option value=&quot;comments&quot;>Comments</option>
+                    <option value=&quot;created_at&quot;>Date Published</option>
+                  </select>
+                </div>
+                <button class=&quot;pr-btn-outline pr-layout-059&quot; onclick=&quot;(function(){var p=document.getElementById('ao3-filters-panel');var b=document.getElementById('ao3-filters-toggle');if(p.style.display==='none'){p.style.display='flex';b.textContent='Hide Filters';}else{p.style.display='none';b.textContent='Show Filters';}})();&quot; id=&quot;ao3-filters-toggle&quot;>Show Filters</button>
+              </div>
+            </div>
+
+            <div id=&quot;search-results-panel&quot; class=&quot;panel pr-layout-060&quot;>
+              <p class=&quot;pr-layout-061&quot;>
+                Enter keywords or filters, then press Search. If AO3 blocks the proxy, Pocket Reader will show an exact AO3 search link you can open directly.
+              </p>
+            </div>
+          </div>
+
+          <!-- Right Panel: Advanced Filters (collapsible, hidden by default) -->
+          <div id=&quot;ao3-filters-panel&quot; class=&quot;panel pr-layout-062&quot;>
+            <h3 class=&quot;pr-layout-063&quot;>Advanced Filters</h3>
+
+            <div>
+              <label class=&quot;settings-label&quot; for=&quot;ao3-search-title&quot;>Title</label>
+              <input id=&quot;ao3-search-title&quot; type=&quot;text&quot; class=&quot;settings-control&quot; placeholder=&quot;Specific title...&quot;>
+            </div>
+
+            <div>
+              <label class=&quot;settings-label&quot; for=&quot;ao3-search-author&quot;>Author / Creator</label>
+              <input id=&quot;ao3-search-author&quot; type=&quot;text&quot; class=&quot;settings-control&quot; placeholder=&quot;Specific author...&quot;>
+            </div>
+
+            <div>
+              <label class=&quot;settings-label&quot; for=&quot;ao3-search-fandom&quot;>Fandom</label>
+              <input id=&quot;ao3-search-fandom&quot; type=&quot;text&quot; class=&quot;settings-control&quot; placeholder=&quot;Fandom name...&quot;>
+            </div>
+
+            <div class=&quot;pr-layout-064&quot;>
+              <div class=&quot;pr-layout-053&quot;>
+                <label class=&quot;settings-label&quot; for=&quot;ao3-search-rating&quot;>Rating</label>
+                <select id=&quot;ao3-search-rating&quot; class=&quot;settings-control&quot;>
+                  <option value=&quot;Any&quot; selected>Any</option>
+                  <option value=&quot;10&quot;>General</option>
+                  <option value=&quot;11&quot;>Teen</option>
+                  <option value=&quot;12&quot;>Mature</option>
+                  <option value=&quot;13&quot;>Explicit</option>
+                  <option value=&quot;9&quot;>Not Rated</option>
+                </select>
+              </div>
+              <div class=&quot;pr-layout-053&quot;>
+                <label class=&quot;settings-label&quot; for=&quot;ao3-search-category&quot;>Category</label>
+                <select id=&quot;ao3-search-category&quot; class=&quot;settings-control&quot;>
+                  <option value=&quot;Any&quot; selected>Any</option>
+                  <option value=&quot;21&quot;>Gen</option>
+                  <option value=&quot;22&quot;>F/M</option>
+                  <option value=&quot;23&quot;>M/M</option>
+                  <option value=&quot;116&quot;>F/F</option>
+                  <option value=&quot;224&quot;>Multi</option>
+                  <option value=&quot;24&quot;>Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div class=&quot;pr-layout-065&quot;>
+              <div class=&quot;pr-layout-053&quot;>
+                <label class=&quot;settings-label&quot; for=&quot;ao3-search-words-min&quot;>Min Words</label>
+                <input id=&quot;ao3-search-words-min&quot; type=&quot;number&quot; class=&quot;settings-control&quot; placeholder=&quot;Min...&quot;>
+              </div>
+              <div class=&quot;pr-layout-053&quot;>
+                <label class=&quot;settings-label&quot; for=&quot;ao3-search-words-max&quot;>Max Words</label>
+                <input id=&quot;ao3-search-words-max&quot; type=&quot;number&quot; class=&quot;settings-control&quot; placeholder=&quot;Max...&quot;>
+              </div>
+            </div>
+
+            <div class=&quot;pr-layout-064&quot;>
+              <div class=&quot;pr-layout-053&quot;>
+                <label class=&quot;settings-label&quot; for=&quot;ao3-search-language&quot;>Language</label>
+                <select id=&quot;ao3-search-language&quot; class=&quot;settings-control&quot;>
+                  <option value=&quot;en&quot; selected>English</option>
+                  <option value=&quot;Any&quot;>Any</option>
+                </select>
+              </div>
+              <div class=&quot;pr-layout-066&quot;>
+                <label class=&quot;settings-label pr-layout-067&quot;>
+                  <input class=&quot;pr-layout-068&quot; id=&quot;ao3-search-complete&quot; type=&quot;checkbox&quot;> Complete?
+                </label>
+              </div>
+            </div>
+
+            <button class=&quot;pr-btn-primary pr-layout-069&quot; onclick=&quot;handlePageSearch()&quot;>Apply &amp;amp; Search</button>
+
+            <p class=&quot;pr-layout-070&quot;>
+              Filters map directly to AO3 native search fields.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div id=&quot;reading-view&quot; class=&quot;view&quot;>
+        <div class=&quot;reader-wrapper&quot;>
+          <button class=&quot;reader-sidebar-toggle&quot; onclick=&quot;toggleReaderSidebar()&quot;>
+            <span id=&quot;reader-sidebar-toggle-arrow&quot;>&amp;lt;</span>
+          </button>
+
+          <aside id=&quot;reader-sidebar&quot; class=&quot;reader-sidebar&quot;>
+            <div class=&quot;reader-tabs&quot;>
+              <button id=&quot;tab-btn-info&quot; class=&quot;reader-tab active&quot; onclick=&quot;switchReaderTab('info')&quot;>Info</button>
+              <button id=&quot;tab-btn-chapters&quot; class=&quot;reader-tab&quot; onclick=&quot;switchReaderTab('chapters')&quot;>Chapters</button>
+              <button id=&quot;tab-btn-bookmarks&quot; class=&quot;reader-tab&quot; onclick=&quot;switchReaderTab('bookmarks')&quot;>Bookmarks</button>
+            </div>
+
+            <div id=&quot;tab-content-info&quot;>
+              <div class=&quot;cover-placeholder&quot; id=&quot;reader-cover-side&quot;>?</div>
+              <div class=&quot;metadata-block&quot;>
+                <p id=&quot;reader-title-side&quot; class=&quot;metadata-label&quot;>No Story Loaded</p>
+                <p id=&quot;reader-author-side&quot; class=&quot;metadata-value&quot;>-</p>
+              </div>
+              <div class=&quot;metadata-block&quot;>
+                <p class=&quot;metadata-label&quot;>Word Count</p>
+                <p id=&quot;reader-words-side&quot; class=&quot;metadata-value&quot;>-</p>
+              </div>
+              <div class=&quot;metadata-block&quot;>
+                <p class=&quot;metadata-label&quot;>Est. Listening Time</p>
+                <p id=&quot;reader-time-side&quot; class=&quot;metadata-value&quot;>-</p>
+              </div>
+              <div class=&quot;metadata-block&quot;>
+                <p class=&quot;metadata-label&quot;>Your Rating</p>
+                <div class=&quot;star-rating&quot; id=&quot;reader-star-rating&quot;>
+                  <input type=&quot;radio&quot; id=&quot;reader-star5&quot; name=&quot;reader-rate&quot; value=&quot;5&quot; onclick=&quot;window.rateStory(window.currentStory?.title, 5)&quot;><label for=&quot;reader-star5&quot;><svg class=&quot;pr-icon&quot; aria-hidden=&quot;true&quot;><use href=&quot;#icon-star&quot;></use></svg></label>
+                  <input type=&quot;radio&quot; id=&quot;reader-star4&quot; name=&quot;reader-rate&quot; value=&quot;4&quot; onclick=&quot;window.rateStory(window.currentStory?.title, 4)&quot;><label for=&quot;reader-star4&quot;><svg class=&quot;pr-icon&quot; aria-hidden=&quot;true&quot;><use href=&quot;#icon-star&quot;></use></svg></label>
+                  <input type=&quot;radio&quot; id=&quot;reader-star3&quot; name=&quot;reader-rate&quot; value=&quot;3&quot; onclick=&quot;window.rateStory(window.currentStory?.title, 3)&quot;><label for=&quot;reader-star3&quot;><svg class=&quot;pr-icon&quot; aria-hidden=&quot;true&quot;><use href=&quot;#icon-star&quot;></use></svg></label>
+                  <input type=&quot;radio&quot; id=&quot;reader-star2&quot; name=&quot;reader-rate&quot; value=&quot;2&quot; onclick=&quot;window.rateStory(window.currentStory?.title, 2)&quot;><label for=&quot;reader-star2&quot;><svg class=&quot;pr-icon&quot; aria-hidden=&quot;true&quot;><use href=&quot;#icon-star&quot;></use></svg></label>
+                  <input type=&quot;radio&quot; id=&quot;reader-star1&quot; name=&quot;reader-rate&quot; value=&quot;1&quot; onclick=&quot;window.rateStory(window.currentStory?.title, 1)&quot;><label for=&quot;reader-star1&quot;><svg class=&quot;pr-icon&quot; aria-hidden=&quot;true&quot;><use href=&quot;#icon-star&quot;></use></svg></label>
+                </div>
+              </div>
+            </div>
+            <div class=&quot;pr-layout-008&quot; id=&quot;tab-content-chapters&quot;>
+              <p class=&quot;pr-layout-071&quot;>Chapter list appears here.</p>
+            </div>
+            <div class=&quot;pr-layout-008&quot; id=&quot;tab-content-bookmarks&quot;>
+              <p class=&quot;pr-layout-071&quot;>Bookmarks appear here.</p>
+            </div>
+          </aside>
+
+          <main class=&quot;reader-main&quot;>
+            <div class=&quot;reader-text-area&quot;>
+              <div class=&quot;panel&quot;>
+                <h1 class=&quot;pr-layout-038&quot; id=&quot;reader-title&quot;>Untitled</h1>
+                <p class=&quot;pr-layout-072&quot; id=&quot;reader-author&quot;>by Unknown</p>
+                <p class=&quot;pr-layout-073&quot; id=&quot;reader-stats&quot;></p>
+                <p class=&quot;pr-layout-039&quot; id=&quot;reader-summary&quot;>Loaded story summary appears here.</p>
+              </div>
+              <h2 id=&quot;reader-chapter-title&quot; class=&quot;chapter-title&quot;>Chapter</h2>
+              <div id=&quot;reader-content&quot;></div>
+            </div>
+
+            <div id=&quot;reader-buffer-container&quot; class=&quot;reader-buffer-container pr-layout-074&quot;>
+
+              <div class=&quot;pr-layout-075&quot; id=&quot;chapter-seek-preview&quot;></div>
+              <input class=&quot;pr-layout-076&quot; type=&quot;range&quot; id=&quot;chapter-progress-bar&quot; list=&quot;chapter-notches&quot; min=&quot;0&quot; max=&quot;0&quot; value=&quot;0&quot;
+                oninput=&quot;window._readerSeekPreview(this.value)&quot;
+                onchange=&quot;window._readerSeekCommit(this.value)&quot;
+                title=&quot;Drag to scrub through the story (notches mark chapters)&quot;>
+              <datalist id=&quot;chapter-notches&quot;></datalist>
+              <div class=&quot;pr-layout-077&quot; id=&quot;reader-time-remaining&quot;></div>
+
+              <div id=&quot;away-mode-bar&quot; class=&quot;cache-bar pr-layout-078&quot;>
+                <div class=&quot;pr-layout-079&quot;>
+                  <span id=&quot;reader-buffer-text&quot; class=&quot;cache-bar-text&quot;>Buffer idle.</span>
+                  <span class=&quot;pr-layout-080&quot; id=&quot;reader-buffer-eta&quot;></span>
+                </div>
+                <div class=&quot;pr-layout-081&quot;>
+                  <div class=&quot;reader-buffer-track cache-bar-track pr-layout-082&quot;>
+                    <div id=&quot;reader-buffer-fill&quot; class=&quot;reader-buffer-fill&quot;></div>
+                  </div>
+                  <button id=&quot;cache-resume-btn&quot; class=&quot;btn-cache-action&quot; onclick=&quot;if(typeof window._resumeCaching==='function') window._resumeCaching()&quot; title=&quot;Resume caching&quot; style=&quot;display: none; margin-right: 8px;&quot;>&amp;#9654;</button>
+                  <button id=&quot;cache-pause-btn&quot; class=&quot;btn-cache-action&quot; onclick=&quot;_toggleCachePause()&quot; title=&quot;Pause / Resume caching&quot;>Pause</button>
+                  <button id=&quot;cache-stop-btn&quot; class=&quot;btn-cache-action btn-cache-stop&quot; onclick=&quot;_stopCaching()&quot; title=&quot;Stop caching&quot;>Stop</button>
+                </div>
+              </div>
+
+            </div>
+            <div class=&quot;playback-bar pr-layout-083&quot;>
+              <div class=&quot;pr-layout-064&quot;>
+                <select id=&quot;reader-engine-select&quot; class=&quot;playback-dropdown pr-layout-053&quot; onchange=&quot;switchReaderVoiceEngine(this.value)&quot;>
+                  <option value=&quot;pocket&quot;>Pocket TTS</option>
+                  <option value=&quot;webspeech&quot;>Device</option>
+                </select>
+                <select id=&quot;voice-selector&quot; class=&quot;playback-dropdown pr-layout-053&quot; onchange=&quot;if(window.onVoiceSelectionChange) window.onVoiceSelectionChange(this.value)&quot;>
+                  <optgroup label=&quot;Male voices&quot;>
+                    <option value=&quot;donald_malone&quot; selected>Donald Malone - American, Midwestern (Recommended)</option>
+                    <option value=&quot;bill_boerst&quot;>Bill Boerst - American (Recommended)</option>
+                    <option value=&quot;jason_mayoff&quot;>Jason Mayoff - American</option>
+                  </optgroup>
+                  <optgroup label=&quot;Female voices&quot;>
+                    <option value=&quot;kristin_hughes&quot;>Kristin Hughes - American, Iowa (Recommended)</option>
+                    <option value=&quot;jodi_krangle_expressive&quot;>Jodi Krangle Expressive - American (Recommended)</option>
+                    <option value=&quot;karen_savage&quot;>Karen Savage - American</option>
+                    <option value=&quot;rayne&quot;>Rayne (Personal Clone)</option>
+                  </optgroup>
+                </select>
+              </div>
+              <div class=&quot;pr-layout-088&quot;>
+                <button class=&quot;control-btn&quot; title=&quot;Jump to Start&quot; onclick=&quot;window.skipChapter(-999)&quot;>&amp;lt;&amp;lt;</button>
+                <button class=&quot;control-btn&quot; title=&quot;Previous Paragraph&quot; onclick=&quot;window.skipParagraph(-1)&quot;>&amp;lt;</button>
+                <button id=&quot;play-btn-main&quot; class=&quot;play-btn pr-layout-089&quot; onclick=&quot;togglePlayState()&quot;>Play</button>
+                <button class=&quot;control-btn&quot; title=&quot;Next Paragraph&quot; onclick=&quot;window.skipParagraph(1)&quot;>&amp;gt;</button>
+                <button class=&quot;control-btn&quot; title=&quot;Jump to End&quot; onclick=&quot;window.skipChapter(999)&quot;>&amp;gt;&amp;gt;</button>
+              </div>
+              <div class=&quot;pr-layout-090&quot;>
+                <button class=&quot;pr-btn-sub pr-layout-091&quot; onclick=&quot;saveBookmark()&quot;>Bookmark</button>
+                <button class=&quot;pr-btn-sub pr-layout-091&quot; onclick=&quot;if(window.currentStory &amp;&amp; typeof window.toggleFavorite === 'function') { const fav = window.toggleFavorite(window.currentStory.title); alert(fav ? 'Added to favorites.' : 'Removed from favorites.'); }&quot;>Favorite</button>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <div id=&quot;hmofa-view&quot; class=&quot;view&quot;>
+        <div class=&quot;library-header pr-layout-092&quot;>
+          <h1 class=&quot;pr-layout-093&quot;>
+            <img class=&quot;pr-layout-044&quot; src=&quot;_/theme/hmofa%20512.png&quot; alt=&quot;&quot;>
+            HMOFA Masterlist
+          </h1>
+          <div class=&quot;pr-layout-094&quot;>
+            <input id=&quot;masterlist-search&quot; class=&quot;search-input pr-layout-095&quot; placeholder=&quot;Search title / author / genre...&quot; oninput=&quot;renderMasterlist()&quot;>
+            <button class=&quot;pr-btn-primary pr-layout-045&quot; onclick=&quot;loadHMOFA()&quot;>Refresh Masterlist</button>
+          </div>
+        </div>
+        <div id=&quot;hmofa-sticky-scrollbar&quot; class=&quot;hmofa-sticky-scrollbar&quot;>
+          <div id=&quot;hmofa-sticky-scrollbar-inner&quot;></div>
+        </div>
+        <div class=&quot;table-container&quot; id=&quot;hmofa-table-container&quot;>
+          <table class=&quot;data-table&quot; id=&quot;hmofa-data-table&quot;>
+            <thead>
+              <tr>
+                <th class=&quot;sortable&quot; onclick=&quot;window.sortByColumn('title')&quot;>Title<span class=&quot;sort-ind&quot; id=&quot;sind-title&quot;></span></th>
+                <th class=&quot;sortable&quot; onclick=&quot;window.sortByColumn('author')&quot;>Author<span class=&quot;sort-ind&quot; id=&quot;sind-author&quot;></span></th>
+                <th class=&quot;sortable&quot; onclick=&quot;window.sortByColumn('genre')&quot;>Genre<span class=&quot;sort-ind&quot; id=&quot;sind-genre&quot;></span></th>
+                <th class=&quot;sortable&quot; onclick=&quot;window.sortByColumn('setting')&quot;>World Setting<span class=&quot;sort-ind&quot; id=&quot;sind-setting&quot;></span></th>
+                <th class=&quot;sortable&quot; onclick=&quot;window.sortByColumn('words')&quot;>Words<span class=&quot;sort-ind&quot; id=&quot;sind-words&quot;></span></th>
+                <th class=&quot;sortable&quot; onclick=&quot;window.sortByColumn('rating')&quot;>Rating<span class=&quot;sort-ind&quot; id=&quot;sind-rating&quot;></span></th>
+                <th class=&quot;sortable&quot; onclick=&quot;window.sortByColumn('loveInterest')&quot;>Love Interest<span class=&quot;sort-ind&quot; id=&quot;sind-loveInterest&quot;></span></th>
+                <th class=&quot;sortable&quot; onclick=&quot;window.sortByColumn('monogamous')&quot;>Monogamous?<span class=&quot;sort-ind&quot; id=&quot;sind-monogamous&quot;></span></th>
+                <th class=&quot;sortable&quot; onclick=&quot;window.sortByColumn('ocOrIp')&quot;>OC / IP<span class=&quot;sort-ind&quot; id=&quot;sind-ocOrIp&quot;></span></th>
+                <th class=&quot;sortable&quot; onclick=&quot;window.sortByColumn('status')&quot;>Status<span class=&quot;sort-ind&quot; id=&quot;sind-status&quot;></span></th>
+              </tr>
+            </thead>
+            <tbody id=&quot;hmofa-tbody&quot;></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id=&quot;profile-view&quot; class=&quot;view&quot;>
+        <div class=&quot;profile-hero&quot;>
+          <div class=&quot;profile-avatar-container pr-layout-096&quot; onclick=&quot;document.getElementById('profile-avatar-upload').click()&quot; title=&quot;Change profile picture&quot;>
+            <img id=&quot;profile-avatar-img&quot; class=&quot;profile-avatar pr-layout-097&quot; src=&quot;_/theme/profile%20512.png&quot; alt=&quot;&quot;>
+            <span class=&quot;profile-avatar-edit&quot;>Edit</span>
+            <input class=&quot;pr-layout-008&quot; id=&quot;profile-avatar-upload&quot; type=&quot;file&quot; accept=&quot;image/*&quot; onchange=&quot;handleAvatarUpload(event)&quot;>
+          </div>
+          <div>
+            <h1 class=&quot;pr-layout-038&quot; id=&quot;profile-name&quot;>Guest Reader</h1>
+            <p class=&quot;pr-layout-098&quot; id=&quot;profile-category&quot;></p>
+            <p class=&quot;pr-layout-039&quot; id=&quot;profile-stats-summary&quot;>0 stories | 0 finished | 0 min listened</p>
+          </div>
+        </div>
+
+        <!-- Centerpiece Cloud Sync Card -->
+        <div id=&quot;cloud-sync-card&quot; class=&quot;pr-card pr-layout-099&quot;>
+          <div class=&quot;pr-layout-100&quot;>
+            <div class=&quot;pr-layout-101&quot;>
+              <h3 class=&quot;pr-layout-102&quot;>Cloud Synchronization</h3>
+              <p class=&quot;pr-layout-103&quot; id=&quot;cloud-sync-status-text&quot;>
+                Currently operating in <strong>Guest (Offline-Only)</strong> mode.<br>
+                <span class=&quot;pr-layout-104&quot;>Sync your library, reading progress, and settings safely to the cloud to preserve them.</span>
+              </p>
+            </div>
+            <div class=&quot;pr-layout-105&quot; id=&quot;cloud-sync-actions&quot;>
+              <button class=&quot;pr-btn-primary pr-layout-106&quot; onclick=&quot;window.triggerCloudLogin()&quot;>Log In / Sync</button>
+            </div>
+          </div>
+        </div>
+
+        <div id=&quot;profile-details&quot; class=&quot;pr-card pr-layout-107&quot;>
+          <div class=&quot;pr-layout-108&quot;>
+            <h3 class=&quot;pr-layout-068&quot;>About You</h3>
+            <div class=&quot;pr-layout-109&quot;>
+              <span class=&quot;pr-layout-110&quot; id=&quot;profile-save-hint&quot;>Saved</span>
+              <button class=&quot;pr-btn-sub pr-layout-111&quot; onclick=&quot;document.getElementById('profile-edit-modal').style.display='flex'&quot;>Edit Profile</button>
+            </div>
+          </div>
+          <p class=&quot;pr-layout-112&quot;>Your reading life, all in one place - everything here is optional.</p>
+
+          <div class=&quot;profile-display-grid pr-layout-028&quot;>
+            <div><span class=&quot;settings-label&quot;>Display name</span><div class=&quot;pr-layout-113&quot; id=&quot;profile-disp-name&quot;>-</div></div>
+            <div><span class=&quot;settings-label&quot;>I am a...</span><div class=&quot;pr-layout-113&quot; id=&quot;profile-disp-category&quot;>-</div></div>
+            <div><span class=&quot;settings-label&quot;>Favorite genre</span><div class=&quot;pr-layout-113&quot; id=&quot;profile-disp-genre&quot;>-</div></div>
+            <div><span class=&quot;settings-label&quot;>Favorite fandom / universe</span><div class=&quot;pr-layout-113&quot; id=&quot;profile-disp-fandom&quot;>-</div></div>
+            <div><span class=&quot;settings-label&quot;>Favorite character or pairing</span><div class=&quot;pr-layout-113&quot; id=&quot;profile-disp-character&quot;>-</div></div>
+            <div><span class=&quot;settings-label&quot;>Preferred length</span><div class=&quot;pr-layout-113&quot; id=&quot;profile-disp-length&quot;>-</div></div>
+            <div><span class=&quot;settings-label&quot;>Reading vibe</span><div class=&quot;pr-layout-113&quot; id=&quot;profile-disp-mood&quot;>-</div></div>
+            <div><span class=&quot;settings-label&quot;>Currently reading</span><div class=&quot;pr-layout-113&quot; id=&quot;profile-disp-currently&quot;>-</div></div>
+          </div>
+
+          <span class=&quot;settings-label&quot;>Favorite stories</span>
+          <ul class=&quot;pr-layout-114&quot; id=&quot;profile-disp-favs&quot;>
+            <li>-</li>
+          </ul>
+        </div>
+
+        <h2>Achievements</h2>
+        <div id=&quot;achievements-grid-container&quot; class=&quot;achievements-grid&quot;></div>
+      </div>
+
+      <div id=&quot;settings-view&quot; class=&quot;view&quot;>
+        <h1 class=&quot;pr-layout-115&quot;>Application Settings</h1>
+        <div class=&quot;settings-grid settings-grid-masonry&quot;>
+          <div class=&quot;settings-card&quot;>
+            <h3>Companion &amp; App</h3>
+            <p class=&quot;pr-layout-116&quot;>Your name, picture, and reading profile now live on your <a class=&quot;pr-layout-117&quot; href=&quot;#&quot; onclick=&quot;showView('profile-view');return false;&quot;>Profile page</a></p>
+
+            <label class=&quot;settings-label&quot; for=&quot;companion-select&quot;>Companion</label>
+            <select id=&quot;companion-select&quot; name=&quot;companion-select&quot; class=&quot;settings-control&quot; onchange=&quot;applySettings()&quot;>
+              <option value=&quot;virtue&quot;>Virtue - Maned Wolf</option>
+              <option value=&quot;none&quot;>None</option>
+              <option value=&quot;jade&quot; disabled=&quot;true&quot;>Jade - Spotted Hyena - Coming Later</option>
+            </select>
+            <p class=&quot;settings-label pr-layout-118&quot;>Plan</p>
+            <p class=&quot;pr-layout-119&quot;>Pocket Reader - Web</p>
+            <span class=&quot;settings-label pr-layout-118&quot;>Tips</span>
+            <button class=&quot;pr-btn-sub&quot; onclick=&quot;if(window.resetTips) window.resetTips()&quot;>Re-enable first-time tips</button>
+          </div>
+
+          <div class=&quot;settings-card&quot;>
+            <h3>Narration &amp; Playback</h3>
+            <label class=&quot;settings-label&quot; for=&quot;voice-engine-select&quot;>Voice Engine</label>
+            <select id=&quot;voice-engine-select&quot; name=&quot;voice-engine-select&quot; class=&quot;settings-control&quot; onchange=&quot;switchReaderVoiceEngine(this.value)&quot;>
+              <option value=&quot;pocket&quot;>Pocket TTS - Premium (High End)</option>
+              <option value=&quot;webspeech&quot;>Device Voice - Fallback</option>
+            </select>
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;haptics-toggle&quot;>Haptic feedback</label>
+            <input id=&quot;haptics-toggle&quot; name=&quot;haptics-toggle&quot; type=&quot;checkbox&quot; onchange=&quot;applySettings()&quot;>
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;push-updates-toggle&quot;>Get updates for subscribed stories</label>
+            <input id=&quot;push-updates-toggle&quot; name=&quot;push-updates-toggle&quot; type=&quot;checkbox&quot; onchange=&quot;initPushNotifications(this)&quot;>
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;ui-hints-toggle&quot;>Show UI Hints</label>
+            <input id=&quot;ui-hints-toggle&quot; name=&quot;ui-hints-toggle&quot; type=&quot;checkbox&quot; onchange=&quot;applySettings()&quot;>
+
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;sleep-timer-select&quot;>Sleep timer</label>
+            <select id=&quot;sleep-timer-select&quot; name=&quot;sleep-timer-select&quot; class=&quot;settings-control&quot; onchange=&quot;applySleepTimer()&quot;>
+              <option value=&quot;0&quot;>Off</option>
+              <option value=&quot;15&quot;>15 min</option>
+              <option value=&quot;30&quot;>30 min</option>
+              <option value=&quot;60&quot;>60 min</option>
+            </select>
+            <p class=&quot;pr-layout-120&quot; id=&quot;sleep-timer-status&quot;>Timer disabled.</p>
+          </div>
+
+          <div class=&quot;settings-card&quot;>
+            <h3>Expressive Narration <span class=&quot;pr-layout-121&quot;>(Pocket TTS only)</span></h3>
+            <p class=&quot;pr-layout-122&quot;>These tuning options apply to Pocket TTS. They have no effect on Device voices.</p>
+
+            <label class=&quot;settings-label&quot; for=&quot;expressive-prosody-toggle&quot;>Emotion-aware delivery</label>
+            <input id=&quot;expressive-prosody-toggle&quot; name=&quot;expressive-prosody-toggle&quot; type=&quot;checkbox&quot; onchange=&quot;applySettings()&quot;>
+            <p class=&quot;pr-layout-123&quot;>Uses one same-voice emotional reference per paragraph for stable audiobook narration.</p>
+
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;voice-emotion-mode-select&quot;>Voice emotion profile</label>
+            <select id=&quot;voice-emotion-mode-select&quot; name=&quot;voice-emotion-mode-select&quot; class=&quot;settings-control&quot; onchange=&quot;applySettings()&quot;>
+              <option value=&quot;neutral&quot; selected>Neutral only (Recommended)</option>
+              <option value=&quot;balanced&quot;>Balanced emotional references</option>
+            </select>
+            <p class=&quot;pr-layout-123&quot;>Neutral avoids sudden changes in tone. Balanced uses emotion tags but can introduce strange voice issues.</p>
+
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;punct-pause-toggle&quot;>Punctuation pauses (slower; off by default)</label>
+            <input id=&quot;punct-pause-toggle&quot; name=&quot;punct-pause-toggle&quot; type=&quot;checkbox&quot; onchange=&quot;applySettings()&quot;>
+            <p class=&quot;pr-layout-123&quot;>Adds silence after punctuation without changing narrator or emotion route.</p>
+
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;pause-tags-toggle&quot;>Honor inline pause tags</label>
+            <input id=&quot;pause-tags-toggle&quot; name=&quot;pause-tags-toggle&quot; type=&quot;checkbox&quot; onchange=&quot;applySettings()&quot; checked>
+            <p class=&quot;pr-layout-123&quot;>Insert a custom silence where you type <code>[1.2s]</code> or <code>[10s]</code> in the text.</p>
+
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;pronunciation-term-input&quot;>Pronunciation overrides</label>
+            <div class=&quot;pr-layout-124&quot;>
+              <input id=&quot;pronunciation-term-input&quot; class=&quot;settings-control&quot; type=&quot;text&quot; placeholder=&quot;Word or name&quot; autocomplete=&quot;off&quot;>
+              <input id=&quot;pronunciation-sounds-input&quot; class=&quot;settings-control&quot; type=&quot;text&quot; aria-label=&quot;Replacement pronunciation&quot; placeholder=&quot;Sounds like&quot; autocomplete=&quot;off&quot;>
+              <button class=&quot;pr-btn-sub&quot; type=&quot;button&quot; onclick=&quot;addPronunciationOverride()&quot;>Add</button>
+            </div>
+            <div class=&quot;pr-layout-125&quot; id=&quot;pronunciation-overrides-list&quot;></div>
+            <p class=&quot;pr-layout-123&quot;>Example: basically = bay sick lee. Changes force fresh Pocket audio cache entries.</p>
+
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;chunk-mode-select&quot;>Chunking</label>
+            <select id=&quot;chunk-mode-select&quot; name=&quot;chunk-mode-select&quot; class=&quot;settings-control&quot; onchange=&quot;onChunkModeChange()&quot;>
+              <option value=&quot;sentence&quot; selected>Auto (by sentence)</option>
+              <option value=&quot;words&quot;>By word count</option>
+            </select>
+            <div class=&quot;pr-layout-126&quot; id=&quot;chunk-words-container&quot;>
+              <label class=&quot;settings-label&quot; for=&quot;chunk-min-words&quot;>Min words / chunk <span class=&quot;pr-layout-127&quot; id=&quot;chunk-min-label&quot;>8</span></label>
+              <input id=&quot;chunk-min-words&quot; name=&quot;chunk-min-words&quot; type=&quot;range&quot; min=&quot;3&quot; max=&quot;60&quot; value=&quot;8&quot; oninput=&quot;applySettings()&quot;>
+              <label class=&quot;settings-label pr-layout-128&quot; for=&quot;chunk-max-words&quot;>Max words / chunk <span class=&quot;pr-layout-127&quot; id=&quot;chunk-max-label&quot;>40</span></label>
+              <input id=&quot;chunk-max-words&quot; name=&quot;chunk-max-words&quot; type=&quot;range&quot; min=&quot;10&quot; max=&quot;120&quot; value=&quot;40&quot; oninput=&quot;applySettings()&quot;>
+            </div>
+          </div>
+
+          <div class=&quot;settings-card&quot;>
+            <h3>Display &amp; Themes</h3>
+            <label class=&quot;settings-label&quot; for=&quot;app-theme-select&quot;>App theme</label>
+            <select id=&quot;app-theme-select&quot; name=&quot;app-theme-select&quot; class=&quot;settings-control&quot; onchange=&quot;applySettings()&quot;>
+              <option value=&quot;dark&quot;>Midnight</option>
+              <option value=&quot;light&quot;>Paper</option>
+              <option value=&quot;slate&quot;>Anthrostate</option>
+              <option value=&quot;high-contrast&quot;>High Contrast</option>
+              <option value=&quot;colorblind&quot;>Colorblind Safe</option>
+            </select>
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;app-font-slider&quot;>App text size <span class=&quot;pr-layout-127&quot; id=&quot;app-font-label&quot;>11pt</span></label>
+            <input id=&quot;app-font-slider&quot; name=&quot;app-font-slider&quot; type=&quot;range&quot; min=&quot;10&quot; max=&quot;18&quot; value=&quot;11&quot; oninput=&quot;applySettings()&quot;>
+            <label class=&quot;settings-label&quot; for=&quot;reading-font-select&quot;>Reader Font</label>
+            <select id=&quot;reading-font-select&quot; name=&quot;reading-font-select&quot; class=&quot;settings-control&quot; onchange=&quot;applySettings()&quot;>
+              <option value=&quot;'Literata Local', Georgia, serif&quot;>Literata</option>
+              <option value=&quot;'IBM Plex Sans Local', Arial, sans-serif&quot;>IBM Plex Sans</option>
+              <option value=&quot;'Courier New', Courier, monospace&quot;>Courier New</option>
+              <option value=&quot;'Times New Roman', Times, serif&quot;>Times New Roman</option>
+              <option value=&quot;Georgia, serif&quot;>Georgia</option>
+              <option value=&quot;Arial, Helvetica, sans-serif&quot;>Arial</option>
+            </select>
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;reader-font-slider&quot;>Reading font size <span class=&quot;pr-layout-127&quot; id=&quot;reader-font-label&quot;>13pt</span></label>
+            <input id=&quot;reader-font-slider&quot; name=&quot;reader-font-slider&quot; type=&quot;range&quot; min=&quot;10&quot; max=&quot;20&quot; value=&quot;13&quot; oninput=&quot;applySettings()&quot;>
+          </div>
+
+          <div class=&quot;settings-card&quot;>
+            <h3>Accessibility &amp; Accommodations</h3>
+            <label class=&quot;settings-label&quot; for=&quot;touch-target-size-toggle&quot;>Larger buttons &amp; touch controls</label>
+            <input id=&quot;touch-target-size-toggle&quot; name=&quot;touch-target-size-toggle&quot; type=&quot;checkbox&quot; onchange=&quot;applySettings()&quot;>
+            <p class=&quot;pr-layout-123&quot;>Increases hitboxes and spacing for navigation buttons, sliders, and stars to assist with motor control.</p>
+
+            <label class=&quot;settings-label pr-layout-118&quot; for=&quot;scroll-behavior-select&quot;>Auto-scroll behavior</label>
+            <select id=&quot;scroll-behavior-select&quot; name=&quot;scroll-behavior-select&quot; class=&quot;settings-control&quot; onchange=&quot;applySettings()&quot;>
+              <option value=&quot;smooth&quot;>Smooth Scroll (Default)</option>
+              <option value=&quot;auto&quot;>Instant Jump</option>
+              <option value=&quot;none&quot;>Disabled (Manual scroll only)</option>
+            </select>
+            <p class=&quot;pr-layout-123&quot;>Configures how the reader highlights and tracks spoken text. Instant or disabled options can reduce motion sickness.</p>
+          </div>
+
+          <div class=&quot;settings-card&quot;>
+            <h3>Performance</h3>
+            <p class=&quot;settings-help&quot;>Current narration engine, worker state, GPU mode, and backend latency. These values are diagnostic signals, not permanent settings.</p>
+            <div id=&quot;perf-panel&quot;></div>
+            <button class=&quot;pr-btn-sub pr-layout-129&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;refreshPerfPanel()&quot;>Refresh</button>
+          </div>
+
+          <div class=&quot;settings-card&quot;>
+            <h3>This Device</h3>
+            <p id=&quot;device-setup-settings-summary&quot; class=&quot;settings-help&quot;>Diagnostics have not run on this device.</p>
+            <button class=&quot;pr-btn-sub pr-layout-129&quot; data-settings-safe-action=&quot;true&quot; type=&quot;button&quot; onclick=&quot;runPocketDeviceDiagnosticsFromSettings(this)&quot;>Re-run device diagnostics</button>
+            <p class=&quot;settings-help&quot;>Hardware recommendations are stored locally and do not follow your Pocket Reader account to another phone or computer.</p>
+          </div>
+
+          <div class=&quot;settings-card&quot;>
+            <h3>Away Mode Cache Queue</h3>
+            <p class=&quot;settings-help&quot;>Queue stories from their menu, then start Away Mode in Library. It prepares offline audio while Pocket Reader stays open. You can hide the progress panel and return later; if your phone pauses the app, caching resumes when you return.</p>
+            <div id=&quot;bg-cache-panel&quot;></div>
+            <button class=&quot;pr-btn-sub pr-layout-129&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;refreshBgCachePanel()&quot;>Refresh now</button>
+          </div>
+
+          <form class=&quot;settings-card&quot; onsubmit=&quot;event.preventDefault(); saveSiteCookies();&quot;>
+            <h3>Connect Accounts</h3>
+            <p class=&quot;pr-layout-130&quot;>
+              <b>How to find your cookies:</b> Press F12 or open Developer Tools, go to the <b>Application</b> tab (Storage in Firefox), select <b>Cookies</b>, click the site URL, and copy the values for 'a' and 'b' (for FA) or the PHPSESSID (for SoFurry).
+            </p>
+            <label class=&quot;settings-label&quot; for=&quot;fa-cookie-a&quot;>FurAffinity cookie a</label>
+            <input id=&quot;fa-cookie-a&quot; name=&quot;fa-cookie-a&quot; class=&quot;settings-control&quot; type=&quot;password&quot; autocomplete=&quot;off&quot;>
+            <label class=&quot;settings-label&quot; for=&quot;fa-cookie-b&quot;>FurAffinity cookie b</label>
+            <input id=&quot;fa-cookie-b&quot; name=&quot;fa-cookie-b&quot; class=&quot;settings-control&quot; type=&quot;password&quot; autocomplete=&quot;off&quot;>
+            <label class=&quot;settings-label&quot; for=&quot;sofurry-cookie-session&quot;>SoFurry session</label>
+            <input id=&quot;sofurry-cookie-session&quot; name=&quot;sofurry-cookie-session&quot; class=&quot;settings-control&quot; type=&quot;password&quot; autocomplete=&quot;off&quot;>
+            <button class=&quot;pr-btn-sub pr-layout-129&quot; type=&quot;submit&quot;>Save account cookies</button>
+          </form>
+
+        </div><details id=&quot;advanced-settings-section&quot; class=&quot;adv-settings-section&quot;>
+          <summary class=&quot;adv-settings-summary&quot;>
+            <span>Advanced Settings &amp;amp; Info</span>
+            <span class=&quot;adv-settings-arrow&quot;>></span>
+          </summary>
+
+          <div class=&quot;adv-warning-box&quot;>
+            <strong>Caution:</strong> Changing these settings without understanding them can cause the app to crash, produce silent or static audio, or perform poorly. The app automatically resets advanced settings to safe defaults if it detects a crash on the next launch. Stable settings are saved between sessions.
+          </div>
+
+          <div class=&quot;settings-grid settings-grid-masonry pr-layout-029&quot;>
+
+            <div class=&quot;settings-card&quot;>
+              <h3>Storage &amp; Backup</h3>
+              <button class=&quot;pr-btn-sub pr-layout-131&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;openManagePermanentCaches()&quot;>Manage permanent caches</button>
+              <button class=&quot;pr-btn-sub pr-layout-131&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;clearAudioCache(false)&quot;>Clear generated audio cache</button>
+              <button class=&quot;pr-btn-sub pr-layout-131&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;clearNeuralEngineCache()&quot;>Clear ONNX Neural Engine (80MB Model)</button>
+              <button class=&quot;pr-btn-sub pr-layout-131&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;resetAllCacheDecisions()&quot;>Reset cache prompts</button>
+              <button class=&quot;pr-btn-sub pr-layout-131&quot; onclick=&quot;downloadBackup()&quot;>Download backup</button>
+              <button class=&quot;pr-btn-sub pr-layout-131&quot; onclick=&quot;triggerRestoreBackup()&quot;>Restore backup</button>
+              <button class=&quot;pr-btn-sub pr-layout-132&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;if(confirm('This will cleanly reload the app and re-initialize all engines without deleting your library or settings. Proceed?')) location.reload(true);&quot;>Hard Refresh (Restart App)</button>
+              <button class=&quot;pr-btn-sub pr-layout-133&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;clearTextCache()&quot;>Clear all local data</button>
+            </div>
+
+            <div class=&quot;settings-card&quot;>
+              <h3>Low Memory Mode</h3>
+              <p class=&quot;settings-help&quot;>Reduces animation and background work for constrained devices. Use this when the browser reports less than 4 GB RAM, tabs reload in the background, or synthesis becomes unstable.</p>
+              <label class=&quot;settings-label&quot; for=&quot;low-mem-toggle&quot;>Enable Low Memory Mode</label>
+              <input id=&quot;low-mem-toggle&quot; name=&quot;low-mem-toggle&quot; type=&quot;checkbox&quot; onchange=&quot;applySettings()&quot;>
+            </div>
+
+            <div class=&quot;settings-card&quot;>
+              <h3>Advanced Performance</h3>
+              <p class=&quot;settings-help&quot;>Hardware detection and fallback controls for Pocket TTS. Leave these on automatic unless diagnostics point to a GPU or memory problem.</p>
+              <div class=&quot;pr-layout-134&quot;>
+                <span class=&quot;pr-layout-135&quot;>CPU Cores:</span>    <strong id=&quot;detected-cores&quot;>-</strong>
+                <span class=&quot;pr-layout-135&quot;>Auto Workers:</span> <strong id=&quot;detected-workers&quot;>-</strong>
+                <span class=&quot;pr-layout-135&quot;>GPU Vendor:</span>   <strong id=&quot;detected-gpu&quot;>detecting...</strong>
+                <span class=&quot;pr-layout-135&quot;>SIMD / SAB:</span>   <strong id=&quot;detected-simd&quot;>-</strong>
+              </div>
+              <details class=&quot;pr-layout-136&quot; id=&quot;advanced-worker-details&quot;>
+                <summary class=&quot;pr-layout-137&quot;>Worker pool override</summary>
+                <div class=&quot;pr-layout-138&quot;>
+                  <label class=&quot;pr-layout-139&quot;>
+                    <input type=&quot;checkbox&quot; id=&quot;manual-workers-toggle&quot; onchange=&quot;onManualWorkersToggle()&quot;>
+                    <span>Enable manual override</span>
+                  </label>
+                  <div class=&quot;pr-layout-008&quot; id=&quot;manual-workers-container&quot;>
+                    <label class=&quot;settings-label&quot; for=&quot;max-workers-input&quot;>Max Workers (1-8)</label>
+                    <input type=&quot;number&quot; id=&quot;max-workers-input&quot; class=&quot;settings-control pr-layout-140&quot; min=&quot;1&quot; max=&quot;8&quot; value=&quot;4&quot; onchange=&quot;applySettings()&quot;>
+                    <p class=&quot;warning-msg&quot;>Increasing workers may cause audio glitches or UI lag on weaker devices.</p>
+                    <button class=&quot;pr-btn-sub pr-layout-141&quot; onclick=&quot;resetWorkerSettings()&quot;>Reset to auto-detected</button>
+                  </div>
+                </div>
+              </details>
+              <details class=&quot;pr-layout-142&quot;>
+                <summary class=&quot;pr-layout-137&quot;>Narration backend</summary>
+                <div class=&quot;pr-layout-143&quot;>
+                  <label class=&quot;settings-label&quot; for=&quot;pocket-backend-select&quot;>Backend selection</label>
+                  <select id=&quot;pocket-backend-select&quot; class=&quot;settings-control&quot; onchange=&quot;applySettings()&quot;>
+                    <option value=&quot;auto&quot;>Auto (recommended)</option>
+                    <option value=&quot;wasm&quot;>Threaded WASM</option>
+                    <option value=&quot;webgpu&quot;>WebGPU FP16</option>
+                  </select>
+                  <p class=&quot;settings-help&quot;>Auto uses this device's local setup result, then the full narration watchdog keeps WebGPU only while it remains faster and stable. This choice never follows your account to another device.</p>
+                  <button id=&quot;pocket-backend-optimize-btn&quot; class=&quot;pr-btn-sub pr-layout-129&quot; data-settings-safe-action=&quot;true&quot; type=&quot;button&quot; onclick=&quot;runPocketBackendOptimizationFromSettings(this)&quot;>Re-run backend optimization</button>
+                  <button class=&quot;pr-btn-sub pr-layout-129&quot; data-settings-safe-action=&quot;true&quot; type=&quot;button&quot; onclick=&quot;clearPocketGpuAssets().then(() => refreshPerfPanel())&quot;>Clear GPU assets</button>
+                  <p id=&quot;pocket-backend-status&quot; class=&quot;settings-help&quot; role=&quot;status&quot; aria-live=&quot;polite&quot;></p>
+                </div>
+              </details>
+            </div>
+
+            <div class=&quot;settings-card&quot;>
+              <h3>Device Profile</h3>
+              <p class=&quot;settings-help&quot;>Best-effort browser hardware signals. Browsers intentionally round or hide some values, especially RAM and GPU model.</p>
+              <div id=&quot;device-profile-grid&quot; class=&quot;device-profile-grid&quot;></div>
+              <button class=&quot;pr-btn-sub pr-layout-129&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;refreshDeviceProfile()&quot;>Refresh device profile</button>
+            </div>
+
+            <div class=&quot;settings-card&quot;>
+              <h3>Site Health</h3>
+              <div id=&quot;site-health-grid&quot;></div>
+              <button class=&quot;pr-btn-sub pr-layout-129&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;refreshSiteHealth()&quot;>Refresh health</button>
+            </div>
+
+            <div class=&quot;settings-card pr-layout-148&quot;>
+              <h3>Diagnostics</h3>
+              <p class=&quot;pr-layout-149&quot;>Run a full self-test of the app's capabilities and generate a report you can send to the developer to help fix issues.</p>
+              <div class=&quot;pr-layout-150&quot; id=&quot;diagnostic-status&quot;></div>
+              <div class=&quot;pr-layout-151&quot;>
+                <button class=&quot;pr-btn-primary pr-layout-053&quot; id=&quot;run-diag-btn&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;window.Diagnostics.runDiagnostic()&quot;>Run Diagnostic &amp;amp; Generate Report</button>
+                <button class=&quot;pr-btn-sub pr-layout-053&quot; data-settings-safe-action=&quot;true&quot; onclick=&quot;window.Diagnostics.downloadLogs()&quot;>Download Raw Logs</button>
+              </div>
+              <div class=&quot;pr-layout-152&quot; id=&quot;adv-crash-notice&quot;></div>
+            </div>
+
+          </div></details></div><div id=&quot;about-view&quot; class=&quot;view&quot;>
+            <div class=&quot;about-layout pr-layout-153&quot;>
+              <div class=&quot;about-virtue pr-layout-154&quot;>
+                <img class=&quot;about-virtue-img pr-layout-155&quot; src=&quot;_/theme/virtue_smile.webp&quot; alt=&quot;&quot;>
+                <div class=&quot;about-virtue-bubble pr-layout-156&quot;>
+                  <div class=&quot;about-app-name pr-layout-157&quot;>Alpharius' Pocket Reader</div>
+                  <div class=&quot;about-app-version pr-layout-158&quot;>v0.6.0 - Web</div>
+                </div>
+              </div>
+              <div class=&quot;about-body&quot;>
+                <h2 class=&quot;pr-layout-115&quot;>Created by</h2>
+                <p>Chris (Alpharius67 / Fluffarius) - app design, code, the Virtue companion character, and all related art.</p>
+
+                <h3>Licensing &amp;amp; rights</h3>
+                <ul>
+                  <li><b>App code / source:</b> licensed under the <a class="pr-layout-159" href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank">Apache License 2.0</a> (full text in the repository's <a class="pr-layout-159" href="https://huggingface.co/spaces/alpharius6769/pocket-reader/blob/main/LICENSE" target="_blank"><code>LICENSE</code></a> and <a class="pr-layout-159" href="https://huggingface.co/spaces/alpharius6769/pocket-reader/blob/main/NOTICE" target="_blank"><code>NOTICE</code></a> files).</li>
+                  <li><b>Virtue companion</b> - her character, appearance, artwork, lore &amp; dialogue - and the <b>&quot;Alpharius' Pocket Reader&quot; branding</b>: &copy; 2026 Chris (Alpharius67), <b>All Rights Reserved</b>. Not open source on any grounds, and <b>may not be used to train AI/ML models or as generative-AI input</b> without prior written permission from the creator. (See <a class="pr-layout-159" href="https://huggingface.co/spaces/alpharius6769/pocket-reader/blob/main/CHARACTER_LICENSE.md" target="_blank"><code>CHARACTER_LICENSE.md</code></a>.)</li>
+                  <li><b>Story content:</b> 100% of the rights in every story - curated or fetched - belong to its original author. Pocket Reader claims no ownership and streams content to a single reader's device for personal use only.</li>
+                </ul>
+
+                <h3>Community &amp;amp; story sources</h3>
+                <ul>
+                  <li><b>HMOFA Masterlist</b> - curated and maintained by <b>Therealwolfy</b>. The curated list itself is his work; the individual stories it catalogues remain the property of their respective authors.</li>
+                  <li><b>Story sources</b> (fetched on demand - each author retains all rights):
+                    <a class=&quot;pr-layout-159&quot; href=&quot;https://archiveofourown.org&quot; target=&quot;_blank&quot;>Archive of Our Own</a>,
+                    <a class=&quot;pr-layout-159&quot; href=&quot;https://www.royalroad.com&quot; target=&quot;_blank&quot;>Royal Road</a>,
+                    <a class=&quot;pr-layout-159&quot; href=&quot;https://www.wattpad.com&quot; target=&quot;_blank&quot;>Wattpad</a>,
+                    <a class=&quot;pr-layout-159&quot; href=&quot;https://www.furaffinity.net&quot; target=&quot;_blank&quot;>FurAffinity</a>,
+                    <a class=&quot;pr-layout-159&quot; href=&quot;https://www.sofurry.com&quot; target=&quot;_blank&quot;>SoFurry</a>.</li>
+                  <li><b>Story extraction:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://fichub.net/&quot; target=&quot;_blank&quot;>FicHub</a> (AO3 EPUB resolution).</li>
+                </ul>
+
+                <h3>Open-source components</h3>
+                <details class=&quot;pr-layout-160&quot;>
+                  <summary>View third-party software licenses</summary>
+                  <div class=&quot;pr-layout-161&quot;>
+                    <p class=&quot;pr-layout-162&quot;>Disclaimer: The views, content, use cases, and applications within Alpharius' Pocket Reader are solely those of the app creator and do not represent, nor are they endorsed by, the original creators of the open-source software and assets listed below.</p>
+                    <p class=&quot;pr-layout-163&quot;>Browser neural text-to-speech</p>
+                    <p><b>Pocket TTS model and voices:</b> neural speech model and voice assets loaded by the browser. The model and voice assets retain their upstream license terms.</p>
+                    <p><b>ONNX Runtime Web:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://github.com/microsoft/onnxruntime&quot; target=&quot;_blank&quot;>GitHub</a> &amp;middot; MIT. By <b>Microsoft</b>.</p>
+
+                    <p class=&quot;pr-layout-164&quot;>Backend (Python)</p>
+                    <p><b>FastAPI:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://github.com/fastapi/fastapi&quot; target=&quot;_blank&quot;>GitHub</a> &amp;middot; MIT. By <b>Sebastian Ramirez</b>.</p>
+                    <p><b>Uvicorn:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://github.com/encode/uvicorn&quot; target=&quot;_blank&quot;>GitHub</a> &amp;middot; BSD-3-Clause. By <b>Encode</b>.</p>
+                    <p><b>Pydantic:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://github.com/pydantic/pydantic&quot; target=&quot;_blank&quot;>GitHub</a> &amp;middot; MIT. By <b>Samuel Colvin</b>.</p>
+                    <p><b>pypdfium2:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://github.com/pypdfium2-team/pypdfium2&quot; target=&quot;_blank&quot;>GitHub</a> &amp;middot; Apache-2.0 / BSD-3-Clause. By the <b>pypdfium2-team</b>, bundling <b>Google PDFium</b>. (PDF parsing &amp;amp; covers.)</p>
+                    <p><b>Pillow:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://github.com/python-pillow/Pillow&quot; target=&quot;_blank&quot;>GitHub</a> &amp;middot; MIT-CMU. By <b>Jeffrey A. Clark</b> &amp;amp; contributors.</p>
+                    <p><b>lxml:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://lxml.de/&quot; target=&quot;_blank&quot;>Website</a> &amp;middot; BSD-3-Clause. By <b>lxml.de</b>. (EPUB / XML parsing.)</p>
+                    <p><b>BeautifulSoup4:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://www.crummy.com/software/BeautifulSoup/&quot; target=&quot;_blank&quot;>Website</a> &amp;middot; MIT. By <b>Leonard Richardson</b>.</p>
+                    <p><b>python-docx:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://github.com/python-openxml/python-docx&quot; target=&quot;_blank&quot;>GitHub</a> &amp;middot; MIT. By <b>Steve Canny</b>.</p>
+                    <p><b>httpx:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://github.com/encode/httpx&quot; target=&quot;_blank&quot;>GitHub</a> &amp;middot; BSD-3-Clause. By <b>Encode</b>.</p>
+                    <p><b>python-multipart:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://github.com/Kludex/python-multipart&quot; target=&quot;_blank&quot;>GitHub</a> &amp;middot; Apache-2.0. By <b>Andrew Dunham</b>.</p>
+                    <p><b>pywebpush:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://github.com/web-push-libs/pywebpush&quot; target=&quot;_blank&quot;>GitHub</a> &amp;middot; MPL-2.0. By <b>Mozilla Services</b>.</p>
+
+                    <p class=&quot;pr-layout-164&quot;>Assets &amp;amp; platforms</p>
+                    <p><b>Game-Icons.net:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://game-icons.net/&quot; target=&quot;_blank&quot;>Website</a> &amp;middot; <a class=&quot;pr-layout-159&quot; href=&quot;https://creativecommons.org/licenses/by/3.0/&quot; target=&quot;_blank&quot;>CC-BY 3.0</a>. Achievement icons by <b>Lorc, Delapouite</b> &amp;amp; contributors.</p>
+                    <p><b>Hosting:</b> <a class=&quot;pr-layout-159&quot; href=&quot;https://huggingface.co/spaces&quot; target=&quot;_blank&quot;>Hugging Face Spaces</a> (backend) &amp;middot; <a class=&quot;pr-layout-159&quot; href=&quot;https://anvil.works&quot; target=&quot;_blank&quot;>Anvil</a> (frontend) &amp;middot; <a class=&quot;pr-layout-159&quot; href=&quot;https://www.jsdelivr.com/&quot; target=&quot;_blank&quot;>jsDelivr</a> (CDN).</p>
+                    <p class="pr-layout-165">Full license texts and attributions are in the repository's <a class="pr-layout-159" href="https://huggingface.co/spaces/alpharius6769/pocket-reader/blob/main/NOTICE" target="_blank"><code>NOTICE</code></a> and <a class="pr-layout-159" href="https://huggingface.co/spaces/alpharius6769/pocket-reader/blob/main/ATTRIBUTIONS.md" target="_blank"><code>ATTRIBUTIONS.md</code></a>.</p>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            <div class=&quot;pr-layout-008&quot;><div anvil-drop-here></div></div>
+          </div>
+    </div>
+
+    <div id=&quot;global-loading-overlay&quot; class=&quot;global-loading-overlay&quot;>
+      <div class=&quot;global-loading-card&quot;>
+        <div class=&quot;global-loading-spinner&quot;></div>
+        <div class=&quot;global-loading-headline&quot; id=&quot;_loading-headline&quot;></div>
+        <div class=&quot;global-loading-sub&quot; id=&quot;_loading-sub&quot;></div>
+      </div>
+    </div>
+
+    <div id=&quot;cache-modal-overlay&quot; class=&quot;modal-overlay&quot;>
+      <div class=&quot;cache-modal&quot;>
+        <h3>&amp;#x1F399; Pre-cache audio?</h3>
+        <p class=&quot;pr-layout-166&quot;>Pre-caching synthesizes audio in the background so playback is seamless. The AI engine loads once on first use (~80 MB).</p>
+        <div class=&quot;modal-buttons pr-layout-167&quot;>
+          <button class=&quot;pr-btn-success pr-layout-013&quot; onclick=&quot;startCaching('Normal')&quot;>&amp;#x26A1; Cache Now (Recommended)</button>
+          <button class=&quot;pr-btn-outline pr-layout-013&quot; onclick=&quot;startCaching('Permanent')&quot;>&amp;#x1F512; Cache Permanently</button>
+          <button class=&quot;pr-btn-outline pr-layout-168&quot; onclick=&quot;closeCacheModal()&quot;>&amp;#x25B6; Read without caching</button>
+        </div>
+        <p class=&quot;pr-layout-169&quot;>Press Play after this dialog closes to start narration.</p>
+      </div>
+    </div>
+
+    <div id=&quot;wip-modal-overlay&quot; class=&quot;modal-overlay&quot;>
+      <div class=&quot;cache-modal&quot;>
+        <h3>Work in progress</h3>
+        <p class=&quot;pr-layout-170&quot;>This dialog is ready for future notices.</p>
+        <div class=&quot;pr-layout-171&quot;>
+          <input id=&quot;hide-wip-checkbox&quot; type=&quot;checkbox&quot;>
+          <label class=&quot;pr-layout-172&quot; for=&quot;hide-wip-checkbox&quot;>Don't show this warning again</label>
+        </div>
+        <div class=&quot;modal-buttons&quot;>
+          <button class=&quot;pr-btn-success&quot; onclick=&quot;closeWipModal()&quot;>Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id=&quot;settings-modal-overlay&quot; class=&quot;modal-overlay&quot;></div>
+    <div id=&quot;virtue-container&quot; class=&quot;virtue-container pr-layout-173&quot;>
+      <div id=&quot;virtue-text-overlay&quot; class=&quot;virtue-text-overlay&quot;></div>
+    </div>
+
+    <div id=&quot;caching-progress-modal&quot; class=&quot;modal-overlay pr-layout-174&quot;>
+      <div class=&quot;cache-modal-card pr-layout-175&quot;>
+        <h3 class=&quot;pr-layout-176&quot;>Preparing Narration</h3>
+        <div class=&quot;pr-layout-177&quot;>
+          <span class=&quot;global-loading-spinner pr-layout-178&quot;></span>
+        </div>
+        <p class=&quot;pr-layout-179&quot; id=&quot;caching-progress-text&quot;>Synthesizing audio...</p>
+
+        <div class=&quot;progress-container pr-layout-180&quot;>
+          <div id=&quot;caching-progress-fill&quot; class=&quot;progress-bar-fill pr-layout-181&quot;></div>
+        </div>
+
+        <p class=&quot;pr-layout-182&quot; id=&quot;caching-progress-stats&quot;>0 / 0 paragraphs - 0%</p>
+
+        <button id=&quot;caching-progress-dismiss-btn&quot; class=&quot;pr-btn-outline pr-layout-183&quot; disabled onclick=&quot;window.dismissCachingModal()&quot;>Begin Playback - keep caching</button>
+
+        <button id=&quot;away-queue-minimize-btn&quot; onclick=&quot;window.dismissCachingModal()&quot; class=&quot;pr-btn-outline pr-layout-184&quot;>
+          Hide Cache Panel
+        </button>
+        <p class=&quot;pr-layout-185&quot; id=&quot;away-queue-hint&quot;>
+          Away Mode prepares offline narration for queued stories. Add stories with Queue Away, start Away Mode in Library, then hide this panel while Pocket Reader remains open. If your phone pauses the app in the background or when locked, the cache job resumes when you return.
+        </p>
+
+        <button onclick=&quot;if(typeof window._stopCaching==='function') window._stopCaching()&quot; class=&quot;pr-btn-outline pr-layout-186&quot;>Stop Caching Completely</button>
+      </div>
+    </div>
+    <script src=&quot;_/theme/diagnostics.js?v=diag-v4&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/storage_core.js?v=storage-v6&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/sync_core.js?v=sync-v5&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/api_core.js?v=search-v10&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/experience_coordinator.js?v=experience-v4&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/virtue_controller.js?v=virtue-v4&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/engine_utils.js&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/narration_runtime_loader.js?v=narration-loader-v7&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/tts_pronunciation_core.js?v=tts-pron-v1&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/audio_core.js?v=audio-v10&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/buffer_manager.js?v=buffer-v5&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/library_manager.js?v=library-v5&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/device_setup.js?v=device-setup-v6&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/settings_manager.js?v=settings-v39&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/cinematic_ui.js?v=cinematic-v4&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/reader_features.js?v=features-v3&quot; type=&quot;module&quot;></script>
+    <script src=&quot;_/theme/ui_controller.js?v=ui-v77&quot; type=&quot;module&quot;></script>
+  </div>
+" prop:visible="true"></anvil-form>

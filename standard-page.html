@@ -1,0 +1,105 @@
+<title>Pocket Reader</title>
+
+<!-- ==========================================
+1. PWA & MOBILE META TAGS
+========================================== -->
+<!-- Sets a 1:1 initial scale and extends content into the iPhone 'notch'/safe
+     areas (viewport-fit=cover, paired with env(safe-area-inset-*) in the CSS).
+     Pinch-to-zoom is intentionally left ENABLED for accessibility — modern
+     browsers ignore user-scalable=no anyway, so the layout must not rely on
+     zoom being disabled. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+<!-- Tells iOS Safari that this app can be installed to the Home Screen -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+
+<!-- Styles the iOS status bar to blend seamlessly with your app background -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pocket Reader">
+
+<!-- Sets the Android Chrome top-bar and tab-switcher color to your Dark Blue theme -->
+<meta name="theme-color" content="#111214">
+
+<!-- ==========================================
+2. GLOBAL STYLESHEET
+========================================== -->
+<!-- Links the optimized CSS file we just created -->
+<link rel="stylesheet" href="_/theme/theme.css?v=midnight-v19">
+
+<!-- ==========================================
+2b. MODULE PRELOAD (flatten the ES-module waterfall)
+========================================== -->
+<!--
+The FrontEnd form loads its JS as an ES-module graph (both via <script type=module>
+in the form HTML and via anvil.js.import_from at form init). Because those modules
+are only discovered once the Skulpt runtime boots and parses each parent module,
+they otherwise download in a serial waterfall that gates first paint / LCP.
+These hints let the browser start fetching the render-critical modules in parallel
+during initial HTML parse, before the runtime asks for them. URLs (and ?v= query
+strings) MUST match the script-tag / import_from URLs exactly, or the browser
+double-fetches. audio_core, buffer_manager and tts_pronunciation_core are
+intentionally omitted: they are only needed for playback, so leaving them to load
+after paint keeps them from competing with the render-critical modules.
+-->
+<link rel="modulepreload" href="_/theme/diagnostics.js?v=diag-v4">
+<link rel="modulepreload" href="_/theme/motion_lite.js">
+<link rel="modulepreload" href="_/theme/storage_core.js?v=storage-v6">
+<link rel="modulepreload" href="_/theme/sync_core.js?v=sync-v5">
+<link rel="modulepreload" href="_/theme/engine_utils.js">
+<link rel="modulepreload" href="_/theme/narration_runtime_loader.js?v=narration-loader-v7">
+<link rel="modulepreload" href="_/theme/api_core.js?v=search-v10">
+<link rel="modulepreload" href="_/theme/experience_coordinator.js?v=experience-v4">
+<link rel="modulepreload" href="_/theme/virtue_controller.js?v=virtue-v4">
+<link rel="modulepreload" href="_/theme/pocket_backend_policy.js?v=backend-v20">
+<link rel="modulepreload" href="_/theme/pocket_performance_policy.js?v=performance-v2">
+<link rel="modulepreload" href="_/theme/device_setup.js?v=device-setup-v6">
+<link rel="modulepreload" href="_/theme/settings_manager.js?v=settings-v39">
+<link rel="modulepreload" href="_/theme/library_manager.js?v=library-v5">
+<link rel="modulepreload" href="_/theme/cinematic_ui.js?v=cinematic-v4">
+<link rel="modulepreload" href="_/theme/reader_features.js?v=features-v3">
+<link rel="modulepreload" href="_/theme/ui_controller.js?v=ui-v76">
+
+<!-- ==========================================
+3. SERVICE WORKER REGISTRATION
+========================================== -->
+<!-- Registers the background worker immediately so assets cache on the first visit -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
+      // Share one registration promise with ui_controller so first load does
+      // not race two registrations or emit duplicate failures.
+      window.__prServiceWorkerRegistration = navigator.serviceWorker
+        .register('/_/api/serviceworker.js?v=127', { scope: '/' })
+        .catch(function() {
+          return navigator.serviceWorker.register('/_/api/serviceworker.js', { scope: '/' });
+        })
+        .then(function(registration) {
+          console.log('Service Worker registered with scope:', registration.scope);
+          window.__prServiceWorkerError = null;
+          return registration;
+        })
+        .catch(function(error) {
+          window.__prServiceWorkerError = {
+            name: error && error.name ? error.name : 'Error',
+            message: error && error.message ? error.message : String(error)
+          };
+          console.error('Service Worker registration failed:', error);
+          return null;
+        });
+    });
+  }
+</script>
+
+<!-- ==========================================
+4. ANVIL COMPONENT DROP ZONE
+========================================== -->
+<!-- 
+This acts as the blank canvas. Your FrontEnd Form.html 
+(which starts with <div class="app-wrapper">) will be injected here. 
+By keeping this wrapper classless, we prevent Anvil's default 
+padding/margins from interfering with your 100dvh full-screen layout.
+-->
+<div>
+  <div anvil-drop-here></div>
+</div>

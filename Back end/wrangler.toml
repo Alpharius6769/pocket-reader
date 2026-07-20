@@ -1,0 +1,20 @@
+name = "pocket-reader-proxy"
+main = "cloudflare_worker.js"
+compatibility_date = "2026-07-18"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[vars]
+ALLOWED_ORIGINS = "https://hot-wiry-raven.anvil.app"
+ALLOWED_PROXY_HOSTS = "archiveofourown.org,fichub.net"
+CHAPTER_SYNC_URL = "https://alpharius6769-pocket-reader.hf.space/api/sync/chapters"
+
+[triggers]
+crons = ["17,47 * * * *"]
+
+# Smart placement routes the worker close to the target server for faster fetch times
+[placement]
+mode = "smart"

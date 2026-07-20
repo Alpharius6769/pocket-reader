@@ -1,0 +1,50 @@
+{
+  "onnx/": {
+    "count": 67,
+    "bytes": 1836836250,
+    "sample": [
+      "onnx/english_2026-04-ort-r1/flow_lm_decode_block4_int8.ort",
+      "onnx/english_2026-04-ort-r1/flow_lm_flow_int8.ort",
+      "onnx/english_2026-04-ort-r1/flow_lm_main_int8.ort",
+      "onnx/english_2026-04-ort-r1/flow_lm_unified_block4_int8.ort",
+      "onnx/english_2026-04-ort-r1/mimi_decoder_int8.ort",
+      "onnx/english_2026-04-ort-r1/required_operators_and_types.config",
+      "onnx/english_2026-04-ort-r1/text_conditioner_int8.ort",
+      "onnx/english_2026-04-webgpu-fp16-r2/.bzEmpty"
+    ]
+  },
+  "models/": {
+    "count": 0,
+    "bytes": 0,
+    "sample": []
+  },
+  "voices/": {
+    "count": 159,
+    "bytes": 879480673,
+    "sample": [
+      "voices/UPLOAD_TO_B2.md",
+      "voices/bill_boerst_anger.safetensors",
+      "voices/bill_boerst_calm.safetensors",
+      "voices/bill_boerst_confused.safetensors",
+      "voices/bill_boerst_enthused.safetensors",
+      "voices/bill_boerst_excited.safetensors",
+      "voices/bill_boerst_frustrated.safetensors",
+      "voices/bill_boerst_happy.safetensors"
+    ]
+  },
+  "backup/": {
+    "count": 0,
+    "bytes": 0,
+    "sample": []
+  },
+  "ggml/": {
+    "count": 0,
+    "bytes": 0,
+    "sample": []
+  },
+  "runtime/": {
+    "count": 0,
+    "bytes": 0,
+    "sample": []
+  }
+}

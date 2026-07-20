@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite
+*.sqlite3
+
+# Cloudflare / Wrangler
+.wrangler/
+
+# Dependencies, generated builds, benchmarks, and local upload staging
+**/node_modules/
+.venv-*/
+benchmark-results/
+*_build/
+*-build/
+*-upload/
+*_upload/
+ort-relaxed-build/
+ort-runtime-b2-upload/
+ort-runtime-minimal-build/
+pocket-*-build/
+pocket-*-upload/
+b2-upload-onnxruntime/
+voice-zero-pocket-pack*/
+_backup_*/
+
+# OS / editor
+Thumbs.db
+.DS_Store

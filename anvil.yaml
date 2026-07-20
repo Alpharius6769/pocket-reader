@@ -1,0 +1,201 @@
+allow_embedding: true
+correct_dependency_ids: {}
+db_schema:
+  cloudlibrary:
+    client: none
+    columns:
+    - admin_ui: {width: 200}
+      client_hidden: false
+      name: owner
+      target: users
+      type: link_single
+    - admin_ui: {width: 200}
+      client_hidden: false
+      name: saved_data
+      type: simpleObject
+    indexes: []
+    server: full
+    title: CloudLibrary
+  user_profiles:
+    client: none
+    columns:
+    - admin_ui: {order: 0, width: 200}
+      client_hidden: false
+      name: user
+      target: users
+      type: link_single
+    - admin_ui: {width: 200}
+      client_hidden: false
+      name: profile_data
+      type: simpleObject
+    - admin_ui: {width: 120}
+      client_hidden: true
+      name: revision
+      type: number
+    - admin_ui: {width: 180}
+      client_hidden: true
+      name: updated_at
+      type: datetime
+    - admin_ui: {width: 200}
+      client_hidden: true
+      name: avatar_media
+      type: media
+    - admin_ui: {width: 200}
+      client_hidden: true
+      name: avatar_hash
+      type: string
+    indexes: []
+    server: full
+    title: user_profiles
+  users:
+    client: none
+    columns:
+    - admin_ui: {width: 200}
+      client_hidden: false
+      name: email
+      type: string
+    - admin_ui: {width: 200}
+      client_hidden: true
+      name: enabled
+      type: bool
+    - admin_ui: {width: 200}
+      client_hidden: true
+      name: last_login
+      type: datetime
+    - admin_ui: {width: 200}
+      client_hidden: true
+      name: password_hash
+      type: string
+    - admin_ui: {width: 200}
+      client_hidden: true
+      name: n_password_failures
+      type: number
+    - admin_ui: {width: 200}
+      client_hidden: true
+      name: confirmed_email
+      type: bool
+    - admin_ui: {width: 200}
+      client_hidden: true
+      name: remembered_logins
+      type: simpleObject
+    - admin_ui: {width: 200}
+      client_hidden: true
+      name: signed_up
+      type: datetime
+    indexes: []
+    server: full
+    title: Users
+dependencies: []
+exported_table_schema:
+- client: none
+  columns:
+    +L1cOdgU2ZoZ:
+      admin_ui: {order: 4, width: 200}
+      client_hidden: true
+      init: {completed: 1779163604556, started: 1779163604051}
+      name: n_password_failures
+      type: number
+    0CaMifkX5bUj:
+      admin_ui: {order: 1, width: 200}
+      client_hidden: true
+      init: {completed: 1779163604142, started: 1779163603636}
+      name: enabled
+      type: bool
+    HQ_CVQSgAGU1:
+      admin_ui: {order: 3, width: 200}
+      client_hidden: true
+      init: {completed: 1779163604426, started: 1779163603917}
+      name: password_hash
+      type: string
+    IUPuKHZXmPk0:
+      admin_ui: {order: 6, width: 200}
+      client_hidden: true
+      init: {completed: 1779163627814, started: 1779163627308}
+      name: remembered_logins
+      type: simpleObject
+    bKPCUjpyZ7R8:
+      admin_ui: {order: 0, width: 200}
+      client_hidden: false
+      init: {completed: 1779163604005, started: 1779163603499}
+      name: email
+      type: string
+    fmjd+8gI4Coy:
+      admin_ui: {order: 7, width: 200}
+      client_hidden: true
+      init: {completed: 1779163648799, started: 1779163648293}
+      name: signed_up
+      type: datetime
+    namtZlMsXjFA:
+      admin_ui: {order: 2, width: 200}
+      client_hidden: true
+      init: {completed: 1779163604286, started: 1779163603777}
+      name: last_login
+      type: datetime
+    oAGCmKjQ5F6S:
+      admin_ui: {order: 5, width: 200}
+      client_hidden: true
+      init: {completed: 1779163604687, started: 1779163604181}
+      name: confirmed_email
+      type: bool
+  id: 1067747
+  name: Users
+  python_name: users
+  server: full
+- client: none
+  columns:
+    OSE3kBt94cnz:
+      admin_ui: {order: 1, width: 200}
+      client_hidden: false
+      init: {completed: 1779163854418, started: 1779163853912}
+      name: saved_data
+      type: simpleObject
+    bMi3g9YBaCNW:
+      admin_ui: {order: 0, width: 200}
+      backend: anvil.tables.Row
+      client_hidden: false
+      init: {completed: 1779163810444, started: 1779163809938}
+      name: owner
+      table_id: 1067747
+      type: liveObject
+  id: 1067748
+  name: CloudLibrary
+  python_name: cloudlibrary
+  server: full
+metadata: {description: A private offline-capable story reader with Pocket TTS narration and optional cross-device profile sync., logo_img: 'asset:pocket_reader_icon-logo.jpeg', title: Alpharius' Pocket Reader}
+name: Alpharius' Pocket Reader (WIP Name)
+native_deps: {head_html: ''}
+package_name: Alpharius_Pocket_Reader
+renamed: true
+runtime_options:
+  client_version: '3'
+  legacy_features: {bootstrap3: true, class_names: true}
+  server_spec: {base: python310-standard}
+  version: 3
+services:
+- client_config: {enable_v2: true}
+  server_config: {}
+  source: /runtime/services/tables.yml
+- client_config: {allow_remember_me: true, allow_signup: true, confirm_email: true, enable_automatically: true, remember_me_days: 365, use_email: true, use_google: true, use_token: true}
+  server_config:
+    email_content:
+      confirm_address:
+        html: |-
+          <p>Welcome to Alpharius' Pocket Reader.</p>
+          <p>Confirm your email address to enable private profile sync across your devices:</p>
+          <p>{{confirm_link}}</p>
+          <p>If you did not create this account, you can ignore this message.</p>
+          <p>Pocket Reader</p>
+      reset_password:
+        html: |-
+          <p>A password reset was requested for your Pocket Reader account {{email}}.</p>
+          <p>Use the link below to choose a new password:</p>
+          <p>{{reset_link}}</p>
+          <p>This link will expire in ten minutes.</p>
+          <p>If you did not request this reset, you can ignore this message.</p>
+    user_table: users
+  source: /runtime/services/anvil/users.yml
+- client_config: {}
+  server_config: {}
+  source: /runtime/services/google.yml
+startup: {module: FrontEnd, type: form}
+startup_form: null
