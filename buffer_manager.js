@@ -769,7 +769,7 @@ export const BufferManager = {
       window.currentStory = window.currentStory || firstStory || { title: 'Queued story', storyKey: firstRef };
       if (!window.currentStory.title) window.currentStory.title = firstStory?.title || 'Queued story';
       sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
-        title: firstRef,
+        title: window.currentStory.title,
         mode: 'Permanent',
         awayQueue: [...window.precacheQueue],
         requestedAt: Date.now(),

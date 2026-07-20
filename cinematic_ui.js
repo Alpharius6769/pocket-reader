@@ -201,7 +201,7 @@ function installSettingsSystem() {
   // backup/restore, permanent caches) live in the Advanced Settings & Info
   // section, so a top-level Offline Storage pill was redundant and misleading.
   const groups = [
-    ['account', 'Account & Sync', 'cloud'], ['reading', 'Reading', 'book-open'], ['narration', 'Narration', 'volume-2'],
+    ['reading', 'Reading', 'book-open'], ['narration', 'Narration', 'volume-2'],
     ['appearance', 'Appearance', 'sparkles'], ['companion', 'Companion', 'user'],
     ['accessibility', 'Accessibility', 'shield-check'], ['advanced', 'Advanced Diagnostics', 'sliders-horizontal'],
   ];
@@ -213,7 +213,7 @@ function installSettingsSystem() {
   nav.innerHTML = groups.map(([id, label, glyph], index) => `<button class="${index ? '' : 'active'}" data-settings-target="${id}">${icon(glyph)}<span>${label}</span></button>`).join('');
   grid.before(nav);
   const cards = [...grid.querySelectorAll('.settings-card')];
-  const classify = (title) => /account|sync/i.test(title) ? 'account' : /narration|playback|voice|expressive|pronunciation/i.test(title) ? 'narration' : /font|reading|reader|text/i.test(title) ? 'reading' : /theme|appearance|color/i.test(title) ? 'appearance' : /companion|app/i.test(title) ? 'companion' : /storage|cache|offline/i.test(title) ? 'storage' : /access|motion|haptic|hint/i.test(title) ? 'accessibility' : 'advanced';
+  const classify = (title) => /narration|playback|voice|expressive|pronunciation/i.test(title) ? 'narration' : /font|reading|reader|text/i.test(title) ? 'reading' : /theme|appearance|color/i.test(title) ? 'appearance' : /companion|app/i.test(title) ? 'companion' : /storage|cache|offline/i.test(title) ? 'storage' : /access|motion|haptic|hint/i.test(title) ? 'accessibility' : 'advanced';
   const decorateCard = (card, index) => {
     const section = classify(card.querySelector('h3')?.textContent || '');
     card.dataset.settingsSection = section;
@@ -243,11 +243,7 @@ function installSettingsSystem() {
     target?.scrollIntoView({ behavior: motionAllowed() ? 'smooth' : 'auto', block: 'start' });
   });
 
-  const accountSettings = document.createElement('section');
-  accountSettings.className = 'settings-card';
-  accountSettings.dataset.settingsSection = 'account';
-  accountSettings.innerHTML = `<h3>Account & Sync</h3>${syncStatusMarkup()}<button class="pr-btn-primary" onclick="showView('profile-view')">${icon('user')}<span>Open Account Center</span></button><p class="settings-help">Accounts are optional. Google and email accounts use Anvil's secure login, confirmation, and password-reset flow.</p>`;
-  grid.prepend(accountSettings);
+
 
   const personalization = document.createElement('section');
   personalization.className = 'settings-card';

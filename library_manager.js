@@ -137,6 +137,11 @@ function normalizePocketVoiceSetting(profile) {
   if (!settings || typeof settings !== 'object') return;
   const defaultVoice = window.POCKET_DEFAULT_VOICE || 'donald_malone';
   const voices = window.POCKET_VOICES || [];
+  // Migrate old default voice of 'donald_malone' to 'rayne' once if not explicitly overridden by user
+  if ((settings.pocketVoice === 'donald_malone' || !settings.pocketVoice) && typeof localStorage !== 'undefined' && !localStorage.getItem('pr_voice_migrated_to_rayne_v1')) {
+    settings.pocketVoice = 'rayne';
+    localStorage.setItem('pr_voice_migrated_to_rayne_v1', 'true');
+  }
   const canonical = typeof window.canonicalPocketVoice === 'function'
     ? window.canonicalPocketVoice(settings.pocketVoice || defaultVoice)
     : String(settings.pocketVoice || defaultVoice).toLowerCase().trim();
@@ -1257,7 +1262,7 @@ function _buildStoryCardHtml(story, isList) {
     const subscriptionLabel = story.updateSubscribed ? 'Unsubscribe' : 'Subscribe';
     const subscriptionButton = canSubscribe
       ? '<button onclick="event.stopPropagation(); ' + closeMenusJs
-        + " window.toggleStorySubscription(decodeURIComponent('" + storyKeyEncoded + "'))\"><span>" + (window.prIcon?.('bell') || '🔔') + "</span> "
+        + " window.toggleStorySubscription(decodeURIComponent('" + storyKeyEncoded + "'))\"><span>🔔 Bell - </span> "
         + subscriptionLabel + '</button>'
       : '';
 

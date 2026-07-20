@@ -845,7 +845,7 @@ export async function loadStory(url, options = {}) {
           window.showSettingsModal("Preferred Voice", html);
           
           const sel = document.getElementById('new-story-voice-select');
-          window.renderPocketVoiceOptions(sel, window.userProfile?.settings?.pocketVoice || 'donald_malone');
+          window.renderPocketVoiceOptions(sel, window.userProfile?.settings?.pocketVoice || window.POCKET_DEFAULT_VOICE || 'rayne');
 
           const cancelBtn = document.getElementById('new-story-voice-cancel');
           const continueBtn = document.getElementById('new-story-voice-continue');
