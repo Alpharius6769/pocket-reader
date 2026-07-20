@@ -115,7 +115,7 @@ window.showView = showView;
 if (window._pendingViews && window._pendingViews.length > 0) {
   const finalView = window._pendingViews.pop();
   window._pendingViews = [];
-  window.showView(finalView);
+  setTimeout(() => window.showView(finalView), 50);
 }
 
 // ── Mobile bottom-bar "More" popover ─────────────────────────────────────────
