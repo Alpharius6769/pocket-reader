@@ -1033,51 +1033,52 @@
                   </div>
                 </details>
               </div>
+            </div>
           </div>
 
-          <div id=&quot;away-mode-view&quot; class=&quot;view&quot;>
-            <h1 class=&quot;pr-layout-115&quot;>Away Mode Caching</h1>
-            <div class=&quot;settings-grid settings-grid-masonry&quot;>
+          <div id='away-mode-view' class='view'>
+            <h1 class='pr-layout-115'>Away Mode Caching</h1>
+            <div class='settings-grid settings-grid-masonry'>
               
               <!-- Status & Control Card -->
-              <div class=&quot;settings-card&quot;>
+              <div class='settings-card'>
                 <h3>Status &amp; Controls</h3>
-                <p class=&quot;settings-help&quot;>Away Mode prepares offline narration for your queued stories. Caching runs while this page remains open.</p>
-                <div class=&quot;device-setup-facts&quot; style=&quot;margin-bottom:15px; margin-top:10px;&quot;>
-                  <div style=&quot;display:flex; justify-content:space-between; margin-bottom:8px;&quot;><strong>Status</strong><span id=&quot;away-status-text&quot; style=&quot;font-weight:bold;&quot;>Idle</span></div>
-                  <div style=&quot;display:flex; justify-content:space-between; margin-bottom:8px;&quot;><strong>Queue Depth</strong><span id=&quot;away-queue-depth&quot;>0 paragraphs</span></div>
-                  <div style=&quot;display:flex; justify-content:space-between; margin-bottom:8px;&quot;><strong>Session Cached</strong><span id=&quot;away-session-cached&quot;>0 paragraphs</span></div>
-                  <div style=&quot;display:flex; justify-content:space-between; margin-bottom:8px;&quot;><strong>ETA</strong><span id=&quot;away-eta&quot;>N/A</span></div>
+                <p class='settings-help'>Away Mode prepares offline narration for your queued stories. Caching runs while this page remains open.</p>
+                <div class='device-setup-facts' style='margin-bottom:15px; margin-top:10px;'>
+                  <div style='display:flex; justify-content:space-between; margin-bottom:8px;'><strong>Status</strong><span id='away-status-text' style='font-weight:bold;'>Idle</span></div>
+                  <div style='display:flex; justify-content:space-between; margin-bottom:8px;'><strong>Queue Depth</strong><span id='away-queue-depth'>0 paragraphs</span></div>
+                  <div style='display:flex; justify-content:space-between; margin-bottom:8px;'><strong>Session Cached</strong><span id='away-session-cached'>0 paragraphs</span></div>
+                  <div style='display:flex; justify-content:space-between; margin-bottom:8px;'><strong>ETA</strong><span id='away-eta'>N/A</span></div>
                 </div>
                 
-                <div style=&quot;display:flex; gap:10px; margin-bottom:15px;&quot;>
-                  <button id=&quot;away-start-btn&quot; class=&quot;pr-btn-success&quot; style=&quot;flex:1;&quot; onclick=&quot;window.startAwayModeFromSubpage()&quot;>Begin Caching</button>
-                  <button id=&quot;away-stop-btn&quot; class=&quot;pr-btn-outline&quot; style=&quot;flex:1;&quot; onclick=&quot;window.stopAwayModeFromSubpage()&quot;>Stop Caching</button>
+                <div style='display:flex; gap:10px; margin-bottom:15px;'>
+                  <button id='away-start-btn' class='pr-btn-success' style='flex:1;' onclick='window.startAwayModeFromSubpage()'>Begin Caching</button>
+                  <button id='away-stop-btn' class='pr-btn-outline' style='flex:1;' onclick='window.stopAwayModeFromSubpage()'>Stop Caching</button>
                 </div>
 
-                <label class=&quot;settings-label&quot; for=&quot;away-workers-select&quot; style=&quot;margin-top:10px;&quot;>Parallel Narration Workers</label>
-                <select id=&quot;away-workers-select&quot; class=&quot;settings-control&quot; onchange=&quot;window.saveAwayWorkersSetting(this.value)&quot;>
-                  <option value=&quot;1&quot;>1 Worker (Recommended for Mobile)</option>
-                  <option value=&quot;2&quot;>2 Workers (Faster - CPU/GPU Intensive)</option>
-                  <option value=&quot;3&quot;>3 Workers</option>
-                  <option value=&quot;4&quot;>4 Workers (Extreme)</option>
+                <label class='settings-label' for='away-workers-select' style='margin-top:10px;'>Parallel Narration Workers</label>
+                <select id='away-workers-select' class='settings-control' onchange='window.saveAwayWorkersSetting(this.value)'>
+                  <option value='1'>1 Worker (Recommended for Mobile)</option>
+                  <option value='2'>2 Workers (Faster - CPU/GPU Intensive)</option>
+                  <option value='3'>3 Workers</option>
+                  <option value='4'>4 Workers (Extreme)</option>
                 </select>
               </div>
 
               <!-- Active Queue Card -->
-              <div class=&quot;settings-card&quot;>
+              <div class='settings-card'>
                 <h3>Caching Queue</h3>
-                <p class=&quot;settings-help&quot;>Manage stories currently queued for offline caching.</p>
-                <div id=&quot;away-queue-list&quot; style=&quot;display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; margin-top:12px; border:1px solid var(--border-color); padding:8px; border-radius:6px; background:rgba(0,0,0,0.1);&quot;>
+                <p class='settings-help'>Manage stories currently queued for offline caching.</p>
+                <div id='away-queue-list' style='display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; margin-top:12px; border:1px solid var(--border-color); padding:8px; border-radius:6px; background:rgba(0,0,0,0.1);'>
                   <!-- Dynamic content -->
                 </div>
               </div>
 
               <!-- Quick Add Card -->
-              <div class=&quot;settings-card&quot;>
+              <div class='settings-card'>
                 <h3>Quick Add from Library</h3>
-                <p class=&quot;settings-help&quot;>Add other library stories to the caching queue.</p>
-                <div id=&quot;away-quick-add-list&quot; style=&quot;display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; margin-top:12px; border:1px solid var(--border-color); padding:8px; border-radius:6px; background:rgba(0,0,0,0.1);&quot;>
+                <p class='settings-help'>Add other library stories to the caching queue.</p>
+                <div id='away-quick-add-list' style='display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; margin-top:12px; border:1px solid var(--border-color); padding:8px; border-radius:6px; background:rgba(0,0,0,0.1);'>
                   <!-- Dynamic content -->
                 </div>
               </div>
@@ -1085,9 +1086,8 @@
             </div>
           </div>
 
-          <div class=&quot;pr-layout-008&quot;><div anvil-drop-here></div></div>
-          </div>
-    </div>
+          <div class='pr-layout-008'><div anvil-drop-here></div></div>
+        </div>
 
     <div id=&quot;global-loading-overlay&quot; class=&quot;global-loading-overlay&quot;>
       <div class=&quot;global-loading-card&quot;>
