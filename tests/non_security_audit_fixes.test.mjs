@@ -14,15 +14,33 @@ test('startup avoids hidden diagnostics polling and eager library rendering', as
   assert.doesNotMatch(library, /requestIdleCallback\(\(\) => \{\s*renderLibrary/);
 });
 
-test('narration modules load on demand rather than in the initial module graph', async () => {
+test('narration and UI modules use one canonical versioned URL everywhere', async () => {
   const html = await read('FrontEnd_html.html');
   const loader = await read('narration_runtime_loader.js');
-  assert.match(html, /narration_runtime_loader\.js\?v=narration-loader-v7/);
-  assert.doesNotMatch(html, /<script src=&quot;_\/theme\/buffer_manager\.js/);
-  assert.doesNotMatch(html, /<script src=&quot;_\/theme\/audio_core\.js/);
+  const serviceWorker = await read('serviceworker.py');
+  const standardPage = await read('standard-page.html');
+  const tagVersion = (source, module) =>
+    source.match(new RegExp(`${module}\\.js\\?v=([a-z0-9-]+)`))?.[1];
+  // Every module must be referenced by ONE URL across the form template, the
+  // narration loader's dynamic imports, and the SW precache — a second URL
+  // creates a second module instance whose top-level side effects run twice.
+  for (const module of ['audio_core', 'buffer_manager']) {
+    const pageTag = tagVersion(html, module);
+    assert.ok(pageTag, `${module} script tag missing from FrontEnd_html.html`);
+    assert.equal(tagVersion(loader, module), pageTag,
+      `${module}: narration_runtime_loader import differs from form-template tag`);
+    assert.equal(tagVersion(serviceWorker, module), pageTag,
+      `${module}: serviceworker precache differs from form-template tag`);
+  }
+  for (const module of ['ui_controller', 'narration_runtime_loader']) {
+    const pageTag = tagVersion(html, module);
+    assert.ok(pageTag, `${module} script tag missing from FrontEnd_html.html`);
+    assert.equal(tagVersion(serviceWorker, module), pageTag,
+      `${module}: serviceworker precache differs from form-template tag`);
+    assert.equal(tagVersion(standardPage, module), pageTag,
+      `${module}: standard-page modulepreload differs from form-template tag`);
+  }
   assert.match(loader, /ensureNarrationRuntime/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v45'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v36'\)/);
   const deferredActions = loader.match(/const DEFERRED_NARRATION_ACTIONS = \[[\s\S]*?\];/)?.[0] || '';
   assert.doesNotMatch(deferredActions, /onSpeedSliderInput/);
   assert.match(loader, /window\.onSpeedSliderInput = function onSpeedSliderInput/);
@@ -30,7 +48,7 @@ test('narration modules load on demand rather than in the initial module graph',
 
 test('service worker uses bounded navigation and lifetime-protected cache writes', async () => {
   const source = await read('serviceworker.py');
-  assert.match(source, /pocket-reader-core-v127/);
+  assert.match(source, /pocket-reader-core-v128/);
   assert.match(source, /fetchWithTimeout\(event\.request, 6000\)/);
   assert.match(source, /event\.waitUntil\(updatePromise/);
   assert.match(source, /url\.searchParams\.has\('v'\)/);

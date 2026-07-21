@@ -166,8 +166,17 @@ function _requestFastNarrationReload(mode) {
       }));
     }
   }
-  const activeView = document.querySelector('.view.active')?.id || 'home-view';
-  sessionStorage.setItem('POCKET_PRE-RELOAD_VIEW', activeView);
+  // Preserve the view the user was actually on when the FIRST reload was
+  // requested. showView marks the active view with '.active-view' (not
+  // '.active'); the old '.view.active' selector matched nothing and always
+  // saved the 'home-view' fallback, so restore yanked the user to Home. Also,
+  // an isolation-retry re-enters this function AFTER the reload has landed on
+  // Home, so only record the view if one is not already stashed for this
+  // reload chain — otherwise the retry would overwrite the real view with Home.
+  if (!sessionStorage.getItem('POCKET_PRE-RELOAD_VIEW')) {
+    const activeView = document.querySelector('.view.active-view')?.id || 'home-view';
+    sessionStorage.setItem('POCKET_PRE-RELOAD_VIEW', activeView);
+  }
   const target = new URL(window.location.href);
   target.searchParams.set(FAST_NARRATION_PARAM, '1');
   target.searchParams.set('tts_iso', String(Date.now()));
@@ -1548,7 +1557,7 @@ window.renderAwayModeUI = function() {
   } else {
     queueList.innerHTML = queue.map((ref, idx) => {
       const story = window.findLibraryStoryByRef?.(ref);
-      const title = story ? story.title : ref;
+      const title = _escapeCacheStatus(story ? story.title : ref);
       return `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--panel-bg); padding:8px 12px; border-radius:4px; border:1px solid var(--border-color);">
         <span style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%;" title="${title}">${title}</span>
         <button class="pr-btn-outline" style="padding:4px 8px; font-size:0.8rem; margin:0;" onclick="window.removeStoryFromAwayQueue('${encodeURIComponent(ref)}')">Remove</button>
@@ -1567,8 +1576,9 @@ window.renderAwayModeUI = function() {
   } else {
     quickAddList.innerHTML = notInQueue.map(s => {
       const ref = s.storyKey || window.getStoryStableKey?.(s) || s.title;
+      const title = _escapeCacheStatus(s.title);
       return `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--panel-bg); padding:8px 12px; border-radius:4px; border:1px solid var(--border-color);">
-        <span style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%;" title="${s.title}">${s.title}</span>
+        <span style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%;" title="${title}">${title}</span>
         <button class="pr-btn-primary" style="padding:4px 8px; font-size:0.8rem; margin:0;" onclick="window.addStoryToAwayQueue('${encodeURIComponent(ref)}')">Add</button>
       </div>`;
     }).join('');
@@ -1613,10 +1623,9 @@ window.addStoryToAwayQueue = function(refEncoded) {
 
 window.removeStoryFromAwayQueue = function(refEncoded) {
   const ref = decodeURIComponent(refEncoded);
-  if (window.precacheQueue) {
-    window.precacheQueue = window.precacheQueue.filter(item => item !== ref);
-    localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
-  }
+  if (!Array.isArray(window.precacheQueue)) window.precacheQueue = [];
+  window.precacheQueue = window.precacheQueue.filter(item => item !== ref);
+  localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
   const badge = document.getElementById('precache-count');
   if (badge) badge.innerText = `${window.precacheQueue.length} queued`;
   const btn = document.getElementById('start-precache-btn');

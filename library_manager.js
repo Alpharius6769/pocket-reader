@@ -137,10 +137,19 @@ function normalizePocketVoiceSetting(profile) {
   if (!settings || typeof settings !== 'object') return;
   const defaultVoice = window.POCKET_DEFAULT_VOICE || 'rayne';
   const voices = window.POCKET_VOICES || [];
-  // Migrate old default voice of 'rayne' to 'rayne' once if not explicitly overridden by user
-  if ((settings.pocketVoice === 'rayne' || !settings.pocketVoice) && typeof localStorage !== 'undefined' && !localStorage.getItem('pr_voice_migrated_to_rayne_v1')) {
+  // One-time migration to the new default voice (rayne). The previous default
+  // was 'donald_malone', and normalizePocketVoiceSetting always writes the
+  // resolved default back into settings.pocketVoice, so pre-0.8.0 profiles have
+  // 'donald_malone' persisted. Only migrate profiles that are still on that old
+  // default (never a voice the user deliberately picked). A NEW flag name is
+  // used because the original migration compared against 'rayne' (the new
+  // default) and so silently migrated nobody while burning 'pr_voice_migrated_
+  // to_rayne_v1' on first run.
+  if ((settings.pocketVoice === 'donald_malone' || !settings.pocketVoice)
+      && typeof localStorage !== 'undefined'
+      && !localStorage.getItem('pr_voice_migrated_to_rayne_v2')) {
     settings.pocketVoice = 'rayne';
-    localStorage.setItem('pr_voice_migrated_to_rayne_v1', 'true');
+    localStorage.setItem('pr_voice_migrated_to_rayne_v2', 'true');
   }
   const canonical = typeof window.canonicalPocketVoice === 'function'
     ? window.canonicalPocketVoice(settings.pocketVoice || defaultVoice)

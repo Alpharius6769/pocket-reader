@@ -233,9 +233,14 @@ export async function handleFileSelect(event) {
 }
 window.handleFileSelect = handleFileSelect;
 
-export async function processUploadedFile(file, fichubMeta) {
-  if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_thinking');
-  if (typeof window.showLoadingOverlay === 'function')
+export async function processUploadedFile(file, fichubMeta, options = {}) {
+  // silent: a background caching path (Away Mode / cache-job resume) fed this
+  // file via loadStory({preventNavigate}). Never navigate, show overlays, pop
+  // companion reactions, or alert — just parse, add to library, and persist
+  // chapters so the caller can cache them.
+  const silent = options.silent === true;
+  if (!silent && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_thinking');
+  if (!silent && typeof window.showLoadingOverlay === 'function')
     window.showLoadingOverlay('Parsing document...', 'Extracting text and chapters');
   const formData = new FormData();
   formData.append('file', file);
@@ -308,8 +313,8 @@ export async function processUploadedFile(file, fichubMeta) {
             || _stored.concat(newStory.chapters.slice(_stored.length));
           _existing.isFinished = false;
           if (typeof window._saveStoryChapters === 'function') await window._saveStoryChapters(newStory.storyKey, newStory.chapters);
-          if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
-          if (window.virtueSpeak) window.virtueSpeak(`Added ${_added} new chapter${_added > 1 ? 's' : ''} from your upload - your existing audio is kept.`, 6000);
+          if (!silent && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
+          if (!silent && window.virtueSpeak) window.virtueSpeak(`Added ${_added} new chapter${_added > 1 ? 's' : ''} from your upload - your existing audio is kept.`, 6000);
         }
       } catch (e) { console.warn('Upload merge check failed:', e); }
     }
@@ -326,11 +331,17 @@ export async function processUploadedFile(file, fichubMeta) {
       try { await window._saveStoryChapters(newStory.storyKey, newStory.chapters); }
       catch (e) { console.warn('Failed to persist uploaded story chapters:', e); }
     }
-    if (typeof window.populateReaderUI === 'function') window.populateReaderUI(window.currentStory, newStory.author);
-    if (typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
-    if (typeof window.showView === 'function') window.showView('reading-view');
-    await _ensureCacheDecisionModal();
+    if (!silent && typeof window.populateReaderUI === 'function') window.populateReaderUI(window.currentStory, newStory.author);
+    if (!silent && typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
+    if (!silent && typeof window.showView === 'function') window.showView('reading-view');
+    if (!silent) await _ensureCacheDecisionModal();
   } catch (error) {
+    if (silent) {
+      // Background caching path: never alert or pop a companion reaction. Let
+      // the caller observe the unset currentStory and skip the cache job.
+      console.warn('[Upload] Silent background parse failed:', error?.message || error);
+      throw error;
+    }
     const msg = error?.name === 'AbortError'
       ? `The upload took longer than ${Math.round(uploadTimeoutMs / 1000)} seconds. Check your connection and try again.`
       : error.message && error.message !== 'Upload failed'
@@ -340,7 +351,7 @@ export async function processUploadedFile(file, fichubMeta) {
     if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_network_error');
   } finally {
     clearTimeout(timeoutId);
-    if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+    if (!silent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
   }
 }
 window.processUploadedFile = processUploadedFile;
@@ -726,7 +737,17 @@ export async function loadStory(url, options = {}) {
   // this load's real error look like a user-initiated cancel.
   window._storyFetchCancelled = false;
   // Re-entrancy guard: abort any still-in-flight previous load (quietly).
-  if (_activeLoadAbort) { try { _activeLoadAbort._superseded = true; _activeLoadAbort.abort(); } catch (e) {} }
+  if (_activeLoadAbort) {
+    try {
+      _activeLoadAbort._superseded = true;
+      // If a background (silent) load supersedes a foreground one, the new load
+      // shows no overlay of its own, so the superseded load must clear the
+      // "Loading Story…" overlay it left up — otherwise it is orphaned forever.
+      // A foreground supersede shows its own overlay, so it must NOT be cleared.
+      _activeLoadAbort._supersededBySilent = preventNavigate;
+      _activeLoadAbort.abort();
+    } catch (e) {}
+  }
   _activeLoadAbort = null;
   if (!preventNavigate && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_story_loading');
 
@@ -898,9 +919,15 @@ export async function loadStory(url, options = {}) {
 
   // 3. Validate URL before network fetch
   if (!isValidStoryUrl(fetchUrl)) {
-    alert("Invalid story URL or address range. Please enter a valid public http(s) URL.");
-    if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_network_error');
-    if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+    // In background caching mode there is no user to see an alert, and the
+    // caller detects the unopened story from the unchanged currentStory. A
+    // URL-less uploaded story whose chapters were evicted reaches here on
+    // resume; alerting would be a spurious "Invalid story URL" popup.
+    if (!preventNavigate) {
+      alert("Invalid story URL or address range. Please enter a valid public http(s) URL.");
+      if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_network_error');
+      if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+    }
     return;
   }
 
@@ -957,12 +984,18 @@ export async function loadStory(url, options = {}) {
         const title = fhData.meta?.title;
         const file  = new File([blob], title ? `${title}.epub` : 'story.epub', { type: 'application/epub+zip' });
         if (typeof window.processUploadedFile === 'function') {
-          window.processUploadedFile(file, fhData.meta);
+          // Await so a background (preventNavigate) caller does not run its
+          // post-load "did the story open?" check before parsing finishes, and
+          // so silent mode is propagated (no navigation/overlay/alert).
+          await window.processUploadedFile(file, fhData.meta, { silent: preventNavigate });
           fichubSuccess = true;
         }
       } catch(fichubErr) {
         clearTimeout(ao3Timeout);
-        if (ao3Controller._superseded) return;
+        if (ao3Controller._superseded) {
+          if (ao3Controller._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+          return;
+        }
         if (window._storyFetchCancelled) {
           window._storyFetchCancelled = false;
           if (typeof window.virtueSpeak === 'function') window.virtueSpeak("Okay - I stopped loading that story.", 3500);
@@ -1015,7 +1048,10 @@ export async function loadStory(url, options = {}) {
       }
       // A superseding load or a user Cancel aborted us: exit quietly instead of
       // surfacing a spurious Cloudflare dialog for a request the user abandoned.
-      if (ao3Controller._superseded) return;
+      if (ao3Controller._superseded) {
+        if (ao3Controller._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+        return;
+      }
       if (window._storyFetchCancelled) {
         window._storyFetchCancelled = false;
         if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
