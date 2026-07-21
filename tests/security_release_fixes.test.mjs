@@ -39,9 +39,9 @@ test('push writes and deletes require a server-issued ownership token', async ()
 test('service-worker install failures reject and smoke targets the active revision', async () => {
   const worker = await read('serviceworker.py');
   const smoke = await read(path.join('tools', 'smoke_pocket_worker_runtime.mjs'));
-  assert.match(worker, /pocket-reader-core-v127/);
+  assert.match(worker, /pocket-reader-core-v128/);
   assert.match(worker, /Install failed:[\s\S]{0,100}throw err;/);
-  assert.match(smoke, /serviceworker\.js\?v=127/);
+  assert.match(smoke, /serviceworker\.js\?v=128/);
 });
 
 test('permanent cache resolves and loads the selected library story', async () => {

@@ -7,7 +7,7 @@ import {
   writePocketDeviceBackendPreference,
 } from './pocket_backend_policy.js?v=backend-v20';
 
-const NARRATION_SERVICE_WORKER_VERSION = '127';
+const NARRATION_SERVICE_WORKER_VERSION = '128';
 const NARRATION_SERVICE_WORKER_URL = `/_/api/serviceworker.js?v=${NARRATION_SERVICE_WORKER_VERSION}`;
 
 function narrationServiceWorkerControlsPage() {

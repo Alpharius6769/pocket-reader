@@ -70,7 +70,7 @@ after paint keeps them from competing with the render-critical modules.
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
       window.__prServiceWorkerRegistration = navigator.serviceWorker
-        .register('/_/api/serviceworker.js?v=127', { scope: '/' })
+        .register('/_/api/serviceworker.js?v=128', { scope: '/' })
         .catch(function() {
           return navigator.serviceWorker.register('/_/api/serviceworker.js', { scope: '/' });
         })
