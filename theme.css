@@ -852,9 +852,11 @@ body {
   position: fixed;
   bottom: 0;
   right: -120%;
-  width: clamp(160px, 22vw, 360px);
+  /* Kept deliberately modest on desktop so the fixed companion does not sit on
+     top of page cards/content at the bottom-right (it still reads clearly). */
+  width: clamp(150px, 17vw, 288px);
   aspect-ratio: 4 / 5;
-  max-height: 50vh;
+  max-height: 44vh;
   background-size: contain;
   background-repeat: no-repeat;
   background-position: bottom right;

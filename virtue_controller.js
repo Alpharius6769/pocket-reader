@@ -832,10 +832,6 @@ const _VIRTUE_DATA = {
       "So many days you've returned to me. A scholar's devotion — Plutarch's peer indeed.",
       "Day upon day, visit upon visit. Your dedication is a thing of beauty."
     ],
-    "speed_listener": [
-      "Found your perfect pace, did you? I'll read as fast or slow as you like, always.",
-      "Tuning the narration speed to suit you — I love that you make this yours."
-    ],
     "marking_page": [
       "Your first bookmark! I'll hold your place so you never lose your spot.",
       "Marking the page — leave the remembering to me. I've got it from here."

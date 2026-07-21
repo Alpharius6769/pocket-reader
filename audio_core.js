@@ -3211,12 +3211,6 @@ export function applyPlaybackSpeed() {
     }
   }
 
-  if (rate !== 1 && window.userProfile?.stats) {
-    if (typeof window.setDeviceStatFlag === 'function') window.setDeviceStatFlag('speedAdjusted');
-    else window.userProfile.stats.speedAdjusted = 1;
-    if (window.checkForNewAchievements) window.checkForNewAchievements();
-  }
-
   if (!window.isPlaying && window.virtueSpeak) {
     window.virtueSpeak("Speed changed.", 2500);
   }

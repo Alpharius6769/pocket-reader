@@ -550,7 +550,7 @@ export async function handleSearchSubmit(query, options = {}) {
     if (topBar && topBar.value !== (payload.query || rawQuery)) topBar.value = payload.query || rawQuery;
     if (inputEl && inputEl.value !== (payload.query || rawQuery)) inputEl.value = payload.query || rawQuery;
     window._ao3SearchState = { payload, results: [], page: payload.page || 1, hasMore: false, nextPage: null, displayTerm };
-    if (resultsPanel) resultsPanel.innerHTML = `<p style="color:var(--text-muted);">Searching AO3 for "${_escapeSearchHtml(displayTerm)}"...</p>`;
+    if (resultsPanel) resultsPanel.innerHTML = `<p style="color:var(--text-muted);">Searching AO3 for "${_escapeSearchHtml(displayTerm)}"...</p><p style="color:var(--text-muted);font-size:0.82rem;opacity:0.8;margin-top:6px;">AO3 blocks automated traffic, so results are fetched through a proxy — this can take up to a minute. Hang tight.</p>`;
   }
   if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_bubble_point');
 

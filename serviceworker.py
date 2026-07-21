@@ -19,7 +19,21 @@ function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
     var controller = new AbortController();
     var timer = setTimeout(function () { controller.abort(); }, timeoutMs);
-    return fetch(request, { signal: controller.signal }).then(
+    // A navigation request (mode 'navigate') cannot be re-issued through
+    // fetch() with an init object in some browsers — constructing a Request
+    // from it plus a RequestInit throws synchronously ("Cannot construct a
+    // Request with a RequestInit whose mode member is set as 'navigate'"). If
+    // that ever happens the abortable fetch must not hard-fail the navigation:
+    // fall back to a plain fetch(request) so the page still loads (just without
+    // the timeout guard for that one request).
+    var fetchPromise;
+    try {
+        fetchPromise = fetch(request, { signal: controller.signal });
+    } catch (constructError) {
+        clearTimeout(timer);
+        return fetch(request);
+    }
+    return fetchPromise.then(
         function (response) {
             clearTimeout(timer);
             return response;
@@ -60,27 +74,27 @@ self.addEventListener('message', function (event) {
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     '/',
-    '/_/theme/theme.css?v=midnight-v19',
+    '/_/theme/theme.css?v=midnight-v20',
     '/_/theme/tts_pronunciation_core.js?v=pron-v8',
     '/_/theme/pocket_backend_policy.js?v=backend-v20',
     '/_/theme/pocket_performance_policy.js?v=performance-v2',
     '/_/theme/diagnostics.js?v=diag-v4',
-    '/_/theme/api_core.js?v=search-v12',
+    '/_/theme/api_core.js?v=search-v13',
     '/_/theme/experience_coordinator.js?v=experience-v4',
-    '/_/theme/virtue_controller.js?v=virtue-v4',
+    '/_/theme/virtue_controller.js?v=virtue-v5',
     '/_/theme/engine_utils.js',
     '/_/theme/ui_controller.js?v=ui-v80',
     '/_/theme/device_setup.js?v=device-setup-v6',
     '/_/theme/device_benchmark_worker.js?v=device-bench-v1',
     '/_/theme/settings_manager.js?v=settings-v39',
-    '/_/theme/library_manager.js?v=library-v6',
+    '/_/theme/library_manager.js?v=library-v7',
     '/_/theme/narration_runtime_loader.js?v=narration-loader-v9',
     '/_/theme/storage_core.js?v=storage-v6',
     '/_/theme/sync_core.js?v=sync-v5',
     '/_/theme/cinematic_ui.js?v=cinematic-v4',
     '/_/theme/reader_features.js?v=features-v3',
     '/_/theme/buffer_manager.js?v=buffer-v40',
-    '/_/theme/audio_core.js?v=audio-v45',
+    '/_/theme/audio_core.js?v=audio-v46',
     '/_/theme/pocket_worker.js?v=pocket-worker-v40',
     '/_/theme/pocket_pcm_worklet.js?v=pcm-v1',
     '/_/theme/motion_lite.js',
