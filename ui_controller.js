@@ -29,7 +29,7 @@ export function showView(viewId) {
       // active, and close the popover after any navigation.
       const _moreBtn = document.getElementById('nav-more-btn');
       if (_moreBtn) {
-        const secondaryViews = ['search-view', 'hmofa-view', 'settings-view', 'about-view'];
+        const secondaryViews = ['search-view', 'hmofa-view', 'settings-view', 'about-view', 'away-mode-view'];
         _moreBtn.classList.toggle('active-view', secondaryViews.includes(viewId));
       }
       if (typeof window.closeNavMore === 'function') window.closeNavMore();
@@ -41,6 +41,10 @@ export function showView(viewId) {
         if (typeof window.refreshPerfPanel === 'function') window.refreshPerfPanel();
         if (typeof window.refreshBgCachePanel === 'function') window.refreshBgCachePanel();
         if (typeof window.renderPocketDeviceSetupSummary === 'function') window.renderPocketDeviceSetupSummary();
+      }
+
+      if (viewId === 'away-mode-view') {
+        if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
       }
 
       if (viewId === 'home-view') {

@@ -298,6 +298,10 @@
         <img class=&quot;nav-icon&quot; src=&quot;_/theme/hmofa%20192.png&quot; alt=&quot;&quot;>
         <span>HMOFA Masterlist</span>
       </button>
+      <button class=&quot;nav-btn&quot; onclick=&quot;showView('away-mode-view')&quot;>
+        <img class=&quot;nav-icon&quot; src=&quot;_/theme/away_mode_192.png&quot; alt=&quot;&quot;>
+        <span>Away Cache</span>
+      </button>
       <button class=&quot;nav-btn&quot; onclick=&quot;showView('settings-view')&quot;>
         <img class=&quot;nav-icon&quot; src=&quot;_/theme/settings%20192.png&quot; alt=&quot;&quot;>
         <span>Settings</span>
@@ -1029,9 +1033,59 @@
                   </div>
                 </details>
               </div>
-            </div>
+          </div>
 
-            <div class=&quot;pr-layout-008&quot;><div anvil-drop-here></div></div>
+          <div id=&quot;away-mode-view&quot; class=&quot;view&quot;>
+            <h1 class=&quot;pr-layout-115&quot;>Away Mode Caching</h1>
+            <div class=&quot;settings-grid settings-grid-masonry&quot;>
+              
+              <!-- Status & Control Card -->
+              <div class=&quot;settings-card&quot;>
+                <h3>Status &amp; Controls</h3>
+                <p class=&quot;settings-help&quot;>Away Mode prepares offline narration for your queued stories. Caching runs while this page remains open.</p>
+                <div class=&quot;device-setup-facts&quot; style=&quot;margin-bottom:15px; margin-top:10px;&quot;>
+                  <div style=&quot;display:flex; justify-content:space-between; margin-bottom:8px;&quot;><strong>Status</strong><span id=&quot;away-status-text&quot; style=&quot;font-weight:bold;&quot;>Idle</span></div>
+                  <div style=&quot;display:flex; justify-content:space-between; margin-bottom:8px;&quot;><strong>Queue Depth</strong><span id=&quot;away-queue-depth&quot;>0 paragraphs</span></div>
+                  <div style=&quot;display:flex; justify-content:space-between; margin-bottom:8px;&quot;><strong>Session Cached</strong><span id=&quot;away-session-cached&quot;>0 paragraphs</span></div>
+                  <div style=&quot;display:flex; justify-content:space-between; margin-bottom:8px;&quot;><strong>ETA</strong><span id=&quot;away-eta&quot;>N/A</span></div>
+                </div>
+                
+                <div style=&quot;display:flex; gap:10px; margin-bottom:15px;&quot;>
+                  <button id=&quot;away-start-btn&quot; class=&quot;pr-btn-success&quot; style=&quot;flex:1;&quot; onclick=&quot;window.startAwayModeFromSubpage()&quot;>Begin Caching</button>
+                  <button id=&quot;away-stop-btn&quot; class=&quot;pr-btn-outline&quot; style=&quot;flex:1;&quot; onclick=&quot;window.stopAwayModeFromSubpage()&quot;>Stop Caching</button>
+                </div>
+
+                <label class=&quot;settings-label&quot; for=&quot;away-workers-select&quot; style=&quot;margin-top:10px;&quot;>Parallel Narration Workers</label>
+                <select id=&quot;away-workers-select&quot; class=&quot;settings-control&quot; onchange=&quot;window.saveAwayWorkersSetting(this.value)&quot;>
+                  <option value=&quot;1&quot;>1 Worker (Recommended for Mobile)</option>
+                  <option value=&quot;2&quot;>2 Workers (Faster - CPU/GPU Intensive)</option>
+                  <option value=&quot;3&quot;>3 Workers</option>
+                  <option value=&quot;4&quot;>4 Workers (Extreme)</option>
+                </select>
+              </div>
+
+              <!-- Active Queue Card -->
+              <div class=&quot;settings-card&quot;>
+                <h3>Caching Queue</h3>
+                <p class=&quot;settings-help&quot;>Manage stories currently queued for offline caching.</p>
+                <div id=&quot;away-queue-list&quot; style=&quot;display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; margin-top:12px; border:1px solid var(--border-color); padding:8px; border-radius:6px; background:rgba(0,0,0,0.1);&quot;>
+                  <!-- Dynamic content -->
+                </div>
+              </div>
+
+              <!-- Quick Add Card -->
+              <div class=&quot;settings-card&quot;>
+                <h3>Quick Add from Library</h3>
+                <p class=&quot;settings-help&quot;>Add other library stories to the caching queue.</p>
+                <div id=&quot;away-quick-add-list&quot; style=&quot;display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; margin-top:12px; border:1px solid var(--border-color); padding:8px; border-radius:6px; background:rgba(0,0,0,0.1);&quot;>
+                  <!-- Dynamic content -->
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div class=&quot;pr-layout-008&quot;><div anvil-drop-here></div></div>
           </div>
     </div>
 
@@ -1111,12 +1165,12 @@
     <script src='_/theme/narration_runtime_loader.js?v=narration-loader-v7' type='module'></script>
     <script src='_/theme/tts_pronunciation_core.js?v=pron-v8' type='module'></script>
     <script src='_/theme/audio_core.js?v=audio-v45' type='module'></script>
-    <script src='_/theme/buffer_manager.js?v=buffer-v38' type='module'></script>
+    <script src='_/theme/buffer_manager.js?v=buffer-v39' type='module'></script>
     <script src='_/theme/library_manager.js?v=library-v5' type='module'></script>
     <script src='_/theme/device_setup.js?v=device-setup-v6' type='module'></script>
     <script src='_/theme/settings_manager.js?v=settings-v39' type='module'></script>
     <script src='_/theme/cinematic_ui.js?v=cinematic-v4' type='module'></script>
     <script src='_/theme/reader_features.js?v=features-v3' type='module'></script>
-    <script src='_/theme/ui_controller.js?v=ui-v79' type='module'></script>
+    <script src='_/theme/ui_controller.js?v=ui-v80' type='module'></script>
   </div>
 " prop:visible="true"></anvil-form>

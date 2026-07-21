@@ -19,6 +19,13 @@ const FAST_NARRATION_RETRY_KEY = 'pr_fast_narration_retry_v1';
 const CACHE_JOB_RESUME_KEY = 'pr_cache_job_resume_v1';
 const CACHE_JOB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+try {
+  const savedQueue = localStorage.getItem('pocketPrecacheQueue');
+  window.precacheQueue = savedQueue ? JSON.parse(savedQueue) : [];
+} catch (_) {
+  window.precacheQueue = [];
+}
+
 function _isolationReady() {
   return window.crossOriginIsolated === true && typeof SharedArrayBuffer !== 'undefined';
 }
@@ -217,6 +224,7 @@ async function _resumeFastNarrationCache() {
       sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
       if (Array.isArray(resume.awayQueue) && resume.awayQueue.length) {
         window.precacheQueue = [...resume.awayQueue];
+        localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
       }
       // The user already made the cache decision (that is why we reloaded into
       // the isolated session). Suppress the cache-decision modal during this
@@ -385,6 +393,7 @@ export const BufferManager = {
     if (!this.containerEl) this.initUI();
     this._syncUiTicker();
     if (typeof window.refreshBgCachePanel === 'function') window.refreshBgCachePanel();
+    if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
     if (typeof window.updatePlayButtons === 'function') window.updatePlayButtons();
     // Away Mode playback guard lives in audio_core.js togglePlayState() directly
 
@@ -739,6 +748,7 @@ export const BufferManager = {
     }
     if (!window.precacheQueue.includes(stableRef)) {
       window.precacheQueue.push(stableRef);
+      localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
       if (typeof window.triggerVirtue === 'function') {
         window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
         window.virtueSpeak(`${story.title} is queued. Start Away Mode from the Library button when you are ready.`, 3500);
@@ -1482,4 +1492,137 @@ window._resumeCaching = function() {
   if (BufferManager.cachedCount < BufferManager.totalToCache) {
     BufferManager.start(BufferManager.mode || 'Normal');
   }
+};
+
+window.renderAwayModeUI = function() {
+  const queueList = document.getElementById('away-queue-list');
+  const quickAddList = document.getElementById('away-quick-add-list');
+  if (!queueList || !quickAddList) return;
+
+  const library = window.userProfile?.library || [];
+  const queue = window.precacheQueue || [];
+
+  // Update Stats
+  const queuedCount = BufferManager.queue ? BufferManager.queue.length : 0;
+  const cachedCount = BufferManager.cachedCount || 0;
+  const isActive = BufferManager.isActive && BufferManager.mode === 'Permanent';
+  const isPaused = BufferManager.paused && BufferManager.mode === 'Permanent';
+  const statusText = isActive ? "Running" : (isPaused ? "Paused" : "Idle");
+  
+  const statusEl = document.getElementById('away-status-text');
+  if (statusEl) {
+    statusEl.innerText = statusText;
+    statusEl.style.color = isActive ? 'var(--accent-green)' : (isPaused ? 'var(--accent-yellow)' : 'var(--text-muted)');
+  }
+  
+  const depthEl = document.getElementById('away-queue-depth');
+  if (depthEl) depthEl.innerText = `${queuedCount} paragraphs`;
+  
+  const cachedEl = document.getElementById('away-session-cached');
+  if (cachedEl) cachedEl.innerText = `${cachedCount} paragraphs`;
+  
+  let etaStr = "N/A";
+  if (isActive && BufferManager.startTime && cachedCount > 0 && queuedCount > 0) {
+    const elapsed = Date.now() - BufferManager.startTime;
+    const msPerItem = elapsed / cachedCount;
+    const remainingMs = msPerItem * queuedCount;
+    const remainingMin = Math.ceil(remainingMs / 60000);
+    etaStr = `~${remainingMin} min`;
+  }
+  const etaEl = document.getElementById('away-eta');
+  if (etaEl) etaEl.innerText = etaStr;
+
+  const workersSelect = document.getElementById('away-workers-select');
+  if (workersSelect) {
+    workersSelect.value = BufferManager.maxWorkers || 1;
+  }
+
+  const startBtn = document.getElementById('away-start-btn');
+  const stopBtn = document.getElementById('away-stop-btn');
+  if (startBtn) startBtn.disabled = (isActive || isPaused || queue.length === 0);
+  if (stopBtn) stopBtn.disabled = (!isActive && !isPaused);
+
+  // Render Queue list
+  if (queue.length === 0) {
+    queueList.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.9rem;">No stories in caching queue. Add some from the list below.</div>`;
+  } else {
+    queueList.innerHTML = queue.map((ref, idx) => {
+      const story = window.findLibraryStoryByRef?.(ref);
+      const title = story ? story.title : ref;
+      return `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--panel-bg); padding:8px 12px; border-radius:4px; border:1px solid var(--border-color);">
+        <span style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%;" title="${title}">${title}</span>
+        <button class="pr-btn-outline" style="padding:4px 8px; font-size:0.8rem; margin:0;" onclick="window.removeStoryFromAwayQueue('${encodeURIComponent(ref)}')">Remove</button>
+      </div>`;
+    }).join('');
+  }
+
+  // Render Quick Add list
+  const notInQueue = library.filter(s => {
+    const ref = s.storyKey || window.getStoryStableKey?.(s) || s.title;
+    return !queue.includes(ref);
+  });
+
+  if (notInQueue.length === 0) {
+    quickAddList.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.9rem;">All library stories are in the queue.</div>`;
+  } else {
+    quickAddList.innerHTML = notInQueue.map(s => {
+      const ref = s.storyKey || window.getStoryStableKey?.(s) || s.title;
+      return `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--panel-bg); padding:8px 12px; border-radius:4px; border:1px solid var(--border-color);">
+        <span style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%;" title="${s.title}">${s.title}</span>
+        <button class="pr-btn-primary" style="padding:4px 8px; font-size:0.8rem; margin:0;" onclick="window.addStoryToAwayQueue('${encodeURIComponent(ref)}')">Add</button>
+      </div>`;
+    }).join('');
+  }
+};
+
+window.startAwayModeFromSubpage = function() {
+  if (window.BufferManager) {
+    window.BufferManager.startPrecacheQueue();
+  }
+};
+
+window.stopAwayModeFromSubpage = function() {
+  if (window.BufferManager) {
+    window.BufferManager.stop();
+  }
+  if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
+};
+
+window.saveAwayWorkersSetting = function(val) {
+  const num = parseInt(val, 10);
+  if (!isNaN(num) && num >= 1 && num <= 4) {
+    if (window.BufferManager) {
+      window.BufferManager.maxWorkers = num;
+    }
+    if (window.userProfile && window.userProfile.settings) {
+      window.userProfile.settings.enableManualWorkers = true;
+      window.userProfile.settings.maxWorkers = num;
+      if (typeof window.saveLocalData === 'function') window.saveLocalData();
+    }
+    if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
+  }
+};
+
+window.addStoryToAwayQueue = function(refEncoded) {
+  const ref = decodeURIComponent(refEncoded);
+  if (window.BufferManager) {
+    window.BufferManager.addToPrecacheQueue(ref);
+  }
+  if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
+};
+
+window.removeStoryFromAwayQueue = function(refEncoded) {
+  const ref = decodeURIComponent(refEncoded);
+  if (window.precacheQueue) {
+    window.precacheQueue = window.precacheQueue.filter(item => item !== ref);
+    localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
+  }
+  const badge = document.getElementById('precache-count');
+  if (badge) badge.innerText = `${window.precacheQueue.length} queued`;
+  const btn = document.getElementById('start-precache-btn');
+  if (btn) {
+    btn.classList.toggle('active', window.precacheQueue.length > 0);
+  }
+  if (typeof window.saveLocalData === 'function') window.saveLocalData();
+  if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
 };
