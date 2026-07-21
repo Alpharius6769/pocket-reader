@@ -74,14 +74,14 @@ self.addEventListener('message', function (event) {
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     '/',
-    '/_/theme/theme.css?v=midnight-v20',
+    '/_/theme/theme.css?v=midnight-v21',
     '/_/theme/tts_pronunciation_core.js?v=pron-v8',
     '/_/theme/pocket_backend_policy.js?v=backend-v20',
     '/_/theme/pocket_performance_policy.js?v=performance-v2',
     '/_/theme/diagnostics.js?v=diag-v4',
     '/_/theme/api_core.js?v=search-v13',
     '/_/theme/experience_coordinator.js?v=experience-v4',
-    '/_/theme/virtue_controller.js?v=virtue-v5',
+    '/_/theme/virtue_controller.js?v=virtue-v6',
     '/_/theme/engine_utils.js',
     '/_/theme/ui_controller.js?v=ui-v80',
     '/_/theme/device_setup.js?v=device-setup-v6',

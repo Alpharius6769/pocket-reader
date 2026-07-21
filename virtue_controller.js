@@ -366,6 +366,13 @@ function _fitVirtueSpeech(overlay) {
     }
   };
 
+  // Fit once synchronously so the text is already sized to the bubble on the
+  // first painted frame. Without this, the container is revealed with the text
+  // still at its base size — on a small/slow (throttled) phone a longer line
+  // overflows and is clipped by overflow:hidden, so the bubble flashes empty
+  // for a frame before the rAF pass shrinks it. The rAF call still runs to
+  // correct any measurement taken before layout settled.
+  fit();
   requestAnimationFrame(fit);
   if (!overlay._virtueFitObserver && typeof ResizeObserver === 'function') {
     overlay._virtueFitObserver = new ResizeObserver(() => {
