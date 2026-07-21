@@ -320,9 +320,20 @@ function _releaseCacheWakeLock() {
   _cacheWakeLock = null;
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' &&
-      BufferManager.isActive && !BufferManager.paused) {
-    _requestCacheWakeLock();
+  const isCachingActive = BufferManager.isActive && !BufferManager.paused;
+  if (document.visibilityState === 'visible') {
+    if (isCachingActive) {
+      _requestCacheWakeLock();
+    }
+    if (typeof window.stopBgKeepAlive === 'function' && !window.isPlaying && !isCachingActive) {
+      window.stopBgKeepAlive();
+    }
+  } else if (document.visibilityState === 'hidden') {
+    if (isCachingActive || window.isPlaying) {
+      if (typeof window.startBgKeepAlive === 'function') {
+        window.startBgKeepAlive();
+      }
+    }
   }
 });
 
@@ -428,6 +439,9 @@ export const BufferManager = {
       }
       if (awayBar) awayBar.classList.add('caching');
       _requestCacheWakeLock();
+      if (typeof document !== 'undefined' && document.hidden && typeof window.startBgKeepAlive === 'function') {
+        window.startBgKeepAlive();
+      }
       _persistCacheJob(this);
     } else if (this.paused) {
       statusText = `Paused - ${pct}% cached`;

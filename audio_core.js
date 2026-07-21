@@ -1562,32 +1562,41 @@ function _updateMediaSession(playing) {
 }
 window._updateMediaSession = _updateMediaSession;
 
-// ── iOS / Android background audio keep-alive ─────────────────────────────
-// Mobile browsers keep an active, user-initiated story audio element eligible
-// for background playback. They do not grant a web app background CPU time for
-// neural synthesis, so we deliberately do not use a silent looping audio hack.
+// ── iOS / Android / Desktop background audio keep-alive ─────────────────────
+// Plays a silent looping audio stream during active narration or background caching
+// so OS power managers treat the tab process as an active media player, avoiding
+// Web Worker suspension and timer clamping when screen is off or locked.
 let _bgKeepAlive = null;
 function _ensureBgKeepAlive() {
-  if (_bgKeepAlive) return;
+  if (_bgKeepAlive) return _bgKeepAlive;
   // Shortest possible valid WAV (1 sample, silence)
-  const silWav = 'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
+  const silWav = 'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
   _bgKeepAlive = new Audio(silWav);
   _bgKeepAlive.loop   = true;
   _bgKeepAlive.volume = 0.001; // near-inaudible but keeps session alive
-  document.body.appendChild(_bgKeepAlive);
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.appendChild(_bgKeepAlive);
+  }
+  return _bgKeepAlive;
 }
 export function startBgKeepAlive() {
-  // Real story audio owns the media session. Silent-loop keep-alives do not
-  // grant background compute permission and waste battery on mobile browsers.
+  const audio = _ensureBgKeepAlive();
+  if (audio && audio.paused) {
+    audio.play().catch(() => {});
+  }
   if (window.isPlaying) _updateMediaSession(true);
 }
 export function stopBgKeepAlive() {
+  const isCachingActive = Boolean(window.BufferManager?.isActive && !window.BufferManager?.paused);
+  if (_bgKeepAlive && !_bgKeepAlive.paused && !window.isPlaying && !isCachingActive) {
+    try { _bgKeepAlive.pause(); } catch (_) {}
+  }
   if (!window.isPlaying) _updateMediaSession(false);
 }
 window.startBgKeepAlive = startBgKeepAlive;
 window.stopBgKeepAlive  = stopBgKeepAlive;
 
-// Resume after app comes back to foreground (Android/iOS clear the audio context)
+// Resume after app comes back to foreground or transitions to background
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     _updateMediaSession(window.isPlaying);
@@ -1595,6 +1604,15 @@ document.addEventListener('visibilitychange', () => {
     if (window.isPlaying && window.currentAudio instanceof HTMLAudioElement &&
         window.currentAudio.paused && !window.currentAudio.ended) {
       window.currentAudio.play().catch(() => {});
+    }
+    const isCachingActive = Boolean(window.BufferManager?.isActive && !window.BufferManager?.paused);
+    if (!window.isPlaying && !isCachingActive) {
+      stopBgKeepAlive();
+    }
+  } else if (document.visibilityState === 'hidden') {
+    const isCachingActive = Boolean(window.BufferManager?.isActive && !window.BufferManager?.paused);
+    if (window.isPlaying || isCachingActive) {
+      startBgKeepAlive();
     }
   }
 });
@@ -2723,7 +2741,9 @@ async function _createPocketPcmStream(onEnded) {
 }
 
 function _preferDirectMobileMediaPlayback() {
-  return Boolean(navigator.userAgentData?.mobile) || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  // Direct HTMLAudioElement output bypasses AudioContext background suspension
+  // across desktop, laptop, mobile, PWA, and locked-screen sessions.
+  return true;
 }
 
 function _setupAudioRouting(audioElement) {
