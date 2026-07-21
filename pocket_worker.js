@@ -2839,6 +2839,14 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
     }
 
     const chunkText = chunks[chunkIdx];
+    // Deterministic per-chunk seed for the flow-model latent noise. Keying it on
+    // (voice, emotion, text) makes identical content always render identical
+    // audio — the same line never varies in tone between renders or between
+    // paragraphs — so variation comes only from real emotion/punctuation/text
+    // differences, and re-renders / cache rebuilds match exactly. All three
+    // generation paths (WebGPU block, WASM block, per-frame streaming) seed from
+    // this, so behaviour is uniform across devices and quality modes.
+    const chunkNoiseSeed = voiceName + '|' + (meta.emotion || 'neutral') + '|' + chunkText;
     let isFirstAudioChunkOfTextChunk = true;
     const tokenizationStart = performance.now();
     const tokenIds = tokenizerProcessor.encodeIds(chunkText);
@@ -2909,7 +2917,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
         [1, WEBGPU_BLOCK_FRAMES, currentLatentDim],
       );
       const ownedBlockOutputs = new Set([...stateOutputNames(bundleMetadata.flow_lm_state_manifest), 'next_sequence']);
-      seedRandom(voiceName);
+      seedRandom(chunkNoiseSeed);
       try {
         let blockCursor = 0;
         while (blockCursor < frameLimit && !chunkEnded && isGenerating) {
@@ -3065,7 +3073,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
         [1, WASM_BLOCK_FRAMES, currentLatentDim],
       );
       const ownedBlockOutputs = new Set([...stateOutputNames(bundleMetadata.flow_lm_state_manifest), 'next_sequence']);
-      seedRandom(voiceName);
+      seedRandom(chunkNoiseSeed);
       try {
         let blockCursor = 0;
         while (blockCursor < frameLimit && !chunkEnded && isGenerating) {
@@ -3183,6 +3191,10 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
       currentLatentData.fill(NaN);
       const currentLatent = createTensor('float32', currentLatentData, [1, 1, currentLatentDim]);
       const flowLatentInput = createTensor('float32', currentLatentData, [1, currentLatentDim]);
+      // Seed the per-frame latent noise the same way the block paths do, so this
+      // path is deterministic too (it previously drew from Math.random(), which
+      // made the same text render with a different tone every time).
+      seedRandom(chunkNoiseSeed);
       for (let step = 0; step < frameLimit; step++) {
       if (!isGenerating) break;
       const stepStart = performance.now();
@@ -3217,8 +3229,8 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
       for (let i = 0; i < currentLatentDim; i++) {
         let u = 0;
         let v = 0;
-        while (u === 0) u = Math.random();
-        while (v === 0) v = Math.random();
+        while (u === 0) u = seededRandom();
+        while (v === 0) v = seededRandom();
         let sample = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v) * std;
         if (clampAbs != null) sample = Math.max(-clampAbs, Math.min(clampAbs, sample));
         currentLatentData[i] = sample;

@@ -122,7 +122,11 @@ const POCKET_BALANCED_EMOTION_MAP = {
   confused: 'worried',
 };
 const POCKET_EMOTION_PATTERN = new RegExp(`_(${POCKET_ALL_EMOTIONS.join('|')})$`);
-const POCKET_NARRATION_CACHE_VERSION = 'narrv15';
+// narrv16: flow-model latent noise is now deterministically seeded per chunk
+// (voice+emotion+text) on all generation paths — bumped so existing position-
+// keyed cached audio re-renders with the consistent engine instead of the old
+// per-render variation.
+const POCKET_NARRATION_CACHE_VERSION = 'narrv16';
 const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // Identity-anchored voice pack subpath on B2 (see Back end/tools/build_anchored_pack_v2.py).
 // Every v2 emotion state shares a neutral identity anchor, so emotion switches keep
@@ -1129,7 +1133,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // can resolve under an Anvil shell subpath.
-        const workerScript = '/_/theme/pocket_worker.js?v=pocket-worker-v40';
+        const workerScript = '/_/theme/pocket_worker.js?v=pocket-worker-v41';
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
