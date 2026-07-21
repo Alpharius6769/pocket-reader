@@ -1191,7 +1191,13 @@ async function _loadPocketEngine() {
             window._pocketLoadTelemetry.lastProgressAt = Date.now();
             _setStatus(data.status || 'Preparing Pocket TTS...');
           } else if (data.type === 'diagnostic') {
-            console.log(`[${engineLabel} Worker ${i} ${data.level}]`, data.message);
+            // INFO-level worker telemetry (per-paragraph pipeline stats) floods
+            // the console on long cache jobs and adds nothing the diagnostics
+            // buffer below doesn't already capture. Surface only WARN/ERROR to
+            // the raw console; keep every level in Diagnostics for observability.
+            if (data.level === 'WARN' || data.level === 'ERROR') {
+              console.log(`[${engineLabel} Worker ${i} ${data.level}]`, data.message);
+            }
             if (window.Diagnostics) window.Diagnostics.log(data.level, data.message);
             if (data.level === 'WARN' && i === 0) _setStatus('Hardware issue detected,auto-falling back...');
           } else if (data.type === 'backend_selected' || data.type === 'backend_status') {
@@ -1969,6 +1975,50 @@ window.trimPocketCacheWorkerPool = function trimPocketCacheWorkerPool() {
   return ttsWorkers.length;
 };
 
+// ── Idle model-memory reclaim ────────────────────────────────────────────────
+// A warm TTS worker keeps the ONNX models resident (hundreds of MB of WASM).
+// After caching, trimPocketCacheWorkerPool already releases them on memory-safe
+// devices, but nothing released them after plain listening. When playback stops
+// and no cache job is running, release the worker+models after a few idle
+// minutes to reclaim that memory; the next narration reloads the engine (a
+// one-time few-second warm-up). Any synthesis cancels the pending release, so an
+// active session is never torn down.
+const POCKET_IDLE_RELEASE_MS = 180000;
+let _pocketIdleReleaseTimer = null;
+
+function _cancelWorkerIdleRelease() {
+  if (_pocketIdleReleaseTimer) { clearTimeout(_pocketIdleReleaseTimer); _pocketIdleReleaseTimer = null; }
+}
+
+function _releaseIdlePocketWorkers() {
+  _pocketIdleReleaseTimer = null;
+  // Re-check every idle guard at fire time — state may have changed in the wait.
+  if (window.isPlaying) return;
+  if (window.BufferManager?.isActive || window.BufferManager?.paused) return;
+  if ((window._pocketActiveSynthesis || 0) > 0) return;
+  if (!ttsWorkers.length) return;
+  const retired = ttsWorkers.splice(0);
+  retired.forEach((worker) => { try { worker?.worker?.terminate(); } catch (_) {} });
+  Object.values(ttsQueue).forEach((entry) => {
+    try { entry.reject(new Error('Pocket engine released after idle')); } catch (_) {}
+  });
+  ttsQueue = {};
+  _encodedPocketVoices = new Set();
+  _pocketVoiceLoadPromises.clear();
+  _pocketBackendOptimizationPromise = null;
+  _pocketBackendRuntime.cacheWorkerCount = 0;
+  _setNeuralState('idle');
+  loadedVoiceEngine = null;
+  window.Diagnostics?.log('INFO', 'Pocket TTS engine released after idle to reclaim model memory');
+}
+
+function _scheduleWorkerIdleRelease() {
+  _cancelWorkerIdleRelease();
+  if (!ttsWorkers.length) return;
+  if (window.BufferManager?.isActive || window.BufferManager?.paused) return;
+  _pocketIdleReleaseTimer = setTimeout(_releaseIdlePocketWorkers, POCKET_IDLE_RELEASE_MS);
+}
+
 window.rerunPocketBackendOptimization = async function rerunPocketBackendOptimization() {
   clearPocketCalibrations(localStorage);
   clearWebGpuDemotion(localStorage, _pocketBackendContext || {
@@ -2348,6 +2398,7 @@ function _logPocketQuality(level, message, attempt, extra = {}) {
 // Live generator with one quality-guard retry around Pocket output.
 window.generateChunk = async function(text, voice) {
   if (!text || text.trim() === '') return null;
+  _cancelWorkerIdleRelease();
   const engine = _resolveActiveEngine();
   if (engine !== 'pocket') return null;
 
@@ -2438,6 +2489,7 @@ window.generateChunk = async function(text, voice) {
 
 window.generateChunkStream = async function(text, voice, onSegment) {
   if (!text || text.trim() === '' || typeof onSegment !== 'function') return null;
+  _cancelWorkerIdleRelease();
   if (_resolveActiveEngine() !== 'pocket') return null;
   const ready = await _loadPocketEngine();
   if (!ready || ttsWorkers.length === 0) return null;
@@ -2942,6 +2994,9 @@ export function pausePlayback() {
   } else if ('speechSynthesis' in window && window.currentAudio instanceof SpeechSynthesisUtterance) {
     window.speechSynthesis.pause();
   }
+  // Reclaim the resident TTS models if the user stays paused (skipped while a
+  // background cache job is running — that path manages its own workers).
+  _scheduleWorkerIdleRelease();
 }
 window.pausePlayback = pausePlayback;
 
