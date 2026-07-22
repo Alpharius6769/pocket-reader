@@ -848,74 +848,7 @@ export async function loadStory(url, options = {}) {
     }
   }
 
-  // 2. Ask for preferred voice for new stories
-  if (!existingLibEntry && !preventNavigate) {
-    if (typeof window.showSettingsModal === 'function' && typeof window.renderPocketVoiceOptions === 'function') {
-      try {
-        await new Promise((resolve, reject) => {
-          const html = `
-            <div style="text-align: center;">
-              <p>Before we download this story, which voice would you like to use for narration?</p>
-              <select id="new-story-voice-select" class="playback-dropdown pr-layout-053" style="width: 100%; margin-bottom: 15px;"></select>
-              <div style="display: flex; gap: 10px;">
-                <button id="new-story-voice-cancel" class="pr-btn-outline" style="flex: 1;">Cancel</button>
-                <button id="new-story-voice-continue" class="pr-btn-primary" style="flex: 1;">Continue</button>
-              </div>
-            </div>
-          `;
-          window.showSettingsModal("Preferred Voice", html);
-          
-          const sel = document.getElementById('new-story-voice-select');
-          window.renderPocketVoiceOptions(sel, window.userProfile?.settings?.pocketVoice || window.POCKET_DEFAULT_VOICE || 'rayne');
 
-          const cancelBtn = document.getElementById('new-story-voice-cancel');
-          const continueBtn = document.getElementById('new-story-voice-continue');
-          const closeBtn = document.getElementById('settings-modal-close');
-          const overlay = document.getElementById('settings-modal-overlay');
-
-          let resolved = false;
-          const cleanup = () => {
-            if (overlay) overlay.classList.remove('active');
-            if (typeof window.releaseQueuedModal === 'function') window.releaseQueuedModal('settings-modal-overlay');
-          };
-
-          const onCancel = () => {
-            if (resolved) return;
-            resolved = true;
-            cleanup();
-            reject(new Error("USER_CANCELLED"));
-          };
-
-          const onContinue = () => {
-            if (resolved) return;
-            resolved = true;
-            if (sel && sel.value) {
-              if (!window.userProfile) window.userProfile = {};
-              if (!window.userProfile.settings) window.userProfile.settings = {};
-              window.userProfile.settings.pocketVoice = sel.value;
-              if (typeof window.saveLocalData === 'function') window.saveLocalData();
-              const mainSel = document.getElementById('voice-selector');
-              if (mainSel) mainSel.value = sel.value;
-            }
-            cleanup();
-            // Re-show the loading overlay since we are continuing the fetch
-            if (typeof window.showLoadingOverlay === 'function') window.showLoadingOverlay("Fetching story...");
-            resolve();
-          };
-
-          if (cancelBtn) cancelBtn.onclick = onCancel;
-          if (continueBtn) continueBtn.onclick = onContinue;
-          if (closeBtn) closeBtn.addEventListener('click', onCancel, { once: true });
-        });
-      } catch (err) {
-        if (err.message === "USER_CANCELLED") {
-          window._storyFetchCancelled = true;
-          if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-          return;
-        }
-      }
-    }
-  }
 
   // 3. Validate URL before network fetch
   if (!isValidStoryUrl(fetchUrl)) {

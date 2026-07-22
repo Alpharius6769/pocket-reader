@@ -1134,8 +1134,14 @@ export const BufferManager = {
     }
     // Respect max worker limit
     if (this.activeWorkers >= this.maxWorkers) {
-      setTimeout(() => this._loop(gen), 200);
-      return;
+      if (this._lastChunkCompletedAt && (Date.now() - this._lastChunkCompletedAt > 60000)) {
+        console.warn('[Cache] Active workers stagnated for >60s. Auto-recovering worker pool state.');
+        this.activeWorkers = 0;
+        this._lastChunkCompletedAt = Date.now();
+      } else {
+        setTimeout(() => this._loop(gen), 200);
+        return;
+      }
     }
     const task = this.queue.shift();
     this.activeWorkers++;
@@ -1261,6 +1267,7 @@ export const BufferManager = {
       }
       this.cachedCount++;
       this.itemsSynthesizedThisSession++;
+      this._lastChunkCompletedAt = Date.now();
       this.consecutiveErrors = 0;
       this.activeWorkers = Math.max(0, this.activeWorkers - 1);
       await this._prefetchNextVoice();

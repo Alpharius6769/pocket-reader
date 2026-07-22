@@ -2232,8 +2232,14 @@ function _inspectPocketAudioQuality(result, text, assetVoice = null) {
   }
   if (durationSec > maxDuration) reasons.push('duration too long');
   if (clipRatio > 0.005) reasons.push('clipping');
-  if (durationSec > 1.2 && silenceRatio > 0.82) reasons.push('excessive silence');
-  if (_hasRepeatedAudioPattern(samples, sampleRate)) reasons.push('repeated pattern');
+  if (durationSec > 1.2 && silenceRatio > 0.82) {
+    fatal = true;
+    reasons.push('excessive silence');
+  }
+  if (_hasRepeatedAudioPattern(samples, sampleRate)) {
+    fatal = true;
+    reasons.push('repeated pattern');
+  }
 
   // Pitch consistency vs the rolling baseline for this exact voice asset.
   // Baselines are per {voice}_{emotion} so legitimate emotional pitch ranges
@@ -2245,7 +2251,10 @@ function _inspectPocketAudioQuality(result, text, assetVoice = null) {
     pitchBaseHz = _pitchBaselineFor(assetVoice);
     if (pitchHz && pitchBaseHz) {
       const deviation = Math.abs(pitchHz - pitchBaseHz) / pitchBaseHz;
-      if (deviation > 0.28) reasons.push('pitch shift'); // ~4+ semitones off-baseline
+      if (deviation > 0.28) {
+        fatal = true;
+        reasons.push('pitch shift'); // ~4+ semitones off-baseline
+      }
     }
     // Feed the baseline only with renders that passed every check, so a rogue
     // high-pitch chunk can never drag the baseline toward itself.
@@ -2296,7 +2305,7 @@ async function _runPocketWorkerGeneration(workerObj, text, workerVoice, opts, ha
     opts,
   });
 
-  const timeoutMs = 600000;
+  const timeoutMs = 60000;
   let timerObj = null;
   try {
     return await Promise.race([
@@ -2312,7 +2321,7 @@ async function _runPocketWorkerGeneration(workerObj, text, workerVoice, opts, ha
               expected = now + timeoutMs;
               timerObj = setTimeout(check, timeoutMs);
             } else {
-              reject(new Error('TTS worker timeout after 600s'));
+              reject(new Error('TTS worker timeout after 60s'));
             }
           } else {
             timerObj = setTimeout(check, expected - now);
@@ -2323,6 +2332,8 @@ async function _runPocketWorkerGeneration(workerObj, text, workerVoice, opts, ha
     ]);
   } finally {
     if (timerObj) clearTimeout(timerObj);
+    delete ttsQueue[id];
+    if (workerObj) workerObj.activeTasks = Math.max(0, workerObj.activeTasks - 1);
   }
 }
 
@@ -2427,6 +2438,18 @@ window.generateChunk = async function(text, voice) {
   }
   await _ensurePocketTtsCalibration();
 
+  // Refresh worker session periodically (~30 continuous paragraphs / ~15 mins of speech)
+  // to clear ONNX Runtime internal state accumulation and prevent voice hallucinations.
+  window._pocketParagraphCount = (window._pocketParagraphCount || 0) + 1;
+  if (window._pocketParagraphCount >= 30) {
+    window._pocketParagraphCount = 0;
+    window.Diagnostics?.log('INFO', 'Recycling Pocket TTS worker session to maintain pristine audio quality');
+    try {
+      await _resetPocketEngineForBackend();
+      await _loadPocketEngine();
+    } catch (_) {}
+  }
+
   window._pocketActiveSynthesis = (window._pocketActiveSynthesis || 0) + 1;
   window.setExperienceSuppressed?.(true, 'pocket-synthesis');
   window.setCinematicSynthesisSuppressed?.(true);
@@ -2442,9 +2465,13 @@ window.generateChunk = async function(text, voice) {
     // can resurface the error instead of storing silence.
     const allowQualityRetry = !_isPocketThroughputCache() && shouldRetryPocketQuality(first.quality);
     if (allowQualityRetry) {
-      // Re-render once with the same voice conditioning at a lower temperature.
-      // Changing emotion assets during a retry can sound like a new narrator.
-      _logPocketQuality('WARN', 'Pocket synth quality guard retrying (same state, lower temp)', first, { retryUsed: false });
+      // Re-render once with clean worker state at lower temperature.
+      _logPocketQuality('WARN', 'Pocket synth quality guard retrying with clean worker session', first, { retryUsed: false });
+      window._pocketParagraphCount = 0;
+      try {
+        await _resetPocketEngineForBackend();
+        await _loadPocketEngine();
+      } catch (_) {}
       const retry = await _generatePocketAttempt(null, text, route, 1);
       retryUsed = true;
       if (!retry.quality.fatal) {
