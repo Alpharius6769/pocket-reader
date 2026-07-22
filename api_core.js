@@ -233,6 +233,53 @@ export async function handleFileSelect(event) {
 }
 window.handleFileSelect = handleFileSelect;
 
+async function _extractTextFromLocalFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const name = file?.name || '';
+    const isPdf = name.match(/\.pdf$/i) || file?.type === 'application/pdf';
+
+    if (isPdf) {
+      reader.readAsArrayBuffer(file);
+      reader.onload = () => {
+        try {
+          const buffer = new Uint8Array(reader.result);
+          const raw = new TextDecoder('latin1').decode(buffer);
+          const matches = [];
+          const regex = /\(([^)]+)\)\s*(?:Tj|TJ|\')/g;
+          let match;
+          while ((match = regex.exec(raw)) !== null) {
+            let str = match[1].replace(/\\([0-7]{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
+                             .replace(/\\(.)/g, '$1');
+            if (str.trim().length > 0) matches.push(str);
+          }
+
+          if (matches.length < 5) {
+            const textRegex = /[\x20-\x7E]{4,}/g;
+            let m;
+            while ((m = textRegex.exec(raw)) !== null) {
+              const s = m[0].trim();
+              if (s.length > 5 && !s.startsWith('/Font') && !s.startsWith('/Type') && !s.includes('obj') && !s.includes('endobj')) {
+                matches.push(s);
+              }
+            }
+          }
+
+          const fullText = matches.join(' ');
+          resolve(fullText);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = () => reject(reader.error);
+    } else {
+      reader.readAsText(file);
+      reader.onload = () => resolve(reader.result || '');
+      reader.onerror = () => reject(reader.error);
+    }
+  });
+}
+
 export async function processUploadedFile(file, fichubMeta, options = {}) {
   // silent: a background caching path (Away Mode / cache-job resume) fed this
   // file via loadStory({preventNavigate}). Never navigate, show overlays, pop
@@ -250,22 +297,48 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
   );
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), uploadTimeoutMs);
+  let parsedData = null;
   try {
     const response = await fetch(`${window.HF_API_BASE}/api/upload`, {
       method: 'POST',
       body: formData,
       signal: controller.signal,
     });
-    if (!response.ok) {
-      let errMsg = 'Upload failed';
-      try {
-        const errData = await _safeParseJson(response, 'General');
-        if (errData.error) errMsg = errData.error;
-        else if (errData.detail) errMsg = errData.detail;
-      } catch (e) {}
-      throw new Error(errMsg);
+    if (response.ok) {
+      parsedData = await _safeParseJson(response, 'General');
     }
-    const parsedData = await _safeParseJson(response, 'General');
+  } catch (netErr) {
+    console.warn('[Upload] Remote backend upload failed, trying local client-side extraction:', netErr);
+  }
+
+  if (!parsedData) {
+    try {
+      const text = await _extractTextFromLocalFile(file);
+      if (text && text.trim().length > 5) {
+        const rawParas = text
+          .split(/\n\s*\n|\r\n\s*\r\n/)
+          .map((p) => p.replace(/\s+/g, ' ').trim())
+          .filter((p) => p.length > 2);
+        const fileNameClean = (file.name || 'Local Document')
+          .replace(/\.[^/.]+$/, '')
+          .replace(/[_\-]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        parsedData = {
+          filename: file.name,
+          title: fileNameClean,
+          author: 'Local File',
+          chapters: [{ title: fileNameClean, paragraphs: rawParas.length ? rawParas : [text.trim()] }],
+        };
+      }
+    } catch (fallbackErr) {
+      console.warn('[Upload] Local extraction fallback error:', fallbackErr);
+    }
+  }
+
+  if (!parsedData) {
+    throw new Error('Document parsing failed. Check your connection or try a different file format.');
+  }
     const cleanFilename = (parsedData.filename || 'Unknown')
       .replace(/\.[^/.]+$/, '')
       .replace(/[_\-]+/g, ' ')
@@ -850,7 +923,21 @@ export async function loadStory(url, options = {}) {
 
 
 
-  // 3. Validate URL before network fetch
+  // 3. Intercept local file paths or filenames entered into URL input
+  const _trimmedUrl = (fetchUrl || '').trim();
+  if (_trimmedUrl.match(/\.(pdf|epub|docx|txt|html|htm)$/i) || _trimmedUrl.match(/^(file:\/\/|[a-z]:[\\\/]|\/)/i)) {
+    if (!preventNavigate) {
+      if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+      if (typeof window.triggerFileUpload === 'function') {
+        window.triggerFileUpload();
+      } else {
+        alert("To import a local PDF, EPUB, or document file, please use the 'Choose File' button or drop the file onto the intake area.");
+      }
+    }
+    return;
+  }
+
+  // 4. Validate URL before network fetch
   if (!isValidStoryUrl(fetchUrl)) {
     // In background caching mode there is no user to see an alert, and the
     // caller detects the unopened story from the unchanged currentStory. A
