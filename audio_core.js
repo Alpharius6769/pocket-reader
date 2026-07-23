@@ -1735,7 +1735,15 @@ async function ensurePocketVoiceLoaded(voiceName) {
         console.log(`[PocketTTS] Loaded voice ${targetVoice} from Cache Storage.`);
       }
     } catch (e) {
-      console.warn("Unable to open cache for Pocket TTS", e);
+      // Some browsers/private-mode/quota states throw "Unexpected internal
+      // error" from CacheStorage.open. It is non-fatal — the voice fetch below
+      // still hits the browser HTTP cache — so warn only ONCE per session
+      // instead of on every voice load and every worker recycle (which was the
+      // repeated console warning). The persistent-cache layer is simply skipped.
+      if (!window._pocketVoiceCacheWarned) {
+        window._pocketVoiceCacheWarned = true;
+        console.warn("Pocket TTS voice CacheStorage unavailable; using HTTP cache instead.", e?.name || e);
+      }
     }
 
     if (!buffer) {
@@ -2255,9 +2263,20 @@ function _inspectPocketAudioQuality(result, text, assetVoice = null) {
     pitchBaseHz = _pitchBaselineFor(assetVoice);
     if (pitchHz && pitchBaseHz) {
       const deviation = Math.abs(pitchHz - pitchBaseHz) / pitchBaseHz;
-      if (deviation > 0.28) {
+      // Questions and emphatic delivery legitimately raise median pitch ~3-5
+      // semitones (26-42% deviation), so the old 0.28 (~4 semitone) FATAL cut
+      // rejected ordinary dialogue lines — e.g. a two-question paragraph — which,
+      // with deterministic seeding, then failed every identical retry and was
+      // permanently skipped, leaving a gap in the story. Only an EXTREME shift
+      // (>0.50, ~7 semitones) reliably indicates a genuine squeaky/garbled
+      // artifact, so reserve fatal rejection for that; treat the in-between band
+      // as a soft warning (accepted, not baseline-fed). Gibberish prevention
+      // leans on the proactive worker recycle, not this detector.
+      if (deviation > 0.50) {
         fatal = true;
-        reasons.push('pitch shift'); // ~4+ semitones off-baseline
+        reasons.push('pitch shift'); // extreme (~7+ semitones) — genuine artifact
+      } else if (deviation > 0.30) {
+        reasons.push('pitch drift'); // soft: natural question/emphasis range
       }
     }
     // Feed the baseline only with renders that passed every check, so a rogue
@@ -2464,10 +2483,15 @@ window.generateChunk = async function(text, voice) {
   }
   await _ensurePocketTtsCalibration();
 
-  // Refresh worker session periodically (~30 continuous paragraphs / ~15 mins of speech)
-  // to clear ONNX Runtime internal state accumulation and prevent voice hallucinations.
+  // Refresh worker session periodically to clear ONNX Runtime internal state
+  // accumulation and prevent voice hallucinations. Lowered 30->20: reported
+  // long-form degradation onset (~15-20 min of listening) lands near paragraph
+  // 25-30, so a 30-count recycle fired *just* too late; 20 keeps a fresh worker
+  // ahead of onset. The recycle is cheap (re-inits sessions from cached model
+  // bytes, no visible caching stall in testing), and long-form reliability is
+  // the priority over a marginal throughput cost.
   window._pocketParagraphCount = (window._pocketParagraphCount || 0) + 1;
-  if (window._pocketParagraphCount >= 30) {
+  if (window._pocketParagraphCount >= 20) {
     window._pocketParagraphCount = 0;
     window.Diagnostics?.log('INFO', 'Recycling Pocket TTS worker session to maintain pristine audio quality');
     try {

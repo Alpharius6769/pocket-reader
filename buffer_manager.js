@@ -1226,10 +1226,25 @@ export const BufferManager = {
         } catch (err) {
           this._currentSynthStartedAt = null;
           if (err?.message === 'Pocket backend reset' || err?.message === 'Pocket memory-safe cache session released') {
+            // Interrupted by a worker recycle mid-generation — normally just
+            // retry. But bound it: if the SAME paragraph keeps getting
+            // interrupted (a reset loop, e.g. the periodic recycle repeatedly
+            // landing on this one, or a worker that can't stay alive), don't
+            // re-queue forever. After a cap, skip it like the quality circuit
+            // breaker so caching moves on instead of wedging on one paragraph.
+            task.resetRetries = (task.resetRetries || 0) + 1;
+            this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+            if (task.resetRetries > 6) {
+              console.warn(`[BufferManager] Paragraph ${task.chapIdx}:${task.paraIdx} interrupted by worker recycling ${task.resetRetries} times. Skipping to avoid a reset loop.`);
+              window.Diagnostics?.log('WARN', 'Skipped paragraph stuck in worker-recycle retry loop', {
+                storyTitle: task.storyTitle, chapIdx: task.chapIdx, paraIdx: task.paraIdx, resetRetries: task.resetRetries,
+              });
+              this._scheduleLoop(gen, 100);
+              return;
+            }
             console.log("[BufferManager] Chunk generation interrupted by worker recycling. Retrying paragraph...");
             this.queue.unshift(task);
-            this.activeWorkers = Math.max(0, this.activeWorkers - 1);
-            setTimeout(() => this._loop(gen), 100);
+            this._scheduleLoop(gen, 100);
             return;
           }
           console.error("generateChunk failed:", err);
