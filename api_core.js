@@ -864,13 +864,18 @@ export async function loadStory(url, options = {}) {
 
   // 1. Try to load from local IndexedDB cache first (checking both URL and Title)
   if (window.userProfile && window.userProfile.library && typeof window._loadStoryChapters === 'function') {
-    const _norm = (u) => String(u || '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
+    const _norm = (u) => u ? String(u).replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase() : null;
     existingLibEntry = window.findLibraryStoryByRef?.(url) || null;
     if (!existingLibEntry) {
-      existingLibEntry = window.userProfile.library.find((story) =>
-        _norm(story.url) === _norm(url)
-        || (story.sourceUrl && _norm(story.sourceUrl) === _norm(url))
-      );
+      existingLibEntry = window.userProfile.library.find((story) => {
+        const targetNorm = _norm(url);
+        const storyUrlNorm = _norm(story.url);
+        const storySourceNorm = _norm(story.sourceUrl);
+        return (targetNorm && ((storyUrlNorm && storyUrlNorm === targetNorm) || (storySourceNorm && storySourceNorm === targetNorm)))
+          || story.title === url
+          || story.storyKey === url
+          || (window.getStoryStableKey?.(story) === url);
+      });
     }
     if (existingLibEntry) {
       try {
@@ -915,9 +920,15 @@ export async function loadStory(url, options = {}) {
       } catch(e) {
         console.warn("Failed to load chapters from cache, falling back to fetch", e);
       }
-      // If found in library but not cached, fetch using the actual URL
-      if (existingLibEntry.url) {
+      // If found in library but not cached: for uploaded documents (no valid URL), notify gracefully
+      if (existingLibEntry.url && isValidStoryUrl(existingLibEntry.url)) {
         fetchUrl = existingLibEntry.url;
+      } else {
+        if (!preventNavigate) {
+          alert(`Could not load stored chapters for "${existingLibEntry.title || 'Uploaded Document'}". Please re-upload the file.`);
+          if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+        }
+        return;
       }
     }
   }
