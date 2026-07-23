@@ -36,10 +36,42 @@ test('buffer_manager.js triggers background keep-alive when hidden during active
   assert.match(buffer, /if \(typeof document !== 'undefined' && document\.hidden && typeof window\.startBgKeepAlive === 'function'\) \{\s*window\.startBgKeepAlive\(\);/);
 });
 
+test('window._resetPocketEngineForBackend is reachable from buffer_manager.js', async () => {
+  // buffer_manager's caching circuit breaker (2+ consecutive errors) recovers by
+  // calling window._resetPocketEngineForBackend() — it runs in a different module
+  // scope than audio_core.js, so the reset function MUST be attached to window or
+  // the `typeof window._resetPocketEngineForBackend === 'function'` guard is
+  // always false and the recovery path silently never fires, letting background
+  // caching stall on a bad worker instead of resetting it.
+  const audio = await read('audio_core.js');
+  const buffer = await read('buffer_manager.js');
+  assert.match(audio, /window\._resetPocketEngineForBackend = _resetPocketEngineForBackend;/);
+  assert.match(buffer, /typeof window\._resetPocketEngineForBackend === 'function'/);
+});
+
+test('TTS worker generation timeout is patient while backgrounded, fast while foregrounded', async () => {
+  // A fixed 60s timeout (regardless of tab visibility) rejects real, still-
+  // progressing synthesis once the OS deprioritizes a backgrounded/locked tab —
+  // and the reject path resets the ENTIRE Pocket engine, which was killing
+  // background playback and caching mid-session. The budget must be re-read
+  // live (document.hidden) on every poll, not fixed at call start, so a session
+  // that backgrounds mid-generation still gets the patient budget.
+  const audio = await read('audio_core.js');
+  assert.match(audio, /const FOREGROUND_TIMEOUT_MS = 60000;/);
+  assert.match(audio, /const BACKGROUND_TIMEOUT_MS = 600000;/);
+  assert.match(audio, /const currentTimeoutMs = \(\) => \(typeof document !== 'undefined' && document\.hidden\)\s*\n\s*\? BACKGROUND_TIMEOUT_MS : FOREGROUND_TIMEOUT_MS;/);
+  // The deadline check must call currentTimeoutMs() live inside the poll tick,
+  // not capture a fixed value once before the wait begins.
+  const checkFn = audio.slice(audio.indexOf('const check = () => {'), audio.indexOf('timerObj = setTimeout(check, Math.min(POLL_MS, currentTimeoutMs()));'));
+  assert.match(checkFn, /const timeoutMs = currentTimeoutMs\(\);/);
+});
+
 test('anvil-app assets mirror background reliability updates', async () => {
   const anvilAudio = await read('anvil-app/theme/assets/audio_core.js');
   const anvilBuffer = await read('anvil-app/theme/assets/buffer_manager.js');
   assert.match(anvilAudio, /const audio = _ensureBgKeepAlive\(\);/);
   assert.match(anvilAudio, /function _preferDirectMobileMediaPlayback\(\)[\s\S]*?return true;/);
+  assert.match(anvilAudio, /window\._resetPocketEngineForBackend = _resetPocketEngineForBackend;/);
+  assert.match(anvilAudio, /const BACKGROUND_TIMEOUT_MS = 600000;/);
   assert.match(anvilBuffer, /const isCachingActive = BufferManager\.isActive && !BufferManager\.paused;/);
 });

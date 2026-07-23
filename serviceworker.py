@@ -94,7 +94,7 @@ var CORE_ASSETS = [
     '/_/theme/cinematic_ui.js?v=cinematic-v4',
     '/_/theme/reader_features.js?v=features-v3',
     '/_/theme/buffer_manager.js?v=buffer-v40',
-    '/_/theme/audio_core.js?v=audio-v48',
+    '/_/theme/audio_core.js?v=audio-v49',
     '/_/theme/pocket_worker.js?v=pocket-worker-v41',
     '/_/theme/pocket_pcm_worklet.js?v=pcm-v1',
     '/_/theme/motion_lite.js',

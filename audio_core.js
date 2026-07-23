@@ -1949,6 +1949,10 @@ async function _resetPocketEngineForBackend() {
   _setNeuralState('idle');
   loadedVoiceEngine = null;
 }
+// The buffer_manager.js caching circuit breaker recovers from repeated
+// consecutive failures by calling this — it must be reachable from window
+// since buffer_manager runs in its own module scope.
+window._resetPocketEngineForBackend = _resetPocketEngineForBackend;
 
 // Prepare the bounded two-worker pool immediately before a cache job. If live
 // playback previously loaded a one-worker engine, reload from the browser's
@@ -2305,29 +2309,51 @@ async function _runPocketWorkerGeneration(workerObj, text, workerVoice, opts, ha
     opts,
   });
 
-  const timeoutMs = 60000;
+  // Foreground zombie-worker detection stays fast (60s) so an active listener
+  // is never stuck waiting on a genuinely stuck worker. A backgrounded/locked
+  // session gets a much longer allowance (10 min, the pre-60s-fix value):
+  // synthesis can legitimately run several times slower once the OS
+  // deprioritizes a backgrounded tab/PWA, and the reject path here resets the
+  // ENTIRE engine — timing out real, still-progressing work while backgrounded
+  // was killing background playback and caching mid-session. The budget is
+  // re-read live on every poll (not fixed at call start) so a session that
+  // backgrounds mid-generation still gets the patient budget for the rest of
+  // the wait, and one that returns to the foreground still fails fast if truly
+  // stuck.
+  const FOREGROUND_TIMEOUT_MS = 60000;
+  const BACKGROUND_TIMEOUT_MS = 600000;
+  const POLL_MS = 5000;
+  const currentTimeoutMs = () => (typeof document !== 'undefined' && document.hidden)
+    ? BACKGROUND_TIMEOUT_MS : FOREGROUND_TIMEOUT_MS;
   let timerObj = null;
   try {
     return await Promise.race([
       pending,
       new Promise((_, reject) => {
         const start = Date.now();
-        let expected = start + timeoutMs;
+        let lastTick = start;
         const check = () => {
           const now = Date.now();
-          if (now >= expected) {
-            if (now - expected > 10000) {
-              console.log('[Timeout] System sleep or background suspension detected. Rescheduling worker timeout.');
-              expected = now + timeoutMs;
-              timerObj = setTimeout(check, timeoutMs);
-            } else {
-              reject(new Error('TTS worker timeout after 60s'));
-            }
-          } else {
-            timerObj = setTimeout(check, expected - now);
+          const sinceLastTick = now - lastTick;
+          lastTick = now;
+          // A tick firing much later than its poll interval means the JS event
+          // loop itself was suspended (OS/tab freeze), not that the worker is
+          // slow — give it a fresh window rather than counting suspended time
+          // against the budget.
+          if (sinceLastTick > POLL_MS + 10000) {
+            console.log('[Timeout] System sleep or background suspension detected. Rescheduling worker timeout.');
+            timerObj = setTimeout(check, POLL_MS);
+            return;
           }
+          const elapsed = now - start;
+          const timeoutMs = currentTimeoutMs();
+          if (elapsed >= timeoutMs) {
+            reject(new Error(`TTS worker timeout after ${Math.round(elapsed / 1000)}s`));
+            return;
+          }
+          timerObj = setTimeout(check, Math.min(POLL_MS, timeoutMs - elapsed));
         };
-        timerObj = setTimeout(check, timeoutMs);
+        timerObj = setTimeout(check, Math.min(POLL_MS, currentTimeoutMs()));
       }),
     ]);
   } finally {
