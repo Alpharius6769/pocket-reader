@@ -1225,6 +1225,13 @@ export const BufferManager = {
           }
         } catch (err) {
           this._currentSynthStartedAt = null;
+          if (err?.message === 'Pocket backend reset' || err?.message === 'Pocket memory-safe cache session released') {
+            console.log("[BufferManager] Chunk generation interrupted by worker recycling. Retrying paragraph...");
+            this.queue.unshift(task);
+            this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+            setTimeout(() => this._loop(gen), 100);
+            return;
+          }
           console.error("generateChunk failed:", err);
           this.isActive = false;
           this._showModalStatus('Neural engine failed: ' + err.message);
