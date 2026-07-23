@@ -297,19 +297,20 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
   );
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), uploadTimeoutMs);
-  let parsedData = null;
   try {
-    const response = await fetch(`${window.HF_API_BASE}/api/upload`, {
-      method: 'POST',
-      body: formData,
-      signal: controller.signal,
-    });
-    if (response.ok) {
-      parsedData = await _safeParseJson(response, 'General');
+    let parsedData = null;
+    try {
+      const response = await fetch(`${window.HF_API_BASE}/api/upload`, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+      if (response.ok) {
+        parsedData = await _safeParseJson(response, 'General');
+      }
+    } catch (netErr) {
+      console.warn('[Upload] Remote backend upload failed, trying local client-side extraction:', netErr);
     }
-  } catch (netErr) {
-    console.warn('[Upload] Remote backend upload failed, trying local client-side extraction:', netErr);
-  }
 
   if (!parsedData) {
     try {
