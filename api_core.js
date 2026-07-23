@@ -45,7 +45,7 @@ window.VAPID_PUBLIC_KEY = window.VAPID_PUBLIC_KEY || null;
 
 export function isValidStoryUrl(url) {
   if (!url) return false;
-  if (url.startsWith('/api/')) return true;
+  if (url.startsWith('/api/') || url.startsWith('/local-upload/') || url.startsWith('local://')) return true;
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
@@ -372,6 +372,10 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
     if (_m.status) newStory.status = _m.status;
     if (_m.extraMeta) newStory.extraMeta = _m.extraMeta;
     newStory.storyKey = window.getStoryStableKey?.(newStory) || `${newStory.title}|${newStory.author}`;
+    if (_m.source) newStory.url = _m.source;
+    else if (!newStory.url) newStory.url = `/local-upload/${encodeURIComponent(newStory.storyKey)}`;
+    if (_m.status) newStory.status = _m.status;
+    if (_m.extraMeta) newStory.extraMeta = _m.extraMeta;
 
     // Manual-upload update: if this title is already in the library with stored
     // chapters, append only the newly-added ones — keeping the existing chapters
@@ -397,13 +401,13 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
     window.currentChapterIndex = 0;
     window.currentParagraphIndex = 0;
     if (typeof window.addToLibrary === 'function') window.addToLibrary(window.currentStory);
-    // Persist the uploaded chapters to IndexedDB. Uploaded stories have no URL,
-    // so if the chapters are not cached, any later reload (e.g. the fast-narration
-    // caching reload) makes loadStory fall through to a URL fetch and fail with
-    // "Invalid story URL". Saving here lets loadStory restore it from cache.
+    // Persist the uploaded chapters to IndexedDB under storyKey, title, and url.
     if (typeof window._saveStoryChapters === 'function' && Array.isArray(newStory.chapters)) {
-      try { await window._saveStoryChapters(newStory.storyKey, newStory.chapters); }
-      catch (e) { console.warn('Failed to persist uploaded story chapters:', e); }
+      try {
+        await window._saveStoryChapters(newStory.storyKey, newStory.chapters);
+        await window._saveStoryChapters(newStory.title, newStory.chapters);
+        if (newStory.url) await window._saveStoryChapters(newStory.url, newStory.chapters);
+      } catch (e) { console.warn('Failed to persist uploaded story chapters:', e); }
     }
     if (!silent && typeof window.populateReaderUI === 'function') window.populateReaderUI(window.currentStory, newStory.author);
     if (!silent && typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
@@ -940,11 +944,7 @@ export async function loadStory(url, options = {}) {
   if (_trimmedUrl.match(/\.(pdf|epub|docx|txt|html|htm)$/i) || _trimmedUrl.match(/^(file:\/\/|[a-z]:[\\\/]|\/)/i)) {
     if (!preventNavigate) {
       if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-      if (typeof window.triggerFileUpload === 'function') {
-        window.triggerFileUpload();
-      } else {
-        alert("To import a local PDF, EPUB, or document file, please use the 'Choose File' button or drop the file onto the intake area.");
-      }
+      alert("To import a local PDF, EPUB, or document file, please click the 'Choose File' button or drop the file onto the upload area.");
     }
     return;
   }
