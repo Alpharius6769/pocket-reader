@@ -939,9 +939,16 @@ export async function loadStory(url, options = {}) {
 
 
 
-  // 3. Intercept local file paths or filenames entered into URL input
+  // 3. Intercept local file paths or filenames entered into URL input. Must
+  // never catch this app's OWN internal reference schemes — /api/... (curated
+  // stories) and /local-upload/... (re-opened uploads) are exactly the
+  // fetchUrl values step 1 above legitimately produces once a library entry's
+  // cached chapters are missing. The bare leading-"/" alternative below used to
+  // match those too, so re-opening ANY not-yet-cached curated story, or ANY
+  // uploaded document whose cache was evicted, hit this alert and never loaded.
   const _trimmedUrl = (fetchUrl || '').trim();
-  if (_trimmedUrl.match(/\.(pdf|epub|docx|txt|html|htm)$/i) || _trimmedUrl.match(/^(file:\/\/|[a-z]:[\\\/]|\/)/i)) {
+  const _isAppInternalRef = /^(\/api\/|\/local-upload\/|local:\/\/)/i.test(_trimmedUrl);
+  if (!_isAppInternalRef && (_trimmedUrl.match(/\.(pdf|epub|docx|txt|html|htm)$/i) || _trimmedUrl.match(/^(file:\/\/|[a-z]:[\\\/]|\/)/i))) {
     if (!preventNavigate) {
       if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
       alert("To import a local PDF, EPUB, or document file, please click the 'Choose File' button or drop the file onto the upload area.");

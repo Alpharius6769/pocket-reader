@@ -66,9 +66,25 @@ test('TTS worker generation timeout is patient while backgrounded, fast while fo
   assert.match(checkFn, /const timeoutMs = currentTimeoutMs\(\);/);
 });
 
+test('local-file-path intercept in loadStory does not swallow the app\'s own internal reference URLs', async () => {
+  // loadStory's "user pasted a local filesystem path" heuristic used a bare
+  // leading-"/" regex alternative that ALSO matched this app's own internal
+  // reference schemes (/api/library/curated/... for curated stories,
+  // /local-upload/... for re-opened uploads) — exactly the fetchUrl values
+  // step 1 legitimately produces once a library entry's cached chapters are
+  // missing. Live-verified: every not-yet-cached curated story hit a blocking
+  // alert() in the foreground and a silent no-op return in background/silent
+  // calls (preventNavigate) — i.e. it never loaded, foreground OR background.
+  const api = await read('api_core.js');
+  assert.match(api, /const _isAppInternalRef = \/\^\(\\\/api\\\/\|\\\/local-upload\\\/\|local:\\\/\\\/\)\/i\.test\(_trimmedUrl\);/);
+  assert.match(api, /if \(!_isAppInternalRef && \(_trimmedUrl\.match/);
+});
+
 test('anvil-app assets mirror background reliability updates', async () => {
   const anvilAudio = await read('anvil-app/theme/assets/audio_core.js');
   const anvilBuffer = await read('anvil-app/theme/assets/buffer_manager.js');
+  const anvilApi = await read('anvil-app/theme/assets/api_core.js');
+  assert.match(anvilApi, /const _isAppInternalRef = \/\^\(\\\/api\\\/\|\\\/local-upload\\\/\|local:\\\/\\\/\)\/i\.test\(_trimmedUrl\);/);
   assert.match(anvilAudio, /const audio = _ensureBgKeepAlive\(\);/);
   assert.match(anvilAudio, /function _preferDirectMobileMediaPlayback\(\)[\s\S]*?return true;/);
   assert.match(anvilAudio, /window\._resetPocketEngineForBackend = _resetPocketEngineForBackend;/);

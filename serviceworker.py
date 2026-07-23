@@ -79,7 +79,7 @@ var CORE_ASSETS = [
     '/_/theme/pocket_backend_policy.js?v=backend-v20',
     '/_/theme/pocket_performance_policy.js?v=performance-v2',
     '/_/theme/diagnostics.js?v=diag-v4',
-    '/_/theme/api_core.js?v=search-v13',
+    '/_/theme/api_core.js?v=search-v14',
     '/_/theme/experience_coordinator.js?v=experience-v4',
     '/_/theme/virtue_controller.js?v=virtue-v6',
     '/_/theme/engine_utils.js',
