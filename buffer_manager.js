@@ -1047,7 +1047,7 @@ export const BufferManager = {
   // MessageChannel hop is never throttled, so hidden sessions continue at full
   // synthesis speed; visible sessions keep the polite delay.
   _scheduleLoop(gen, delay = 0) {
-    if (document.hidden) {
+    if (document.hidden || (typeof document !== 'undefined' && !document.hasFocus()) || delay === 0) {
       const channel = new MessageChannel();
       channel.port1.onmessage = () => this._loop(gen);
       channel.port2.postMessage(0);
@@ -1253,6 +1253,26 @@ export const BufferManager = {
           });
         } else {
           this.consecutiveErrors++;
+          task.failCount = (task.failCount || 0) + 1;
+
+          if (task.failCount >= 3) {
+            console.warn(`[BufferManager] Paragraph ${task.chapIdx}:${task.paraIdx} failed 3 times. Circuit breaker skipping paragraph to prevent infinite loop.`);
+            window.Diagnostics?.log('WARN', 'Skipped un-synthesizable paragraph during caching', {
+              storyTitle: task.storyTitle,
+              chapIdx: task.chapIdx,
+              paraIdx: task.paraIdx,
+              failCount: task.failCount,
+            });
+            this.consecutiveErrors = 0;
+            this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+            this._scheduleLoop(gen, 100);
+            return;
+          }
+
+          if (this.consecutiveErrors >= 2 && typeof window._resetPocketEngineForBackend === 'function') {
+            try { await window._resetPocketEngineForBackend(); } catch (_) {}
+          }
+
           this.queue.unshift(task);
           if (this.consecutiveErrors >= 5) {
             this.isActive = false;
@@ -1267,7 +1287,7 @@ export const BufferManager = {
             this.activeWorkers = Math.max(0, this.activeWorkers - 1);
             return;
           }
-          setTimeout(() => this._loop(gen), 1500);
+          this._scheduleLoop(gen, 1500);
           this.activeWorkers = Math.max(0, this.activeWorkers - 1);
           return;
         }

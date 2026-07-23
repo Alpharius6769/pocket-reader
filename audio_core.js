@@ -2522,6 +2522,7 @@ window.generateChunk = async function(text, voice) {
     return wav;
   } catch (e) {
     console.error('Pocket worker inference failed:', e);
+    try { await _resetPocketEngineForBackend(); } catch (_) {}
     return null;
   } finally {
     window._pocketActiveSynthesis = Math.max(0, (window._pocketActiveSynthesis || 1) - 1);
