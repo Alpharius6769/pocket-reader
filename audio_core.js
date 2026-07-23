@@ -2484,16 +2484,21 @@ window.generateChunk = async function(text, voice) {
   await _ensurePocketTtsCalibration();
 
   // Refresh worker session periodically to clear ONNX Runtime internal state
-  // accumulation and prevent voice hallucinations. Lowered 30->20: reported
-  // long-form degradation onset (~15-20 min of listening) lands near paragraph
-  // 25-30, so a 30-count recycle fired *just* too late; 20 keeps a fresh worker
-  // ahead of onset. The recycle is cheap (re-inits sessions from cached model
-  // bytes, no visible caching stall in testing), and long-form reliability is
-  // the priority over a marginal throughput cost.
+  // accumulation and prevent voice hallucinations. The recycle does a FULL
+  // engine reload, so its cost is backend-dependent, and so is the threshold:
+  //  - WASM (incl. iOS): the reload re-inits sessions from cached model bytes
+  //    (cheap), and this is where the reported long-form degradation onset
+  //    (~15-20 min of listening, ~paragraph 25-30) appeared — so recycle often
+  //    (every 20) to stay ahead of onset.
+  //  - WebGPU: the reload re-creates the GPU session and re-fetches the ORT
+  //    runtime — expensive and visible ("downloading models again"), and over a
+  //    long story the reload churn dominates caching time. Recycle far less
+  //    often (every 60); the WebGPU EP doesn't show the same WASM-state drift.
   window._pocketParagraphCount = (window._pocketParagraphCount || 0) + 1;
-  if (window._pocketParagraphCount >= 20) {
+  const _recycleEvery = _pocketBackendRuntime?.selectedBackend === 'webgpu' ? 60 : 20;
+  if (window._pocketParagraphCount >= _recycleEvery) {
     window._pocketParagraphCount = 0;
-    window.Diagnostics?.log('INFO', 'Recycling Pocket TTS worker session to maintain pristine audio quality');
+    window.Diagnostics?.log('INFO', 'Recycling Pocket TTS worker session to maintain pristine audio quality', { every: _recycleEvery, backend: _pocketBackendRuntime?.selectedBackend });
     try {
       await _resetPocketEngineForBackend();
       await _loadPocketEngine();

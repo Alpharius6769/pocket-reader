@@ -344,6 +344,7 @@ export const BufferManager = {
   queue: [],
   totalToCache: 0,
   cachedCount: 0,
+  skippedCount: 0,
   consecutiveErrors: 0,
   containerEl: null,
   fillEl: null,
@@ -448,7 +449,9 @@ export const BufferManager = {
       if (awayBar) awayBar.classList.remove('caching');
       _releaseCacheWakeLock();
     } else if (this.cachedCount >= this.totalToCache && this.totalToCache > 0) {
-      statusText = `✅ Cache complete! (${this.totalToCache} paragraphs)`;
+      statusText = this.skippedCount > 0
+        ? `✅ Cache complete! (${this.totalToCache - this.skippedCount}/${this.totalToCache}; ${this.skippedCount} skipped)`
+        : `✅ Cache complete! (${this.totalToCache} paragraphs)`;
       if (awayBar) awayBar.classList.remove('caching');
       _releaseCacheWakeLock();
       _clearPersistedCacheJob();
@@ -595,6 +598,7 @@ export const BufferManager = {
     this.queue = [];
     this.totalToCache = 0;
     this.cachedCount = 0;
+    this.skippedCount = 0;
     const engine = _resolveActiveEngine();
     if (engine !== 'pocket') {
       if (this.containerEl) this.containerEl.style.display = 'none';
@@ -944,6 +948,7 @@ export const BufferManager = {
     this.queue = [];
     this.totalToCache = 0;
     this.cachedCount = 0;
+    this.skippedCount = 0;
     window._pocketThroughputCache = false;
     window.trimPocketCacheWorkerPool?.();
     this.updateUI();
@@ -1239,6 +1244,10 @@ export const BufferManager = {
               window.Diagnostics?.log('WARN', 'Skipped paragraph stuck in worker-recycle retry loop', {
                 storyTitle: task.storyTitle, chapIdx: task.chapIdx, paraIdx: task.paraIdx, resetRetries: task.resetRetries,
               });
+              // Count the skip as processed so the job can still reach 100% /
+              // "complete" instead of sitting one short forever per skipped para.
+              this.cachedCount++;
+              this.skippedCount++;
               this._scheduleLoop(gen, 100);
               return;
             }
@@ -1280,6 +1289,11 @@ export const BufferManager = {
             });
             this.consecutiveErrors = 0;
             this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+            // Count the skip as processed so a story with a few un-synthesizable
+            // paragraphs still reaches "complete" instead of stalling one short
+            // per skip (the "stuck at 2098/2106" symptom).
+            this.cachedCount++;
+            this.skippedCount++;
             this._scheduleLoop(gen, 100);
             return;
           }
