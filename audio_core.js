@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v8';
+} from './tts_pronunciation_core.js?v=pron-v9';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -1133,7 +1133,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // can resolve under an Anvil shell subpath.
-        const workerScript = '/_/theme/pocket_worker.js?v=pocket-worker-v41';
+        const workerScript = '/_/theme/pocket_worker.js?v=pocket-worker-v42';
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -2877,6 +2877,77 @@ function _applyEmotionBoundaryFade(voiceAsset) {
 }
 
 
+// ── Playback lookahead prefetch ──────────────────────────────────────────────
+// Keep a small runway of upcoming paragraphs synthesized ahead of the playback
+// cursor so a screen lock — which suspends the TTS worker on iOS — never lands
+// on an uncached paragraph and silently stalls narration. This runs only on
+// idle worker time while a paragraph is already playing, always yields to live
+// synthesis (which owns the worker), and no-ops when a full background cache
+// job is already filling ahead. It renders in the same (non-throughput) mode
+// live playback reads first, so a prefetched paragraph is an instant cache hit
+// when the cursor reaches it — no CPU needed, which is exactly what a locked
+// iOS screen denies. Con (as flagged to the user): more eager synthesis =
+// more battery while playing uncached stretches.
+const POCKET_PLAYBACK_LOOKAHEAD = 3;
+let _lookaheadRunning = false;
+
+function _peekNextIndices(c, p) {
+  const story = window.currentStory;
+  if (!story?.chapters?.[c]?.paragraphs) return null;
+  if (p + 1 < story.chapters[c].paragraphs.length) return { c, p: p + 1 };
+  if (c + 1 < story.chapters.length && story.chapters[c + 1]?.paragraphs?.length) return { c: c + 1, p: 0 };
+  return null;
+}
+
+// Live playback must always win the single worker; bail the instant it needs it.
+function _lookaheadShouldYield() {
+  return !window.isPlaying || window._pocketLiveSynthActive === true || window._playPriority === true;
+}
+
+async function _ensurePlaybackLookahead() {
+  if (_lookaheadRunning) return;
+  if (_resolveActiveEngine() !== 'pocket') return;
+  if (window.BufferManager?.isActive) return;   // the full cacher already fills ahead of the cursor
+  if (_lookaheadShouldYield()) return;
+  const story = window.currentStory;
+  if (!story?.chapters) return;
+  _lookaheadRunning = true;
+  try {
+    const engine = 'pocket';
+    const title = story.title;
+    const storyRef = story.storyKey || window.getStoryStableKey?.(story) || title;
+    const selVoice = document.getElementById('voice-selector')?.value || POCKET_DEFAULT_VOICE;
+    let c = window.currentChapterIndex, p = window.currentParagraphIndex;
+    for (let i = 0; i < POCKET_PLAYBACK_LOOKAHEAD; i++) {
+      if (_lookaheadShouldYield()) break;
+      const nxt = _peekNextIndices(c, p);
+      if (!nxt) break;              // end of story
+      c = nxt.c; p = nxt.p;
+      const text = story.chapters[c]?.paragraphs?.[p];
+      if (!text || text.trim() === '' || _isMetaParagraph(text)) continue;
+      const cleanVoice = resolveVoiceWithSentiment(engine, selVoice, text, { storyTitle: title, chapIdx: c, paraIdx: p });
+      // Already rendered under either render-mode tag? Then this slot is safe.
+      let cached = false;
+      for (const tag of _prosodyCacheTagVariants(engine)) {
+        if (await getAudioChunk(storyRef, c, p, engine, cleanVoice + tag)) { cached = true; break; }
+      }
+      if (cached) continue;
+      if (_lookaheadShouldYield()) break;   // re-check right before committing the worker
+      const audioBlob = await window.generateChunk(text, cleanVoice);
+      if (audioBlob) {
+        const cacheVoice = cleanVoice + (typeof _prosodyCacheTag === 'function' ? _prosodyCacheTag(engine) : '');
+        await saveAudioChunk(storyRef, c, p, engine, cacheVoice, audioBlob, false).catch(() => {});
+        window.Diagnostics?.log?.('INFO', 'Playback lookahead cached paragraph ahead of the cursor', { chapIdx: c, paraIdx: p });
+      }
+    }
+  } catch (e) {
+    window.Diagnostics?.log?.('WARN', 'Playback lookahead prefetch skipped', { error: e?.message || String(e) });
+  } finally {
+    _lookaheadRunning = false;
+  }
+}
+window._ensurePlaybackLookahead = _ensurePlaybackLookahead;
+
 async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
   const engine = _resolveActiveEngine();
   const storyRef = window.currentStory?.storyKey || window.getStoryStableKey?.(window.currentStory) || title;
@@ -2960,7 +3031,12 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
         }))
         .catch(console.error);
     }
-    if (streamedPlayback) return;
+    if (streamedPlayback) {
+      // Streamed paragraph is playing and the worker is now idle — build the
+      // lookahead runway (fire-and-forget; yields at once if not safe).
+      if (window.isPlaying) _ensurePlaybackLookahead();
+      return;
+    }
   }
 
   if (!audioBlob || !(audioBlob instanceof Blob) || audioBlob.size < 100) {
@@ -3031,6 +3107,10 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
                              `Play start ${_ms}ms (${_cacheHit ? 'cache hit' : 'synthesized'})`,
                              { ms: _ms, cacheHit: _cacheHit });
     }
+    // This paragraph is now playing on the audio element and the worker is
+    // idle — synthesize the next few ahead so a screen lock can't strand us on
+    // an uncached paragraph. Fire-and-forget; it yields at once if not safe.
+    if (window.isPlaying) _ensurePlaybackLookahead();
   } catch (playError) {
     console.warn('Autoplay blocked:', playError);
     pausePlayback();

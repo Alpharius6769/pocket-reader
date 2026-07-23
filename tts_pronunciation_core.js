@@ -1,7 +1,7 @@
 // Browser-safe Pocket TTS pronunciation and tuning helpers.
 // Keep this module free of Node-only APIs; it is imported by the app and worker.
 
-export const PRONUNCIATION_RULESET_VERSION = 'pron-v7'; // v6: dropped ambiguous 'd->would + "no"->"number" over-match; paired with tamed emotion prosody (busts audio cache)
+export const PRONUNCIATION_RULESET_VERSION = 'pron-v9'; // v9: added can't/shan't expansion + "'s been/got"->"has" (fixes "it is been"); v6: dropped ambiguous 'd->would + "no"->"number" over-match; paired with tamed emotion prosody (busts audio cache)
 export const DEFAULT_POCKET_PLAYBACK_SPEED = 1.08;
 export const DEFAULT_POCKET_TEMPERATURE_PRESET = 'balanced';
 export const DEFAULT_POCKET_QUALITY_MODE = 'mobile';
@@ -20,6 +20,12 @@ const BUILT_IN_PRONUNCIATION_OVERRIDES = Object.freeze([
 ]);
 
 const CONTRACTIONS = Object.freeze([
+  // "'s" + been/got/gotten is UNAMBIGUOUSLY "has" ("it is been" is never
+  // grammatical), so expand it FIRST — before the generic "'s -> is" rules
+  // below — so "it's been" -> "it has been", not the broken "it is been".
+  // Only these three participles are safe; every other "'s" stays "is" (the
+  // far more common reading), matching the deliberate-conservatism of this set.
+  [/\b(it|he|she|that|there|what|who|here)'s\s+(been|got|gotten)\b/gi, '$1 has $2'],
   [/\bI'm\b/g, 'I am'], [/\bI've\b/g, 'I have'], [/\bI'll\b/g, 'I will'],
   [/\byou're\b/gi, 'you are'], [/\byou've\b/gi, 'you have'], [/\byou'll\b/gi, 'you will'],
   [/\bhe's\b/gi, 'he is'], [/\bhe'll\b/gi, 'he will'],
@@ -35,6 +41,7 @@ const CONTRACTIONS = Object.freeze([
   [/\bmightn't\b/gi, 'might not'], [/\bneedn't\b/gi, 'need not'], [/\bdaren't\b/gi, 'dare not'], [/\bisn't\b/gi, 'is not'],
   [/\baren't\b/gi, 'are not'], [/\bwasn't\b/gi, 'was not'], [/\bweren't\b/gi, 'were not'], [/\bhasn't\b/gi, 'has not'],
   [/\bhaven't\b/gi, 'have not'], [/\bhadn't\b/gi, 'had not'], [/\bain't\b/gi, 'is not'],
+  [/\bcan't\b/gi, 'can not'], [/\bshan't\b/gi, 'shall not'],
   // NOTE: ma'am is deliberately NOT rewritten. 'mam' reads as British "mum",
   // and phonetic respellings ('maam') destabilize the flow-LM — it renders the
   // pseudo-word in a shifted voice. The model's native "ma'am" is the best take.

@@ -2628,6 +2628,7 @@ async function startGeneration(text, voiceName, jobId, opts) {
         streamSegments: opts?.streamSegments === true,
         throughputMode: opts?.throughputMode === true,
         punctuationSplitCount,
+        seedSalt: Number(opts?.retryLevel) > 0 ? ('|r' + Number(opts.retryLevel)) : '',
       });
       const quality = inspectCalibrationAudio(allChunks);
       if (currentBackend === 'webgpu' && (!quality.finite || quality.rms < 0.0001)) {
@@ -2642,6 +2643,7 @@ async function startGeneration(text, voiceName, jobId, opts) {
         streamSegments: opts?.streamSegments === true,
         throughputMode: opts?.throughputMode === true,
         punctuationSplitCount,
+        seedSalt: Number(opts?.retryLevel) > 0 ? ('|r' + Number(opts.retryLevel)) : '',
       });
     }
 
@@ -2717,6 +2719,12 @@ async function startGeneration(text, voiceName, jobId, opts) {
 }
 
 async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, control = {}) {
+  // Quality-guard retry salt. Normal renders (retryLevel 0) carry no salt, so
+  // audio stays byte-identical across renders/cache rebuilds. On a retry the
+  // salt shifts the deterministic latent noise so a paragraph the guard just
+  // fatal-rejected can render *differently* and recover, instead of the
+  // identical seed reproducing the exact same rejected take forever.
+  const seedSalt = control && control.seedSalt ? String(control.seedSalt) : '';
   if (
     currentBackend === 'wasm'
     && chunkMeta.some((meta) => Number(meta?.lsdSteps || DEFAULT_LSD_STEPS) > 1)
@@ -2846,7 +2854,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
     // differences, and re-renders / cache rebuilds match exactly. All three
     // generation paths (WebGPU block, WASM block, per-frame streaming) seed from
     // this, so behaviour is uniform across devices and quality modes.
-    const chunkNoiseSeed = voiceName + '|' + (meta.emotion || 'neutral') + '|' + chunkText;
+    const chunkNoiseSeed = voiceName + '|' + (meta.emotion || 'neutral') + '|' + chunkText + seedSalt;
     let isFirstAudioChunkOfTextChunk = true;
     const tokenizationStart = performance.now();
     const tokenIds = tokenizerProcessor.encodeIds(chunkText);
