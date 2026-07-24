@@ -381,20 +381,54 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
     // chapters, append only the newly-added ones — keeping the existing chapters
     // and their cached audio (which is keyed by chapter index) — instead of
     // replacing. This is the file-upload equivalent of "Check for New Chapters".
-    const _existing = window.findLibraryStoryByRef?.(newStory.storyKey);
-    if (_existing && typeof window._loadStoryChapters === 'function') {
-      try {
-        const _stored = (await window._loadStoryChapters(newStory.storyKey)) || [];
-        if (_stored.length && newStory.chapters.length > _stored.length) {
-          const _added = newStory.chapters.length - _stored.length;
-          newStory.chapters = window.mergeStoryChapters?.(_stored, newStory.chapters)
-            || _stored.concat(newStory.chapters.slice(_stored.length));
+    // Reconcile against an existing library entry for the SAME story so a
+    // re-uploaded / newer file updates it in place instead of spawning a
+    // duplicate. Match first by stable key, then fall back to title+author: a
+    // story first FETCHED from AO3 keys off its work URL, while the same story
+    // UPLOADED as a file keys off title|author (or a /local-upload/ ref), so
+    // their stable keys never match and the two would otherwise coexist.
+    let _existing = window.findLibraryStoryByRef?.(newStory.storyKey) || null;
+    if (!_existing) {
+      const _norm = (v) => String(v || '').trim().toLowerCase();
+      const _t = _norm(newStory.title), _a = _norm(newStory.author);
+      if (_t) {
+        _existing = (window.userProfile?.library || []).find(
+          (s) => _norm(s.title) === _t && _norm(s.author) === _a) || null;
+      }
+    }
+    if (_existing) {
+      // Adopt the existing identity so cached chapters/audio (keyed by storyKey)
+      // and the addToLibrary dedupe (keyed via getStoryStableKey, which prefers
+      // sourceUrl → url) both resolve to this entry rather than creating a new one.
+      newStory.storyKey = _existing.storyKey || window.getStoryStableKey?.(_existing) || newStory.storyKey;
+      if (_existing.sourceUrl) newStory.sourceUrl = _existing.sourceUrl;
+      else if (_existing.source_url) newStory.source_url = _existing.source_url;
+      if (_existing.url) newStory.url = _existing.url;
+      if (typeof window._loadStoryChapters === 'function') {
+        try {
+          const _stored = (await window._loadStoryChapters(newStory.storyKey))
+            || (await window._loadStoryChapters(_existing.title)) || [];
+          if (_stored.length >= newStory.chapters.length && _stored.length) {
+            // Upload is not newer than what we already hold — keep the existing
+            // chapters (and their index-keyed audio) untouched.
+            newStory.chapters = _stored;
+          } else if (_stored.length) {
+            // Newer upload: keep existing chapters + their audio, append only the
+            // newly-added ones.
+            const _added = newStory.chapters.length - _stored.length;
+            newStory.chapters = window.mergeStoryChapters?.(_stored, newStory.chapters)
+              || _stored.concat(newStory.chapters.slice(_stored.length));
+            if (!silent && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
+            if (!silent && window.virtueSpeak) window.virtueSpeak(`Added ${_added} new chapter${_added > 1 ? 's' : ''} from your upload - your existing audio is kept.`, 6000);
+          }
+          // Reflect the resulting chapter set on the existing entry so its library
+          // card count matches what the reader now holds.
+          _existing.totalChapters = newStory.chapters.length;
+          _existing.publishedChapters = Math.max(Number(_existing.publishedChapters || 0), newStory.chapters.length);
           _existing.isFinished = false;
           if (typeof window._saveStoryChapters === 'function') await window._saveStoryChapters(newStory.storyKey, newStory.chapters);
-          if (!silent && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
-          if (!silent && window.virtueSpeak) window.virtueSpeak(`Added ${_added} new chapter${_added > 1 ? 's' : ''} from your upload - your existing audio is kept.`, 6000);
-        }
-      } catch (e) { console.warn('Upload merge check failed:', e); }
+        } catch (e) { console.warn('Upload merge check failed:', e); }
+      }
     }
 
     window.currentStory = newStory;
@@ -975,6 +1009,18 @@ export async function loadStory(url, options = {}) {
   try {
     let data;
 
+    // Uploaded documents (/local-upload/… or local://…) have no network source.
+    // Reaching here means step 1's cache lookup missed (chapters evicted), so the
+    // only recovery is a re-upload — never a backend scrape, which would just 400
+    // on the non-http ref and pop a spurious Cloudflare dialog.
+    if (/^(\/local-upload\/|local:\/\/)/i.test(fetchUrl)) {
+      if (!preventNavigate) {
+        if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+        alert(`Could not load stored chapters for "${(existingLibEntry && existingLibEntry.title) || 'this uploaded document'}". Please re-upload the file.`);
+      }
+      return;
+    }
+
     if (fetchUrl.startsWith('/api/library/curated/')) {
       // ── Curated library stories — simple direct fetch ──
       const response = await fetch(`${window.HF_API_BASE}${fetchUrl}`);
@@ -1168,6 +1214,12 @@ export async function _silentFetchStoryChapters(url, forceScrape = false) {
   }
   let data;
   const _isAo3 = url.includes('archiveofourown.org/works/');
+
+  // Uploaded documents have no network source — nothing to fetch or cache in the
+  // background. Signal a clean skip instead of POSTing a doomed scrape (400).
+  if (/^(\/local-upload\/|local:\/\/)/i.test(url)) {
+    throw new Error('LOCAL_UPLOAD_NO_SOURCE');
+  }
 
   if (url.startsWith('/api/library/curated/')) {
     const response = await fetch(`${window.HF_API_BASE}${url}`);
