@@ -1,6 +1,6 @@
 # Alpharius' Pocket Reader - Master Agent Handoff
 
-Last reviewed: 2026-07-20
+Last reviewed: 2026-07-23
 
 This is the authoritative handoff for agents working on Pocket Reader. It
 describes the current architecture, production paths, major changes, removed
@@ -58,30 +58,82 @@ Hugging Face backend must not become a second public profile authority.
 
 ## 2. Current Production Release
 
-Release identifier: `startup-mobile-reliability-v1`.
+Release identifier: `upload-dedupe-and-narration-reload-polish-v1`.
 
-Important frontend/service-worker versions currently in source and production:
+Important frontend/service-worker versions currently in source and production
+(verify against the script tags in `FrontEnd_html.html` / `standard-page.html`
+and the pins in `tests/pocket_acceleration.test.mjs` — these move often):
 
 ```text
-Service worker shell: pocket-reader-core-v120
-UI controller: ui-v76
-Settings module: settings-v35
+Service worker shell: pocket-reader-core-v128
+UI controller: ui-v81
+Settings module: settings-v40
 Device setup module: device-setup-v6
-Theme stylesheet: midnight-v19
-Pocket audio module: audio-v39
-Pocket worker: pocket-worker-v37
-Pocket backend policy: backend-v20 (calibration cal-v12)
+Theme stylesheet: midnight-v21
+Pocket audio module: audio-v52
+Pocket worker: pocket-worker-v42
+Pocket backend policy: backend-v20
 Experience coordinator: experience-v4
-Virtue controller: virtue-v4
-Buffer manager: buffer-v33
-API core: search-v8
-Library manager: library-v5
-Narration runtime loader: narration-loader-v2
+Virtue controller: virtue-v6
+Buffer manager: buffer-v42
+API core: search-v15
+Library manager: library-v7
+Narration runtime loader: narration-loader-v9
+Pronunciation ruleset: pron-v9
+PCM worklet: pcm-v1
 ONNX Runtime Web: 1.27.0
 WASM runtime: 1.27.0 relaxed-SIMD minimal ORT-format build
 WASM model family: english_2026-04-ort-r1
 WebGPU model family: certified R3 FP16 bundle with device-local calibration
 ```
+
+### 2026-07-23 releases (v128 era)
+
+Four deploys landed on 2026-07-23, all verified live on
+`hot-wiry-raven.anvil.app`. The first two were frontend-only (Anvil); the last
+two were no-op redeploys of unchanged services to refresh them.
+
+- **Uploaded-story scrape 400 + duplicate-on-upload** (api_core `search-v15`;
+  anvil `3663831` / root `db5fd32`). `loadStory` now intercepts app-internal
+  upload refs (`/local-upload/…`, `local://…`) before the scrape dispatch and
+  shows the re-upload prompt instead of POSTing a non-http URL to `/api/scrape`
+  (which returned `400 "Invalid URL format"` and popped a spurious Cloudflare
+  dialog); `_silentFetchStoryChapters` skips the same refs in background
+  caching. `processUploadedFile` now reconciles an upload against an existing
+  library entry by title+author when the stable key differs (a story first
+  FETCHED from AO3 keys off its work URL, the same story UPLOADED keys off
+  title|author), adopts that entry's identity, and merges/updates it in place —
+  so re-uploading a newer PDF of an already-fetched story updates it (keeping
+  existing chapters' cached audio) instead of creating a duplicate.
+- **Story-load Home/white flash, intrusive loading overlay, settings button
+  lag** (ui `ui-v81`, settings `settings-v40`; anvil `af8667e` / root
+  `1b1737a`). (1) The one-time `?tts_fast=1` reload that unlocks multi-threaded
+  narration reboots to the default Home view before the reader is restored — a
+  visible white/Home flash. Added a self-contained inline anti-flash mask in
+  `standard-page.html` that paints on the first frame whenever a resume record
+  is pending and self-removes via MutationObserver once the app leaves Home (or
+  the JS resume overlay takes over), with a 10s backstop — no module bump
+  needed. (2) `showLoadingOverlay` now delays its reveal ~300ms and
+  `hideLoadingOverlay` cancels a pending reveal, so fast/cached operations never
+  flash the full-screen modal. (3) Cache-clear buttons show working feedback
+  around the async delete (`clearNeuralEngineCache` + a
+  `clearAudioCacheFromSettings` wrapper that avoids a `storage_core` version
+  cascade); the device/backend "Re-run optimization" button's lag was the
+  isolation reload, now covered by the mask.
+- **Cloudflare Worker redeploy** (`pocket-reader-proxy`, version
+  `1ccbe3fc-c6d9-48a8-b6ec-6f08f5ee64b3`) — no code change; the worker only
+  proxies ORT runtime files. Deployed from `Back end/` via `npx wrangler deploy`.
+- **Hugging Face Space rebuild** (commit `e0b9aab`, empty) — no code change;
+  backend is in parity with `Back end/` and was healthy throughout
+  (`/api/health` 200). Pushed to the Space's `main` to refresh the running app.
+
+Intervening v121–v127 releases (2026-07-21 → 2026-07-23) shipped narration
+long-form reliability (recycle cadence, false-positive skip fixes, caching
+completion past un-synthesizable paragraphs, backend-aware worker recycle),
+contraction pronunciation fixes, deterministic per-chunk TTS seeding, seed
+perturb-on-retry, a playback lookahead buffer, and a memory/perf idle-release
+pass. Those were frontend-only (Anvil); see `git log` and the agent memory notes
+for per-release detail rather than reconstructing it here.
 
 The 2026-07-20 release resolved several critical UX, narration default, and background-caching issues:
 - **Default Voice:** Rayne (`rayne`) is now the default voice for all new user profiles. The global fallback is updated and the voice select elements in the HTML default to Rayne.
