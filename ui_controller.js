@@ -740,11 +740,26 @@ export function showLoadingOverlay(headline, sub, onCancel) {
   window._loadingCancelHandler = (typeof onCancel === 'function') ? onCancel : null;
   const cancelBtn = document.getElementById('_loading-cancel');
   if (cancelBtn) cancelBtn.style.display = window._loadingCancelHandler ? '' : 'none';
-  ov.classList.add('active');
+  // Delay the actual reveal so quick operations (opening an already-cached
+  // story, a sub-300ms fetch) never flash the full-screen modal — it only
+  // appears for genuinely slow waits. Text/cancel above are set immediately so
+  // the overlay is correct if/when it does show. If it is already visible, or a
+  // reveal is already scheduled, just keep the updated text (don't re-delay).
+  if (ov.classList.contains('active') || window._loadingOverlayTimer) return;
+  window._loadingOverlayTimer = setTimeout(() => {
+    window._loadingOverlayTimer = null;
+    ov.classList.add('active');
+  }, 300);
 }
 window.showLoadingOverlay = showLoadingOverlay;
 
 export function hideLoadingOverlay() {
+  // Cancel any pending reveal so a fast operation that finishes inside the
+  // 300ms window never shows the overlay at all.
+  if (window._loadingOverlayTimer) {
+    clearTimeout(window._loadingOverlayTimer);
+    window._loadingOverlayTimer = null;
+  }
   const ov = document.getElementById('global-loading-overlay');
   if (ov) ov.classList.remove('active');
   window._loadingCancelHandler = null;
