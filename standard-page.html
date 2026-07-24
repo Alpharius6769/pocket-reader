@@ -41,11 +41,11 @@ instant the app leaves Home (reader/settings/etc.) or the JS overlay takes over.
 Fully self-contained so no versioned module needs to change.
 -->
 <style>
-#pr-iso-mask{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#111214;color:#e8e8ea;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;transition:opacity .25s ease}
+#pr-iso-mask{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:var(--app-bg,#111214);color:var(--text-main,#e8e8ea);font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;transition:opacity .25s ease}
 #pr-iso-mask.pr-iso-hide{opacity:0}
 #pr-iso-mask .pr-iso-card{text-align:center;padding:0 24px}
-#pr-iso-mask .pr-iso-spinner{width:44px;height:44px;margin:0 auto 16px;border:4px solid rgba(255,255,255,.15);border-top-color:#4a9eff;border-radius:50%;animation:pr-iso-spin .8s linear infinite}
-#pr-iso-mask .pr-iso-text{font-size:1rem;opacity:.85}
+#pr-iso-mask .pr-iso-spinner{width:44px;height:44px;margin:0 auto 16px;border:4px solid rgba(128,128,128,.28);border-top-color:var(--accent-blue-text,#4a9eff);border-radius:50%;animation:pr-iso-spin .8s linear infinite}
+#pr-iso-mask .pr-iso-text{font-size:1rem;opacity:.85;color:var(--text-main,#e8e8ea)}
 @keyframes pr-iso-spin{to{transform:rotate(360deg)}}
 </style>
 <script>
@@ -86,6 +86,15 @@ Fully self-contained so no versioned module needs to change.
       return false;
     };
     var start = function () {
+      // Apply the saved theme class up-front so the mask's var(--app-bg) /
+      // var(--text-main) resolve to the user's theme (not the dark default) on
+      // the first frame — otherwise a light-theme user would get a dark mask. The
+      // app re-applies the same class during boot, so this is idempotent.
+      try {
+        var t = (((JSON.parse(localStorage.getItem('pocketReaderData') || '{}') || {}).settings) || {}).theme || 'slate';
+        t = String(t).replace(/[^a-z]/g, '').slice(0, 20);
+        if (t && t !== 'dark' && document.body) document.body.classList.add('theme-' + t);
+      } catch (e) {}
       (document.body || document.documentElement).appendChild(mask);
       if (check()) return;
       obs = new MutationObserver(check);
@@ -123,13 +132,13 @@ after paint keeps them from competing with the render-critical modules.
 <link rel="modulepreload" href="_/theme/sync_core.js?v=sync-v5">
 <link rel="modulepreload" href="_/theme/engine_utils.js">
 <link rel="modulepreload" href="_/theme/narration_runtime_loader.js?v=narration-loader-v9">
-<link rel="modulepreload" href="_/theme/api_core.js?v=search-v15">
+<link rel="modulepreload" href="_/theme/api_core.js?v=search-v16">
 <link rel="modulepreload" href="_/theme/experience_coordinator.js?v=experience-v4">
 <link rel="modulepreload" href="_/theme/virtue_controller.js?v=virtue-v6">
 <link rel="modulepreload" href="_/theme/pocket_backend_policy.js?v=backend-v20">
 <link rel="modulepreload" href="_/theme/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="_/theme/device_setup.js?v=device-setup-v6">
-<link rel="modulepreload" href="_/theme/settings_manager.js?v=settings-v40">
+<link rel="modulepreload" href="_/theme/settings_manager.js?v=settings-v41">
 <link rel="modulepreload" href="_/theme/library_manager.js?v=library-v7">
 <link rel="modulepreload" href="_/theme/cinematic_ui.js?v=cinematic-v4">
 <link rel="modulepreload" href="_/theme/reader_features.js?v=features-v3">

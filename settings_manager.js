@@ -869,26 +869,32 @@ export async function clearNeuralEngineCache() {
 }
 window.clearNeuralEngineCache = clearNeuralEngineCache;
 
-// Settings-page wrapper for the audio-cache button. clearAudioCache lives in
-// storage_core (shared with the reader's "delete all audio" dialog); wrapping it
-// here — rather than editing storage_core — adds working feedback without forcing
-// a storage_core version cascade across its importers. We own the confirm so we
-// can reveal the overlay only AFTER the user commits (not behind the native
-// dialog), then delegate with skipConfirm.
-window.clearAudioCacheFromSettings = async function clearAudioCacheFromSettings(includePermanent = false) {
-  const msg = includePermanent
-    ? "This will delete ALL audio caches, including permanently saved stories. Are you sure?"
-    : 'This will clear your temporary audio cache to free up space. Permanent caches will be kept. Proceed?';
-  if (!confirm(msg)) return;
-  window.showLoadingOverlay?.('Clearing audio cache…', 'Freeing up storage');
-  try {
-    if (typeof window.clearAudioCache === 'function') await window.clearAudioCache(includePermanent, true);
-  } catch (e) {
-    console.error('Failed to clear audio cache:', e);
-  } finally {
-    window.hideLoadingOverlay?.();
-  }
-};
+// Give the audio-cache clear working feedback around its async delete for BOTH
+// entry points (the Settings button and the reader's storage panel / "delete all
+// audio" dialog) — all of which call window.clearAudioCache. We decorate the
+// global that storage_core defines (it loads earlier in module order) rather than
+// editing storage_core, which would force a version cascade across its importers.
+// Interactive calls (skipConfirm falsy) own the confirm here so the overlay
+// reveals only AFTER the user commits — never behind the native dialog; the
+// overlay self-suppresses for sub-300ms clears. Programmatic calls (skipConfirm
+// true) pass straight through unchanged. The flag guards against double-wrapping.
+if (typeof window.clearAudioCache === 'function' && !window._clearAudioCacheWrapped) {
+  const _rawClearAudioCache = window.clearAudioCache;
+  window._clearAudioCacheWrapped = true;
+  window.clearAudioCache = async function clearAudioCache(includePermanent = false, skipConfirm = false) {
+    if (skipConfirm) return _rawClearAudioCache(includePermanent, true);
+    const msg = includePermanent
+      ? "This will delete ALL audio caches, including permanently saved stories. Are you sure?"
+      : 'This will clear your temporary audio cache to free up space. Permanent caches will be kept. Proceed?';
+    if (!confirm(msg)) return;
+    window.showLoadingOverlay?.('Clearing audio cache…', 'Freeing up storage');
+    try {
+      return await _rawClearAudioCache(includePermanent, true);
+    } finally {
+      window.hideLoadingOverlay?.();
+    }
+  };
+}
 
 // ── resetAllCacheDecisions ───────────────────────────────────────────────────
 export function resetAllCacheDecisions() {
