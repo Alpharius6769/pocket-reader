@@ -1133,7 +1133,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // can resolve under an Anvil shell subpath.
-        const workerScript = '/_/theme/pocket_worker.js?v=pocket-worker-v42';
+        const workerScript = '/_/theme/pocket_worker.js?v=pocket-worker-v43';
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -1579,10 +1579,47 @@ function _ensureBgKeepAlive() {
   }
   return _bgKeepAlive;
 }
+
+export function preparePocketMobileMediaSession() {
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
+    || (navigator.maxTouchPoints || 0) > 0;
+  if (!mobile) return false;
+
+  // Use the same media element that later receives narrated blobs. Calling
+  // play() here, directly in the user's tap, grants iOS playback permission to
+  // that element before model loading and synthesis cross async boundaries.
+  if (!_premiumAudio) {
+    _premiumAudio = new Audio();
+  }
+  _premiumAudio.preload = 'auto';
+  _premiumAudio.playsInline = true;
+  _premiumAudio.setAttribute?.('playsinline', '');
+  _premiumAudio.setAttribute?.('webkit-playsinline', '');
+  _bindMediaElementSession(_premiumAudio);
+  window.currentAudio = _premiumAudio;
+  const keepAlive = _ensureBgKeepAlive();
+  if (!_premiumAudio.src || _premiumAudio.dataset?.pocketUnlock !== '1') {
+    _premiumAudio.src = keepAlive.src;
+    _premiumAudio.loop = true;
+    _premiumAudio.volume = 0.001;
+    if (_premiumAudio.dataset) _premiumAudio.dataset.pocketUnlock = '1';
+    _premiumAudio.play().catch(() => {});
+  }
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!_audioCtx && AudioContextClass) _audioCtx = new AudioContextClass();
+  if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {});
+  return true;
+}
+window.preparePocketMobileMediaSession = preparePocketMobileMediaSession;
+
 export function startBgKeepAlive() {
   const audio = _ensureBgKeepAlive();
   if (audio && audio.paused) {
     audio.play().catch(() => {});
+  }
+  if (_premiumAudio?.dataset?.pocketUnlock === '1' && _premiumAudio.paused) {
+    _premiumAudio.play().catch(() => {});
   }
   if (window.isPlaying) _updateMediaSession(true);
 }
@@ -1590,6 +1627,10 @@ export function stopBgKeepAlive() {
   const isCachingActive = Boolean(window.BufferManager?.isActive && !window.BufferManager?.paused);
   if (_bgKeepAlive && !_bgKeepAlive.paused && !window.isPlaying && !isCachingActive) {
     try { _bgKeepAlive.pause(); } catch (_) {}
+  }
+  if (_premiumAudio?.dataset?.pocketUnlock === '1'
+      && !_premiumAudio.paused && !window.isPlaying && !isCachingActive) {
+    try { _premiumAudio.pause(); } catch (_) {}
   }
   if (!window.isPlaying) _updateMediaSession(false);
 }
@@ -2382,42 +2423,15 @@ async function _runPocketWorkerGeneration(workerObj, text, workerVoice, opts, ha
   }
 }
 
-let _pocketTtsCalibrationPromise = null;
-async function _ensurePocketTtsCalibration() {
+function _recordPocketTtsCalibrationFromTelemetry(telemetry) {
   if (_pocketTtsCalibrationRecorded) return;
-  if (_pocketTtsCalibrationPromise) return _pocketTtsCalibrationPromise;
-  _pocketTtsCalibrationPromise = (async () => {
-    try {
-      const neutralVoice = typeof window.resolvePocketAssetVoiceId === 'function'
-        ? window.resolvePocketAssetVoiceId(POCKET_DEFAULT_VOICE, 'neutral')
-        : `${POCKET_DEFAULT_VOICE}_neutral`;
-      const loadedVoice = await ensurePocketVoiceLoaded(neutralVoice);
-      const worker = _selectReadyPocketWorker();
-      // One worker, one short neutral phrase. This measures the real TTS path
-      // without combining privacy-sensitive browser hints into a RAM estimate.
-      const result = await _runPocketWorkerGeneration(worker, 'Pocket Reader is ready.', loadedVoice, {
-        ..._buildPocketProsodyOpts(loadedVoice, { paragraphEmotion: 'neutral' }),
-        expressive: false,
-        calibration: true,
-      });
-      recordPocketTtsCalibration(localStorage, {
-        initializationSucceeded: true,
-        initializationMs: _pocketInitializationMs,
-        realTimeFactor: result?.telemetry?.realTimeFactor,
-        interrupted: false,
-      });
-    } catch (error) {
-      recordPocketTtsCalibration(localStorage, {
-        initializationSucceeded: true,
-        initializationMs: _pocketInitializationMs,
-        interrupted: false,
-      });
-      window.Diagnostics?.log('WARN', 'Pocket TTS device calibration skipped', { reason: error?.message || String(error) });
-    } finally {
-      _pocketTtsCalibrationRecorded = true;
-    }
-  })();
-  return _pocketTtsCalibrationPromise;
+  recordPocketTtsCalibration(localStorage, {
+    initializationSucceeded: true,
+    initializationMs: _pocketInitializationMs,
+    realTimeFactor: telemetry?.realTimeFactor,
+    interrupted: false,
+  });
+  _pocketTtsCalibrationRecorded = true;
 }
 
 async function _generatePocketAttempt(workerObj, text, route, retryLevel = 0, handlers = {}) {
@@ -2469,6 +2483,38 @@ function _logPocketQuality(level, message, attempt, extra = {}) {
   });
 }
 
+let _pocketRecyclePromise = null;
+async function _maybeRecyclePocketEngine() {
+  if (_pocketRecyclePromise) {
+    await _pocketRecyclePromise;
+    return true;
+  }
+  window._pocketParagraphCount = (window._pocketParagraphCount || 0) + 1;
+  const recycleEvery = _pocketBackendRuntime?.selectedBackend === 'webgpu' ? 60 : 20;
+  if (window._pocketParagraphCount < recycleEvery) return false;
+  // A second cache worker or live request may still own the shared engine.
+  // Leave the threshold armed and let the next idle request perform the reset.
+  if ((window._pocketActiveSynthesis || 0) > 0) return false;
+
+  window._pocketParagraphCount = 0;
+  _pocketRecyclePromise = (async () => {
+    window.Diagnostics?.log('INFO', 'Recycling Pocket TTS worker session to maintain pristine audio quality', {
+      every: recycleEvery,
+      backend: _pocketBackendRuntime?.selectedBackend,
+    });
+    await _resetPocketEngineForBackend();
+    await _loadPocketEngine();
+  })().catch((error) => {
+    window.Diagnostics?.log('WARN', 'Pocket TTS worker recycle deferred after reset failure', {
+      reason: error?.message || String(error),
+    });
+  }).finally(() => {
+    _pocketRecyclePromise = null;
+  });
+  await _pocketRecyclePromise;
+  return true;
+}
+
 // Live generator with one quality-guard retry around Pocket output.
 window.generateChunk = async function(text, voice) {
   if (!text || text.trim() === '') return null;
@@ -2481,7 +2527,6 @@ window.generateChunk = async function(text, voice) {
     console.warn('Neural engine unavailable - skipping generation.');
     return null;
   }
-  await _ensurePocketTtsCalibration();
 
   // Refresh worker session periodically to clear ONNX Runtime internal state
   // accumulation and prevent voice hallucinations. The recycle does a FULL
@@ -2494,18 +2539,10 @@ window.generateChunk = async function(text, voice) {
   //    runtime — expensive and visible ("downloading models again"), and over a
   //    long story the reload churn dominates caching time. Recycle far less
   //    often (every 60); the WebGPU EP doesn't show the same WASM-state drift.
-  window._pocketParagraphCount = (window._pocketParagraphCount || 0) + 1;
-  const _recycleEvery = _pocketBackendRuntime?.selectedBackend === 'webgpu' ? 60 : 20;
-  if (window._pocketParagraphCount >= _recycleEvery) {
-    window._pocketParagraphCount = 0;
-    window.Diagnostics?.log('INFO', 'Recycling Pocket TTS worker session to maintain pristine audio quality', { every: _recycleEvery, backend: _pocketBackendRuntime?.selectedBackend });
-    try {
-      await _resetPocketEngineForBackend();
-      await _loadPocketEngine();
-    } catch (_) {}
-  }
+  await _maybeRecyclePocketEngine();
 
   window._pocketActiveSynthesis = (window._pocketActiveSynthesis || 0) + 1;
+  const canResetSharedEngine = () => (window._pocketActiveSynthesis || 0) <= 1;
   window.setExperienceSuppressed?.(true, 'pocket-synthesis');
   window.setCinematicSynthesisSuppressed?.(true);
   try {
@@ -2518,7 +2555,9 @@ window.generateChunk = async function(text, voice) {
     // Background caching skips the full re-render retry: a second pass doubles
     // wall time on phones. Empty/fatal still fails the paragraph so the loop
     // can resurface the error instead of storing silence.
-    const allowQualityRetry = !_isPocketThroughputCache() && shouldRetryPocketQuality(first.quality);
+    const allowQualityRetry = !_isPocketThroughputCache()
+      && shouldRetryPocketQuality(first.quality)
+      && canResetSharedEngine();
     if (allowQualityRetry) {
       // Re-render once with clean worker state at lower temperature.
       _logPocketQuality('WARN', 'Pocket synth quality guard retrying with clean worker session', first, { retryUsed: false });
@@ -2538,8 +2577,11 @@ window.generateChunk = async function(text, voice) {
         });
         return null;
       }
-    } else if (first.quality.fatal && _isPocketThroughputCache()) {
-      _logPocketQuality('ERROR', 'Pocket synth quality guard rejected cache paragraph (no retry in throughput mode)', first, { retryUsed: false });
+    } else if (first.quality.fatal) {
+      const reason = _isPocketThroughputCache()
+        ? 'no retry in throughput mode'
+        : 'shared engine is serving another synthesis';
+      _logPocketQuality('ERROR', `Pocket synth quality guard rejected paragraph (${reason})`, first, { retryUsed: false });
       return null;
     } else if (!first.quality.ok) {
       _logPocketQuality('WARN', 'Pocket synth accepted with a soft quality warning', first, { retryUsed: false });
@@ -2564,6 +2606,7 @@ window.generateChunk = async function(text, voice) {
       ...(accepted.quality.stats || {}),
     };
     window._lastPocketSynthTelemetry = synthTelemetry;
+    _recordPocketTtsCalibrationFromTelemetry(synthTelemetry);
     if (window.Diagnostics) {
       window.Diagnostics.log(_ms > 8000 ? 'WARN' : 'INFO',
         `Pocket synth ${_ms}ms${retryUsed ? ' (quality retry)' : ''}${synthTelemetry.throughputMode ? ' (cache throughput)' : ''}`,
@@ -2577,7 +2620,9 @@ window.generateChunk = async function(text, voice) {
     return wav;
   } catch (e) {
     console.error('Pocket worker inference failed:', e);
-    try { await _resetPocketEngineForBackend(); } catch (_) {}
+    if (canResetSharedEngine()) {
+      try { await _resetPocketEngineForBackend(); } catch (_) {}
+    }
     return null;
   } finally {
     window._pocketActiveSynthesis = Math.max(0, (window._pocketActiveSynthesis || 1) - 1);
@@ -2594,7 +2639,6 @@ window.generateChunkStream = async function(text, voice, onSegment) {
   if (_resolveActiveEngine() !== 'pocket') return null;
   const ready = await _loadPocketEngine();
   if (!ready || ttsWorkers.length === 0) return null;
-  await _ensurePocketTtsCalibration();
 
   window._pocketActiveSynthesis = (window._pocketActiveSynthesis || 0) + 1;
   window.setExperienceSuppressed?.(true, 'pocket-synthesis');
@@ -2607,14 +2651,17 @@ window.generateChunkStream = async function(text, voice, onSegment) {
       _logPocketQuality('ERROR', 'Pocket streamed synthesis failed quality validation', attempt, { streamed: true });
       return null;
     }
-    window.Diagnostics?.log('INFO', 'Pocket streamed synthesis complete', {
+    const streamTelemetry = {
       ms: Math.round(performance.now() - startedAt),
       voice: route.voiceId,
       emotion: route.emotion,
       streamed: true,
       ...(attempt.result.telemetry || {}),
       ...(attempt.quality.stats || {}),
-    });
+    };
+    window._lastPocketSynthTelemetry = streamTelemetry;
+    _recordPocketTtsCalibrationFromTelemetry(streamTelemetry);
+    window.Diagnostics?.log('INFO', 'Pocket streamed synthesis complete', streamTelemetry);
     const wavStartedAt = performance.now();
     const wav = _encodeWAV(attempt.result.audio, attempt.result.sampleRate || 24000);
     window.Diagnostics?.log('INFO', 'Pocket streamed WAV encoded', { wavEncodingMs: Math.round(performance.now() - wavStartedAt), bytes: wav.size });
@@ -2669,25 +2716,32 @@ export function togglePlayState() {
     return;
   }
 
-  // Enforce 30-paragraph caching requirement if the current story is actively caching
+  // Keep a short runway while the current story is actively caching. Mobile
+  // needs only three ready paragraphs; making iOS wait for thirty turned a
+  // healthy x2 cache into a several-minute play-button lockout.
   if (!window.isPlaying && window.BufferManager && window.BufferManager.isActive) {
     const activeJob = window.BufferManager.queue && window.BufferManager.queue[0];
     if (activeJob && activeJob.storyTitle === window.currentStory.title) {
       const cachedCount = window.BufferManager.cachedCount || 0;
-      // Use the job's real paragraph total (BufferManager.totalToCache) so that
-      // stories shorter than 30 paragraphs unlock once fully cached instead of
-      // being blocked forever. Queue items carry no per-item total.
       const total = window.BufferManager.totalToCache || 999;
-      if (cachedCount < 30 && cachedCount < total) {
+      const minReady = window.getPocketPlaybackReadyCount?.(total) ?? Math.min(3, total);
+      if (cachedCount < minReady && cachedCount < total) {
         if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_explaining');
         if (typeof window.virtueSpeak === 'function') {
-          window.virtueSpeak("Still securing the text! Please let me cache at least 30 paragraphs before we begin reading.", 4500, true);
+          window.virtueSpeak(`Still securing the text! Please let me cache ${minReady} paragraphs before we begin reading.`, 4500, true);
         } else {
-          alert("Still caching! Please wait for at least 30 paragraphs before playing.");
+          alert(`Still caching! Please wait for ${minReady} paragraphs before playing.`);
         }
         return;
       }
     }
+  }
+
+  if (!window.isPlaying && _resolveActiveEngine() === 'pocket') {
+    // Run synchronously in the tap before any model/network await. If isolation
+    // requires a navigation, the resume path asks for one fresh tap afterward.
+    preparePocketMobileMediaSession();
+    if (window.requestPocketNarrationIsolation?.('playback', 'Normal')) return;
   }
 
   const playBtn = document.getElementById('play-btn-main');
@@ -2751,8 +2805,8 @@ export async function playCurrentParagraph() {
 }
 window.playCurrentParagraph = playCurrentParagraph;
 
-let _premiumAudio = null;
-let _audioCtx = null;
+let _premiumAudio = window.__pocketMobileMediaElement || null;
+let _audioCtx = window.__pocketMobileAudioContext || null;
 let _audioSource = null;
 let _splitter = null;
 let _merger = null;
@@ -3072,6 +3126,9 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
 
   const audioUrl = URL.createObjectURL(audioBlob);
   window.currentAudio.src = audioUrl;
+  window.currentAudio.loop = false;
+  window.currentAudio.volume = 1;
+  if (window.currentAudio.dataset) delete window.currentAudio.dataset.pocketUnlock;
   window.currentAudio.playbackRate = parseFloat(document.getElementById('speed-slider')?.value || '1');
   window.currentAudio.load();
 
@@ -3538,8 +3595,8 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   }
 
   if (!silent) {
-    if (window.virtueSpeak) window.virtueSpeak("Voice engine changed. Recaching audio... Please wait for 30 paragraphs or 100% before resuming play.", 5000);
-    else alert("Voice engine changed. Recaching audio... Please wait for 30 paragraphs or 100% before resuming play.");
+    if (window.virtueSpeak) window.virtueSpeak("Voice engine changed. Recaching audio... Playback will unlock as soon as the starting buffer is ready.", 5000);
+    else alert("Voice engine changed. Recaching audio... Playback will unlock as soon as the starting buffer is ready.");
     if (engineVal === 'pocket') {
       if (typeof window.startCaching === 'function') window.startCaching('Normal');
       else if (window.BufferManager) window.BufferManager.start();
@@ -3574,8 +3631,8 @@ window.onVoiceSelectionChange = function(newVoice) {
   if (window.currentStory && cleanNewVoice !== prevVoice) {
     const ok = window.confirm(
       "Changing the voice will re-cache this story in the new voice.\n\n" +
-      "It can take a few minutes, and you'll need to wait for about 30 paragraphs " +
-      "(or 100%) before playback. Your previously cached voices are kept.\n\nSwitch voice?"
+      "Playback unlocks as soon as a short starting buffer is ready. " +
+      "Your previously cached voices are kept.\n\nSwitch voice?"
     );
     if (!ok) {
       const sel = document.getElementById('voice-selector');
@@ -3590,8 +3647,8 @@ window.onVoiceSelectionChange = function(newVoice) {
   if (typeof window.saveLocalData === 'function') window.saveLocalData();
 
   if (window.currentStory) {
-    if (window.virtueSpeak) window.virtueSpeak("Voice changed - re-caching this story in the new voice. Wait for ~30 paragraphs or 100% before pressing play.", 5000);
-    else alert("Voice changed - re-caching this story in the new voice. Wait for ~30 paragraphs or 100% before pressing play.");
+    if (window.virtueSpeak) window.virtueSpeak("Voice changed - re-caching this story. Playback will unlock when the starting buffer is ready.", 5000);
+    else alert("Voice changed - re-caching this story. Playback will unlock when the starting buffer is ready.");
     if (engine === 'pocket') {
       if (typeof window.startCaching === 'function') window.startCaching('Normal');
       else if (window.BufferManager) window.BufferManager.start();

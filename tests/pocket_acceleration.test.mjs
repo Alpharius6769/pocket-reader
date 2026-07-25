@@ -146,7 +146,7 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(audio, /wasm_rtf_sample/);
   assert.match(audio, /shouldProbeBundle/);
   assert.match(audio, /wasmReferenceRtf: _pocketBackendRuntime\.wasmReferenceRtf/);
-  assert.match(audio, /pocket-worker-v42/);
+  assert.match(audio, /pocket-worker-v43/);
   assert.match(worker, /wasmReferenceRtf/);
   assert.match(worker, /releaseAllSessions/);
   assert.match(worker, /wasm_rtf_sample/);
@@ -188,21 +188,21 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('serviceworker.py');
-  assert.match(serviceWorker, /pocket-reader-core-v128/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v81/);
+  assert.match(serviceWorker, /pocket-reader-core-v129/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v82/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
-  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v42/);
+  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v43/);
   assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v20/);
   assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v6/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
   const standardPage = await read('standard-page.html');
-  assert.match(standardPage, /serviceworker\.js\?v=128/);
+  assert.match(standardPage, /serviceworker\.js\?v=129/);
 });
 
 test('Settings recognizes the active narration service worker revision', async () => {
   const settings = await read('settings_manager.js');
-    assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'128'/);
+  assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'129'/);
   assert.match(settings, /searchParams\.get\('v'\)\s*===\s*NARRATION_SERVICE_WORKER_VERSION/);
   // ui_controller performs the PRIMARY service-worker registration. Its ?v= MUST
   // match NARRATION_SERVICE_WORKER_VERSION, or narrationServiceWorkerControlsPage()
@@ -210,8 +210,8 @@ test('Settings recognizes the active narration service worker revision', async (
   // narration start. (This pin closes the gap that let ui_controller drift to
   // ?v=110 while everything else moved to 114.)
   const uiController = await read('ui_controller.js');
-  assert.match(uiController, /serviceworker\.js\?v=128/);
-    assert.doesNotMatch(uiController, /serviceworker\.js\?v=(?!128)\d+/);
+  assert.match(uiController, /serviceworker\.js\?v=129/);
+  assert.doesNotMatch(uiController, /serviceworker\.js\?v=(?!129)\d+/);
 });
 
 test('mobile playback uses one media-session transport map with seek support', async () => {

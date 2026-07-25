@@ -1,6 +1,6 @@
 # Alpharius' Pocket Reader - Master Agent Handoff
 
-Last reviewed: 2026-07-23
+Last reviewed: 2026-07-24
 
 This is the authoritative handoff for agents working on Pocket Reader. It
 describes the current architecture, production paths, major changes, removed
@@ -20,18 +20,15 @@ parsing, curated-library delivery, and push subscription coordination run in a
 Hugging Face Space. Large TTS/model assets are stored in Backblaze B2 and
 served through a Cloudflare Worker.
 
-Current working directories:
+The only active engineering workspace is:
 
 ```text
 C:\Users\Chris\Documents\Web Build Antigravity Branch
-C:\Users\Chris\Documents\Web Build Antigravity Branch\anvil-app
-C:\Users\Chris\Documents\Anvil Pocket Reader Sync
 ```
 
-The first directory is the active engineering workspace. `anvil-app` is its
-local mirror. `C:\Users\Chris\Documents\Anvil Pocket Reader Sync` is the real
-deployable Anvil Git checkout and the source of truth for publishing the
-frontend. The Hugging Face checkout is:
+`anvil-app` inside that workspace is the deployable Anvil checkout/mirror.
+Do not use or modify older Pocket Reader directories outside this workspace.
+The Hugging Face checkout is:
 
 ```text
 C:\Users\Chris\Documents\Web Build Antigravity Branch\Hugging Face Space
@@ -58,27 +55,31 @@ Hugging Face backend must not become a second public profile authority.
 
 ## 2. Current Production Release
 
-Release identifier: `upload-dedupe-and-narration-reload-polish-v1`.
+Production release: `mobile-narration-startup-v129`.
+
+Deployed and live-verified on 2026-07-24 from Anvil commit `d7a6be4`.
+The Hugging Face backend, Cloudflare Worker, and B2 assets were unchanged by
+this frontend-only release and were not redeployed.
 
 Important frontend/service-worker versions currently in source and production
 (verify against the script tags in `FrontEnd_html.html` / `standard-page.html`
 and the pins in `tests/pocket_acceleration.test.mjs` — these move often):
 
 ```text
-Service worker shell: pocket-reader-core-v128
-UI controller: ui-v81
-Settings module: settings-v40
+Service worker shell: pocket-reader-core-v129
+UI controller: ui-v82
+Settings module: settings-v42
 Device setup module: device-setup-v6
 Theme stylesheet: midnight-v21
-Pocket audio module: audio-v52
-Pocket worker: pocket-worker-v42
+Pocket audio module: audio-v53
+Pocket worker: pocket-worker-v43
 Pocket backend policy: backend-v20
 Experience coordinator: experience-v4
 Virtue controller: virtue-v6
-Buffer manager: buffer-v42
-API core: search-v15
-Library manager: library-v7
-Narration runtime loader: narration-loader-v9
+Buffer manager: buffer-v43
+API core: search-v16
+Library manager: library-v8
+Narration runtime loader: narration-loader-v10
 Pronunciation ruleset: pron-v9
 PCM worklet: pcm-v1
 ONNX Runtime Web: 1.27.0
@@ -86,6 +87,32 @@ WASM runtime: 1.27.0 relaxed-SIMD minimal ORT-format build
 WASM model family: english_2026-04-ort-r1
 WebGPU model family: certified R3 FP16 bundle with device-local calibration
 ```
+
+### 2026-07-24 production v129
+
+- Narration runtime loading is genuinely deferred: `audio_core.js` and
+  `buffer_manager.js` are no longer parsed during ordinary app startup and load
+  only after a narration action. The lightweight loader synchronously unlocks
+  and preserves the eventual narration media element in the original mobile
+  tap before crossing the dynamic-import promise; Cache Now, Play, and Away
+  Mode all use that path.
+- The first playback/cache action requests the isolated narration session
+  before engine startup. After the isolation reload, mobile users get a fresh
+  tap target that synchronously unlocks the real playback element and starts
+  the keep-alive path before synthesis.
+- The throwaway calibration phrase was removed. The first real requested
+  paragraph now supplies calibration telemetry, avoiding an extra model
+  inference and transient allocation at startup.
+- Mobile playback can begin after a three-paragraph starting buffer instead of
+  waiting for 30 paragraphs. Desktop retains the larger 30-paragraph threshold.
+- Periodic recycle and quality-recovery resets are serialized and do not reset
+  a shared engine while another synthesis is active.
+- Post-reload cache/play intent remains in session storage until the user
+  completes the resume gesture, so an iOS suspension while the prompt is open
+  can recover on the next launch.
+- `FrontEnd_code.py` is aligned with the deployable form controller: local data
+  loading starts once, UI setup waits for the controller module, and a restored
+  reader view is not overwritten by Home.
 
 ### 2026-07-23 releases (v128 era)
 
@@ -718,7 +745,7 @@ Verify the published URL after pushing:
 
 ```powershell
 Invoke-WebRequest https://hot-wiry-raven.anvil.app/_/theme/<asset>?v=<version>
-Invoke-WebRequest https://hot-wiry-raven.anvil.app/_/api/serviceworker.js?v=119
+Invoke-WebRequest https://hot-wiry-raven.anvil.app/_/api/serviceworker.js?v=129
 ```
 
 For backend changes:
@@ -736,12 +763,13 @@ For current frontend regression coverage:
 node --test tests\*.test.mjs
 ```
 
-The current suite has 99 passing Node tests and four passing backend regression
+The current suite has 145 passing Node tests and four passing backend regression
 tests covering Pocket generation, WebGPU
 calibration/fallback, narration isolation, service-worker revision, mobile
 playback, interrupted cache jobs, Away Mode guidance, subscriptions, menu
 initialization, onboarding drafts, pronunciation, quality guards, and
-performance policy. The live WebKit smoke confirms cross-origin isolation,
+performance policy. The live v129 WebKit smoke confirms deferred narration on
+plain load, on-demand module activation, cross-origin isolation,
 SharedArrayBuffer availability, zero reload loops, and zero page/console errors.
 The first-device browser harness also exercises Chromium,
 desktop WebKit, and simulated iPhone 13 Pro WebKit for setup ordering, safe

@@ -43,6 +43,13 @@ function _narrationRuntimeLabel() {
   return `Threaded WASM ×${threads}`;
 }
 
+function _minimumPlaybackReadyCount(total) {
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
+    || (navigator.maxTouchPoints || 0) > 0;
+  return Math.min(mobile ? 3 : 30, Math.max(0, Number(total) || 0));
+}
+window.getPocketPlaybackReadyCount = _minimumPlaybackReadyCount;
+
 function _persistCacheJob(manager) {
   const activeTask = manager.queue?.[0];
   const storyTitle = activeTask?.storyTitle || window.currentStory?.title;
@@ -128,7 +135,7 @@ function _fastNarrationRequested() {
   return new URL(window.location.href).searchParams.get(FAST_NARRATION_PARAM) === '1';
 }
 
-function _requestFastNarrationReload(mode) {
+function _requestFastNarrationReload(mode, action = 'cache') {
   if (!_supportsFastNarrationSession() || _isolationReady()) return false;
   // Mobile relies on cross-origin isolation just as much as desktop: multi-thread
   // WASM needs SharedArrayBuffer, and field data shows 4-thread narration is ~5x
@@ -148,6 +155,7 @@ function _requestFastNarrationReload(mode) {
     sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
       title: window.currentStory.title,
       mode: mode || 'Normal',
+      action: action || 'cache',
       requestedAt: Date.now(),
     }));
   } else {
@@ -155,15 +163,17 @@ function _requestFastNarrationReload(mode) {
     try {
       const existing = JSON.parse(sessionStorage.getItem(FAST_NARRATION_RESUME_KEY) || 'null') || {};
       existing.mode = mode || existing.mode || 'Normal';
+      existing.action = action || existing.action || 'cache';
       existing.requestedAt = Date.now();
       if (!existing.title) existing.title = window.currentStory.title;
       sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify(existing));
     } catch (_) {
-      sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
-        title: window.currentStory.title,
-        mode: mode || 'Normal',
-        requestedAt: Date.now(),
-      }));
+        sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
+          title: window.currentStory.title,
+          mode: mode || 'Normal',
+          action: action || 'cache',
+          requestedAt: Date.now(),
+        }));
     }
   }
   // Preserve the view the user was actually on when the FIRST reload was
@@ -203,6 +213,64 @@ function _requestFastNarrationReload(mode) {
   return true;
 }
 
+window.requestPocketNarrationIsolation = function requestPocketNarrationIsolation(action = 'playback', mode = 'Normal') {
+  return _requestFastNarrationReload(mode, action);
+};
+
+function _isMobileNarrationPlatform() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
+    || (navigator.maxTouchPoints || 0) > 0;
+}
+
+function _awaitMobileNarrationGesture(action = 'cache') {
+  if (!_isMobileNarrationPlatform()) {
+    window.preparePocketMobileMediaSession?.();
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      // This function is invoked directly by the user's button tap. Keep media
+      // creation and play()/resume() calls synchronous so iOS grants playback.
+      window.preparePocketMobileMediaSession?.();
+      window.startBgKeepAlive?.();
+      window.closeFeatureDialog?.();
+      delete window.continuePocketNarrationAfterReload;
+      resolve();
+    };
+    window.continuePocketNarrationAfterReload = finish;
+
+    const verb = action === 'playback' ? 'Start narration' : 'Start caching';
+    if (typeof window.showFeatureDialog === 'function') {
+      window.showFeatureDialog(
+        'Narration is ready',
+        '<p>Pocket Reader prepared the faster, memory-safe narration session for this device.</p><p>Tap below once so your browser can authorize audio and background work.</p>',
+        `<button class="pr-btn-primary" onclick="window.continuePocketNarrationAfterReload()">${verb}</button>`,
+      );
+      return;
+    }
+
+    // Minimal fallback for an unusually early resume before shared modal helpers
+    // load. It still preserves the required direct user gesture.
+    const overlay = document.createElement('div');
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:24px';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'pr-btn-primary';
+    button.textContent = verb;
+    button.addEventListener('click', () => {
+      overlay.remove();
+      finish();
+    }, { once: true });
+    overlay.appendChild(button);
+    document.body.appendChild(overlay);
+  });
+}
+
 async function _resumeFastNarrationCache() {
   if (!_fastNarrationRequested()) return;
   const raw = sessionStorage.getItem(FAST_NARRATION_RESUME_KEY);
@@ -228,9 +296,8 @@ async function _resumeFastNarrationCache() {
       if (!_isolationReady() && sessionStorage.getItem(FAST_NARRATION_RETRY_KEY) !== '1') {
         window.currentStory = window.currentStory || { title: resume.title };
         if (!window.currentStory.title) window.currentStory.title = resume.title;
-        if (_requestFastNarrationReload(resume.mode || 'Normal')) return;
+        if (_requestFastNarrationReload(resume.mode || 'Normal', resume.action || 'cache')) return;
       }
-      sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
       if (Array.isArray(resume.awayQueue) && resume.awayQueue.length) {
         window.precacheQueue = [...resume.awayQueue];
         localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
@@ -282,11 +349,20 @@ async function _resumeFastNarrationCache() {
         && Array.isArray(window.currentStory.chapters)
         && window.currentStory.chapters.length > 0;
       if (storyLoaded) {
-        if (resume.mode === 'Permanent' && Array.isArray(window.precacheQueue) && window.precacheQueue.length) {
+        await _awaitMobileNarrationGesture(resume.action || 'cache');
+        // Keep the resume intent durable while the post-reload prompt is open.
+        // iOS may suspend or terminate the page before the user taps Continue;
+        // clearing only after that gesture lets the next launch recover again.
+        sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
+        if (resume.action === 'playback') {
+          window.togglePlayState?.();
+        } else if (resume.mode === 'Permanent' && Array.isArray(window.precacheQueue) && window.precacheQueue.length) {
           await BufferManager.startPrecacheQueue();
         } else {
           BufferManager.start(resume.mode || 'Normal');
         }
+      } else {
+        sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
       }
       return;
     }
@@ -448,6 +524,7 @@ export const BufferManager = {
       statusText = `Paused - ${pct}% cached`;
       if (awayBar) awayBar.classList.remove('caching');
       _releaseCacheWakeLock();
+      if (!window.isPlaying) window.stopBgKeepAlive?.();
     } else if (this.cachedCount >= this.totalToCache && this.totalToCache > 0) {
       statusText = this.skippedCount > 0
         ? `✅ Cache complete! (${this.totalToCache - this.skippedCount}/${this.totalToCache}; ${this.skippedCount} skipped)`
@@ -455,10 +532,12 @@ export const BufferManager = {
       if (awayBar) awayBar.classList.remove('caching');
       _releaseCacheWakeLock();
       _clearPersistedCacheJob();
+      if (!window.isPlaying) window.stopBgKeepAlive?.();
     } else {
       statusText = `Offline caching is idle.`;
       if (awayBar) awayBar.classList.remove('caching');
       _releaseCacheWakeLock();
+      if (!window.isPlaying) window.stopBgKeepAlive?.();
     }
     if (this.textEl) this.textEl.innerText = statusText;
     if (this.pauseBtnEl) {
@@ -542,7 +621,7 @@ export const BufferManager = {
       }
 
       // ISSUE 19 FIX: Clean Modal Dismiss States
-      const minReady = Math.min(30, this.totalToCache);
+      const minReady = _minimumPlaybackReadyCount(this.totalToCache);
       if (this.cachingModalDismiss) {
         this.cachingModalDismiss.style.display = 'block';
         if (this.mode === 'Permanent') {
@@ -790,7 +869,12 @@ export const BufferManager = {
   },
 
   async startPrecacheQueue() {
+    // Must run in the initiating tap before the first await. iOS will reject a
+    // media play() first attempted after async setup or after the tab hides.
+    window.preparePocketMobileMediaSession?.();
+    window.startBgKeepAlive?.();
     if (!window.precacheQueue || window.precacheQueue.length === 0) {
+      if (!window.isPlaying) window.stopBgKeepAlive?.();
       if (typeof window.virtueSpeak === 'function') window.virtueSpeak('First, open each story menu and choose Queue Away. Then start Away Mode from Library.', 5000);
       return;
     }
@@ -816,7 +900,7 @@ export const BufferManager = {
         awayQueue: [...window.precacheQueue],
         requestedAt: Date.now(),
       }));
-      if (_requestFastNarrationReload('Permanent')) return;
+      if (_requestFastNarrationReload('Permanent', 'cache')) return;
     }
     const btn = document.getElementById('start-precache-btn');
     if (btn) {
@@ -951,6 +1035,7 @@ export const BufferManager = {
     this.skippedCount = 0;
     window._pocketThroughputCache = false;
     window.trimPocketCacheWorkerPool?.();
+    if (!window.isPlaying) window.stopBgKeepAlive?.();
     this.updateUI();
     _releaseCacheWakeLock();
     _clearPersistedCacheJob();
@@ -962,6 +1047,8 @@ export const BufferManager = {
 
   resume() {
     if (!this.paused) return;
+    window.preparePocketMobileMediaSession?.();
+    window.startBgKeepAlive?.();
     this.paused = false;
     this.updateUI();
     if (!this.isActive) {
@@ -1020,6 +1107,7 @@ export const BufferManager = {
       }
       const loadedRef = window.currentStory?.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory?.title;
       if (loadedRef !== jobRef) return;
+      await _awaitMobileNarrationGesture('cache');
       // Must go through the isolation handoff — direct start() is 1-thread slow mode.
       if (typeof window.startCaching === 'function') {
         window.startCaching(job.mode || 'Normal');
@@ -1402,6 +1490,7 @@ export const BufferManager = {
 };
 
 window.BufferManager = BufferManager;
+window.startPrecacheQueue = (...args) => BufferManager.startPrecacheQueue(...args);
 
 window.addEventListener('pagehide', () => {
   if (BufferManager.isActive || BufferManager.paused) _persistCacheJob(BufferManager);
@@ -1472,7 +1561,7 @@ async function _continueCaching(mode) {
   // Persist chapters BEFORE the isolation reload so resume restores from cache
   // instead of re-fetching over the network (see _persistCurrentStoryChapters).
   await _persistCurrentStoryChapters();
-  if (_requestFastNarrationReload(mode)) {
+  if (_requestFastNarrationReload(mode, 'cache')) {
     if (typeof window.closeCacheModal === 'function') window.closeCacheModal();
     return;
   }
@@ -1524,6 +1613,8 @@ function _showConstrainedCacheNotice(mode) {
 }
 
 window.chooseConstrainedCaching = function chooseConstrainedCaching(enableExpressive) {
+  window.preparePocketMobileMediaSession?.();
+  window.startBgKeepAlive?.();
   const mode = _pendingConstrainedCacheMode || 'Normal';
   const choice = enableExpressive ? 'enabled' : 'disabled';
   writePocketExpressiveChoice(localStorage, choice);
@@ -1534,13 +1625,19 @@ window.chooseConstrainedCaching = function chooseConstrainedCaching(enableExpres
 };
 
 window.startCaching = async function(mode, storyRef = null) {
+  // Preserve the user activation before story lookup, capability refresh, or an
+  // isolation handoff introduces an await boundary.
+  window.preparePocketMobileMediaSession?.();
+  window.startBgKeepAlive?.();
   if (!await _ensureCachingStory(storyRef)) {
+    if (!window.isPlaying) window.stopBgKeepAlive?.();
     window.virtueSpeak?.('That story could not be opened for offline caching.', 5000);
     return;
   }
   if (_resolveActiveEngine() === 'pocket') {
     try { await window.refreshPocketDeviceCapability?.(); } catch (_) {}
     if (isPocketDeviceConstrained() && !window.getPocketExpressiveProsodyChoice?.()) {
+      if (!window.isPlaying) window.stopBgKeepAlive?.();
       if (typeof window.closeCacheModal === 'function') window.closeCacheModal();
       _showConstrainedCacheNotice(mode);
       return;

@@ -8,8 +8,8 @@ export function ensureNarrationRuntime() {
   if (narrationRuntimePromise) return narrationRuntimePromise;
 
   window.__pocketNarrationRuntimeLoading = true;
-  narrationRuntimePromise = import('./audio_core.js?v=audio-v52')
-    .then(() => import('./buffer_manager.js?v=buffer-v42'))
+  narrationRuntimePromise = import('./audio_core.js?v=audio-v53')
+    .then(() => import('./buffer_manager.js?v=buffer-v43'))
     .then(() => {
       window.__pocketNarrationRuntimeLoaded = true;
       window.__pocketNarrationRuntimeLoading = false;
@@ -36,9 +36,49 @@ window.onSpeedSliderInput = function onSpeedSliderInput(value) {
   if (label) label.innerText = `${Number.parseFloat(value).toFixed(2)}x`;
 };
 
+const POCKET_DEFERRED_SILENCE =
+  'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
+
+function preparePocketDeferredMediaGesture() {
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
+    || (navigator.maxTouchPoints || 0) > 0;
+  if (!mobile) return false;
+
+  // Dynamic import resolves after the original click task, which is too late
+  // for iOS media authorization. Create and play the eventual narration
+  // element now; audio_core adopts this exact element after it loads.
+  let audio = window.__pocketMobileMediaElement;
+  if (!(audio instanceof HTMLAudioElement)) {
+    audio = new Audio();
+    audio.preload = 'auto';
+    audio.playsInline = true;
+    audio.setAttribute?.('playsinline', '');
+    audio.setAttribute?.('webkit-playsinline', '');
+    window.__pocketMobileMediaElement = audio;
+  }
+  window.currentAudio = audio;
+  if (!audio.src || audio.dataset?.pocketUnlock !== '1') {
+    audio.src = POCKET_DEFERRED_SILENCE;
+    audio.loop = true;
+    audio.volume = 0.001;
+    if (audio.dataset) audio.dataset.pocketUnlock = '1';
+    audio.play().catch(() => {});
+  }
+  return true;
+}
+window.preparePocketMobileMediaSession =
+  window.preparePocketMobileMediaSession || preparePocketDeferredMediaGesture;
+
+const MEDIA_GESTURE_ACTIONS = new Set([
+  'togglePlayState',
+  'startCaching',
+  'startPrecacheQueue',
+]);
+
 const DEFERRED_NARRATION_ACTIONS = [
   'switchReaderVoiceEngine',
   'startCaching',
+  'startPrecacheQueue',
   '_toggleCachePause',
   '_stopCaching',
   'togglePlayState',
@@ -59,13 +99,16 @@ const DEFERRED_NARRATION_ACTIONS = [
 ];
 
 DEFERRED_NARRATION_ACTIONS.forEach((name) => {
-  const deferredAction = (...args) => ensureNarrationRuntime().then(() => {
-    const implementation = window[name];
-    if (typeof implementation !== 'function' || implementation === deferredAction) {
-      throw new Error(`Narration action ${name} did not initialize.`);
-    }
-    return implementation(...args);
-  });
+  const deferredAction = (...args) => {
+    if (MEDIA_GESTURE_ACTIONS.has(name)) preparePocketDeferredMediaGesture();
+    return ensureNarrationRuntime().then(() => {
+      const implementation = window[name];
+      if (typeof implementation !== 'function' || implementation === deferredAction) {
+        throw new Error(`Narration action ${name} did not initialize.`);
+      }
+      return implementation(...args);
+    });
+  };
   if (typeof window[name] !== 'function') window[name] = deferredAction;
 });
 

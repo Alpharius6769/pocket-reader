@@ -39,9 +39,9 @@ test('push writes and deletes require a server-issued ownership token', async ()
 test('service-worker install failures reject and smoke targets the active revision', async () => {
   const worker = await read('serviceworker.py');
   const smoke = await read(path.join('tools', 'smoke_pocket_worker_runtime.mjs'));
-  assert.match(worker, /pocket-reader-core-v128/);
+  assert.match(worker, /pocket-reader-core-v129/);
   assert.match(worker, /Install failed:[\s\S]{0,100}throw err;/);
-  assert.match(smoke, /serviceworker\.js\?v=128/);
+  assert.match(smoke, /serviceworker\.js\?v=129/);
 });
 
 test('permanent cache resolves and loads the selected library story', async () => {
@@ -123,7 +123,8 @@ test('release checks validate deploy parity, config entrypoints, and non-writing
   const cacheTool = await read(path.join('tools', 'pocket_caching_expectations.mjs'));
   const smokeTool = await read(path.join('tools', 'smoke_pocket_worker_runtime.mjs'));
   const webkitPackage = JSON.parse(await read(path.join('tests', 'webkit-smoke', 'package.json')));
-  assert.match(parity, /Anvil Pocket Reader Sync/);
+  assert.match(parity, /path\.join\(root, 'anvil-app'\)/);
+  assert.doesNotMatch(parity, /Anvil Pocket Reader Sync/);
   assert.match(parity, /wrangler\.toml/);
   assert.match(cacheTool, /--check/);
   assert.match(smokeTool, /--no-write/);

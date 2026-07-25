@@ -14,23 +14,22 @@ test('startup avoids hidden diagnostics polling and eager library rendering', as
   assert.doesNotMatch(library, /requestIdleCallback\(\(\) => \{\s*renderLibrary/);
 });
 
-test('narration and UI modules use one canonical versioned URL everywhere', async () => {
+test('narration stays deferred while runtime and UI modules use canonical URLs', async () => {
   const html = await read('FrontEnd_html.html');
   const loader = await read('narration_runtime_loader.js');
   const serviceWorker = await read('serviceworker.py');
   const standardPage = await read('standard-page.html');
   const tagVersion = (source, module) =>
     source.match(new RegExp(`${module}\\.js\\?v=([a-z0-9-]+)`))?.[1];
-  // Every module must be referenced by ONE URL across the form template, the
-  // narration loader's dynamic imports, and the SW precache — a second URL
-  // creates a second module instance whose top-level side effects run twice.
+  // Heavy narration modules must not be executable script tags in the form
+  // template. The loader and SW may share one canonical URL without parsing the
+  // runtime during ordinary startup.
   for (const module of ['audio_core', 'buffer_manager']) {
-    const pageTag = tagVersion(html, module);
-    assert.ok(pageTag, `${module} script tag missing from FrontEnd_html.html`);
-    assert.equal(tagVersion(loader, module), pageTag,
-      `${module}: narration_runtime_loader import differs from form-template tag`);
-    assert.equal(tagVersion(serviceWorker, module), pageTag,
-      `${module}: serviceworker precache differs from form-template tag`);
+    assert.doesNotMatch(html, new RegExp(`<script[^>]+${module}\\.js`));
+    const loaderVersion = tagVersion(loader, module);
+    assert.ok(loaderVersion, `${module} dynamic import missing from narration loader`);
+    assert.equal(tagVersion(serviceWorker, module), loaderVersion,
+      `${module}: serviceworker precache differs from narration loader`);
   }
   for (const module of ['ui_controller', 'narration_runtime_loader']) {
     const pageTag = tagVersion(html, module);
@@ -48,7 +47,7 @@ test('narration and UI modules use one canonical versioned URL everywhere', asyn
 
 test('service worker uses bounded navigation and lifetime-protected cache writes', async () => {
   const source = await read('serviceworker.py');
-  assert.match(source, /pocket-reader-core-v128/);
+  assert.match(source, /pocket-reader-core-v129/);
   assert.match(source, /fetchWithTimeout\(event\.request, 6000\)/);
   assert.match(source, /event\.waitUntil\(updatePromise/);
   assert.match(source, /url\.searchParams\.has\('v'\)/);

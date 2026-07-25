@@ -4,8 +4,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const deploy = process.env.ANVIL_DEPLOY_DIR
-  || 'C:\\Users\\Chris\\Documents\\Anvil Pocket Reader Sync';
+const deploy = path.join(root, 'anvil-app');
 const normalize = (value) => value.replace(/\r\n/g, '\n');
 const read = (file) => normalize(readFileSync(file, 'utf8'));
 const failures = [];
@@ -19,13 +18,9 @@ const assetFiles = [
 ];
 for (const name of assetFiles) {
   const source = path.join(root, name);
-  for (const target of [
-    path.join(root, 'anvil-app', 'theme', 'assets', name),
-    path.join(deploy, 'theme', 'assets', name),
-  ]) {
-    if (!existsSync(target) || read(source) !== read(target)) {
-      failures.push(`${name} differs from ${target}`);
-    }
+  const target = path.join(deploy, 'theme', 'assets', name);
+  if (!existsSync(target) || read(source) !== read(target)) {
+    failures.push(`${name} differs from ${target}`);
   }
 }
 
@@ -35,11 +30,9 @@ for (const [sourceName, targetName] of [
   ['serviceworker.py', path.join('server_code', 'serviceworker.py')],
 ]) {
   const source = path.join(root, sourceName);
-  for (const base of [path.join(root, 'anvil-app'), deploy]) {
-    const target = path.join(base, targetName);
-    if (!existsSync(target) || read(source) !== read(target)) {
-      failures.push(`${sourceName} differs from ${target}`);
-    }
+  const target = path.join(deploy, targetName);
+  if (!existsSync(target) || read(source) !== read(target)) {
+    failures.push(`${sourceName} differs from ${target}`);
   }
 }
 

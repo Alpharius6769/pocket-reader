@@ -9,6 +9,7 @@ class FrontEnd(FrontEndTemplate):
     # Guards the first-time-setup wizard retry chain so init_ui's module-load
     # polling doesn't spawn overlapping timers (see _maybe_show_setup_modal).
     self._setup_modal_kicked = False
+    self._data_loading_started = False
     self._ui_initialized = False
 
     # Theme modules load from the form template. Do not import them here: a
@@ -86,19 +87,26 @@ class FrontEnd(FrontEndTemplate):
       self._maybe_show_setup_modal()
 
     if hasattr(window, 'loadLocalData'):
+      if not self._data_loading_started:
+        self._data_loading_started = True
+        window.loadLocalData()
+
+      if not hasattr(window, 'uiControllerLoaded'):
+        window.setTimeout(self.init_ui, 100)
+        return
+
       if self._ui_initialized:
         return
       self._ui_initialized = True
-      # loadLocalData is async — its continuation (avatar load, engine detection,
-      # cloud sync) runs after this block.
-      window.loadLocalData()
+
       try:
         if hasattr(window, 'initSettingsUI'):
           window.initSettingsUI()
         if hasattr(window, 'applySettings'):
           window.applySettings()
         if hasattr(window, 'showView'):
-          window.showView('home-view')
+          if not getattr(window, '_pocketViewRestored', False):
+            window.showView('home-view')
         if hasattr(window, 'updateContinueReading'):
           window.updateContinueReading()
       except Exception as e:

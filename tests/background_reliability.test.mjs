@@ -36,6 +36,14 @@ test('buffer_manager.js triggers background keep-alive when hidden during active
   assert.match(buffer, /if \(typeof document !== 'undefined' && document\.hidden && typeof window\.startBgKeepAlive === 'function'\) \{\s*window\.startBgKeepAlive\(\);/);
 });
 
+test('cache media keep-alive starts from the initiating tap and stops with the job', async () => {
+  const buffer = await read('buffer_manager.js');
+  const startCaching = buffer.match(/window\.startCaching = async function[\s\S]*?\n};/)?.[0] || '';
+  assert.match(startCaching, /preparePocketMobileMediaSession\?\.\(\)/);
+  assert.ok(startCaching.indexOf('preparePocketMobileMediaSession?.()') < startCaching.indexOf('await _ensureCachingStory'));
+  assert.match(buffer, /stopBgKeepAlive\?\.\(\)/);
+});
+
 test('window._resetPocketEngineForBackend is reachable from buffer_manager.js', async () => {
   // buffer_manager's caching circuit breaker (2+ consecutive errors) recovers by
   // calling window._resetPocketEngineForBackend() — it runs in a different module

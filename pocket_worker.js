@@ -4,7 +4,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v7';
+} from './tts_pronunciation_core.js?v=pron-v9';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,

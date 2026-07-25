@@ -1311,7 +1311,7 @@ if ('serviceWorker' in navigator) {
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
-    .register('/_/api/serviceworker.js?v=128', { scope: '/' })
+    .register('/_/api/serviceworker.js?v=129', { scope: '/' })
     .catch(() => navigator.serviceWorker.register('/_/api/serviceworker.js', { scope: '/' }));
     window.__prServiceWorkerRegistration = registrationPromise
       .catch((err) => {

@@ -34,6 +34,6 @@ test('completion message discloses skipped paragraphs honestly', async () => {
 
 test('recycle threshold is backend-aware: 20 on WASM, 60 on WebGPU', async () => {
   const audio = await read('audio_core.js');
-  assert.match(audio, /const _recycleEvery = _pocketBackendRuntime\?\.selectedBackend === 'webgpu' \? 60 : 20;/);
-  assert.match(audio, /if \(window\._pocketParagraphCount >= _recycleEvery\)/);
+  assert.match(audio, /const recycleEvery = _pocketBackendRuntime\?\.selectedBackend === 'webgpu' \? 60 : 20;/);
+  assert.match(audio, /if \(window\._pocketParagraphCount < recycleEvery\) return false;/);
 });

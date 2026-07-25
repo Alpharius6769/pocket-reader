@@ -13,7 +13,7 @@ def service_worker(**_params):
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v128';
+var CACHE_NAME = 'pocket-reader-core-v129';
 
 function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
@@ -83,19 +83,19 @@ var CORE_ASSETS = [
     '/_/theme/experience_coordinator.js?v=experience-v4',
     '/_/theme/virtue_controller.js?v=virtue-v6',
     '/_/theme/engine_utils.js',
-    '/_/theme/ui_controller.js?v=ui-v81',
+    '/_/theme/ui_controller.js?v=ui-v82',
     '/_/theme/device_setup.js?v=device-setup-v6',
     '/_/theme/device_benchmark_worker.js?v=device-bench-v1',
-    '/_/theme/settings_manager.js?v=settings-v41',
-    '/_/theme/library_manager.js?v=library-v7',
-    '/_/theme/narration_runtime_loader.js?v=narration-loader-v9',
+    '/_/theme/settings_manager.js?v=settings-v42',
+    '/_/theme/library_manager.js?v=library-v8',
+    '/_/theme/narration_runtime_loader.js?v=narration-loader-v10',
     '/_/theme/storage_core.js?v=storage-v6',
     '/_/theme/sync_core.js?v=sync-v5',
     '/_/theme/cinematic_ui.js?v=cinematic-v4',
     '/_/theme/reader_features.js?v=features-v3',
-    '/_/theme/buffer_manager.js?v=buffer-v42',
-    '/_/theme/audio_core.js?v=audio-v52',
-    '/_/theme/pocket_worker.js?v=pocket-worker-v42',
+    '/_/theme/buffer_manager.js?v=buffer-v43',
+    '/_/theme/audio_core.js?v=audio-v53',
+    '/_/theme/pocket_worker.js?v=pocket-worker-v43',
     '/_/theme/pocket_pcm_worklet.js?v=pcm-v1',
     '/_/theme/motion_lite.js',
     '/_/theme/lucide-sprite.svg',

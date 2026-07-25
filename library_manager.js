@@ -4,7 +4,7 @@ import {
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v7';
+} from './tts_pronunciation_core.js?v=pron-v9';
 
 // --- DATA DEFINITIONS (Attached to window to prevent Anvil Scope/ReferenceErrors) ---
 window._ACH_ICONS = {
