@@ -1,0 +1,110 @@
+name: Deploy backend to Hugging Face
+
+# backend/ is the source of truth; the Hugging Face Space is a deploy target.
+# See MIGRATION_PLAN.md Phase 2.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-hf-space
+  cancel-in-progress: false
+
+env:
+  HF_SPACE: alpharius6769/Pocket_Reader
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # curated_library PDFs are LFS objects. They are NOT synced by this
+          # workflow (see the rsync excludes below), so CI never needs to pull
+          # them and never spends metered LFS bandwidth.
+          lfs: false
+          submodules: false
+
+      - name: Require HF_TOKEN
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::HF_TOKEN secret is not set. Add a Hugging Face write token at"
+            echo "::error::Settings > Secrets and variables > Actions > New repository secret."
+            exit 1
+          fi
+
+      - name: Clone the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git clone --depth 1 \
+            "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" hf-space
+
+      - name: Sync backend/ into the Space
+        run: |
+          # Excludes, and why:
+          #   tools/, reports/ - maintainer-only, explicitly not runtime app code
+          #   .wrangler/       - local Cloudflare credential cache, must never leave this machine
+          #   __pycache__/     - build artefact
+          #   curated_library/ - large LFS PDFs that change rarely; synced manually
+          #                      so routine backend deploys cost no LFS bandwidth
+          #   .git/            - never clobber the Space's own history
+          #   .gitignore       - the Space keeps its own
+          rsync -av --delete \
+            --exclude='tools/' \
+            --exclude='reports/' \
+            --exclude='.wrangler/' \
+            --exclude='__pycache__/' \
+            --exclude='curated_library/' \
+            --exclude='.git/' \
+            --exclude='.gitignore' \
+            backend/ hf-space/
+
+      - name: Fail if a secret-shaped file slipped through
+        run: |
+          if find hf-space -type f \
+               \( -name '*.env' -o -name '*wrangler-account*' -o -name '*.pem' \
+                  -o -name '*.key' -o -name '*credential*' \) \
+               -not -path '*/.git/*' | grep -q .; then
+            echo "::error::Refusing to publish: a credential-shaped file is staged for a PUBLIC Space."
+            find hf-space -type f \( -name '*.env' -o -name '*wrangler-account*' \
+              -o -name '*.pem' -o -name '*.key' -o -name '*credential*' \) -not -path '*/.git/*'
+            exit 1
+          fi
+
+      - name: Commit and push
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        working-directory: hf-space
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet && git diff --cached --quiet && [ -z "$(git status --porcelain)" ]; then
+            echo "Space already matches backend/ -- nothing to deploy."
+            exit 0
+          fi
+          git add -A
+          git status --short
+          git commit -m "Sync backend from ${GITHUB_REPOSITORY}@${GITHUB_SHA:0:7}"
+          git push
+
+      - name: Wait for the Space to come back healthy
+        run: |
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+              "https://alpharius6769-pocket-reader.hf.space/api/health" || true)
+            if [ "$code" = "200" ]; then
+              echo "Space healthy after ${i} attempt(s)."
+              exit 0
+            fi
+            echo "attempt ${i}: /api/health returned ${code:-no response}; rebuilding..."
+            sleep 20
+          done
+          echo "::error::Space did not return a healthy /api/health within ~10 minutes."
+          exit 1

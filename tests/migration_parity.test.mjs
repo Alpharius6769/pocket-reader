@@ -1,9 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 const norm = (s) => s.replace(/\r\n/g, '\n').trimEnd();
+
+// anvil-app is a bare gitlink with no .gitmodules, so a plain clone (and any
+// CI checkout) leaves it empty. The mirror checks are a local pre-deploy guard;
+// skip them where the checkout does not exist rather than failing CI.
+const anvilPresent = existsSync(new URL('../anvil-app/theme/assets', import.meta.url));
 
 // During the Anvil decommission (MIGRATION_PLAN.md) the service worker exists
 // twice: Anvil serves it from a Python http_endpoint, Cloudflare Pages will
@@ -49,7 +55,9 @@ test('sw.js and serviceworker.py declare the same cache version', async () => {
 // The canonical frontend now lives in public/. anvil-app keeps a flat mirror
 // until Anvil is decommissioned; these are the files whose drift would ship
 // broken narration, so they are checked explicitly.
-test('anvil-app mirror still matches the canonical public/ sources', async () => {
+test('anvil-app mirror still matches the canonical public/ sources', {
+  skip: anvilPresent ? false : 'anvil-app checkout not present (bare gitlink)',
+}, async () => {
   const sources = {
     'audio_core.js': 'public/assets/js/audio_core.js',
     'buffer_manager.js': 'public/assets/js/buffer_manager.js',

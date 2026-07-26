@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 const norm = (s) => s.replace(/\r\n/g, '\n');
+
+// See tests/migration_parity.test.mjs: anvil-app is a bare gitlink, so it is
+// absent from CI checkouts.
+const anvilPresent = existsSync(new URL('../anvil-app/theme/assets', import.meta.url));
 
 // Regression guards for the 2026-07-23 upload/dedup + narration-reload/overlay UI
 // fixes and the follow-up audit hardening (author-guarded dedup, corrected
@@ -69,7 +74,9 @@ test('audio-cache clear is wrapped once with working feedback for both callers',
   assert.doesNotMatch(settings, /clearAudioCacheFromSettings/);
 });
 
-test('anvil-app assets mirror the upload/UI audit fixes', async () => {
+test('anvil-app assets mirror the upload/UI audit fixes', {
+  skip: anvilPresent ? false : 'anvil-app checkout not present (bare gitlink)',
+}, async () => {
   // Canonical source now lives under public/; anvil-app keeps a flat mirror
   // until Anvil is decommissioned (MIGRATION_PLAN.md Phase 4).
   const sources = {

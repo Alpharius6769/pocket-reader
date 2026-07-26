@@ -16,11 +16,13 @@ const assetFiles = [
   'public/assets/js/tts_pronunciation_core.js', 'public/assets/js/ui_controller.js', 'public/assets/js/virtue_controller.js',
   'public/assets/js/narration_runtime_loader.js', 'public/assets/css/theme.css', 'public/standard-page.html',
 ];
+// Sources are nested under public/; Anvil serves a FLAT theme/assets/
+// directory, so the mirror target is the basename only.
 for (const name of assetFiles) {
   const source = path.join(root, name);
-  const target = path.join(deploy, 'theme', 'assets', name);
+  const target = path.join(deploy, 'theme', 'assets', path.basename(name));
   if (!existsSync(target) || read(source) !== read(target)) {
-    failures.push(`${name} differs from ${target}`);
+    failures.push(`${name} differs from ${path.relative(root, target)}`);
   }
 }
 
@@ -50,7 +52,8 @@ for (const name of [
 const wranglerPath = path.join(root, 'worker', 'wrangler.toml');
 const wrangler = read(wranglerPath);
 const mainMatch = wrangler.match(/^main\s*=\s*"([^"]+)"/m);
-if (!mainMatch || !existsSync(path.join(root, 'backend', mainMatch[1]))) {
+// main is relative to the wrangler.toml, which now lives in worker/.
+if (!mainMatch || !existsSync(path.join(root, 'worker', mainMatch[1]))) {
   failures.push('worker/wrangler.toml has a missing main entrypoint');
 }
 
