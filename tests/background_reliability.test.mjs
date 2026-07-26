@@ -1,8 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+
+// See tests/migration_parity.test.mjs: anvil-app is a bare gitlink, so it is
+// absent from CI checkouts.
+const anvilPresent = existsSync(new URL('../anvil-app/theme/assets', import.meta.url));
 
 test('audio_core.js plays silent audio keep-alive during active narration', async () => {
   const audio = await read('public/assets/js/audio_core.js');
@@ -88,7 +93,9 @@ test('local-file-path intercept in loadStory does not swallow the app\'s own int
   assert.match(api, /if \(!_isAppInternalRef && \(_trimmedUrl\.match/);
 });
 
-test('anvil-app assets mirror background reliability updates', async () => {
+test('anvil-app assets mirror background reliability updates', {
+  skip: anvilPresent ? false : 'anvil-app checkout not present (bare gitlink)',
+}, async () => {
   const anvilAudio = await read('anvil-app/theme/assets/audio_core.js');
   const anvilBuffer = await read('anvil-app/theme/assets/buffer_manager.js');
   const anvilApi = await read('anvil-app/theme/assets/api_core.js');
