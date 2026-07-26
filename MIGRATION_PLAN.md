@@ -335,6 +335,48 @@ wipe push subscriptions.
       threaded WASM, narration, caching, offline shell
 - [ ] Keep Anvil live and untouched as rollback
 
+#### Supabase state (verified live 2026-07-26)
+
+```text
+Project ref  dctjxeqjtctyvvrdlcxo
+API base     https://dctjxeqjtctyvvrdlcxo.supabase.co
+Publishable  sb_publishable_KUGiCZjxfxQb2eQwOTQO0A_MY8ihwur
+GoTrue       v2.193.1
+Org / branch Alpharius' Arts (FREE) / main [PRODUCTION]
+```
+
+The publishable key is safe to ship in frontend JS — that is its purpose. RLS
+policies, not key secrecy, are what enforce access. The `sb_secret_...` key must
+never appear in the frontend or this repo.
+
+Verified via `/auth/v1/settings`:
+
+| Setting | State | Notes |
+|---|---|---|
+| email signup | **enabled** | matches Anvil |
+| email confirmation | **required** (`mailer_autoconfirm: false`) | matches Anvil |
+| signups | allowed | |
+| **Google OAuth** | **DISABLED** | ⚠️ **blocks Phase 4** |
+
+**⚠️ Google OAuth must be enabled before the auth cutover.** Anvil currently
+authenticates users through Google (`anvil.yaml` loads
+`/runtime/services/google.yml`), and the plan relies on re-linking those users
+by email address. With Google disabled in Supabase, **every Google-authenticated
+account is locked out at cutover** and cannot self-recover — they have no
+password to reset. Required before Phase 4:
+
+1. Google Cloud Console → APIs & Services → Credentials → create an **OAuth 2.0
+   Client ID** (Web application).
+2. Authorised redirect URI:
+   `https://dctjxeqjtctyvvrdlcxo.supabase.co/auth/v1/callback`
+3. Supabase Dashboard → Authentication → Providers → Google → paste the Client
+   ID and Client Secret, enable.
+4. Re-verify with `/auth/v1/settings` that `external.google` is `true`.
+
+Note the Supabase project uses **branching**, with `main` marked PRODUCTION.
+Given a real user base, rehearse the Anvil profile import on a preview branch
+before applying migrations to `main`.
+
 ### Phase 4 — Auth cutover (the risky one)
 - [ ] Export Anvil `user_profiles` + user rows (Anvil Uplink script)
 - [ ] Import into Supabase; Google OAuth users re-link automatically by email
