@@ -58,7 +58,7 @@ test('onboarding and hidden controls are accessibility-isolated', async () => {
   const setup = await read('public/assets/js/device_setup.js');
   const ui = await read('public/assets/js/ui_controller.js');
   const virtue = await read('public/assets/js/virtue_controller.js');
-  assert.match(html, /id=&quot;first-time-setup-modal&quot;[^>]*role=&quot;dialog&quot;[^>]*aria-modal=&quot;true&quot;/);
+  assert.match(html, /id="first-time-setup-modal"[^>]*role="dialog"[^>]*aria-modal="true"/);
   assert.match(setup, /activatePocketModal/);
   assert.match(setup, /deactivatePocketModal/);
   assert.match(ui, /_syncNavMoreAccessibility/);

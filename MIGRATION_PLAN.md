@@ -82,19 +82,27 @@ isolation guarantee than what it relies on today.
    functions. The rest of the app is vanilla JS. Dropping Anvil removes an
    entire interpreter plus the Anvil client runtime from startup.
 
-2. **Possibly delete the `?tts_fast=1` isolation reload.** Cross-origin
-   isolation is currently won by the service worker re-injecting COOP/COEP
-   (`buffer_manager.js:146`), which forces a full page reload — and that reload
-   is the root cause of the story-load Home flash the anti-flash mask in
-   `standard-page.html` exists to paper over. Cloudflare Pages can set COOP/COEP
-   directly via `public/_headers`, so isolation could hold from the first paint.
+2. ~~**Possibly delete the `?tts_fast=1` isolation reload**~~ — **RETRACTED
+   2026-07-26. Do not attempt this.**
 
-   Caveat: `COEP: require-corp` breaks cross-origin subresources that lack CORP.
-   Audit first — the CF Worker (B2 model assets) needs
-   `Cross-Origin-Resource-Policy: cross-origin` added, and the jsDelivr Motion
-   import must be CORS-clean. `COEP: credentialless` is the lower-risk option.
-   **Keep the SW fallback path** until real-device telemetry confirms header
-   isolation holds; only then consider removing the reload and the mask.
+   The original idea was to set COOP/COEP globally via `public/_headers` so
+   isolation holds from first paint, removing the reload (and with it the
+   story-load Home flash the anti-flash mask papers over).
+
+   **It would break Google sign-in.** `sw.js` documents the existing design
+   explicitly: *"Isolation is opt-in and limited to `?tts_fast=1` narration
+   sessions. The normal app stays unisolated because COOP same-origin severs
+   OAuth popup relationships."* Phase 4 introduces Google OAuth through
+   Supabase, which depends on exactly those popup relationships. Global COOP is
+   therefore incompatible with the auth this migration is adding.
+
+   The opt-in, per-navigation isolation applied by the service worker is the
+   correct architecture. It stays, the `?tts_fast=1` reload stays, and the
+   anti-flash mask stays. `public/_headers` carries a comment saying so, because
+   this is exactly the kind of "obvious cleanup" a future reader would attempt.
+
+   (The CF Worker already sends `Cross-Origin-Resource-Policy: cross-origin`,
+   so the narration path's COEP requirement is satisfied as-is.)
 
 ## Phases
 

@@ -64,37 +64,37 @@ self.addEventListener('message', function (event) {
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     '/',
-    '/_/theme/theme.css?v=midnight-v21',
-    '/_/theme/tts_pronunciation_core.js?v=pron-v9',
-    '/_/theme/pocket_backend_policy.js?v=backend-v20',
-    '/_/theme/pocket_performance_policy.js?v=performance-v2',
-    '/_/theme/diagnostics.js?v=diag-v4',
-    '/_/theme/api_core.js?v=search-v16',
-    '/_/theme/experience_coordinator.js?v=experience-v4',
-    '/_/theme/virtue_controller.js?v=virtue-v6',
-    '/_/theme/engine_utils.js',
-    '/_/theme/ui_controller.js?v=ui-v82',
-    '/_/theme/device_setup.js?v=device-setup-v6',
-    '/_/theme/device_benchmark_worker.js?v=device-bench-v1',
-    '/_/theme/settings_manager.js?v=settings-v42',
-    '/_/theme/library_manager.js?v=library-v8',
-    '/_/theme/narration_runtime_loader.js?v=narration-loader-v10',
-    '/_/theme/storage_core.js?v=storage-v6',
-    '/_/theme/sync_core.js?v=sync-v5',
-    '/_/theme/cinematic_ui.js?v=cinematic-v4',
-    '/_/theme/reader_features.js?v=features-v3',
-    '/_/theme/buffer_manager.js?v=buffer-v43',
-    '/_/theme/audio_core.js?v=audio-v53',
-    '/_/theme/pocket_worker.js?v=pocket-worker-v43',
-    '/_/theme/pocket_pcm_worklet.js?v=pcm-v1',
-    '/_/theme/motion_lite.js',
-    '/_/theme/lucide-sprite.svg',
-    '/_/theme/literata-400.woff2',
-    '/_/theme/literata-600.woff2',
-    '/_/theme/literata-700.woff2',
-    '/_/theme/ibm-plex-sans-400.woff2',
-    '/_/theme/ibm-plex-sans-500.woff2',
-    '/_/theme/ibm-plex-sans-600.woff2'
+    '/assets/css/theme.css?v=midnight-v21',
+    '/assets/js/tts_pronunciation_core.js?v=pron-v9',
+    '/assets/js/pocket_backend_policy.js?v=backend-v20',
+    '/assets/js/pocket_performance_policy.js?v=performance-v2',
+    '/assets/js/diagnostics.js?v=diag-v4',
+    '/assets/js/api_core.js?v=search-v16',
+    '/assets/js/experience_coordinator.js?v=experience-v4',
+    '/assets/js/virtue_controller.js?v=virtue-v6',
+    '/assets/js/engine_utils.js',
+    '/assets/js/ui_controller.js?v=ui-v82',
+    '/assets/js/device_setup.js?v=device-setup-v6',
+    '/assets/js/device_benchmark_worker.js?v=device-bench-v1',
+    '/assets/js/settings_manager.js?v=settings-v42',
+    '/assets/js/library_manager.js?v=library-v8',
+    '/assets/js/narration_runtime_loader.js?v=narration-loader-v10',
+    '/assets/js/storage_core.js?v=storage-v6',
+    '/assets/js/sync_core.js?v=sync-v5',
+    '/assets/js/cinematic_ui.js?v=cinematic-v4',
+    '/assets/js/reader_features.js?v=features-v3',
+    '/assets/js/buffer_manager.js?v=buffer-v43',
+    '/assets/js/audio_core.js?v=audio-v53',
+    '/assets/js/pocket_worker.js?v=pocket-worker-v43',
+    '/assets/js/pocket_pcm_worklet.js?v=pcm-v1',
+    '/assets/js/motion_lite.js',
+    '/assets/icons/lucide-sprite.svg',
+    '/assets/fonts/literata-400.woff2',
+    '/assets/fonts/literata-600.woff2',
+    '/assets/fonts/literata-700.woff2',
+    '/assets/fonts/ibm-plex-sans-400.woff2',
+    '/assets/fonts/ibm-plex-sans-500.woff2',
+    '/assets/fonts/ibm-plex-sans-600.woff2'
 ];
 
 // 1. INSTALLATION & PRE-CACHING
@@ -147,8 +147,8 @@ self.addEventListener('push', function (event) {
     var title = payload.title || 'Pocket Reader';
     var options = {
         body: payload.body || 'A subscribed story has an update.',
-        icon: '/_/theme/reader%20192.png',
-        badge: '/_/theme/reader%20192.png',
+        icon: '/assets/img/reader%20192.png',
+        badge: '/assets/img/reader%20192.png',
         data: {
             storyUrl: payload.storyUrl || payload.url || '',
             type: payload.type || ''
@@ -225,10 +225,8 @@ self.addEventListener('fetch', function (event) {
 
     // Never intercept the service worker script itself or Anvil internals
     if (
-        url.pathname.indexOf('serviceworker') !== -1 ||
-        (event.request.mode !== 'navigate' && url.pathname.indexOf('/_/') === 0 && url.pathname.indexOf('/_/theme/') !== 0) ||
-        url.origin.indexOf('hf.space') !== -1 ||
-        (event.request.mode !== 'navigate' && url.pathname.indexOf('/_/api/') === 0)
+        url.pathname === '/sw.js' ||
+        url.origin.indexOf('hf.space') !== -1
     ) {
         return;
     }
@@ -260,7 +258,7 @@ self.addEventListener('fetch', function (event) {
     // Query-versioned JS/CSS is immutable by URL, so serve it from cache
     // immediately and refresh in the background. Unversioned assets retain
     // network-first behavior so emergency updates are never pinned.
-    if (url.pathname.indexOf('/_/theme/') === 0 && (url.pathname.slice(-3) === '.js' || url.pathname.slice(-4) === '.css')) {
+    if (url.pathname.indexOf('/assets/') === 0 && (url.pathname.slice(-3) === '.js' || url.pathname.slice(-4) === '.css')) {
         var isPocketWorker = url.pathname.indexOf('/pocket_worker.js') !== -1;
         var updatePromise = fetch(event.request)
             .then(function (networkResponse) {
@@ -293,7 +291,7 @@ self.addEventListener('fetch', function (event) {
     }
 
     // Cache-first strategy for large visual assets.
-    if (url.pathname.indexOf('/_/theme/') === 0 || event.request.destination === 'image') {
+    if (url.pathname.indexOf('/assets/') === 0 || event.request.destination === 'image') {
         event.respondWith(
             caches.match(event.request).then(function (cachedResponse) {
                 if (cachedResponse) {

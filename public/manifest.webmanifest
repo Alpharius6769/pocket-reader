@@ -1,0 +1,32 @@
+{
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "name": "Alpharius' Pocket Reader",
+  "short_name": "Pocket Reader",
+  "description": "A private offline-capable story reader with Pocket TTS narration and optional cross-device profile sync.",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#111214",
+  "theme_color": "#111214",
+  "icons": [
+    {
+      "src": "/assets/img/pocket_reader_icon.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/img/pocket_reader_icon.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/img/pocket_reader_icon-logo.jpeg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

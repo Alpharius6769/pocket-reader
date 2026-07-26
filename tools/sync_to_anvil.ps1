@@ -66,10 +66,29 @@ $pairs.Add([pscustomobject]@{
     Source = Join-Path $root 'public\standard-page.html'
     Target = Join-Path $assets 'standard-page.html'
 })
-$pairs.Add([pscustomobject]@{
-    Source = Join-Path $root 'public\index.html'
-    Target = $formTemplate
-})
+# public/index.html is NOT synced any more.
+#
+# Phase 3 converted it from an Anvil form template (the whole page stored inside
+# a prop:html attribute, every quote escaped) into a standalone HTML document.
+# Copying that into form_template.html would render the Anvil app as a wall of
+# escaped markup -- it is a one-way conversion, by design.
+#
+# Anvil's form template is therefore frozen at its last pre-conversion state.
+# JS, CSS and assets still sync normally, so Anvil remains patchable for
+# everything except page structure until it is deleted in Phase 5.
+if (Test-Path $formTemplate) {
+    $indexHead = [IO.File]::ReadAllText((Join-Path $root 'public\index.html')).TrimStart()
+    if ($indexHead.StartsWith('<!DOCTYPE')) {
+        Write-Host 'note: public/index.html is now a standalone document and is no longer synced to Anvil.' -ForegroundColor DarkGray
+        Write-Host '      Anvil form_template.html is frozen at its pre-Phase-3 state (see MIGRATION_PLAN.md).' -ForegroundColor DarkGray
+    } else {
+        # Still the Anvil-shaped template, so keep syncing it.
+        $pairs.Add([pscustomobject]@{
+            Source = Join-Path $root 'public\index.html'
+            Target = $formTemplate
+        })
+    }
+}
 $pairs.Add([pscustomobject]@{
     Source = Join-Path $root 'serviceworker.py'
     Target = $serverSw

@@ -33,7 +33,7 @@ test('the deferred loader preserves the original mobile user activation', async 
   assert.match(audio, /_premiumAudio\?\.dataset\?\.pocketUnlock === '1'[\s\S]*?_premiumAudio\.pause\(\)/);
   assert.match(audio, /window\.currentAudio\.loop = false/);
   assert.match(buffer, /window\.startPrecacheQueue\s*=/);
-  assert.match(html, /onclick=&quot;window\.startPrecacheQueue\(\)&quot;/);
+  assert.match(html, /onclick="window\.startPrecacheQueue\(\)"/);
   assert.doesNotMatch(html, /if\(window\.BufferManager\) window\.BufferManager\.startPrecacheQueue/);
 });
 
