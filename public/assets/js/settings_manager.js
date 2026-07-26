@@ -8,13 +8,25 @@ import {
 } from './pocket_backend_policy.js?v=backend-v20';
 
 const NARRATION_SERVICE_WORKER_VERSION = '129';
-const NARRATION_SERVICE_WORKER_URL = `/_/api/serviceworker.js?v=${NARRATION_SERVICE_WORKER_VERSION}`;
+
+// Anvil serves the worker from a Python http_endpoint at /_/api/serviceworker.js;
+// Cloudflare Pages serves it as a static file at /sw.js. Both hosts run this
+// exact module during the migration, so the path is resolved at runtime rather
+// than hardcoded. Drop the Anvil branch when Anvil is deleted
+// (MIGRATION_PLAN.md Phase 5).
+export const SERVICE_WORKER_PATH = window.location.hostname.endsWith('.anvil.app')
+  ? '/_/api/serviceworker.js'
+  : '/sw.js';
+const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
 
 function narrationServiceWorkerControlsPage() {
   const scriptUrl = navigator.serviceWorker?.controller?.scriptURL || '';
   try {
     const parsed = new URL(scriptUrl, window.location.origin);
-    return parsed.pathname.endsWith('/serviceworker.js')
+    // Accept either host's worker path.
+    const isOurWorker = parsed.pathname.endsWith('/serviceworker.js')
+      || parsed.pathname === '/sw.js';
+    return isOurWorker
       && parsed.searchParams.get('v') === NARRATION_SERVICE_WORKER_VERSION;
   } catch (_) {
     return false;
@@ -28,7 +40,7 @@ async function ensureNarrationServiceWorkerControl() {
   try {
     await navigator.serviceWorker.register(NARRATION_SERVICE_WORKER_URL, { scope: '/' });
   } catch (_) {
-    await navigator.serviceWorker.register('/_/api/serviceworker.js', { scope: '/' });
+    await navigator.serviceWorker.register(SERVICE_WORKER_PATH, { scope: '/' });
   }
   const startedAt = Date.now();
   while (Date.now() - startedAt < 30000) {
@@ -1035,8 +1047,8 @@ export function initPushNotifications(checkbox) {
       if (!vapidKey) { setPushUpdatesEnabled(false); alert("Push is enabled but no VAPID public key is configured on the server yet."); return; }
       let swReg = await navigator.serviceWorker.getRegistration();
       if (!swReg) {
-        try { swReg = await navigator.serviceWorker.register('/_/api/serviceworker.js', { scope: '/' }); }
-        catch(e) { swReg = await navigator.serviceWorker.register('/_/api/serviceworker.js', { scope: '/' }); }
+        try { swReg = await navigator.serviceWorker.register(SERVICE_WORKER_PATH, { scope: '/' }); }
+        catch(e) { swReg = await navigator.serviceWorker.register(SERVICE_WORKER_PATH, { scope: '/' }); }
       }
       const existing     = await swReg.pushManager.getSubscription();
       const subscription = existing || (await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) }));

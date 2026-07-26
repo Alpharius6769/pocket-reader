@@ -73,10 +73,10 @@ var CORE_ASSETS = [
     '/assets/js/experience_coordinator.js?v=experience-v4',
     '/assets/js/virtue_controller.js?v=virtue-v6',
     '/assets/js/engine_utils.js',
-    '/assets/js/ui_controller.js?v=ui-v82',
+    '/assets/js/ui_controller.js?v=ui-v83',
     '/assets/js/device_setup.js?v=device-setup-v6',
     '/assets/js/device_benchmark_worker.js?v=device-bench-v1',
-    '/assets/js/settings_manager.js?v=settings-v42',
+    '/assets/js/settings_manager.js?v=settings-v43',
     '/assets/js/library_manager.js?v=library-v8',
     '/assets/js/narration_runtime_loader.js?v=narration-loader-v10',
     '/assets/js/storage_core.js?v=storage-v6',
@@ -223,7 +223,7 @@ self.addEventListener('notificationclick', function (event) {
 self.addEventListener('fetch', function (event) {
     var url = new URL(event.request.url);
 
-    // Never intercept the service worker script itself or Anvil internals
+    // Never intercept the service worker script itself or backend API calls
     if (
         url.pathname === '/sw.js' ||
         url.origin.indexOf('hf.space') !== -1

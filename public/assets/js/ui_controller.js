@@ -1310,9 +1310,15 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
+    // Anvil serves the worker from /_/api/serviceworker.js; Cloudflare Pages
+    // serves the static /sw.js. Resolve at runtime so this one module works on
+    // both hosts during the migration. Drop the Anvil branch at Phase 5.
+    const swPath = window.location.hostname.endsWith('.anvil.app')
+      ? '/_/api/serviceworker.js'
+      : '/sw.js';
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
-    .register('/_/api/serviceworker.js?v=129', { scope: '/' })
-    .catch(() => navigator.serviceWorker.register('/_/api/serviceworker.js', { scope: '/' }));
+    .register(`${swPath}?v=129`, { scope: '/' })
+    .catch(() => navigator.serviceWorker.register(swPath, { scope: '/' }));
     window.__prServiceWorkerRegistration = registrationPromise
       .catch((err) => {
         window.__prServiceWorkerError = {

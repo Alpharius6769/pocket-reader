@@ -189,7 +189,7 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('serviceworker.py');
   assert.match(serviceWorker, /pocket-reader-core-v129/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v82/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v83/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
   assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v43/);
@@ -209,9 +209,26 @@ test('Settings recognizes the active narration service worker revision', async (
   // never matches and the SW registration thrashes between versions on every
   // narration start. (This pin closes the gap that let ui_controller drift to
   // ?v=110 while everything else moved to 114.)
+  // Derive the version rather than pinning 129 twice: the invariant is that the
+  // two files agree, not that either holds a particular number.
+  const version = settings.match(/NARRATION_SERVICE_WORKER_VERSION\s*=\s*'(\d+)'/)[1];
   const uiController = await read('public/assets/js/ui_controller.js');
-  assert.match(uiController, /serviceworker\.js\?v=129/);
-  assert.doesNotMatch(uiController, /serviceworker\.js\?v=(?!129)\d+/);
+  const registered = [...uiController.matchAll(/\?v=(\d+)`?,\s*\{\s*scope/g)].map((m) => m[1]);
+  assert.ok(registered.length > 0, 'ui_controller performs no versioned SW registration');
+  for (const v of registered) {
+    assert.equal(v, version,
+      `ui_controller registers ?v=${v} but NARRATION_SERVICE_WORKER_VERSION is ${version}`);
+  }
+
+  // Both hosts run this module during the migration, so the worker path must be
+  // resolved at runtime. A hardcoded Anvil path would silently fail on Pages
+  // (unsupported MIME type) and take offline support and isolation with it.
+  for (const source of [uiController, settings]) {
+    assert.match(source, /hostname\.endsWith\('\.anvil\.app'\)/,
+      'service-worker path must branch on host while both Anvil and Pages are live');
+    assert.match(source, /'\/sw\.js'/, 'the static Pages worker path is missing');
+    assert.match(source, /'\/_\/api\/serviceworker\.js'/, 'the Anvil worker path is missing');
+  }
 });
 
 test('mobile playback uses one media-session transport map with seek support', async () => {
