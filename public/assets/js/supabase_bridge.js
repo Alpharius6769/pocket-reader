@@ -377,7 +377,18 @@ async function currentUserId() {
 async function deleteAccountData(confirmation) {
   if (String(confirmation || '').trim().toUpperCase() !== 'DELETE') return false;
   try {
-    await rest('/user_profiles', { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
+    // PostgREST refuses an unfiltered DELETE as a mass-deletion safeguard, so
+    // the filter is required even though RLS already scopes this to one row.
+    // Without it the request fails and the user's data silently survives a
+    // "delete my account data" confirmation.
+    const uid = await currentUserId();
+    await rest(`/user_profiles?user_id=eq.${encodeURIComponent(uid)}`, {
+      method: 'DELETE',
+      headers: { Prefer: 'return=minimal' },
+    });
+    // Confirm it actually went, rather than trusting a 2xx.
+    const left = await rest('/user_profiles?select=user_id&limit=1');
+    if (Array.isArray(left) && left.length) throw new Error('row still present after delete');
     return true;
   } catch (err) {
     log('ERROR', 'Failed to delete account data', String(err));
