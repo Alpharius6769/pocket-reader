@@ -4,10 +4,15 @@ This document tracks third-party software, models, services, icons, and data
 sources used by Alpharius' Pocket Reader. It is an engineering attribution
 inventory, not legal advice.
 
-Pocket Reader code authored by Chris (Alpharius67 / Fluffarius) is Apache
-License 2.0. The Virtue character, Virtue artwork/dialogue/lore, and Pocket
-Reader branding are proprietary works. See `LICENSE`, `NOTICE`, and
+Pocket Reader code authored by Chris (Alpharius67 / Fluffarius) is proprietary,
+all rights reserved. The Virtue character, Virtue artwork/dialogue/lore, and
+Pocket Reader branding are separately proprietary. See `LICENSE`, `NOTICE`, and
 `CHARACTER_LICENSE.md`.
+
+Going proprietary does not alter the terms of the third-party components listed
+below. Their licenses and obligations — notably OFL-1.1 bundled license texts,
+CC-BY-3.0 attribution for Game-Icons.net, and MPL-2.0 for pywebpush — continue
+to apply in full.
 
 Last reviewed: 2026-07-15.
 
@@ -61,6 +66,19 @@ Last reviewed: 2026-07-15.
 - Distribution note: source `.flac` references and converted `.safetensors`
   files are not stored in this source tree. The maintainer tool records source
   URLs and writes a runtime manifest for the uploaded B2/Cloudflare assets.
+
+### Rayne (default voice)
+
+- Author: Chris (Alpharius67 / Fluffarius)
+- Origin: AI-generated voice created by the maintainer.
+- License: Project-owned. No third-party rights apply; free for the project to
+  use, including commercially.
+- Used as: The application's default Pocket TTS voice for all new profiles and
+  the global voice fallback.
+- Runtime asset names: `rayne`, with emotion suffixes such as `_neutral`.
+- Distribution note: source `.wav` reference and converted `.safetensors` files
+  are not stored in this source tree; they live with the other runtime voice
+  assets on B2 and are served through the Cloudflare Worker.
 
 ### Pocket TTS voice conversion maintainer tool
 

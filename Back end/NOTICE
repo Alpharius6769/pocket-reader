@@ -4,26 +4,29 @@ Copyright (c) 2026 Chris (Alpharius67 / Fluffarius)
 This distribution contains multiple categories of material with different
 rights and license terms.
 
-1. Pocket Reader Code - Apache License 2.0
+1. Pocket Reader Code - Proprietary, All Rights Reserved
 
-The application source code authored for Pocket Reader is licensed under the
-Apache License, Version 2.0. This includes the FastAPI backend, parser and
-scraper modules, Cloudflare Worker source, Anvil bridge Python files, frontend
-JavaScript modules, CSS, HTML shell, service-worker endpoint, Dockerfile, and
-related configuration files, except where another section of this NOTICE says
-otherwise.
+The application source code authored for Pocket Reader is proprietary and all
+rights are reserved. This includes the FastAPI backend, parser and scraper
+modules, Cloudflare Worker source, frontend JavaScript modules, CSS, HTML shell,
+service worker, database schema and migrations, Dockerfile, and related
+configuration files, except where another section of this NOTICE says otherwise.
 Maintainer-only tooling under `tools/`, including the Pocket TTS voice
 conversion utility, is distributed with the source but is not runtime app code.
 
-Redistribution of the code must retain the LICENSE and NOTICE files and all
-applicable copyright and attribution notices.
+No license to use, copy, modify, redistribute, or self-host this code is
+granted. See LICENSE for the full terms.
+
+Versions published before 2026-07-26 were licensed under the Apache License,
+Version 2.0. That grant remains irrevocable for those specific versions; it does
+not extend to versions published on or after that date.
 
 2. Virtue Character, Artwork, Dialogue, and Branding - All Rights Reserved
 
-The Apache 2.0 license does not cover the Virtue character, her artwork,
-dialogue, lore, worldbuilding, or the Pocket Reader brand identity. These works
-are proprietary creative works owned by Chris (Alpharius67 / Fluffarius), all
-rights reserved.
+The Virtue character, her artwork, dialogue, lore, worldbuilding, and the Pocket
+Reader brand identity are proprietary creative works owned by Chris (Alpharius67
+/ Fluffarius), all rights reserved. They are governed by CHARACTER_LICENSE.md,
+which imposes restrictions beyond those in LICENSE.
 
 This includes, without limitation:
 

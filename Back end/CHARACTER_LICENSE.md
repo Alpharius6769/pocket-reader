@@ -4,8 +4,9 @@ Copyright (c) 2026 Chris (Alpharius67 / Fluffarius). All rights reserved.
 
 This document applies to the Virtue character and the proprietary creative
 works distributed with, referenced by, or displayed inside Alpharius' Pocket
-Reader. It does not apply to the application source code that is separately
-licensed under Apache License 2.0.
+Reader. The application source code is separately covered by LICENSE
+(proprietary, all rights reserved); this document adds further restrictions
+specific to the character and brand.
 
 ## Scope
 
@@ -26,7 +27,7 @@ The following works are proprietary and are not open source:
 - The "Alpharius' Pocket Reader" name, logo, icon, visual identity, and
   related branding.
 
-No rights to these works are granted by the Apache 2.0 license on the code.
+No rights to these works are granted by LICENSE, which is itself proprietary.
 Their presence in this repository or public availability in the running app is
 not permission to copy, extract, reuse, train on, or redistribute them.
 
@@ -77,7 +78,7 @@ the associated GitHub or Hugging Face profile.
 ## No Implied License
 
 Forking, cloning, downloading, caching, or viewing this repository does not
-grant any license to Virtue or Pocket Reader branding. The application code is
-open for technical reuse under Apache 2.0; the character and brand are not.
+grant any license to Virtue or Pocket Reader branding. Neither the application
+code nor the character and brand are available for reuse; see LICENSE.
 
-Last updated: 2026-07-15
+Last updated: 2026-07-26

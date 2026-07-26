@@ -6,7 +6,9 @@ sdk: docker
 python_version: '3.10'
 app_file: app.py
 pinned: false
-license: apache-2.0
+license: other
+license_name: pocket-reader-proprietary
+license_link: LICENSE
 short_description: Edge-routed audiobook reader backend with browser-side TTS.
 ---
 
@@ -155,8 +157,10 @@ temporarily routes AO3 fetches through Zyte's rotating IPs.
 
 This repository contains multiple categories of works:
 
-- Code authored for Pocket Reader is Apache License 2.0. See `LICENSE` and
-  `NOTICE`.
+- Code authored for Pocket Reader is proprietary, all rights reserved. No
+  license to reuse, redistribute, or self-host is granted. See `LICENSE` and
+  `NOTICE`. Versions published before 2026-07-26 were Apache-2.0; that grant
+  remains valid for those versions only.
 - The Virtue character, her artwork, dialogue, lore, and Pocket Reader
   branding are proprietary creative works owned by Chris
   (Alpharius67 / Fluffarius), all rights reserved. See

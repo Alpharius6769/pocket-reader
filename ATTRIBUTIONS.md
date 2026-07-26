@@ -27,6 +27,12 @@ Cloudflare, Backblaze B2, Zyte, story-source platforms, Game-Icons.net assets,
 and project-owned artwork are documented in the backend repository's full
 `ATTRIBUTIONS.md` and `NOTICE` files.
 
-Virtue artwork, dialogue, lore, character identity, Pocket Reader branding,
-and project-owned navigation art are proprietary works owned by Chris
-(Alpharius67 / Fluffarius), all rights reserved.
+Pocket Reader application code is proprietary, all rights reserved (see
+`LICENSE` in the backend repository). Virtue artwork, dialogue, lore, character
+identity, Pocket Reader branding, and project-owned navigation art are
+separately proprietary works owned by Chris (Alpharius67 / Fluffarius), all
+rights reserved.
+
+The third-party components above retain their own licenses. Lucide (ISC),
+Literata and IBM Plex Sans (OFL-1.1) obligations continue to apply, and their
+bundled license texts must ship with the frontend.
