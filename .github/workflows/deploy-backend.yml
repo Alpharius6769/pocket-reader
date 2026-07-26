@@ -79,32 +79,61 @@ jobs:
           fi
 
       - name: Commit and push
+        id: push
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         working-directory: hf-space
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet && git diff --cached --quiet && [ -z "$(git status --porcelain)" ]; then
+          if [ -z "$(git status --porcelain)" ]; then
             echo "Space already matches backend/ -- nothing to deploy."
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git add -A
           git status --short
           git commit -m "Sync backend from ${GITHUB_REPOSITORY}@${GITHUB_SHA:0:7}"
           git push
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Wait for the Space to come back healthy
+      # A plain /api/health poll is NOT sufficient: immediately after a push the
+      # Space reports stage RUNNING_BUILDING and the OLD container keeps serving
+      # 200s, so health alone goes green while a broken build is still cooking.
+      # Gate on the Spaces API instead: the Space must be on the commit we just
+      # pushed AND in terminal stage RUNNING, and only then do we probe health.
+      - name: Wait for the Space to rebuild onto the pushed commit
+        if: steps.push.outputs.deployed == 'true'
+        env:
+          TARGET_SHA: ${{ steps.push.outputs.sha }}
         run: |
-          for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' \
-              "https://alpharius6769-pocket-reader.hf.space/api/health" || true)
-            if [ "$code" = "200" ]; then
-              echo "Space healthy after ${i} attempt(s)."
-              exit 0
+          API="https://huggingface.co/api/spaces/${HF_SPACE}"
+          for i in $(seq 1 40); do
+            body=$(curl -sf "$API" || true)
+            stage=$(echo "$body" | jq -r '.runtime.stage // "UNKNOWN"')
+            sha=$(echo   "$body" | jq -r '.sha // ""')
+
+            case "$stage" in
+              BUILD_ERROR|RUNTIME_ERROR|CONFIG_ERROR|NO_APP_FILE)
+                echo "::error::Space entered $stage. Check the build logs at"
+                echo "::error::https://huggingface.co/spaces/${HF_SPACE}?logs=build"
+                exit 1
+                ;;
+            esac
+
+            if [ "$sha" = "$TARGET_SHA" ] && [ "$stage" = "RUNNING" ]; then
+              code=$(curl -s -o /dev/null -w '%{http_code}' \
+                "https://alpharius6769-pocket-reader.hf.space/api/health" || true)
+              if [ "$code" = "200" ]; then
+                echo "Space is RUNNING on ${sha:0:7} and healthy."
+                exit 0
+              fi
+              echo "attempt ${i}: RUNNING on target commit but health returned ${code:-none}"
+            else
+              echo "attempt ${i}: stage=${stage} sha=${sha:0:7} (want RUNNING on ${TARGET_SHA:0:7})"
             fi
-            echo "attempt ${i}: /api/health returned ${code:-no response}; rebuilding..."
             sleep 20
           done
-          echo "::error::Space did not return a healthy /api/health within ~10 minutes."
+          echo "::error::Space did not reach RUNNING on ${TARGET_SHA:0:7} within ~13 minutes."
           exit 1
