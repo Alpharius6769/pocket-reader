@@ -180,23 +180,50 @@ submodule refs. Phase 1 must absorb or drop them before the first push.
       5 ESM imports, plus the anvil-app mirror check rewritten to map bare
       names to canonical `public/` paths rather than concatenating a prefix).
       Suite 145/145.
-- [ ] Move `Back end/` → `backend/` and extract `worker/cloudflare_worker.js`
-- [ ] Extract `public/sw.js` from `serviceworker.py` (it is an Anvil
-      `@http_endpoint` returning a JS string; the JS is ES5 and self-contained,
-      so extraction is mechanical)
-- [ ] Strip the Anvil form wrapper from `public/index.html`; the inline
-      early-click stubs in the first inline script must survive
-- [ ] Add `tools/sync_to_anvil.ps1` so `anvil-app/` stays deployable from the
-      new canonical `public/` tree while Anvil remains production
+- [x] `Back end/` → `backend/`, worker extracted to `worker/`
+      (`cloudflare_worker.js` + `wrangler.toml`; `main` is relative so it still
+      resolves). 60 renames; 9 test/tool files repointed.
+- [x] Extracted `public/sw.js` from `serviceworker.py` — 13,464 bytes, passes
+      `node --check`, no Python wrapper leakage. Added
+      `tests/migration_parity.test.mjs` (4 guards) asserting `public/sw.js`
+      stays byte-identical to the JS embedded in `serviceworker.py`, that
+      `CACHE_NAME` matches, and that the `anvil-app` mirror still matches the
+      canonical `public/` sources. Suite **149/149**.
+- [x] Added `tools/sync_to_anvil.ps1` (with `-Check` mode) — flattens
+      `public/assets/**` into Anvil's flat `theme/assets/`, maps
+      `index.html` → `form_template.html` and `serviceworker.py` →
+      `server_code/`. Guards against two files flattening onto one target.
+      Verified against a negative control: injected drift → exit 1, restored →
+      exit 0. Currently reports **88 files in sync**.
+- [x] Recovered `away_mode_192.png` / `away_mode_512.png`, which existed only
+      in the Anvil checkout despite being referenced by `index.html:302`. They
+      were never in the root tree, so a Pages deploy would have shipped a
+      broken nav icon.
 
-**Deliberately NOT done in Phase 1:** rewriting the 26 precached module URLs
-from `/_/theme/<f>?v=` to `/assets/js/<f>?v=`. Anvil serves those paths and
-stays production until Phase 4, so rewriting them now breaks the live deploy.
-That rewrite is coupled to the Cloudflare Pages cutover in Phase 3 and must
-land together with `sw.js`, `standard-page.html` modulepreloads, `index.html`
-script tags, `narration_runtime_loader.js` imports, and the pins in
-`tests/pocket_acceleration.test.mjs`, `tests/non_security_audit_fixes.test.mjs`,
-and `tools/smoke_pocket_worker_runtime.mjs`.
+**Deliberately NOT done in Phase 1** — both items below break Anvil the moment
+they land, so they belong with the Pages cutover in Phase 3:
+
+1. **The module-URL rewrite** from `/_/theme/<f>?v=` to `/assets/js/<f>?v=`.
+   Anvil serves those paths. Must land atomically across `sw.js`,
+   `standard-page.html` modulepreloads, `index.html` script tags,
+   `narration_runtime_loader.js` imports, and the pins in
+   `tests/pocket_acceleration.test.mjs`,
+   `tests/non_security_audit_fixes.test.mjs`, and
+   `tools/smoke_pocket_worker_runtime.mjs`.
+
+2. **Converting `index.html` into a real HTML document.** This is bigger than
+   "strip a wrapper" — measured 2026-07-26, the file is 92,443 bytes and is
+   *not* HTML at all. The entire page is stored inside a `prop:html` attribute
+   of a single `<anvil-form container="HtmlTemplate">` element, so every
+   internal quote is escaped: **2,906 `&quot;` and exactly one real
+   quoted attribute** (the wrapper's own). Conversion requires: unwrap the
+   `<anvil-form>` element, unescape all 2,906 entities, rewrite the 31
+   `_/theme/` references, and add the `<!DOCTYPE html>`/`<head>` document shell
+   that Anvil currently supplies (meta, title, manifest, icon links). The
+   result is **not** re-syncable to Anvil without re-escaping, which is why it
+   cannot land before cutover. The inline early-click stubs in the first inline
+   script must survive the transformation — they exist so nothing throws before
+   the modules load.
 
 ### Phase 2 — Backend continuity
 - [ ] `backend/` becomes source of truth; HF Space becomes a push target

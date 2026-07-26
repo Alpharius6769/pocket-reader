@@ -40,18 +40,18 @@ for (const name of [
   'app.py', 'parsers_core.py', 'parsers_epub.py', 'parsers_pdf.py',
   'scrapers_core.py',
 ]) {
-  const source = path.join(root, 'Back end', name);
+  const source = path.join(root, 'backend', name);
   const target = path.join(root, 'Hugging Face Space', name);
   if (!existsSync(target) || read(source) !== read(target)) {
-    failures.push(`Back end/${name} differs from Hugging Face Space/${name}`);
+    failures.push(`backend/${name} differs from Hugging Face Space/${name}`);
   }
 }
 
-const wranglerPath = path.join(root, 'Back end', 'wrangler.toml');
+const wranglerPath = path.join(root, 'worker', 'wrangler.toml');
 const wrangler = read(wranglerPath);
 const mainMatch = wrangler.match(/^main\s*=\s*"([^"]+)"/m);
-if (!mainMatch || !existsSync(path.join(root, 'Back end', mainMatch[1]))) {
-  failures.push('Back end/wrangler.toml has a missing main entrypoint');
+if (!mainMatch || !existsSync(path.join(root, 'backend', mainMatch[1]))) {
+  failures.push('worker/wrangler.toml has a missing main entrypoint');
 }
 
 if (process.argv.includes('--live')) {

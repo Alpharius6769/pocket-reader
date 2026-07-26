@@ -75,7 +75,7 @@ test('uploads use a size-aware deadline and always clear timers', async () => {
 });
 
 test('backend database durability and health refresh are fail-visible and singleflight', async () => {
-  const source = await read('Back end/app.py');
+  const source = await read('backend/app.py');
   assert.match(source, /ALLOW_EPHEMERAL_DB/);
   assert.match(source, /database_durable/);
   assert.match(source, /SITE_HEALTH_REFRESH_LOCK/);

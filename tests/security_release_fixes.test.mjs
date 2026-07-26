@@ -26,7 +26,7 @@ test('cache status escapes story titles and audio keys use stable references', a
 
 test('push writes and deletes require a server-issued ownership token', async () => {
   const client = await read('public/assets/js/settings_manager.js');
-  const server = await read(path.join('Back end', 'app.py'));
+  const server = await read(path.join('backend', 'app.py'));
   assert.match(client, /pocketReaderPushAuthToken/);
   assert.match(client, /crypto\.getRandomValues\(bytes\)/);
   assert.doesNotMatch(client, /Math\.random\(\).*pr-/);
@@ -60,7 +60,7 @@ test('Cloudflare fallback dialog does not interpolate URL into inline JavaScript
 });
 
 test('push targets and subscribed AO3 stories use parsed hostname allowlists', async () => {
-  const source = await read(path.join('Back end', 'app.py'));
+  const source = await read(path.join('backend', 'app.py'));
   assert.match(source, /def _is_allowed_push_endpoint/);
   assert.match(source, /PUSH_ENDPOINT_HOSTS/);
   assert.match(source, /def _canonical_ao3_work_url/);
@@ -68,16 +68,16 @@ test('push targets and subscribed AO3 stories use parsed hostname allowlists', a
 });
 
 test('push deletion also removes the owned state snapshot', async () => {
-  const source = await read(path.join('Back end', 'app.py'));
+  const source = await read(path.join('backend', 'app.py'));
   assert.match(source, /DELETE FROM user_state WHERE user_id = \?/);
   assert.match(source, /_delete_push_owner_data/);
 });
 
 test('upload parsers enforce global PDF, ZIP, EPUB, DOCX/HTML/TXT, and output limits', async () => {
-  const core = await read(path.join('Back end', 'parsers_core.py'));
-  const pdf = await read(path.join('Back end', 'parsers_pdf.py'));
-  const epub = await read(path.join('Back end', 'parsers_epub.py'));
-  const doc = await read(path.join('Back end', 'parsers_document.py'));
+  const core = await read(path.join('backend', 'parsers_core.py'));
+  const pdf = await read(path.join('backend', 'parsers_pdf.py'));
+  const epub = await read(path.join('backend', 'parsers_epub.py'));
+  const doc = await read(path.join('backend', 'parsers_document.py'));
   assert.match(core, /MAX_ZIP_MEMBERS/);
   assert.match(core, /MAX_PARSED_TEXT_CHARS/);
   assert.match(pdf, /MAX_PDF_PAGES/);
@@ -91,8 +91,8 @@ test('upload parsers enforce global PDF, ZIP, EPUB, DOCX/HTML/TXT, and output li
 });
 
 test('all remote scraper response paths enforce byte limits and scrape admission control', async () => {
-  const scraper = await read(path.join('Back end', 'scrapers_core.py'));
-  const app = await read(path.join('Back end', 'app.py'));
+  const scraper = await read(path.join('backend', 'scrapers_core.py'));
+  const app = await read(path.join('backend', 'app.py'));
   assert.match(scraper, /_read_limited_response/);
   assert.match(scraper, /MAX_ZYTE_RESPONSE_BYTES/);
   assert.match(scraper, /_assert_public_connected_peer/);
@@ -103,7 +103,7 @@ test('all remote scraper response paths enforce byte limits and scrape admission
 });
 
 test('generic proxy is read-only, authenticated for non-browser callers, and strips headers', async () => {
-  const source = await read(path.join('Back end', 'cloudflare_worker.js'));
+  const source = await read(path.join('worker', 'cloudflare_worker.js'));
   assert.match(source, /PROXY_AUTH_TOKEN/);
   assert.match(source, /Only GET and HEAD are supported/);
   assert.match(source, /buildUpstreamHeaders/);

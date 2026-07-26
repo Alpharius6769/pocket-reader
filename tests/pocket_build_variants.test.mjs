@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 test('WASM block exporter supports the complete adaptive block candidate matrix', () => {
-  const source = readFileSync(join(ROOT, 'Back end', 'tools', 'export_pocket_wasm_block_core.py'), 'utf8');
+  const source = readFileSync(join(ROOT, 'backend', 'tools', 'export_pocket_wasm_block_core.py'), 'utf8');
   assert.match(source, /add_argument\("--frames"/);
   assert.match(source, /choices=\(2, 4, 6, 8\)/);
   assert.match(source, /flow_lm_decode_block\{frames\}/);
@@ -16,7 +16,7 @@ test('WASM block exporter supports the complete adaptive block candidate matrix'
 });
 
 test('unified WASM core merger hoists shared branch weights into one session', () => {
-  const source = readFileSync(join(ROOT, 'Back end', 'tools', 'merge_pocket_wasm_unified_core.py'), 'utf8');
+  const source = readFileSync(join(ROOT, 'backend', 'tools', 'merge_pocket_wasm_unified_core.py'), 'utf8');
   assert.match(source, /helper\.make_node\(\s*"If"/);
   assert.match(source, /dedupe_initializers/);
   assert.match(source, /prefill_empty_sequence/);

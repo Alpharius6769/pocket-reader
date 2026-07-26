@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "Back end"))
+sys.path.insert(0, str(ROOT / "backend"))
 
 import app
 import parsers_core

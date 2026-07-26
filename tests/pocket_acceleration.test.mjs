@@ -252,7 +252,7 @@ test('story subscriptions use explicit AO3 state and push handoff', async () => 
   const library = await read('public/assets/js/library_manager.js');
   const settings = await read('public/assets/js/settings_manager.js');
   const serviceWorker = await read('serviceworker.py');
-  const backend = await read('Back end/app.py');
+  const backend = await read('backend/app.py');
   assert.match(library, /window\.toggleStorySubscription/);
   assert.match(library, /window\.checkSubscribedStoryUpdates/);
   assert.match(library, /publishedChapters/);
@@ -295,7 +295,7 @@ test('WebGPU auto-selection targets the certified R3 bundle', async () => {
 });
 
 test('Cloudflare publishes immutable R3 assets with revision metadata', async () => {
-  const worker = await read('Back end/cloudflare_worker.js');
+  const worker = await read('worker/cloudflare_worker.js');
   assert.match(worker, /english_2026-04-webgpu-fp16-r3/);
   assert.match(worker, /X-Asset-Revision", "english-2026-04-fp16-r3/);
   assert.match(worker, /max-age=31536000, immutable/);

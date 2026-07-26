@@ -25,7 +25,7 @@ CONFIGS = [
 
 
 def load_helpers(root: Path):
-    path = root / "Back end/tools/export_pocket_wasm_block_core.py"
+    path = root / "backend/tools/export_pocket_wasm_block_core.py"
     spec = importlib.util.spec_from_file_location("pocket_block_export", path)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
