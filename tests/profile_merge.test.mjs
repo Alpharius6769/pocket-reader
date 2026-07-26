@@ -162,19 +162,43 @@ test('an oversized profile is rejected rather than silently truncated', () => {
   assert.throws(() => normalizeProfile(huge, 'd'), /too large/i);
 });
 
-test('merging is idempotent: re-merging a merged profile changes nothing material', () => {
+// Idempotency holds only when every per-group clock is explicit. If a story
+// omits one, normalizeProfile fills it with Date.now() -- matching the Python
+// original, where the same default is `value["updatedAt"]`, itself defaulting to
+// _now_ms(). Two merges a millisecond apart then produce different clocks, which
+// is the intended wall-clock last-writer-wins fallback rather than a bug. An
+// earlier version of this test omitted clocks and was therefore flaky.
+test('merging is idempotent when every sync clock is explicit', () => {
+  const allGroups = {
+    metadata: 400, progress: 400, favorite: 400, rating: 400, bookmarks: 400, narration: 400, collections: 400,
+  };
   const incoming = {
+    updatedAt: 400,
     displayName: 'Chris',
     profileFieldUpdatedAt: { displayName: 400 },
     settings: { theme: 'slate' },
     settingsFieldUpdatedAt: { theme: 400 },
-    library: [{ storyKey: 'k', title: 'T', sync: { metadata: 400, progress: 400 } }],
+    library: [{ storyKey: 'k', title: 'T', updatedAt: 400, sync: { ...allGroups } }],
     achievements: [{ id: 'a1', unlockedAt: 10 }],
+    readingQueueUpdatedAt: 400,
   };
   const once = mergeProfile({}, incoming, 'd');
   const twice = mergeProfile(once, incoming, 'd');
+  // updatedAt/revision are stamped per merge by design.
   const strip = (p) => { const c = structuredClone(p); delete c.updatedAt; delete c.revision; return c; };
   assert.deepEqual(strip(twice), strip(once));
+});
+
+test('a story with no explicit clocks falls back to wall-clock ordering', () => {
+  // Documents the behaviour above so it cannot be mistaken for a regression:
+  // absent group clocks are stamped at normalisation time.
+  const bare = { library: [{ storyKey: 'k', title: 'T' }] };
+  const merged = mergeProfile({}, bare, 'd');
+  const story = merged.library[0];
+  for (const group of ['metadata', 'progress', 'favorite', 'rating', 'bookmarks', 'narration', 'collections']) {
+    assert.equal(typeof story.sync[group], 'number', `${group} clock must be populated`);
+    assert.ok(story.sync[group] > 0, `${group} clock must be a real timestamp`);
+  }
 });
 
 test('malformed input is rejected explicitly, not coerced', () => {

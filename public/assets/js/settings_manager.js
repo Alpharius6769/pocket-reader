@@ -1032,7 +1032,8 @@ export function initPushNotifications(checkbox) {
     }
     if (window.location.pathname.startsWith('/debug/')) {
       setPushUpdatesEnabled(false);
-          alert("Push notifications only work on the published app, not in the Anvil debugger. Publish the app first, then enable this.");
+      // The service worker is not registered under /debug/, and push needs one.
+      alert('Push notifications need the service worker, which is not active on debug pages. Open the app at its normal address, then enable this.');
       return;
     }
     Notification.requestPermission().then(async (permission) => {
