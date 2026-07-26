@@ -347,6 +347,33 @@ where `SUBSCRIPTIONS_DB` lives — so the deploy workflow's Space rebuilds do NO
 wipe push subscriptions.
 
 ### Phase 3 — Frontend live on Pages (Anvil still authoritative)
+
+**Build + deploy done 2026-07-26; functional verification outstanding.**
+
+- [x] `tools/convert_to_static.mjs` — idempotent, `--check` mode. Unwraps the
+      `<anvil-form>`, unescapes, rewrites 45 `_/theme/` assets onto
+      `/assets/**`, repoints the service-worker registration, and emits a real
+      document with `standard-page.html` as its `<head>`.
+- [x] `public/manifest.webmanifest` (Anvil auto-injected one; source had none)
+- [x] `public/_headers` — caching + security, **no COOP/COEP** (see win #2)
+- [x] Suite **154/154**, including new guards for the converted document, the
+      `/sw.js` registration, the COOP prohibition, and manifest validity.
+- [x] Deployed to preview `https://phase3-preview.pocket-reader-f2y.pages.dev`
+      and verified live: correct headers, no COOP/COEP, no Anvil residue.
+      (Immediately after deploy the edge returned 522 for ~30s — propagation,
+      not a build fault. Retry before investigating.)
+- [ ] **`ALLOWED_ORIGINS` — the app cannot talk to the backend until this is
+      done in all three places** (see the CORS trap above). Until then the
+      preview loads but every API call is blocked.
+- [ ] Functional verification on a real browser + device: boot, story load,
+      narration, threaded WASM under `?tts_fast=1`, caching, offline shell
+- [ ] Ship the IndexedDB export/import path before production cutover
+- [ ] Promote to the production branch
+
+Note the conversion is a **one-way door**: `public/index.html` can no longer be
+synced to Anvil. `tools/sync_to_anvil.ps1` now detects this, skips that one
+file, and says so — Anvil's `form_template.html` is frozen at its
+pre-Phase-3 state while JS/CSS/assets keep syncing.
 - [ ] Deploy `public/` to Cloudflare Pages
 - [ ] Point `PR_CONFIG.apiBase` (`api_core.js:2`) at HF as today — unchanged
 - [ ] Auth still calls Anvil during this phase via a CORS shim, **or** run the
