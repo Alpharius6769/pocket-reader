@@ -225,13 +225,39 @@ they land, so they belong with the Pages cutover in Phase 3:
    script must survive the transformation — they exist so nothing throws before
    the modules load.
 
-### Phase 2 — Backend continuity
-- [ ] `backend/` becomes source of truth; HF Space becomes a push target
-- [ ] GitHub Action deploys to HF on merge to main
-- [ ] Add `Cross-Origin-Resource-Policy: cross-origin` to the CF Worker
-      (prerequisite for Phase 3 header isolation)
-- [ ] Verify all 23 routes still serve
-- [ ] **Decide: public Space vs Worker-proxied private Space** (see below)
+### Phase 2 — Backend continuity — DONE 2026-07-26
+- [x] `backend/` is the source of truth; the HF Space is a push target.
+      `tools/verify_release_parity.mjs` reports clean (it had been broken by
+      the Phase 1 path rewrite in two places — concatenating nested source
+      paths onto Anvil's flat layout, and looking for the worker entrypoint
+      under `backend/` after it moved to `worker/`).
+- [x] `.github/workflows/test.yml` — suite on push/PR. **Green: 149 tests,
+      0 fail, 3 skipped.** The 3 skips are the anvil-app mirror assertions,
+      which cannot run in CI because `anvil-app` is a bare gitlink; they still
+      run locally, where they guard pre-deploy drift.
+- [x] `.github/workflows/deploy-backend.yml` — syncs `backend/` → HF Space on
+      changes under `backend/**`. Currently fails fast and loudly on the
+      `Require HF_TOKEN` guard, which is correct until the secret exists.
+- [x] `Cross-Origin-Resource-Policy: cross-origin` — **already present** in
+      `worker/cloudflare_worker.js` (lines 163 and 296). No change needed; the
+      Phase 3 COEP prerequisite is satisfied.
+- [x] Live route probe, all 200 and warm (99–679 ms): `/`, `/api/health`,
+      `/api/library/curated`, `/api/vapid-public-key`, `/api/health/sites`,
+      `/api/masterlist`.
+- [x] Option B decided (see below); implementation deferred to after Phase 3.
+
+**Remaining action for the maintainer:** add an HF **write** token as the
+`HF_TOKEN` repository secret (Settings → Secrets and variables → Actions).
+Until then the deploy workflow fails by design rather than silently no-opping.
+
+**LFS discipline (protects the no-spend rule).** The 20 `curated_library` PDFs
+are the repo's only Git LFS objects (~32 MB). Both workflows check out with
+`lfs: false`, and the deploy excludes `curated_library/`, so **CI never spends
+metered LFS bandwidth**. Those PDFs change rarely; when they do, sync them into
+the Space manually. The deploy also excludes `tools/` and `reports/`
+(maintainer-only, not runtime app code) and `.wrangler/` — a local Cloudflare
+credential cache that must never reach a public Space — with a guard step that
+fails the run if any credential-shaped file is staged.
 
 #### The HF visibility problem
 
