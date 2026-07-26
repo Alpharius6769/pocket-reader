@@ -26,8 +26,18 @@ for (const name of assetFiles) {
   }
 }
 
+// public/index.html is excluded once Phase 3 converts it to a standalone
+// document: it can no longer be represented as an Anvil form template, so a
+// difference there is the expected end state rather than drift. Anvil's
+// form_template.html is frozen pre-conversion until Anvil is deleted.
+const indexIsStandalone = read(path.join(root, 'public', 'index.html'))
+  .trimStart()
+  .startsWith('<!DOCTYPE');
+
 for (const [sourceName, targetName] of [
-  ['public/index.html', path.join('client_code', 'FrontEnd', 'form_template.html')],
+  ...(indexIsStandalone
+    ? []
+    : [['public/index.html', path.join('client_code', 'FrontEnd', 'form_template.html')]]),
   ['FrontEnd_code.py', path.join('client_code', 'FrontEnd', '__init__.py')],
   ['serviceworker.py', path.join('server_code', 'serviceworker.py')],
 ]) {

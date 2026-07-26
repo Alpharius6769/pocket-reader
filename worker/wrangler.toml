@@ -8,7 +8,10 @@ enabled = true
 head_sampling_rate = 1
 
 [vars]
-ALLOWED_ORIGINS = "https://hot-wiry-raven.anvil.app"
+# Additive: cloudflare_worker.js resolveAllowedOrigin() also hardcodes the two
+# .anvil.app origins as defaults. Both the hardcoded list and this variable are
+# stripped of Anvil entries when Anvil is deleted (MIGRATION_PLAN.md Phase 5).
+ALLOWED_ORIGINS = "https://pocket-reader-f2y.pages.dev,https://phase3-preview.pocket-reader-f2y.pages.dev,https://hot-wiry-raven.anvil.app"
 ALLOWED_PROXY_HOSTS = "archiveofourown.org,fichub.net"
 CHAPTER_SYNC_URL = "https://alpharius6769-pocket-reader.hf.space/api/sync/chapters"
 

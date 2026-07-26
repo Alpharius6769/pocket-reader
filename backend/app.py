@@ -82,7 +82,18 @@ logging.basicConfig(
 log = logging.getLogger("pocket-reader.app")
 
 # Config
-DEFAULT_ALLOWED_ORIGINS = "https://hot-wiry-raven.anvil.app,https://vu5ls67qwlzkeklw.anvil.app"
+# Exact-match origin list (no wildcards). The Cloudflare Pages entries are the
+# production origin and the stable per-branch preview alias; per-deployment
+# hash URLs are deliberately not listed. The .anvil.app origins are removed
+# when Anvil is deleted (MIGRATION_PLAN.md Phase 5).
+# NOTE: the ALLOWED_ORIGINS env var on the Hugging Face Space overrides this
+# entirely -- this default only applies when that variable is unset or empty.
+DEFAULT_ALLOWED_ORIGINS = (
+    "https://pocket-reader-f2y.pages.dev,"
+    "https://phase3-preview.pocket-reader-f2y.pages.dev,"
+    "https://hot-wiry-raven.anvil.app,"
+    "https://vu5ls67qwlzkeklw.anvil.app"
+)
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
 if not ALLOWED_ORIGINS.strip():
     ALLOWED_ORIGINS = DEFAULT_ALLOWED_ORIGINS
