@@ -1,9 +1,12 @@
 # Pocket Reader — Anvil Decommission & GitHub Migration Plan
 
-Created: 2026-07-26. Status: **Phases 0–2 complete. Phase 3 next.**
+Created: 2026-07-26. Status: **Phases 0–3 complete. Phase 4 (Supabase auth) next.**
 
-Live at `github.com/Alpharius6769/pocket-reader` (private). CI green; the
-`backend/` → Hugging Face deploy is verified end to end.
+- Repo: `github.com/Alpharius6769/pocket-reader` (private), CI green
+- **Frontend LIVE: https://pocket-reader-f2y.pages.dev** — narration, isolation
+  and offline shell all verified in a real browser
+- Backend: Hugging Face, deployed from `backend/` by GitHub Actions
+- Anvil: superseded and awaiting deletion (no users, nothing to preserve)
 
 Authoritative plan for moving Pocket Reader off Anvil Works onto a private
 GitHub repo + Cloudflare Pages, with Supabase owning auth and profile sync.
@@ -18,7 +21,7 @@ completes. Until then, **Anvil remains production**.
 | Frontend host | **Cloudflare Pages**, deployed from a private GitHub repo. Free tier, unlike GitHub Pages which needs Pro for private-repo publishing. |
 | Auth + profile DB | **Supabase** free tier (Postgres + GoTrue: Google OAuth, email/password, confirmation, reset). |
 | Code license | **Proprietary, all rights reserved.** Replaces the current Apache-2.0 grant for future versions. |
-| User base | **Tens of accounts.** Export/import tooling and a forced-reset flow are required — not optional. |
+| User base | **NONE — revised 2026-07-26.** The maintainer confirmed Anvil has no users and no logins worth preserving. This removes most of the risk originally planned around: no account export, no forced password resets, no Google re-linking, no IndexedDB-loss mitigation, no installed-PWA breakage, no user notice period. Earlier notes assuming "tens of accounts" are superseded. |
 | Unchanged | Cloudflare Worker, Backblaze B2, Zyte, FicHub. |
 
 Hard constraint: **no new recurring spend.** Every service above is free tier
@@ -394,13 +397,23 @@ wipe push subscriptions.
       and verified live: correct headers, no COOP/COEP, no Anvil residue.
       (Immediately after deploy the edge returned 522 for ~30s — propagation,
       not a build fault. Retry before investigating.)
-- [ ] **`ALLOWED_ORIGINS` — the app cannot talk to the backend until this is
-      done in all three places** (see the CORS trap above). Until then the
-      preview loads but every API call is blocked.
-- [ ] Functional verification on a real browser + device: boot, story load,
-      narration, threaded WASM under `?tts_fast=1`, caching, offline shell
-- [ ] Ship the IndexedDB export/import path before production cutover
-- [ ] Promote to the production branch
+- [x] `ALLOWED_ORIGINS` updated in all four places; verified by origin.
+- [x] **Functional verification passed on the preview 2026-07-26** (headless
+      Chrome): `crossOriginIsolated: true`, curated library lists 20 stories,
+      story loads with 3 chapters, **narration synthesised 164,684 bytes of
+      `audio/wav`** with `_pocketParagraphCount` reaching 5, offline navigation
+      served 200 from cache, zero page errors and zero failed requests.
+      Note: isolation requires a **two-step** first visit — the service worker
+      cannot inject COOP/COEP until it is installed *and* controlling, so a
+      direct `?tts_fast=1` first load is never isolated. The app's own retry
+      handles this; test harnesses must not treat it as a failure.
+- [x] Export/import path shipped (`data_transfer.js`) — no longer a cutover
+      blocker now that there are no users, but retained: it is a genuine
+      backup feature and round-trip verified byte-for-byte.
+- [x] **Promoted to production 2026-07-26 — `https://pocket-reader-f2y.pages.dev`
+      is live.** Verified serving: shell, `/sw.js`, manifest, and versioned
+      modules all 200; zero Anvil residue; loader and service worker agree on
+      one canonical URL per module (no version fork).
 
 Note the conversion is a **one-way door**: `public/index.html` can no longer be
 synced to Anvil. `tools/sync_to_anvil.ps1` now detects this, skips that one
@@ -473,11 +486,15 @@ Note the Supabase project uses **branching**, with `main` marked PRODUCTION.
 Given a real user base, rehearse the Anvil profile import on a preview branch
 before applying migrations to `main`.
 
-### Phase 4 — Auth cutover (the risky one)
-- [ ] Export Anvil `user_profiles` + user rows (Anvil Uplink script)
-- [ ] Import into Supabase; Google OAuth users re-link automatically by email
-- [ ] Email/password users **cannot** have hashes migrated → forced reset flow
-      plus advance notice in-app
+### Phase 4 — Auth (no longer the risky one)
+
+With no existing accounts, this is a greenfield build rather than a migration.
+Everything below about exporting, re-linking and forced resets is **struck**:
+
+- [x] ~~Export Anvil `user_profiles` + user rows~~ — nothing to export
+- [x] ~~Import into Supabase; re-link Google users by email~~ — no users
+- [x] ~~Forced password-reset flow + advance notice~~ — no accounts to reset
+- [x] Google OAuth enabled and verified (`external.google: true`)
 - [ ] Port `sync_user_profile` to a Supabase Edge Function with a serializable
       transaction; port `save/load_user_avatar` (avatar stays in a server-only
       column, ≤512px WebP ~256 KB, as today)
@@ -492,29 +509,20 @@ Maintainer decision 2026-07-26: the published Anvil app **and** the local
 checkout are being removed outright, not merely bypassed. That makes this the
 point of no return, so the ordering below matters.
 
-**⚠️ Before deleting anything on Anvil**
+**Prerequisites — almost all removed 2026-07-26**
 
-1. [ ] **Export the Data Tables and keep the dump.** Deleting the Anvil app
-       destroys `user_profiles` — every profile, avatar blob, and sync clock.
-       Once gone there is no recovery and no support path. Export via Anvil
-       Uplink to JSON, verify the row count matches the Supabase import, and
-       archive it off-machine for at least one release cycle.
-2. [ ] Confirm Supabase has been the sole write authority for a full release,
-       with no rollback to Anvil pending.
-3. [ ] Verify every migrated account can sign in — **Google users especially**,
-       since they have no password to fall back on.
+With no users and no accounts, the Data Table export, the sign-in verification
+sweep, the grace period and the in-app notice are all unnecessary. The only
+remaining care is:
 
-**User-facing consequences to announce in advance**
+1. [ ] Sanity-check the Anvil Data Tables are genuinely empty before deleting,
+       so the "no users" assumption is confirmed rather than assumed.
 
-- Deleting the app kills `hot-wiry-raven.anvil.app`. Any bookmark, shared link,
-  or **installed PWA** pointing there breaks permanently — an installed PWA is
-  bound to its origin and cannot be redirected.
-- Combined with the origin-scoped IndexedDB loss (see Known migration costs),
-  users must reinstall from `pocket-reader-f2y.pages.dev` **and** re-cache any
-  narration they want offline. Give notice inside the app before cutover, not
-  after.
-- Consider leaving the Anvil app up but empty for a grace period, serving only
-  a redirect notice, before deleting the account.
+**Anvil's frontend is already superseded.** As of 2026-07-26 the JS modules
+target Cloudflare Pages asset paths unconditionally, so opening
+`hot-wiry-raven.anvil.app` will render but its narration, icons and sprites
+will 404. That is expected and harmless — it has no users and is being deleted.
+`tools/sync_to_anvil.ps1` is therefore obsolete.
 
 **Then delete, in this order**
 
