@@ -288,6 +288,28 @@ Worker proxies `/api/*` with an HF read token held as a Worker secret. Sequenced
 after Phase 3 is stable — it changes the request path for every API call and
 must not be in flight during the frontend move.
 
+#### CORS trap — `ALLOWED_ORIGINS` lives in THREE places
+
+All three currently name only Anvil. Miss one and the Pages frontend is
+CORS-blocked with no obvious culprit. Add `https://pocket-reader.pages.dev`
+to every one before the cutover:
+
+1. **HF Space variable** `ALLOWED_ORIGINS` (Space Settings → Variables).
+2. **`backend/app.py:85`** — `DEFAULT_ALLOWED_ORIGINS` hardcodes
+   `https://hot-wiry-raven.anvil.app,https://vu5ls67qwlzkeklw.anvil.app` as the
+   fallback used whenever the env var is empty. Easy to miss because the Space
+   variable normally masks it.
+3. **`worker/wrangler.toml`** — `[vars] ALLOWED_ORIGINS`, currently the single
+   Anvil origin. Requires a `wrangler deploy` to take effect.
+
+Keep the Anvil origins in all three during Phase 3 so both frontends work
+simultaneously; strip them at Phase 4.
+
+Related, already confirmed present: the Space has a persistent storage bucket
+mounted at `/data` (`alpharius6769/Pocket_Reader-storage`, read/write), which is
+where `SUBSCRIPTIONS_DB` lives — so the deploy workflow's Space rebuilds do NOT
+wipe push subscriptions.
+
 ### Phase 3 — Frontend live on Pages (Anvil still authoritative)
 - [ ] Deploy `public/` to Cloudflare Pages
 - [ ] Point `PR_CONFIG.apiBase` (`api_core.js:2`) at HF as today — unchanged
