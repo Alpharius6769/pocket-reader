@@ -246,9 +246,25 @@ they land, so they belong with the Pages cutover in Phase 3:
       `/api/masterlist`.
 - [x] Option B decided (see below); implementation deferred to after Phase 3.
 
-**Remaining action for the maintainer:** add an HF **write** token as the
-`HF_TOKEN` repository secret (Settings → Secrets and variables → Actions).
-Until then the deploy workflow fails by design rather than silently no-opping.
+- [x] **`HF_TOKEN` set and the deploy verified live 2026-07-26.** First real
+      deploy published the relicensing (5 files: LICENSE, NOTICE,
+      ATTRIBUTIONS.md, CHARACTER_LICENSE.md, README.md; +189/−222) as Space
+      commit `129724f`. Confirmed on the live Space: `LICENSE` now serves the
+      proprietary text and the README frontmatter reads `license: other`.
+      `app.py`, `requirements.txt`, and `Dockerfile` were byte-identical, so no
+      code shipped. A second run correctly took the no-op path and skipped the
+      wait step. Space reached terminal stage `RUNNING` on `129724f`.
+
+**Deploy-gate lesson (cost one false green).** The first deploy reported success
+in **14 seconds** while the Space was in stage `RUNNING_BUILDING` — and it stayed
+there for several more minutes. During an HF rebuild the OLD container keeps
+serving `200 OK`, so polling `/api/health` alone certifies nothing and would
+have greenlit a broken build. The gate now queries
+`https://huggingface.co/api/spaces/{repo}` and requires `.sha` to equal the
+commit just pushed AND `.runtime.stage` to be terminal `RUNNING` before probing
+health, failing fast on `BUILD_ERROR`/`RUNTIME_ERROR`/`CONFIG_ERROR`/
+`NO_APP_FILE`. **Never gate an HF Space deploy on an app-level health endpoint
+alone.**
 
 **LFS discipline (protects the no-spend rule).** The 20 `curated_library` PDFs
 are the repo's only Git LFS objects (~32 MB). Both workflows check out with
