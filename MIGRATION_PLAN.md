@@ -329,7 +329,9 @@ to every one before the cutover:
    Anvil origin. Requires a `wrangler deploy` to take effect.
 
 Keep the Anvil origins in all three during Phase 3 so both frontends work
-simultaneously; strip them at Phase 4.
+simultaneously. **Strip them in Phase 5**, when the Anvil app is deleted
+outright (maintainer decision 2026-07-26 — Anvil is not merely decommissioned,
+the published app and the local checkout are both being removed).
 
 Related, already confirmed present: the Space has a persistent storage bucket
 mounted at `/data` (`alpharius6769/Pocket_Reader-storage`, read/write), which is
@@ -376,12 +378,29 @@ account is locked out at cutover** and cannot self-recover — they have no
 password to reset. Required before Phase 4:
 
 1. Google Cloud Console → APIs & Services → Credentials → create an **OAuth 2.0
-   Client ID** (Web application).
-2. Authorised redirect URI:
+   Client ID**, application type **Web application**.
+2. Authorised redirect URI (exact):
    `https://dctjxeqjtctyvvrdlcxo.supabase.co/auth/v1/callback`
-3. Supabase Dashboard → Authentication → Providers → Google → paste the Client
+3. Authorised JavaScript origins: `https://pocket-reader-f2y.pages.dev` and
+   `http://localhost:8788`. **No Anvil origin** — Supabase auth never runs on
+   the Anvil frontend, which keeps Anvil Users until it is deleted.
+4. Supabase Dashboard → Authentication → Providers → Google → paste the Client
    ID and Client Secret, enable.
-4. Re-verify with `/auth/v1/settings` that `external.google` is `true`.
+5. Supabase → Authentication → URL Configuration → Site URL
+   `https://pocket-reader-f2y.pages.dev`; Redirect URLs
+   `https://pocket-reader-f2y.pages.dev/**` and `http://localhost:*/**`.
+6. Re-verify with `/auth/v1/settings` that `external.google` is `true`.
+
+Observed in the Google Cloud project 2026-07-26:
+- It already holds an OAuth client **"Alpharius' Desktop Reader", type
+  Desktop**, which is unusable for Supabase (Desktop clients permit only
+  loopback redirects) and belongs to the separate Pocket Reader Desktop
+  project. **Create a second Web application client; do not modify or delete
+  the Desktop one.**
+- **Publishing status is the classic failure.** A consent screen left in
+  *Testing* admits only explicitly listed test users — everyone else gets
+  `403: access_denied`. It must be **Published**. No Google verification review
+  is required, since `email`/`profile`/`openid` are non-sensitive scopes.
 
 Note the Supabase project uses **branching**, with `main` marked PRODUCTION.
 Given a real user base, rehearse the Anvil profile import on a preview branch
@@ -398,12 +417,73 @@ before applying migrations to `main`.
 - [ ] Ship `supabase_bridge.js`; delete the Anvil bridge
 - [ ] Dual-write window: both Anvil and Supabase accept syncs, so rollback
       stays possible for at least one release
-- [ ] Decommission Anvil; delete `anvil-app/` and the `_/theme/` mirror
+- [ ] Anvil still running at the end of Phase 4 — deletion is Phase 5
 
-### Phase 5 — Cleanup
-- [ ] Rewrite `AGENT_HANDOFF_MASTER.md` §1 and the deploy sections
-- [ ] Retire `anvil-deploy-path` notes
-- [ ] Consider removing the isolation reload + anti-flash mask (see win #2)
+### Phase 5 — Delete Anvil entirely
+
+Maintainer decision 2026-07-26: the published Anvil app **and** the local
+checkout are being removed outright, not merely bypassed. That makes this the
+point of no return, so the ordering below matters.
+
+**⚠️ Before deleting anything on Anvil**
+
+1. [ ] **Export the Data Tables and keep the dump.** Deleting the Anvil app
+       destroys `user_profiles` — every profile, avatar blob, and sync clock.
+       Once gone there is no recovery and no support path. Export via Anvil
+       Uplink to JSON, verify the row count matches the Supabase import, and
+       archive it off-machine for at least one release cycle.
+2. [ ] Confirm Supabase has been the sole write authority for a full release,
+       with no rollback to Anvil pending.
+3. [ ] Verify every migrated account can sign in — **Google users especially**,
+       since they have no password to fall back on.
+
+**User-facing consequences to announce in advance**
+
+- Deleting the app kills `hot-wiry-raven.anvil.app`. Any bookmark, shared link,
+  or **installed PWA** pointing there breaks permanently — an installed PWA is
+  bound to its origin and cannot be redirected.
+- Combined with the origin-scoped IndexedDB loss (see Known migration costs),
+  users must reinstall from `pocket-reader-f2y.pages.dev` **and** re-cache any
+  narration they want offline. Give notice inside the app before cutover, not
+  after.
+- Consider leaving the Anvil app up but empty for a grace period, serving only
+  a redirect notice, before deleting the account.
+
+**Then delete, in this order**
+
+4. [ ] Delete the published Anvil app from the Anvil dashboard.
+5. [ ] Remove the local checkout `anvil-app/` and the `_/theme/` mirror.
+6. [ ] Delete the now-orphaned Anvil sources: `FrontEnd_code.py`,
+       `Server_code.py`, `serviceworker.py`, `anvil.yaml`.
+       **`serviceworker.py` only after** `public/sw.js` is the live worker —
+       it is currently the canonical copy that `sw.js` is checked against.
+7. [ ] Delete `tools/sync_to_anvil.ps1` (transitional tooling).
+8. [ ] Drop the root repo's `anvil-app` gitlink (mode 160000, no `.gitmodules`).
+9. [ ] Strip the Anvil origins from all three `ALLOWED_ORIGINS` locations
+       (Space variable, `backend/app.py` `DEFAULT_ALLOWED_ORIGINS`,
+       `worker/wrangler.toml` + `wrangler deploy`).
+
+**Test suite changes this forces**
+
+10. [ ] Delete the three anvil-app mirror assertions (in
+        `migration_parity.test.mjs`, `ui_reload_and_upload_fixes.test.mjs`,
+        `background_reliability.test.mjs`) — they become permanently skipped
+        dead weight.
+11. [ ] Rewrite the `public/sw.js` ↔ `serviceworker.py` parity test: with the
+        Python endpoint gone, `sw.js` is the only copy and the guard is moot.
+        Replace it with a check that `sw.js` and the precache list agree.
+12. [ ] Update `tools/verify_release_parity.mjs` to drop the anvil-app leg
+        entirely.
+
+**Docs**
+
+13. [ ] Rewrite `AGENT_HANDOFF_MASTER.md` §1 (hosting), §2 (release state), and
+        the deploy sections; the commit SHAs there are already stale from the
+        history purge.
+14. [ ] Retire the `anvil-deploy-path` agent memory note.
+15. [ ] Reconsider removing the `?tts_fast=1` isolation reload and the
+        anti-flash mask (architectural win #2), once header isolation is
+        confirmed on real devices.
 
 ## Known migration costs
 
@@ -417,6 +497,13 @@ synthesize. Mitigations:
 
 **Forced password reset** for email/password accounts at Phase 4. Unavoidable —
 Anvil's password hashes are not portable into Supabase GoTrue.
+
+**Installed PWAs break permanently at Phase 5.** A PWA installed from
+`hot-wiry-raven.anvil.app` is bound to that origin; deleting the Anvil app
+leaves those installs pointing at nothing, with no redirect possible. Anyone who
+added Pocket Reader to a home screen must reinstall from
+`pocket-reader-f2y.pages.dev`. Announce in-app before cutover — after deletion
+there is no channel left to reach those users through.
 
 ## Licensing position (audited 2026-07-26)
 
