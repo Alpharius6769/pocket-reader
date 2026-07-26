@@ -94,7 +94,10 @@ test('local-file-path intercept in loadStory does not swallow the app\'s own int
 });
 
 test('anvil-app assets mirror background reliability updates', {
-  skip: anvilPresent ? false : 'anvil-app checkout not present (bare gitlink)',
+  // Retired: Anvil has no users and is being deleted, and the modules now
+  // target Pages asset paths that Anvil cannot serve. See
+  // tests/migration_parity.test.mjs for the guard that replaced this.
+  skip: 'Anvil mirror retired -- modules target Cloudflare Pages',
 }, async () => {
   const anvilAudio = await read('anvil-app/theme/assets/audio_core.js');
   const anvilBuffer = await read('anvil-app/theme/assets/buffer_manager.js');

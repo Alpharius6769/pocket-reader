@@ -183,14 +183,46 @@ ${body.trim()}
 const swRaw = await readFile(path.join(pub, 'sw.js'), 'utf8');
 const sw = rewriteServiceWorkerPaths(rewriteThemeUrls(swRaw, assets, seen));
 
-const loaderPath = path.join(pub, 'assets', 'js', 'narration_runtime_loader.js');
-const loaderRaw = await readFile(loaderPath, 'utf8');
-const loader = rewriteThemeUrls(loaderRaw, assets, seen);
+/**
+ * Several modules build asset URLs from a TEMPLATE, e.g.
+ *   `_/theme/ach_${iconId}.svg`
+ * The literal rewriter cannot see those (the filename is not known statically),
+ * and a missed one is a silent 404 at runtime -- a blank achievement icon or a
+ * dead Virtue sprite. These map the prefix by asset kind instead.
+ *
+ * Anvil compatibility is no longer required (no users remain and the app is
+ * being deleted), so these rewrite unconditionally.
+ */
+// Quote-agnostic (these appear inside both template literals and quoted HTML
+// attributes) and ordered longest-first, so the absolute "/_/theme/" form is
+// consumed before the relative "_/theme/" form and cannot leave a double slash.
+const DYNAMIC_PREFIX_REWRITES = [
+  ['/_/theme/ach_${', '/assets/icons/ach_${'],
+  ['_/theme/ach_${', '/assets/icons/ach_${'],
+  ['/_/theme/${', '/assets/img/${'],
+  ['_/theme/${', '/assets/img/${'],
+];
+
+function rewriteJsModule(text, assets, seen) {
+  let out = rewriteThemeUrls(text, assets, seen);
+  for (const [from, to] of DYNAMIC_PREFIX_REWRITES) out = out.split(from).join(to);
+  return out;
+}
+
+// Every module, not just the loader: audio_core alone builds the TTS worker
+// URL, the AudioWorklet URL and the MediaSession artwork URLs from Anvil paths.
+const jsDir = path.join(pub, 'assets', 'js');
+const jsWrites = [];
+for (const name of (await readdir(jsDir)).filter((f) => f.endsWith('.js'))) {
+  const file = path.join(jsDir, name);
+  const raw = await readFile(file, 'utf8');
+  jsWrites.push([file, rewriteJsModule(raw, assets, seen), raw]);
+}
 
 const writes = [
   [path.join(pub, 'index.html'), documentHtml, indexRaw],
   [path.join(pub, 'sw.js'), sw, swRaw],
-  [loaderPath, loader, loaderRaw],
+  ...jsWrites,
 ];
 
 const changed = writes.filter(([, next, prev]) => next !== prev).map(([f]) => path.relative(root, f));

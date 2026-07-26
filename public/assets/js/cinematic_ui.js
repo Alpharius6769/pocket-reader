@@ -1,4 +1,4 @@
-const ICON_URL = '/_/theme/lucide-sprite.svg';
+const ICON_URL = '/assets/icons/lucide-sprite.svg';
 const ICON_SPRITE_ID = 'pocket-reader-icon-sprite';
 
 async function installInlineIconSprite() {
@@ -388,7 +388,7 @@ function installHomeStage() {
   stage.className = 'home-virtue-stage';
   stage.innerHTML = `
     <div class="home-virtue-wrapper">
-      <img src="/_/theme/virtue_happy_holding_bubble.webp" alt="Virtue">
+      <img src="/assets/img/virtue_happy_holding_bubble.webp" alt="Virtue">
       <span class="home-virtue-bubble-text">Welcome!</span>
     </div>
   `;

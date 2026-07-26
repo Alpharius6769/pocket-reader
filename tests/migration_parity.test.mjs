@@ -131,21 +131,30 @@ test('the PWA manifest is valid and self-hosted', async () => {
     'a maskable icon is needed for a clean Android home-screen shape');
 });
 
-// The canonical frontend now lives in public/. anvil-app keeps a flat mirror
-// until Anvil is decommissioned; these are the files whose drift would ship
-// broken narration, so they are checked explicitly.
-test('anvil-app mirror still matches the canonical public/ sources', {
-  skip: anvilPresent ? false : 'anvil-app checkout not present (bare gitlink)',
-}, async () => {
-  const sources = {
-    'audio_core.js': 'public/assets/js/audio_core.js',
-    'buffer_manager.js': 'public/assets/js/buffer_manager.js',
-    'pocket_worker.js': 'public/assets/js/pocket_worker.js',
-    'narration_runtime_loader.js': 'public/assets/js/narration_runtime_loader.js',
-  };
-  for (const [name, canonical] of Object.entries(sources)) {
-    const source = norm(await read(canonical));
-    const mirror = norm(await read(`anvil-app/theme/assets/${name}`));
-    assert.equal(mirror, source, `${name} mirror drifted from ${canonical}`);
+// The anvil-app mirror is no longer asserted. Confirmed 2026-07-26 that Anvil
+// has no users and no accounts worth preserving and is being deleted, so the
+// frontend modules now target Cloudflare Pages unconditionally (the TTS worker,
+// AudioWorklet, sprite and icon URLs all moved to /assets/**). Anvil can no
+// longer run them, and pretending otherwise would mean maintaining two asset
+// layouts for a host that is going away.
+//
+// What replaces it: the guard below asserts the modules carry NO Anvil asset
+// paths, which is the property that actually matters now.
+test('no module still builds an Anvil asset URL', async () => {
+  const modules = [
+    'audio_core.js', 'buffer_manager.js', 'pocket_worker.js', 'cinematic_ui.js',
+    'device_setup.js', 'virtue_controller.js', 'experience_coordinator.js',
+    'library_manager.js', 'narration_runtime_loader.js',
+  ];
+  for (const name of modules) {
+    const source = await read(`public/assets/js/${name}`);
+    const offenders = source
+      .split('\n')
+      // The base64url decoder contains a /_/g regex literal, not a path.
+      .filter((line) => !line.includes('replace(/_/g'))
+      .filter((line) => line.includes('_/theme/'))
+      .map((line) => line.trim().slice(0, 100));
+    assert.deepEqual(offenders, [],
+      `${name} still points at Anvil's asset layout, which 404s on Pages`);
   }
 });

@@ -1133,7 +1133,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // can resolve under an Anvil shell subpath.
-        const workerScript = '/_/theme/pocket_worker.js?v=pocket-worker-v43';
+        const workerScript = '/assets/js/pocket_worker.js?v=pocket-worker-v43';
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -1551,8 +1551,8 @@ function _updateMediaSession(playing) {
       artist:  story.author || 'Unknown author',
       album:   story.title  || 'Pocket Reader',
       artwork: [
-        { src: new URL('/_/theme/reader%20512.png', window.location.origin).href, sizes: '512x512', type: 'image/png' },
-        { src: new URL('/_/theme/reader%20192.png', window.location.origin).href, sizes: '192x192', type: 'image/png' },
+        { src: new URL('/assets/img/reader%20512.png', window.location.origin).href, sizes: '512x512', type: 'image/png' },
+        { src: new URL('/assets/img/reader%20192.png', window.location.origin).href, sizes: '192x192', type: 'image/png' },
       ]
     });
     navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
@@ -2819,7 +2819,7 @@ async function _createPocketPcmStream(onEnded) {
   if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (!_audioCtx.audioWorklet) throw new Error('AudioWorklet is unavailable.');
   if (!_pocketWorkletModulePromise) {
-    _pocketWorkletModulePromise = _audioCtx.audioWorklet.addModule('/_/theme/pocket_pcm_worklet.js?v=pcm-v1');
+    _pocketWorkletModulePromise = _audioCtx.audioWorklet.addModule('/assets/js/pocket_pcm_worklet.js?v=pcm-v1');
   }
   await _pocketWorkletModulePromise;
   if (_audioCtx.state === 'suspended') await _audioCtx.resume();

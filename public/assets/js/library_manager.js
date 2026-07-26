@@ -1960,7 +1960,7 @@ export function renderAchievements() {
       progressHtml = `<div style="margin-top:12px;display:flex;align-items:center;gap:12px;"><div style="flex-grow:1;height:6px;background:var(--input-bg);border-radius:3px;overflow:hidden;"><div style="width:${pct}%;height:100%;background:${tierColor};transition:width 0.3s ease;"></div></div><span style="font-size:0.8rem;color:var(--text-muted);min-width:60px;text-align:right;">${currentVal.toLocaleString()}/${targetVal.toLocaleString()}</span></div>`;
     }
 
-    const svgDataUri = window._ACH_ICONS[ach.id] || `_/theme/ach_${ach.id}.svg`;
+    const svgDataUri = window._ACH_ICONS[ach.id] || `/assets/icons/ach_${ach.id}.svg`;
     const iconHtml = `<div style="width:28px;height:28px;background-color:${iconColor};-webkit-mask:url('${svgDataUri}') center/contain no-repeat;mask:url('${svgDataUri}') center/contain no-repeat;"></div>`;
 
     html += `<div class="${cardClass}" style="flex-direction:row;align-items:center;gap:20px;padding:20px;"><div style="width:50px;height:50px;border-radius:50%;background:var(--input-bg);display:flex;align-items:center;justify-content:center;border:2px solid ${tierColor};flex-shrink:0;">${iconHtml}</div><div style="flex-grow:1;min-width:0;"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><h4 style="margin:0;font-size:1.1rem;">${ach.title}</h4>${tierLabel ? `<span style="font-size:0.75rem;font-weight:bold;background:${tierColor};padding:2px 8px;border-radius:10px;color:#131a26;">${tierLabel}</span>` : ''}</div><p style="margin:0;color:var(--text-muted);font-size:0.9rem;">${ach.desc}</p>${progressHtml}</div></div>`;

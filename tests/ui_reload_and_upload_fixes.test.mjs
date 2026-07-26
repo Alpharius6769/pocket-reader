@@ -75,7 +75,10 @@ test('audio-cache clear is wrapped once with working feedback for both callers',
 });
 
 test('anvil-app assets mirror the upload/UI audit fixes', {
-  skip: anvilPresent ? false : 'anvil-app checkout not present (bare gitlink)',
+  // Retired: Anvil has no users and is being deleted, and the modules now
+  // target Pages asset paths that Anvil cannot serve. See
+  // tests/migration_parity.test.mjs for the guard that replaced this.
+  skip: 'Anvil mirror retired -- modules target Cloudflare Pages',
 }, async () => {
   // Canonical source now lives under public/; anvil-app keeps a flat mirror
   // until Anvil is decommissioned (MIGRATION_PLAN.md Phase 4).
