@@ -74,6 +74,7 @@ var CORE_ASSETS = [
     '/assets/js/virtue_controller.js?v=virtue-v6',
     '/assets/js/engine_utils.js',
     '/assets/js/ui_controller.js?v=ui-v83',
+    '/assets/js/data_transfer.js?v=transfer-v1',
     '/assets/js/device_setup.js?v=device-setup-v6',
     '/assets/js/device_benchmark_worker.js?v=device-bench-v1',
     '/assets/js/settings_manager.js?v=settings-v43',

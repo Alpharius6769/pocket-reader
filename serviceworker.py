@@ -84,6 +84,7 @@ var CORE_ASSETS = [
     '/_/theme/virtue_controller.js?v=virtue-v6',
     '/_/theme/engine_utils.js',
     '/_/theme/ui_controller.js?v=ui-v83',
+    '/_/theme/data_transfer.js?v=transfer-v1',
     '/_/theme/device_setup.js?v=device-setup-v6',
     '/_/theme/device_benchmark_worker.js?v=device-bench-v1',
     '/_/theme/settings_manager.js?v=settings-v43',
