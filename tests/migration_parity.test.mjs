@@ -36,17 +36,19 @@ const precachedAssets = (source) =>
       .map((m) => decodeURIComponent(m[1])),
   );
 
-test('both service workers precache the same asset set', async () => {
-  const [py, sw] = await Promise.all([read('serviceworker.py'), read('public/sw.js')]);
-  const anvil = precachedAssets(extractJsFromEndpoint(py));
-  const stat = precachedAssets(sw);
-  const missing = [...anvil].filter((f) => !stat.has(f));
-  const extra = [...stat].filter((f) => !anvil.has(f));
-  assert.deepEqual(
-    { missing, extra },
-    { missing: [], extra: [] },
-    'the Anvil and Pages service workers cache different assets',
+// Cross-worker parity is retired: the Anvil worker is frozen and superseded, so
+// the Pages worker legitimately caches modules Anvil never had. What still
+// matters is that the Pages worker precaches everything the shell loads --
+// otherwise the offline shell boots and then fails on a missing module.
+test('the service worker precaches every module the shell loads', async () => {
+  const [html, sw] = await Promise.all([read('public/index.html'), read('public/sw.js')]);
+  const cached = precachedAssets(sw);
+  const loaded = new Set(
+    [...html.matchAll(/(?:src|href)=['"]\/assets\/js\/([^'"?]+)/g)].map((m) => decodeURIComponent(m[1])),
   );
+  const missing = [...loaded].filter((f) => !cached.has(f));
+  assert.deepEqual(missing, [],
+    'these modules are loaded by index.html but never precached, so offline boot would fail on them');
 });
 
 test('the static worker carries no Anvil-only paths', async () => {
