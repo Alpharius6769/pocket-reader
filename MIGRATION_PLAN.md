@@ -322,7 +322,34 @@ Worker proxies `/api/*` with an HF read token held as a Worker secret. Sequenced
 after Phase 3 is stable — it changes the request path for every API call and
 must not be in flight during the frontend move.
 
-#### CORS trap — `ALLOWED_ORIGINS` lives in THREE places
+#### Finding: HF's edge overrides the backend's CORS allow-list
+
+Verified 2026-07-26. The Space returns `Access-Control-Allow-Origin: <echo of
+the request Origin>` with `Allow-Credentials: true` and `Expose-Headers: *` for
+**any** origin, including `https://evil.example.com` — regardless of what
+`ALLOWED_ORIGINS` says. `/api/health` correctly reports the configured
+allow-list, and `backend/app.py` has exactly one, correctly configured
+`CORSMiddleware`; Starlette would neither echo a non-matching origin nor emit
+`Expose-Headers: *`. The same echo happens on `huggingface.co/api/...`, a
+platform endpoint unrelated to this app.
+
+**Conclusion: this is Hugging Face platform behaviour, not an application bug.**
+The backend's CORS allow-list is not enforced at the edge for `*.hf.space`.
+
+Consequences:
+- The Pages frontend will reach the backend **whether or not** the Space
+  variable is updated. Set it anyway: it is what `/api/health` reports, it is
+  the behaviour if the app is ever hosted anywhere else, and defence in depth
+  costs nothing.
+- Any origin can call the API from a browser today. It is unauthenticated by
+  design (Anvil owns auth) and the admin routes are gated by
+  `ADMIN_PUSH_SECRET`, so the practical exposure is abuse and quota rather than
+  data theft — but it is not something the app can fix from inside the Space.
+- **This strengthens the case for Option B** (private Space behind the
+  Cloudflare Worker): routing through infrastructure the maintainer controls is
+  the only way to get CORS actually enforced.
+
+#### CORS trap — `ALLOWED_ORIGINS` lives in FOUR places
 
 All three currently name only Anvil. Miss one and the Pages frontend is
 CORS-blocked with no obvious culprit. Add `https://pocket-reader-f2y.pages.dev`
@@ -333,8 +360,13 @@ to every one before the cutover:
    `https://hot-wiry-raven.anvil.app,https://vu5ls67qwlzkeklw.anvil.app` as the
    fallback used whenever the env var is empty. Easy to miss because the Space
    variable normally masks it.
-3. **`worker/wrangler.toml`** — `[vars] ALLOWED_ORIGINS`, currently the single
-   Anvil origin. Requires a `wrangler deploy` to take effect.
+3. **`worker/wrangler.toml`** — `[vars] ALLOWED_ORIGINS`. Requires a
+   `wrangler deploy` to take effect. **Done 2026-07-26** (version `92a76040`);
+   verified Pages + Anvil origins allowed, unknown origin blocked.
+4. **`worker/cloudflare_worker.js:47-50`** — `resolveAllowedOrigin()` also
+   **hardcodes** the two `.anvil.app` origins as defaults, additive to the
+   variable above. Missed in the original count; this is why the Worker
+   accepted Anvil origins without them appearing in `wrangler.toml`.
 
 Keep the Anvil origins in all three during Phase 3 so both frontends work
 simultaneously. **Strip them in Phase 5**, when the Anvil app is deleted
