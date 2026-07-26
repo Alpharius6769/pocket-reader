@@ -1,6 +1,9 @@
 # Pocket Reader — Anvil Decommission & GitHub Migration Plan
 
-Created: 2026-07-26. Status: **Phase 0 — not yet started.**
+Created: 2026-07-26. Status: **Phases 0–2 complete. Phase 3 next.**
+
+Live at `github.com/Alpharius6769/pocket-reader` (private). CI green; the
+`backend/` → Hugging Face deploy is verified end to end.
 
 Authoritative plan for moving Pocket Reader off Anvil Works onto a private
 GitHub repo + Cloudflare Pages, with Supabase owning auth and profile sync.
@@ -116,16 +119,23 @@ Each phase ends in a working, shippable state. Anvil stays live until Phase 4.
       **All commit SHAs changed** — references in `AGENT_HANDOFF_MASTER.md` are
       now stale (e.g. `14c1943` → `ff91ee9`).
 - [x] `git filter-repo` and `wrangler` 4.114.0 installed
-- [ ] `gh auth login` — **still not authenticated.** The device flow was
-      interrupted: `AppData\Local\GitHub CLI\` holds only `device-id` and no
-      `hosts.yml`, so the browser authorised but the CLI never polled for and
-      stored the token. Re-run and leave the terminal open until it prints
-      `✓ Logged in as ...`.
-- [ ] Create private GitHub repo `pocket-reader` (blocked on gh auth)
-- [x] Supabase project created — `https://dctjxeqjtctyvvrdlcxo.supabase.co`
-      (anon public key still needed; goes into frontend config at Phase 4)
-- [x] Cloudflare Pages project named `pocket-reader` → permanent origin
-      **`pocket-reader.pages.dev`**
+- [x] `gh auth login` — authenticated as **Alpharius6769** (scopes: `repo`,
+      `workflow`, `read:org`, `gist`). The first attempt silently half-completed:
+      the browser authorised but the CLI was closed before it polled for the
+      token, leaving `AppData\Local\GitHub CLI\` holding only `device-id` and no
+      `hosts.yml`. **Always verify with `gh api user --jq .login`.**
+- [x] Private GitHub repo created and pushed:
+      `github.com/Alpharius6769/pocket-reader`
+- [x] Supabase project created — key verified, see the Supabase section below
+- [x] `wrangler login` — OAuth, account `5664c240e6960492187406a30f6a5ab3`
+- [x] **Cloudflare Pages project `pocket-reader` created 2026-07-26.**
+      Note the assigned origin is **`pocket-reader-f2y.pages.dev`**, *not*
+      `pocket-reader.pages.dev` — `pages.dev` subdomains are globally unique and
+      the plain name was taken, so Cloudflare appended a suffix. This is the
+      permanent origin: it is what every `ALLOWED_ORIGINS` entry must name and
+      what user IndexedDB will bind to.
+      (Creation failed once with a Cloudflare-side HTTP 500 / `code: 8000000`;
+      a plain retry succeeded. Not a permissions issue — retry before debugging.)
 
 #### BLOCKER: repository size
 
@@ -307,7 +317,7 @@ must not be in flight during the frontend move.
 #### CORS trap — `ALLOWED_ORIGINS` lives in THREE places
 
 All three currently name only Anvil. Miss one and the Pages frontend is
-CORS-blocked with no obvious culprit. Add `https://pocket-reader.pages.dev`
+CORS-blocked with no obvious culprit. Add `https://pocket-reader-f2y.pages.dev`
 to every one before the cutover:
 
 1. **HF Space variable** `ALLOWED_ORIGINS` (Space Settings → Variables).
@@ -398,11 +408,11 @@ before applying migrations to `main`.
 ## Known migration costs
 
 **IndexedDB is origin-scoped.** Moving from `hot-wiry-raven.anvil.app` to
-`<project>.pages.dev` means every existing user loses locally cached stories and
+`pocket-reader-f2y.pages.dev` means every existing user loses locally cached stories and
 generated audio — potentially hundreds of MB of narration that took hours to
 synthesize. Mitigations:
 - Ship an **export/import path for cached audio + library** before Phase 3.
-- Treat `<project>.pages.dev` as permanent. A custom domain would be a second
+- Treat `pocket-reader-f2y.pages.dev` as permanent. A custom domain would be a second
   origin change (and costs money, so it's out of scope under the no-spend rule).
 
 **Forced password reset** for email/password accounts at Phase 4. Unavoidable —
