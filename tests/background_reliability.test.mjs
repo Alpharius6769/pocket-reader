@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('audio_core.js plays silent audio keep-alive during active narration', async () => {
-  const audio = await read('audio_core.js');
+  const audio = await read('public/assets/js/audio_core.js');
   // startBgKeepAlive must invoke audio.play() on the silent loop element
   assert.match(audio, /function _ensureBgKeepAlive\(\)/);
   assert.match(audio, /export function startBgKeepAlive\(\)/);
@@ -14,30 +14,30 @@ test('audio_core.js plays silent audio keep-alive during active narration', asyn
 });
 
 test('stopBgKeepAlive respects active background caching before pausing keep-alive', async () => {
-  const audio = await read('audio_core.js');
+  const audio = await read('public/assets/js/audio_core.js');
   assert.match(audio, /const isCachingActive = Boolean\(window\.BufferManager\?\.isActive && !window\.BufferManager\?\.paused\);/);
   assert.match(audio, /if \(_bgKeepAlive && !_bgKeepAlive\.paused && !window\.isPlaying && !isCachingActive\)/);
 });
 
 test('_preferDirectMobileMediaPlayback returns true for OS background entitlement', async () => {
-  const audio = await read('audio_core.js');
+  const audio = await read('public/assets/js/audio_core.js');
   assert.match(audio, /function _preferDirectMobileMediaPlayback\(\)[\s\S]*?return true;/);
 });
 
 test('visibilitychange in audio_core.js triggers keep-alive on hidden state', async () => {
-  const audio = await read('audio_core.js');
+  const audio = await read('public/assets/js/audio_core.js');
   assert.match(audio, /else if \(document\.visibilityState === 'hidden'\)[\s\S]*?if \(window\.isPlaying \|\| isCachingActive\)[\s\S]*?startBgKeepAlive\(\)/);
 });
 
 test('buffer_manager.js triggers background keep-alive when hidden during active caching', async () => {
-  const buffer = await read('buffer_manager.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
   assert.match(buffer, /document\.addEventListener\('visibilitychange', \(\) => \{\s*const isCachingActive = BufferManager\.isActive && !BufferManager\.paused;/);
   assert.match(buffer, /else if \(document\.visibilityState === 'hidden'\)[\s\S]*?if \(typeof window\.startBgKeepAlive === 'function'\)/);
   assert.match(buffer, /if \(typeof document !== 'undefined' && document\.hidden && typeof window\.startBgKeepAlive === 'function'\) \{\s*window\.startBgKeepAlive\(\);/);
 });
 
 test('cache media keep-alive starts from the initiating tap and stops with the job', async () => {
-  const buffer = await read('buffer_manager.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
   const startCaching = buffer.match(/window\.startCaching = async function[\s\S]*?\n};/)?.[0] || '';
   assert.match(startCaching, /preparePocketMobileMediaSession\?\.\(\)/);
   assert.ok(startCaching.indexOf('preparePocketMobileMediaSession?.()') < startCaching.indexOf('await _ensureCachingStory'));
@@ -51,8 +51,8 @@ test('window._resetPocketEngineForBackend is reachable from buffer_manager.js', 
   // the `typeof window._resetPocketEngineForBackend === 'function'` guard is
   // always false and the recovery path silently never fires, letting background
   // caching stall on a bad worker instead of resetting it.
-  const audio = await read('audio_core.js');
-  const buffer = await read('buffer_manager.js');
+  const audio = await read('public/assets/js/audio_core.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
   assert.match(audio, /window\._resetPocketEngineForBackend = _resetPocketEngineForBackend;/);
   assert.match(buffer, /typeof window\._resetPocketEngineForBackend === 'function'/);
 });
@@ -64,7 +64,7 @@ test('TTS worker generation timeout is patient while backgrounded, fast while fo
   // background playback and caching mid-session. The budget must be re-read
   // live (document.hidden) on every poll, not fixed at call start, so a session
   // that backgrounds mid-generation still gets the patient budget.
-  const audio = await read('audio_core.js');
+  const audio = await read('public/assets/js/audio_core.js');
   assert.match(audio, /const FOREGROUND_TIMEOUT_MS = 60000;/);
   assert.match(audio, /const BACKGROUND_TIMEOUT_MS = 600000;/);
   assert.match(audio, /const currentTimeoutMs = \(\) => \(typeof document !== 'undefined' && document\.hidden\)\s*\n\s*\? BACKGROUND_TIMEOUT_MS : FOREGROUND_TIMEOUT_MS;/);
@@ -83,7 +83,7 @@ test('local-file-path intercept in loadStory does not swallow the app\'s own int
   // missing. Live-verified: every not-yet-cached curated story hit a blocking
   // alert() in the foreground and a silent no-op return in background/silent
   // calls (preventNavigate) — i.e. it never loaded, foreground OR background.
-  const api = await read('api_core.js');
+  const api = await read('public/assets/js/api_core.js');
   assert.match(api, /const _isAppInternalRef = \/\^\(\\\/api\\\/\|\\\/local-upload\\\/\|local:\\\/\\\/\)\/i\.test\(_trimmedUrl\);/);
   assert.match(api, /if \(!_isAppInternalRef && \(_trimmedUrl\.match/);
 });

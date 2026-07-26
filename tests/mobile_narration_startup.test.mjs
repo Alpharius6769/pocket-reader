@@ -5,8 +5,8 @@ import { readFile } from 'node:fs/promises';
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
 test('heavy narration modules remain deferred until narration is requested', async () => {
-  const html = await read('FrontEnd_html.html');
-  const loader = await read('narration_runtime_loader.js');
+  const html = await read('public/index.html');
+  const loader = await read('public/assets/js/narration_runtime_loader.js');
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
@@ -15,10 +15,10 @@ test('heavy narration modules remain deferred until narration is requested', asy
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
-  const html = await read('FrontEnd_html.html');
-  const loader = await read('narration_runtime_loader.js');
-  const audio = await read('audio_core.js');
-  const buffer = await read('buffer_manager.js');
+  const html = await read('public/index.html');
+  const loader = await read('public/assets/js/narration_runtime_loader.js');
+  const audio = await read('public/assets/js/audio_core.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
 
   assert.match(loader, /function preparePocketDeferredMediaGesture/);
   assert.match(loader, /MEDIA_GESTURE_ACTIONS/);
@@ -38,7 +38,7 @@ test('the deferred loader preserves the original mobile user activation', async 
 });
 
 test('playback requests an isolated narration session before model startup', async () => {
-  const audio = await read('audio_core.js');
+  const audio = await read('public/assets/js/audio_core.js');
   const toggle = audio.match(/export function togglePlayState\(\)[\s\S]*?\n}\nwindow\.togglePlayState/)?.[0] || '';
 
   assert.match(toggle, /preparePocketMobileMediaSession\(\)/);
@@ -50,7 +50,7 @@ test('playback requests an isolated narration session before model startup', asy
 });
 
 test('post-isolation mobile resume requires a fresh user gesture', async () => {
-  const buffer = await read('buffer_manager.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
   const resume = buffer.match(/async function _resumeFastNarrationCache\(\)[\s\S]*?\n}\n\n\/\/ /)?.[0] || '';
 
   assert.match(buffer, /action:\s*action\s*\|\|\s*'cache'/);
@@ -68,7 +68,7 @@ test('post-isolation mobile resume requires a fresh user gesture', async () => {
 });
 
 test('first requested paragraph supplies calibration telemetry without a throwaway synthesis', async () => {
-  const audio = await read('audio_core.js');
+  const audio = await read('public/assets/js/audio_core.js');
 
   assert.doesNotMatch(audio, /Pocket Reader is ready\./);
   assert.doesNotMatch(audio, /await _ensurePocketTtsCalibration\(\)/);
@@ -77,8 +77,8 @@ test('first requested paragraph supplies calibration telemetry without a throwaw
 });
 
 test('mobile caching unlocks playback quickly and starts keep-alive from the tap', async () => {
-  const buffer = await read('buffer_manager.js');
-  const audio = await read('audio_core.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  const audio = await read('public/assets/js/audio_core.js');
 
   assert.match(buffer, /function _minimumPlaybackReadyCount[\s\S]*?mobile\s*\?\s*3\s*:\s*30/);
   assert.match(audio, /getPocketPlaybackReadyCount\?\.\(total\)/);
@@ -93,7 +93,7 @@ test('mobile caching unlocks playback quickly and starts keep-alive from the tap
 });
 
 test('periodic worker recycle is serialized and never begins during active synthesis', async () => {
-  const audio = await read('audio_core.js');
+  const audio = await read('public/assets/js/audio_core.js');
 
   assert.match(audio, /let _pocketRecyclePromise = null/);
   assert.match(audio, /async function _maybeRecyclePocketEngine/);
@@ -102,7 +102,7 @@ test('periodic worker recycle is serialized and never begins during active synth
 });
 
 test('quality recovery never resets the shared engine while another synthesis is active', async () => {
-  const audio = await read('audio_core.js');
+  const audio = await read('public/assets/js/audio_core.js');
   const generate = audio.match(/window\.generateChunk = async function[\s\S]*?\n};/)?.[0] || '';
 
   assert.match(generate, /const canResetSharedEngine = \(\) => \(window\._pocketActiveSynthesis \|\| 0\) <= 1/);
@@ -111,7 +111,7 @@ test('quality recovery never resets the shared engine while another synthesis is
 });
 
 test('every pronunciation consumer uses the current ruleset URL', async () => {
-  for (const file of ['audio_core.js', 'settings_manager.js', 'library_manager.js', 'pocket_worker.js']) {
+  for (const file of ['public/assets/js/audio_core.js', 'public/assets/js/settings_manager.js', 'public/assets/js/library_manager.js', 'public/assets/js/pocket_worker.js']) {
     const source = await read(file);
     assert.doesNotMatch(source, /tts_pronunciation_core\.js\?v=pron-v7/, `${file} still imports pron-v7`);
     assert.match(source, /tts_pronunciation_core\.js\?v=pron-v9/, `${file} must import pron-v9`);

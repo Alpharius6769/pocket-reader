@@ -227,7 +227,7 @@ async function runThreadCount(browser, browserCdp, threads) {
         await route.fulfill({
           status: 200,
           headers: { ...isolatedHeaders, 'Content-Type': 'text/javascript; charset=utf-8' },
-          body: readFileSync(resolve(options.assetRoot, 'pocket_worker.js')),
+          body: readFileSync(resolve(options.assetRoot, 'public/assets/js/pocket_worker.js')),
         });
         return;
       }
@@ -486,7 +486,7 @@ try {
     mimiProvider: options.mimiProvider,
     syncGroupBlocks: options.syncGroupBlocks,
     workerCount: options.workerCount,
-    workerSha256: createHash('sha256').update(readFileSync(resolve(options.assetRoot, 'pocket_worker.js'))).digest('hex'),
+    workerSha256: createHash('sha256').update(readFileSync(resolve(options.assetRoot, 'public/assets/js/pocket_worker.js'))).digest('hex'),
     results,
   };
   writeFileSync(options.output, `${JSON.stringify(report, null, 2)}\n`);

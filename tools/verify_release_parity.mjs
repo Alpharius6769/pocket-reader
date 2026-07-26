@@ -10,11 +10,11 @@ const read = (file) => normalize(readFileSync(file, 'utf8'));
 const failures = [];
 
 const assetFiles = [
-  'api_core.js', 'audio_core.js', 'buffer_manager.js', 'device_setup.js',
-  'diagnostics.js', 'library_manager.js', 'pocket_backend_policy.js',
-  'pocket_performance_policy.js', 'pocket_worker.js', 'settings_manager.js',
-  'tts_pronunciation_core.js', 'ui_controller.js', 'virtue_controller.js',
-  'narration_runtime_loader.js', 'theme.css', 'standard-page.html',
+  'public/assets/js/api_core.js', 'public/assets/js/audio_core.js', 'public/assets/js/buffer_manager.js', 'public/assets/js/device_setup.js',
+  'public/assets/js/diagnostics.js', 'public/assets/js/library_manager.js', 'public/assets/js/pocket_backend_policy.js',
+  'public/assets/js/pocket_performance_policy.js', 'public/assets/js/pocket_worker.js', 'public/assets/js/settings_manager.js',
+  'public/assets/js/tts_pronunciation_core.js', 'public/assets/js/ui_controller.js', 'public/assets/js/virtue_controller.js',
+  'public/assets/js/narration_runtime_loader.js', 'public/assets/css/theme.css', 'public/standard-page.html',
 ];
 for (const name of assetFiles) {
   const source = path.join(root, name);
@@ -25,7 +25,7 @@ for (const name of assetFiles) {
 }
 
 for (const [sourceName, targetName] of [
-  ['FrontEnd_html.html', path.join('client_code', 'FrontEnd', 'form_template.html')],
+  ['public/index.html', path.join('client_code', 'FrontEnd', 'form_template.html')],
   ['FrontEnd_code.py', path.join('client_code', 'FrontEnd', '__init__.py')],
   ['serviceworker.py', path.join('server_code', 'serviceworker.py')],
 ]) {

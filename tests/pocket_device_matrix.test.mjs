@@ -8,7 +8,7 @@ import {
   evaluateIphoneWebGpuEligibility,
   isMobileWebGpuOptimisticCandidate,
   resolveWasmReferenceRtf,
-} from '../pocket_backend_policy.js';
+} from '../public/assets/js/pocket_backend_policy.js';
 
 // User agents representative of the target device spectrum. iOS clamps
 // hardwareConcurrency to 4; Android reports the real logical core count.
@@ -87,7 +87,7 @@ test('device spectrum WebGPU policy: iOS unsupported, Android flagship candidate
 });
 
 test('device simulation helper stays aligned with policy RTF estimates', async () => {
-  const { estimateWasmRealTimeFactor } = await import('../pocket_backend_policy.js');
+  const { estimateWasmRealTimeFactor } = await import('../public/assets/js/pocket_backend_policy.js');
   const pixel = estimateWasmRealTimeFactor({
     userAgent: ANDROID_UA, crossOriginIsolated: true, hardwareConcurrency: 8, threads: 4,
   });

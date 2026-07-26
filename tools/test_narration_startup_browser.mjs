@@ -2,8 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { webkit } from '../tests/webkit-smoke/node_modules/playwright/index.mjs';
 
 const root = new URL('../', import.meta.url);
-const loaderSource = await readFile(new URL('narration_runtime_loader.js', root), 'utf8');
-const audioSource = await readFile(new URL('audio_core.js', root), 'utf8');
+const loaderSource = await readFile(new URL('public/assets/js/narration_runtime_loader.js', root), 'utf8');
+const audioSource = await readFile(new URL('public/assets/js/audio_core.js', root), 'utf8');
 const toggleSource = audioSource
   .match(/export function togglePlayState\(\) \{[\s\S]*?\n\}\nwindow\.togglePlayState/)?.[0]
   ?.replace('export function', 'function')

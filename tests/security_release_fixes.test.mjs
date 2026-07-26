@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (name) => readFile(path.join(root, name), 'utf8');
 
 test('library card mutations and playback use stable story references', async () => {
-  const source = await read('library_manager.js');
+  const source = await read('public/assets/js/library_manager.js');
   assert.match(source, /function findLibraryStoryByRef/);
   assert.match(source, /titleMatches\.length === 1 \? titleMatches\[0\] : null/);
   assert.doesNotMatch(source, /incomingKey \|\| s\.title === storyData\.title/);
@@ -17,7 +17,7 @@ test('library card mutations and playback use stable story references', async ()
 });
 
 test('cache status escapes story titles and audio keys use stable references', async () => {
-  const source = await read('buffer_manager.js');
+  const source = await read('public/assets/js/buffer_manager.js');
   assert.match(source, /function _escapeCacheStatus/);
   assert.match(source, /\$\{_escapeCacheStatus\(currentStory\)\}/);
   assert.match(source, /getAudioChunk\(task\.storyRef \|\| task\.storyTitle/);
@@ -25,7 +25,7 @@ test('cache status escapes story titles and audio keys use stable references', a
 });
 
 test('push writes and deletes require a server-issued ownership token', async () => {
-  const client = await read('settings_manager.js');
+  const client = await read('public/assets/js/settings_manager.js');
   const server = await read(path.join('Back end', 'app.py'));
   assert.match(client, /pocketReaderPushAuthToken/);
   assert.match(client, /crypto\.getRandomValues\(bytes\)/);
@@ -45,15 +45,15 @@ test('service-worker install failures reject and smoke targets the active revisi
 });
 
 test('permanent cache resolves and loads the selected library story', async () => {
-  const library = await read('library_manager.js');
-  const buffer = await read('buffer_manager.js');
+  const library = await read('public/assets/js/library_manager.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
   assert.match(library, /window\.startCaching\('Permanent', storyRef\)/);
   assert.match(buffer, /async function _ensureCachingStory\(storyRef\)/);
   assert.match(buffer, /window\.startCaching = async function\(mode, storyRef = null\)/);
 });
 
 test('Cloudflare fallback dialog does not interpolate URL into inline JavaScript', async () => {
-  const source = await read('api_core.js');
+  const source = await read('public/assets/js/api_core.js');
   assert.match(source, /id="cloudflare-open-story"/);
   assert.match(source, /addEventListener\('click'/);
   assert.doesNotMatch(source, /onclick="window\.open\('\$\{urlSafe\}/);
@@ -112,7 +112,7 @@ test('generic proxy is read-only, authenticated for non-browser callers, and str
 });
 
 test('dynamic runtime modules are checked against pinned SHA-256 digests', async () => {
-  const source = await read('pocket_worker.js');
+  const source = await read('public/assets/js/pocket_worker.js');
   assert.match(source, /PINNED_MODULE_SHA256/);
   assert.match(source, /async function importVerifiedModule/);
   assert.match(source, /crypto\.subtle\.digest\('SHA-256'/);

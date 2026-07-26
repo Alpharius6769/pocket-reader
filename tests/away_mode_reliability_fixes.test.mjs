@@ -7,7 +7,7 @@ const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 // Regression guards for the 2026-07-21 Away Mode / silent-caching audit fixes.
 
 test('Away Mode subpage escapes story titles (stored XSS)', async () => {
-  const buffer = await read('buffer_manager.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
   // Both the queue list and quick-add list must route the title through the
   // module's HTML escaper before interpolating into innerHTML. Scraped/EPUB
   // titles are attacker-influenced, so a raw `${title}` render is a stored XSS.
@@ -18,7 +18,7 @@ test('Away Mode subpage escapes story titles (stored XSS)', async () => {
 });
 
 test('fast-narration reload saves the real active view, once', async () => {
-  const buffer = await read('buffer_manager.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
   // showView marks the active view with `.active-view`; the old `.view.active`
   // selector matched nothing and always saved the home-view fallback, so the
   // post-reload restore yanked the user to Home.
@@ -30,7 +30,7 @@ test('fast-narration reload saves the real active view, once', async () => {
 });
 
 test('voice migration targets the real old default and uses a fresh flag', async () => {
-  const library = await read('library_manager.js');
+  const library = await read('public/assets/js/library_manager.js');
   // The previous default was donald_malone; the original migration compared
   // against 'rayne' (the new default) and migrated nobody while burning the v1
   // flag. Migrate the old default, gated by a NEW flag so already-run clients
@@ -41,7 +41,7 @@ test('voice migration targets the real old default and uses a fresh flag', async
 });
 
 test('silent (preventNavigate) loads never navigate, overlay, or alert', async () => {
-  const api = await read('api_core.js');
+  const api = await read('public/assets/js/api_core.js');
   // processUploadedFile honors a silent option for background caching paths.
   assert.match(api, /export async function processUploadedFile\(file, fichubMeta, options = \{\}\)/);
   assert.match(api, /const silent = options\.silent === true;/);
@@ -53,7 +53,7 @@ test('silent (preventNavigate) loads never navigate, overlay, or alert', async (
 });
 
 test('a silent load superseding a foreground one clears the orphaned overlay', async () => {
-  const api = await read('api_core.js');
+  const api = await read('public/assets/js/api_core.js');
   // When a background (silent) load aborts a foreground load, the new load shows
   // no overlay of its own, so the superseded load must clear the one it left up.
   assert.match(api, /_activeLoadAbort\._supersededBySilent = preventNavigate;/);

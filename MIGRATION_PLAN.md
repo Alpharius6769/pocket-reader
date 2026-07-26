@@ -101,14 +101,31 @@ Each phase ends in a working, shippable state. Anvil stays live until Phase 4.
 - [x] Swap LICENSE/NOTICE to proprietary; keep third-party attributions intact
       (done 2026-07-26, suite 145/145; local only, nothing pushed)
 - [x] Resolve Rayne provenance — cleared, maintainer-created AI voice
-- [ ] **Purge `vendor/` from git history — BLOCKS ALL PUSHES** (see below)
-- [ ] `gh auth login` (still not authenticated as of 2026-07-26; no
-      `hosts.yml` at either standard path, `gh api user` fails)
-- [ ] Create private GitHub repo `pocket-reader`
-- [ ] Create Cloudflare Pages project (free) — record the permanent
-      `<project>.pages.dev` origin
-- [ ] Create Supabase project (free) — record URL + anon key
-- [ ] Add the Rayne entry to `ATTRIBUTIONS.md`
+- [x] Add the Rayne entry to `ATTRIBUTIONS.md`
+- [x] **Purge oversized paths from git history — DONE 2026-07-26.**
+      `.git` 1,400.6 MB → **33.2 MB**; tracked 497.6 MB → **36.4 MB** (262
+      files). Two `git filter-repo` passes removed `vendor/`,
+      `personal voices/`, `pocket-flow-qdq-sweep/`, `pocket-flow-quant-sweep/`,
+      and `b2_temp/`. Largest blob in history is now 0.25 MB. Backup of the
+      original 1.4 GB `.git` at
+      `C:\Users\Chris\Documents\pocket-reader-git-backup-20260726`
+      (restore: delete the new `.git`, copy the backup back).
+      All 44 commits of real work preserved; the single pruned commit was
+      "Remove old build sweeps and upload temp files from git tracking", which
+      became empty once the files it deleted never existed. Suite 145/145 after.
+      **All commit SHAs changed** — references in `AGENT_HANDOFF_MASTER.md` are
+      now stale (e.g. `14c1943` → `ff91ee9`).
+- [x] `git filter-repo` and `wrangler` 4.114.0 installed
+- [ ] `gh auth login` — **still not authenticated.** The device flow was
+      interrupted: `AppData\Local\GitHub CLI\` holds only `device-id` and no
+      `hosts.yml`, so the browser authorised but the CLI never polled for and
+      stored the token. Re-run and leave the terminal open until it prints
+      `✓ Logged in as ...`.
+- [ ] Create private GitHub repo `pocket-reader` (blocked on gh auth)
+- [x] Supabase project created — `https://dctjxeqjtctyvvrdlcxo.supabase.co`
+      (anon public key still needed; goes into frontend config at Phase 4)
+- [x] Cloudflare Pages project named `pocket-reader` → permanent origin
+      **`pocket-reader.pages.dev`**
 
 #### BLOCKER: repository size
 

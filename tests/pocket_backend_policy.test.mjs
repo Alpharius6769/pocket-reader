@@ -38,7 +38,7 @@ import {
   writePocketDeviceSetup,
   readPocketDeviceBackendPreference,
   writePocketDeviceBackendPreference,
-} from '../pocket_backend_policy.js';
+} from '../public/assets/js/pocket_backend_policy.js';
 
 function memoryStorage() {
   const values = new Map();

@@ -10,7 +10,7 @@ const norm = (s) => s.replace(/\r\n/g, '\n');
 // re-upload, theme-aware mask, single decorated audio-cache clear).
 
 test('loadStory intercepts uploaded refs before the backend scrape', async () => {
-  const api = await read('api_core.js');
+  const api = await read('public/assets/js/api_core.js');
   // /local-upload/ and local:// refs have no network source; they must be caught
   // before the AO3/scrape dispatch and routed to the re-upload prompt, never
   // POSTed to /api/scrape (which 400s "Invalid URL format" on a non-http url).
@@ -18,27 +18,27 @@ test('loadStory intercepts uploaded refs before the backend scrape', async () =>
 });
 
 test('silent background fetch skips uploaded refs instead of scraping', async () => {
-  const api = await read('api_core.js');
+  const api = await read('public/assets/js/api_core.js');
   assert.match(api, /LOCAL_UPLOAD_NO_SOURCE/);
   assert.match(api, /\^\(\\\/local-upload\\\/\|local:\\\/\\\/\)\/i\.test\(url\)/);
 });
 
 test('upload dedup requires a real author for the title+author fallback', async () => {
-  const api = await read('api_core.js');
+  const api = await read('public/assets/js/api_core.js');
   // Guards against false-positive merges (two "Unknown"-authored, or same-title
   // works) that would adopt the wrong entry's identity and overwrite its chapters.
   assert.match(api, /_a && _a !== 'unknown'/);
 });
 
 test('upload dedup applies a corrected same-count re-upload', async () => {
-  const api = await read('api_core.js');
+  const api = await read('public/assets/js/api_core.js');
   // Same chapter count but changed text must take the new content, not silently
   // keep the stale stored chapters.
   assert.match(api, /_flatten\(newStory\.chapters\) !== _flatten\(_stored\)/);
 });
 
 test('loading overlay reveal is delayed and cancellable', async () => {
-  const ui = await read('ui_controller.js');
+  const ui = await read('public/assets/js/ui_controller.js');
   // Fast/cached operations must not flash the full-screen modal: show schedules a
   // ~300ms reveal; hide cancels a pending reveal.
   assert.match(ui, /_loadingOverlayTimer = setTimeout\(\(\) => \{/);
@@ -46,7 +46,7 @@ test('loading overlay reveal is delayed and cancellable', async () => {
 });
 
 test('fast-narration reload paints a self-removing, theme-aware anti-flash mask', async () => {
-  const page = await read('standard-page.html');
+  const page = await read('public/standard-page.html');
   assert.match(page, /pr-iso-mask/);
   // Gated on an actively-pending resume so a bare ?tts_fast=1 reload is untouched.
   assert.match(page, /pr_fast_narration_resume_v1/);
@@ -58,7 +58,7 @@ test('fast-narration reload paints a self-removing, theme-aware anti-flash mask'
 });
 
 test('audio-cache clear is wrapped once with working feedback for both callers', async () => {
-  const settings = await read('settings_manager.js');
+  const settings = await read('public/assets/js/settings_manager.js');
   // Both the Settings button and the reader storage panel call
   // window.clearAudioCache; the decorator adds feedback for interactive calls and
   // passes programmatic (skipConfirm) calls straight through, wrapped only once.
@@ -70,9 +70,17 @@ test('audio-cache clear is wrapped once with working feedback for both callers',
 });
 
 test('anvil-app assets mirror the upload/UI audit fixes', async () => {
-  for (const name of ['api_core.js', 'ui_controller.js', 'settings_manager.js', 'standard-page.html']) {
-    const root = norm(await read(name));
+  // Canonical source now lives under public/; anvil-app keeps a flat mirror
+  // until Anvil is decommissioned (MIGRATION_PLAN.md Phase 4).
+  const sources = {
+    'api_core.js': 'public/assets/js/api_core.js',
+    'ui_controller.js': 'public/assets/js/ui_controller.js',
+    'settings_manager.js': 'public/assets/js/settings_manager.js',
+    'standard-page.html': 'public/standard-page.html',
+  };
+  for (const [name, canonical] of Object.entries(sources)) {
+    const root = norm(await read(canonical));
     const mirror = norm(await read(`anvil-app/theme/assets/${name}`));
-    assert.equal(mirror, root, `${name} mirror drifted from root`);
+    assert.equal(mirror, root, `${name} mirror drifted from ${canonical}`);
   }
 });

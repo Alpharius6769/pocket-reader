@@ -5,7 +5,7 @@ import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   computePocketFrameBudget,
   shouldRetryPocketQuality,
-} from '../pocket_performance_policy.js';
+} from '../public/assets/js/pocket_performance_policy.js';
 
 test('performance policy is versioned', () => {
   assert.equal(POCKET_PERFORMANCE_POLICY_VERSION, 'perfv1');

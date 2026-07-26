@@ -6,7 +6,7 @@ const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
 test('startup avoids hidden diagnostics polling and eager library rendering', async () => {
   const frontend = await read('FrontEnd_code.py');
-  const library = await read('library_manager.js');
+  const library = await read('public/assets/js/library_manager.js');
   assert.doesNotMatch(frontend, /setInterval\(window\.refreshPerfPanel/);
   assert.doesNotMatch(frontend, /window\.renderLibrary\(\)/);
   assert.doesNotMatch(frontend, /window\.renderAchievements\(\)/);
@@ -15,10 +15,10 @@ test('startup avoids hidden diagnostics polling and eager library rendering', as
 });
 
 test('narration stays deferred while runtime and UI modules use canonical URLs', async () => {
-  const html = await read('FrontEnd_html.html');
-  const loader = await read('narration_runtime_loader.js');
+  const html = await read('public/index.html');
+  const loader = await read('public/assets/js/narration_runtime_loader.js');
   const serviceWorker = await read('serviceworker.py');
-  const standardPage = await read('standard-page.html');
+  const standardPage = await read('public/standard-page.html');
   const tagVersion = (source, module) =>
     source.match(new RegExp(`${module}\\.js\\?v=([a-z0-9-]+)`))?.[1];
   // Heavy narration modules must not be executable script tags in the form
@@ -54,10 +54,10 @@ test('service worker uses bounded navigation and lifetime-protected cache writes
 });
 
 test('onboarding and hidden controls are accessibility-isolated', async () => {
-  const html = await read('FrontEnd_html.html');
-  const setup = await read('device_setup.js');
-  const ui = await read('ui_controller.js');
-  const virtue = await read('virtue_controller.js');
+  const html = await read('public/index.html');
+  const setup = await read('public/assets/js/device_setup.js');
+  const ui = await read('public/assets/js/ui_controller.js');
+  const virtue = await read('public/assets/js/virtue_controller.js');
   assert.match(html, /id=&quot;first-time-setup-modal&quot;[^>]*role=&quot;dialog&quot;[^>]*aria-modal=&quot;true&quot;/);
   assert.match(setup, /activatePocketModal/);
   assert.match(setup, /deactivatePocketModal/);
@@ -66,7 +66,7 @@ test('onboarding and hidden controls are accessibility-isolated', async () => {
 });
 
 test('uploads use a size-aware deadline and always clear timers', async () => {
-  const source = await read('api_core.js');
+  const source = await read('public/assets/js/api_core.js');
   const upload = source.match(/export async function processUploadedFile[\s\S]*?\n}\r?\nwindow\.processUploadedFile/)?.[0] || '';
   assert.match(upload, /uploadTimeoutMs/);
   assert.match(upload, /Math\.min\(\s*240000/);

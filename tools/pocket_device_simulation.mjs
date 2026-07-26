@@ -1,7 +1,7 @@
 // Pocket TTS device optimization simulation.
 //
 // This harness runs a spectrum of target phones through the REAL backend policy
-// (`pocket_backend_policy.js`) to verify the selected backend and WASM thread
+// (`public/assets/js/pocket_backend_policy.js`) to verify the selected backend and WASM thread
 // count, then attaches a MODELED performance estimate for INT8 WASM (the mobile
 // default) and FP16 WebGPU (capability- and calibration-gated).
 //
@@ -20,7 +20,7 @@ import {
   isMobileWebGpuOptimisticCandidate,
   evaluateIphoneWebGpuEligibility,
   resolveWasmReferenceRtf,
-} from '../pocket_backend_policy.js';
+} from '../public/assets/js/pocket_backend_policy.js';
 
 // --- Model anchors -----------------------------------------------------------
 // Mimi codec frame rate -> audio seconds per generated frame.
