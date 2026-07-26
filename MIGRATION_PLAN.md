@@ -172,16 +172,31 @@ Note both nested checkouts are tracked as **bare gitlinks with no `.gitmodules`*
 submodule refs. Phase 1 must absorb or drop them before the first push.
 
 ### Phase 1 — Repo restructure (local, reversible)
-- [ ] Move files into the target layout; delete duplicate copies
-- [ ] Rewrite the 26 precached module URLs in `sw.js` from `/_/theme/<f>?v=`
-      to `/assets/js/<f>?v=` — plus `standard-page.html` modulepreloads,
-      `index.html` script tags, `narration_runtime_loader.js` imports, and the
-      test pins in `tests/pocket_acceleration.test.mjs`,
-      `tests/non_security_audit_fixes.test.mjs`,
-      `tools/smoke_pocket_worker_runtime.mjs`
-- [ ] Strip the Anvil form wrapper from `index.html`; the inline early-click
-      stubs in the first inline script must survive
-- [ ] Full suite green (15 files, `node --test tests/*.test.mjs`)
+- [x] **Frontend moved into `public/` — done 2026-07-26, commit `6c735af`.**
+      85 files relocated to `public/{index.html,standard-page.html,
+      assets/{js,css,fonts,img,icons}}`, all recorded by git as 100% renames so
+      history follows each file. Bundled OFL/ISC license texts moved next to
+      the assets they cover. 15 test/tool files updated (144 path replacements,
+      5 ESM imports, plus the anvil-app mirror check rewritten to map bare
+      names to canonical `public/` paths rather than concatenating a prefix).
+      Suite 145/145.
+- [ ] Move `Back end/` → `backend/` and extract `worker/cloudflare_worker.js`
+- [ ] Extract `public/sw.js` from `serviceworker.py` (it is an Anvil
+      `@http_endpoint` returning a JS string; the JS is ES5 and self-contained,
+      so extraction is mechanical)
+- [ ] Strip the Anvil form wrapper from `public/index.html`; the inline
+      early-click stubs in the first inline script must survive
+- [ ] Add `tools/sync_to_anvil.ps1` so `anvil-app/` stays deployable from the
+      new canonical `public/` tree while Anvil remains production
+
+**Deliberately NOT done in Phase 1:** rewriting the 26 precached module URLs
+from `/_/theme/<f>?v=` to `/assets/js/<f>?v=`. Anvil serves those paths and
+stays production until Phase 4, so rewriting them now breaks the live deploy.
+That rewrite is coupled to the Cloudflare Pages cutover in Phase 3 and must
+land together with `sw.js`, `standard-page.html` modulepreloads, `index.html`
+script tags, `narration_runtime_loader.js` imports, and the pins in
+`tests/pocket_acceleration.test.mjs`, `tests/non_security_audit_fixes.test.mjs`,
+and `tools/smoke_pocket_worker_runtime.mjs`.
 
 ### Phase 2 — Backend continuity
 - [ ] `backend/` becomes source of truth; HF Space becomes a push target
