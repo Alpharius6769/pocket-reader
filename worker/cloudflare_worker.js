@@ -46,6 +46,7 @@ function hostAllowed(hostname, env) {
 function resolveAllowedOrigin(request, env) {
   const defaults = [
     "https://pocket-reader-f2y.pages.dev",
+    "https://phase3-preview.pocket-reader-f2y.pages.dev",
   ];
   const extra = (env && env.ALLOWED_ORIGINS)
     ? env.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
@@ -53,6 +54,12 @@ function resolveAllowedOrigin(request, env) {
   const allowed = [...defaults, ...extra];
   const origin = request.headers.get("Origin") || "";
   if (allowed.includes(origin)) return origin;
+  try {
+    const parsed = new URL(origin);
+    if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) return origin;
+  } catch (_) {
+    // Ignore malformed origins and fall through to the default deny.
+  }
   return null;
 }
 

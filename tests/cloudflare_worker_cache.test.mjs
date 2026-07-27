@@ -86,6 +86,27 @@ test('generic proxy rejects unauthenticated non-browser callers', async () => {
   assert.equal(response.status, 403);
 });
 
+test('generic proxy accepts allowed localhost browser origins without a proxy key', async () => {
+  const originalFetch = globalThis.fetch;
+  let upstream;
+  globalThis.fetch = async (request) => {
+    upstream = request;
+    return new Response('ok');
+  };
+  try {
+    const target = 'https://archiveofourown.org/works/123';
+    const request = new Request(
+      'https://pocket-reader-proxy.example/?url=' + encodeURIComponent(target),
+      { headers: { Origin: 'http://localhost:3000' } },
+    );
+    const response = await worker.fetch(request, {}, { waitUntil() {} });
+    assert.equal(response.status, 200);
+    assert.equal(upstream.method, 'GET');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('generic proxy accepts the backend token, strips sensitive headers, and is read-only', async () => {
   const originalFetch = globalThis.fetch;
   let upstream;

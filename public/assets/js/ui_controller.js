@@ -1747,7 +1747,7 @@ window.triggerCloudLogin = async function() {
       window.userProfile.cloudEmail = email;
 
       // Pull cloud profile
-      if (typeof window.anvilSyncProfileV3 !== 'function' && typeof window.anvilLoadProfile === 'function') {
+      if (typeof window.anvilLoadProfile === 'function') {
         const cloudProfile = await window.anvilLoadProfile();
         if (cloudProfile) {
           console.log("[CloudSync] Loaded cloud profile during login:", cloudProfile);

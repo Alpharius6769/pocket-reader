@@ -48,6 +48,20 @@ test('the browser shell does not force a legacy Anvil direct-path frame escape',
     'public/assets/js/ui_controller.js still forces the legacy Anvil direct-path redirect');
 });
 
+test('login pulls the cloud profile from the logged-in account', async () => {
+  const ui = await read('public/assets/js/ui_controller.js');
+  assert.ok(ui.includes("if (typeof window.anvilLoadProfile === 'function')"),
+    'login should pull the cloud profile whenever loadProfile is available');
+  assert.ok(!ui.includes("typeof window.anvilSyncProfileV3 !== 'function'"),
+    'the dead gate on anvilSyncProfileV3 should not remain in the login flow');
+});
+
+test('Google sign-in preserves route and hash state on return', async () => {
+  const bridge = await read('public/assets/js/supabase_bridge.js');
+  assert.ok(bridge.includes('currentUrl.pathname + currentUrl.search + currentUrl.hash'),
+    'OAuth redirect should preserve the current search and hash state');
+});
+
 test('no module builds an Anvil asset URL', async () => {
   const modules = [
     'audio_core.js', 'buffer_manager.js', 'pocket_worker.js', 'cinematic_ui.js',

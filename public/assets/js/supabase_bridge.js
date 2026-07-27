@@ -265,7 +265,10 @@ function showLoginForm() {
       // Full-page redirect, not a popup: COOP is not applied to ordinary
       // navigations here, but a redirect avoids the popup-blocker and
       // isolation pitfalls entirely.
-      const redirect = encodeURIComponent(window.location.origin + window.location.pathname);
+      const currentUrl = new URL(window.location.href);
+      const redirect = encodeURIComponent(
+        currentUrl.origin + currentUrl.pathname + currentUrl.search + currentUrl.hash,
+      );
       window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirect}`;
     });
 
