@@ -20,6 +20,19 @@ Last reviewed: 2026-07-15.
 - License: SIL Open Font License 1.1
 - Use: local application-control typography.
 
+## Rayne (default voice)
+
+- Author: Chris (Alpharius67 / Fluffarius)
+- Origin: AI-generated voice created by the maintainer.
+- License: Project-owned. No third-party rights apply; free for the project to
+	use, including commercially.
+- Use: default Pocket TTS voice for all new profiles and the global voice
+	fallback.
+- Runtime asset names: `rayne`, with emotion suffixes such as `_neutral`.
+- Distribution note: source `.wav` reference and converted `.safetensors`
+	files are not stored in this source tree; they live with the other runtime
+	voice assets on B2 and are served through the Cloudflare Worker.
+
 ## Other Project Components
 
 Pocket TTS, Voice-Zero, ONNX Runtime Web, Motion, Anvil Works, Hugging Face,

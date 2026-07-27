@@ -600,9 +600,9 @@ Re-hosting changes none of that.
 ## Open questions — all resolved 2026-07-26
 
 1. **Rayne provenance — RESOLVED, no restriction.** Confirmed by the maintainer
-   as an AI-generated voice he created himself, free to use. It is a
-   documentation gap only. **TODO:** add a Rayne entry to `ATTRIBUTIONS.md`
-   (author: Chris, AI-generated, project-owned) so the default voice is
-   inventoried alongside the six Voice-Zero voices.
+      as an AI-generated voice he created himself, free to use. The documentation
+      gap has been closed by adding a Rayne entry to `ATTRIBUTIONS.md` (author:
+      Chris, AI-generated, project-owned) so the default voice is inventoried
+      alongside the six Voice-Zero voices.
 2. **HMOFA masterlist — RESOLVED.** Continued use post-move is covered.
 3. **Supabase 7-day pause — RESOLVED, acceptable.** No keep-alive ping needed.
