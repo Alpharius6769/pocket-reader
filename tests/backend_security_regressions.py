@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 import app
 import parsers_core
+import scrapers_dispatcher
 
 
 class BackendSecurityRegressionTests(unittest.TestCase):
@@ -34,6 +35,20 @@ class BackendSecurityRegressionTests(unittest.TestCase):
             "https://attacker.example/collect"))
         self.assertFalse(app._is_allowed_push_endpoint(
             "https://fcm.googleapis.com:444/fcm/send/abc"))
+
+    def test_detect_site_requires_real_hostnames(self):
+        self.assertEqual(
+            scrapers_dispatcher.detect_site("https://archiveofourown.org/works/123"),
+            "ao3",
+        )
+        self.assertEqual(
+            scrapers_dispatcher.detect_site("https://www.furaffinity.net/view/1"),
+            "furaffinity",
+        )
+        self.assertEqual(
+            scrapers_dispatcher.detect_site("https://attacker.example/?next=furaffinity.net"),
+            "generic",
+        )
 
     def test_zip_member_count_guard(self):
         old_limit = parsers_core.MAX_ZIP_MEMBERS

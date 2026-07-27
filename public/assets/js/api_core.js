@@ -129,16 +129,28 @@ export function rateLimitedFetch(category, fetchFn) {
 }
 window._rateLimitedFetch = rateLimitedFetch;
 
+function _normalizeHostname(url) {
+  try {
+    return new URL(url || '').hostname.toLowerCase().replace(/\.$/, '');
+  } catch (e) {
+    return '';
+  }
+}
+
+function _hostnameMatches(hostname, domain) {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
 export function cookiesForUrl(url) {
   let cks = {};
   try {
     const raw = sessionStorage.getItem('pocketReaderCookies');
     if (raw) cks = JSON.parse(raw);
   } catch (e) {}
-  const u = (url || '').toLowerCase();
+  const host = _normalizeHostname(url);
   const out = {};
-  if (u.includes('furaffinity.net') && cks.fa && (cks.fa.a || cks.fa.b)) out.fa = cks.fa;
-  if (u.includes('sofurry.com') && cks.sofurry && Object.keys(cks.sofurry).length) out.sofurry = cks.sofurry;
+  if (_hostnameMatches(host, 'furaffinity.net') && cks.fa && (cks.fa.a || cks.fa.b)) out.fa = cks.fa;
+  if (_hostnameMatches(host, 'sofurry.com') && cks.sofurry && Object.keys(cks.sofurry).length) out.sofurry = cks.sofurry;
   return Object.keys(out).length ? out : null;
 }
 window.cookiesForUrl = cookiesForUrl;

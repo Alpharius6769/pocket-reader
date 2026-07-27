@@ -1,4 +1,5 @@
 from typing import Optional
+from urllib.parse import urlparse
 from parsers_core import ScrapeResult
 
 # Site-specific imports
@@ -11,19 +12,29 @@ from scrapers_googledocs import scrape_googledocs
 from scrapers_generic import scrape_generic
 
 
+def _hostname_matches(hostname: str, domain: str) -> bool:
+    return hostname == domain or hostname.endswith("." + domain)
+
+
 def detect_site(url: str) -> str:
-    lower = url.lower()
-    if "archiveofourown.org" in lower or "ao3.org" in lower:
+    try:
+        parsed = urlparse(url or "")
+        host = (parsed.hostname or "").lower().rstrip(".")
+        path = parsed.path or ""
+    except Exception:
+        return "generic"
+
+    if _hostname_matches(host, "archiveofourown.org") or _hostname_matches(host, "ao3.org"):
         return "ao3"
-    if "royalroad.com" in lower:
+    if _hostname_matches(host, "royalroad.com"):
         return "royalroad"
-    if "wattpad.com" in lower:
+    if _hostname_matches(host, "wattpad.com"):
         return "wattpad"
-    if "furaffinity.net" in lower:
+    if _hostname_matches(host, "furaffinity.net"):
         return "furaffinity"
-    if "sofurry.com" in lower:
+    if _hostname_matches(host, "sofurry.com"):
         return "sofurry"
-    if "docs.google.com/document/" in lower:
+    if _hostname_matches(host, "docs.google.com") and path.startswith("/document/"):
         return "googledocs"
     return "generic"
 
