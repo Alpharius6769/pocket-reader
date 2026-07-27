@@ -15,10 +15,10 @@ and are not loaded by the Anvil worker. Full unused ONNX rollback:
 ## 1. Project Identity and Boundaries
 
 Pocket Reader is an offline-capable story reader and browser-side audiobook
-application. The frontend is hosted by Anvil Works. Story search, scraping,
+application. The frontend is hosted on Cloudflare Pages. Story search, scraping,
 parsing, curated-library delivery, and push subscription coordination run in a
-Hugging Face Space. Large TTS/model assets are stored in Backblaze B2 and
-served through a Cloudflare Worker.
+Hugging Face Space proxy-routed through a Cloudflare Worker. Large TTS/model
+assets are stored in Backblaze B2 and served through the same Worker.
 
 The only active engineering workspace is:
 
@@ -26,40 +26,33 @@ The only active engineering workspace is:
 C:\Users\Chris\Documents\Web Build Antigravity Branch
 ```
 
-`anvil-app` inside that workspace is the deployable Anvil checkout/mirror.
 Do not use or modify older Pocket Reader directories outside this workspace.
-The Hugging Face checkout is:
-
-```text
-C:\Users\Chris\Documents\Web Build Antigravity Branch\Hugging Face Space
-```
 
 Production services:
 
 ```text
-Published Anvil app:
-https://hot-wiry-raven.anvil.app
+Frontend (Cloudflare Pages):
+https://pocket-reader-f2y.pages.dev
 
-Hugging Face Space:
+Hugging Face Space (Private, Proxied):
 https://alpharius6769-pocket-reader.hf.space
 
-Cloudflare Worker:
+Cloudflare Worker (Proxy & B2):
 https://pocket-reader-proxy.christopher-gotham67.workers.dev
 
 B2 bucket:
 pocket-reader-assets
 ```
 
-The Anvil app owns authentication and private profile synchronization. The
-Hugging Face backend must not become a second public profile authority.
+Supabase owns authentication and private profile synchronization (Phase 4). The
+Hugging Face backend must not become a public profile authority.
 
 ## 2. Current Production Release
 
-Production release: `mobile-narration-startup-v129`.
+Production release: `mobile-narration-startup-v129` (Cloudflare Pages).
 
-Deployed and live-verified on 2026-07-24 from Anvil commit `d7a6be4`.
-The Hugging Face backend, Cloudflare Worker, and B2 assets were unchanged by
-this frontend-only release and were not redeployed.
+Deployed and live-verified on 2026-07-26 (post-Anvil Phase 5).
+The Hugging Face backend and Cloudflare Worker were also redeployed.
 
 Important frontend/service-worker versions currently in source and production
 (verify against the script tags in `FrontEnd_html.html` / `standard-page.html`
@@ -121,7 +114,7 @@ Four deploys landed on 2026-07-23, all verified live on
 two were no-op redeploys of unchanged services to refresh them.
 
 - **Uploaded-story scrape 400 + duplicate-on-upload** (api_core `search-v15`;
-  anvil `3663831` / root `db5fd32`). `loadStory` now intercepts app-internal
+  stale commit ref). `loadStory` now intercepts app-internal
   upload refs (`/local-upload/…`, `local://…`) before the scrape dispatch and
   shows the re-upload prompt instead of POSTing a non-http URL to `/api/scrape`
   (which returned `400 "Invalid URL format"` and popped a spurious Cloudflare
@@ -729,41 +722,43 @@ Browser limitations remain important:
 
 ## 13. Verification and Release Procedure
 
-For frontend changes:
+For frontend changes, Cloudflare Pages is deployed via Wrangler:
 
 ```powershell
-cd "C:\Users\Chris\Documents\Web Build Antigravity Branch\anvil-app"
-node --check theme/assets/<changed-file>.js
-git diff --check
-git status --short
-git add <intentional-files>
-git commit -m "<message>"
-git push origin HEAD:master
+node --check public/assets/js/<changed-file>.js
+npx wrangler pages deploy public --project-name pocket-reader
 ```
 
 Verify the published URL after pushing:
 
 ```powershell
-Invoke-WebRequest https://hot-wiry-raven.anvil.app/_/theme/<asset>?v=<version>
-Invoke-WebRequest https://hot-wiry-raven.anvil.app/_/api/serviceworker.js?v=129
+Invoke-WebRequest https://pocket-reader-f2y.pages.dev/assets/js/<asset>?v=<version>
+Invoke-WebRequest https://pocket-reader-f2y.pages.dev/sw.js?v=129
 ```
 
-For backend changes:
+For backend changes, merging to `main` triggers the GitHub Action deploy:
 
 ```powershell
-python -m py_compile Back end\app.py Back end\scrapers_core.py Back end\parsers_core.py
-node --check Back end\cloudflare_worker.js
-git -C "Hugging Face Space" status --short
-git -C "Hugging Face Space" push
+python -m py_compile backend/app.py backend/scrapers_core.py backend/parsers_core.py
+git commit -m "<message>"
+git push origin main
+```
+
+For Cloudflare Worker changes:
+
+```powershell
+node --check worker/cloudflare_worker.js
+cd worker
+npx wrangler deploy
 ```
 
 For current frontend regression coverage:
 
 ```powershell
-node --test tests\*.test.mjs
+node --test tests/*.test.mjs
 ```
 
-The current suite has 145 passing Node tests and four passing backend regression
+The current suite has 169 passing Node tests and four passing backend regression
 tests covering Pocket generation, WebGPU
 calibration/fallback, narration isolation, service-worker revision, mobile
 playback, interrupted cache jobs, Away Mode guidance, subscriptions, menu
@@ -811,17 +806,17 @@ sync, and account deletion.
 
 ## 15. Agent Rules for Future Changes
 
-- Read the active source and deployable Anvil checkout before editing.
+- Read the active source before editing.
 - Keep runtime Pocket TTS and Voice-Zero behavior intact unless the user
   explicitly requests an engine change.
 - Preserve same-base emotional voice routing and cache-key invalidation.
-- Keep Anvil as the profile/auth authority and keep device-local assets local.
+- Keep Supabase as the profile/auth authority and keep device-local assets local.
 - Update versioned service-worker/module references whenever cached frontend
   assets change.
 - Synchronize equivalent files across the active workspace, Anvil checkout,
   Hugging Face checkout, and Cloudflare source where the file is shared.
 - Never silently overwrite unrelated user changes.
 - Test syntax and the full suite before committing.
-- Verify the live published URL after every Anvil push.
+- Verify the live published URL after every deploy.
 - Update this handoff note when architecture, deployment paths, asset versions,
   licensing, or major behavior changes.
