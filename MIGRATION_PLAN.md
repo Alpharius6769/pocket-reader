@@ -419,13 +419,13 @@ Note the conversion is a **one-way door**: `public/index.html` can no longer be
 synced to Anvil. `tools/sync_to_anvil.ps1` now detects this, skips that one
 file, and says so — Anvil's `form_template.html` is frozen at its
 pre-Phase-3 state while JS/CSS/assets keep syncing.
-- [ ] Deploy `public/` to Cloudflare Pages
-- [ ] Point `PR_CONFIG.apiBase` (`api_core.js:2`) at HF as today — unchanged
-- [ ] Auth still calls Anvil during this phase via a CORS shim, **or** run the
+- [x] Deploy `public/` to Cloudflare Pages
+- [x] Point `PR_CONFIG.apiBase` (`api_core.js:2`) at HF as today — unchanged
+- [x] Auth still calls Anvil during this phase via a CORS shim, **or** run the
       Pages build unauthenticated for smoke-testing only
-- [ ] Verify on real devices: SW registration at the new scope, COOP/COEP,
+- [x] Verify on real devices: SW registration at the new scope, COOP/COEP,
       threaded WASM, narration, caching, offline shell
-- [ ] Keep Anvil live and untouched as rollback
+- [x] Keep Anvil live and untouched as rollback
 
 #### Supabase state (verified live 2026-07-26)
 
@@ -495,13 +495,13 @@ Everything below about exporting, re-linking and forced resets is **struck**:
 - [x] ~~Import into Supabase; re-link Google users by email~~ — no users
 - [x] ~~Forced password-reset flow + advance notice~~ — no accounts to reset
 - [x] Google OAuth enabled and verified (`external.google: true`)
-- [ ] Port `sync_user_profile` to a Supabase Edge Function with a serializable
+- [x] Port `sync_user_profile` to a Supabase Edge Function with a serializable
       transaction; port `save/load_user_avatar` (avatar stays in a server-only
       column, ≤512px WebP ~256 KB, as today)
-- [ ] Ship `supabase_bridge.js`; delete the Anvil bridge
-- [ ] Dual-write window: both Anvil and Supabase accept syncs, so rollback
+- [x] Ship `supabase_bridge.js`; delete the Anvil bridge
+- [x] Dual-write window: both Anvil and Supabase accept syncs, so rollback
       stays possible for at least one release
-- [ ] Anvil still running at the end of Phase 4 — deletion is Phase 5
+- [x] Anvil still running at the end of Phase 4 — deletion is Phase 5
 
 ### Phase 5 — Delete Anvil entirely
 
@@ -515,7 +515,7 @@ With no users and no accounts, the Data Table export, the sign-in verification
 sweep, the grace period and the in-app notice are all unnecessary. The only
 remaining care is:
 
-1. [ ] Sanity-check the Anvil Data Tables are genuinely empty before deleting,
+1. [x] Sanity-check the Anvil Data Tables are genuinely empty before deleting,
        so the "no users" assumption is confirmed rather than assumed.
 
 **Anvil's frontend is already superseded.** As of 2026-07-26 the JS modules
@@ -526,37 +526,37 @@ will 404. That is expected and harmless — it has no users and is being deleted
 
 **Then delete, in this order**
 
-4. [ ] Delete the published Anvil app from the Anvil dashboard.
-5. [ ] Remove the local checkout `anvil-app/` and the `_/theme/` mirror.
-6. [ ] Delete the now-orphaned Anvil sources: `FrontEnd_code.py`,
+4. [x] Delete the published Anvil app from the Anvil dashboard.
+5. [x] Remove the local checkout `anvil-app/` and the `_/theme/` mirror.
+6. [x] Delete the now-orphaned Anvil sources: `FrontEnd_code.py`,
        `Server_code.py`, `serviceworker.py`, `anvil.yaml`.
        **`serviceworker.py` only after** `public/sw.js` is the live worker —
        it is currently the canonical copy that `sw.js` is checked against.
-7. [ ] Delete `tools/sync_to_anvil.ps1` (transitional tooling).
-8. [ ] Drop the root repo's `anvil-app` gitlink (mode 160000, no `.gitmodules`).
-9. [ ] Strip the Anvil origins from all three `ALLOWED_ORIGINS` locations
+7. [x] Delete `tools/sync_to_anvil.ps1` (transitional tooling).
+8. [x] Drop the root repo's `anvil-app` gitlink (mode 160000, no `.gitmodules`).
+9. [x] Strip the Anvil origins from all three `ALLOWED_ORIGINS` locations
        (Space variable, `backend/app.py` `DEFAULT_ALLOWED_ORIGINS`,
        `worker/wrangler.toml` + `wrangler deploy`).
 
 **Test suite changes this forces**
 
-10. [ ] Delete the three anvil-app mirror assertions (in
+10. [x] Delete the three anvil-app mirror assertions (in
         `migration_parity.test.mjs`, `ui_reload_and_upload_fixes.test.mjs`,
         `background_reliability.test.mjs`) — they become permanently skipped
         dead weight.
-11. [ ] Rewrite the `public/sw.js` ↔ `serviceworker.py` parity test: with the
+11. [x] Rewrite the `public/sw.js` ↔ `serviceworker.py` parity test: with the
         Python endpoint gone, `sw.js` is the only copy and the guard is moot.
         Replace it with a check that `sw.js` and the precache list agree.
-12. [ ] Update `tools/verify_release_parity.mjs` to drop the anvil-app leg
+12. [x] Update `tools/verify_release_parity.mjs` to drop the anvil-app leg
         entirely.
 
 **Docs**
 
-13. [ ] Rewrite `AGENT_HANDOFF_MASTER.md` §1 (hosting), §2 (release state), and
+13. [x] Rewrite `AGENT_HANDOFF_MASTER.md` §1 (hosting), §2 (release state), and
         the deploy sections; the commit SHAs there are already stale from the
         history purge.
-14. [ ] Retire the `anvil-deploy-path` agent memory note.
-15. [ ] Reconsider removing the `?tts_fast=1` isolation reload and the
+14. [x] Retire the `anvil-deploy-path` agent memory note.
+15. [x] Reconsider removing the `?tts_fast=1` isolation reload and the
         anti-flash mask (architectural win #2), once header isolation is
         confirmed on real devices.
 
