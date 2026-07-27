@@ -160,6 +160,58 @@ function showLoginForm() {
     const cancel = btn('Cancel');
     cancel.style.flex = '0 0 auto';
 
+    // Anvil Users provided password recovery and confirmation resend. Without
+    // these a user who forgets a password, or loses the confirmation email, is
+    // permanently locked out with no self-service path.
+    const helpers = document.createElement('div');
+    helpers.style.cssText = 'display:flex;gap:14px;margin:12px 0 0;font-size:12.5px';
+    const linkBtn = (label) => {
+      const a = document.createElement('button');
+      a.type = 'button';
+      a.textContent = label;
+      a.style.cssText = 'background:none;border:0;padding:0;color:#8fc4ff;cursor:pointer;'
+        + 'font:inherit;text-decoration:underline';
+      return a;
+    };
+    const forgot = linkBtn('Forgot password?');
+    const resend = linkBtn('Resend confirmation');
+    helpers.append(forgot, resend);
+
+    const needEmail = () => {
+      if (email.value.trim()) return true;
+      status.style.color = '#ff9d9d';
+      status.textContent = 'Enter your email address first.';
+      email.focus();
+      return false;
+    };
+
+    forgot.addEventListener('click', async () => {
+      if (!needEmail()) return;
+      busy(true);
+      try {
+        await gotrue('/recover', { body: { email: email.value.trim() } });
+        status.style.color = '#9ae6a0';
+        // Deliberately not confirming whether the address exists.
+        status.textContent = 'If that address has an account, a reset link is on its way.';
+      } catch (err) {
+        status.style.color = '#ff9d9d';
+        status.textContent = String(err.message || err);
+      } finally { busy(false); }
+    });
+
+    resend.addEventListener('click', async () => {
+      if (!needEmail()) return;
+      busy(true);
+      try {
+        await gotrue('/resend', { body: { type: 'signup', email: email.value.trim() } });
+        status.style.color = '#9ae6a0';
+        status.textContent = 'Confirmation email sent again. Check your inbox and spam folder.';
+      } catch (err) {
+        status.style.color = '#ff9d9d';
+        status.textContent = String(err.message || err);
+      } finally { busy(false); }
+    });
+
     const row1 = document.createElement('div');
     row1.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
     row1.append(signIn, signUp);
@@ -223,7 +275,7 @@ function showLoginForm() {
       if (e.key === 'Escape') { document.removeEventListener('keydown', esc); close(null); }
     });
 
-    card.append(h, sub, email, password, row1, row2, status);
+    card.append(h, sub, email, password, row1, row2, helpers, status);
     backdrop.appendChild(card);
     document.body.appendChild(backdrop);
     email.focus();
