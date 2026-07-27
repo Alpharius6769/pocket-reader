@@ -126,6 +126,34 @@ test('generic proxy accepts the backend token, strips sensitive headers, and is 
   }
 });
 
+test('HF Space proxy forwards the Worker secret as a bearer token', async () => {
+  const originalFetch = globalThis.fetch;
+  let upstream;
+  globalThis.fetch = async (request) => {
+    upstream = request;
+    return new Response('ok');
+  };
+  try {
+    const request = new Request('https://pocket-reader-proxy.example/api/sync/chapters?limit=1', {
+      headers: {
+        Authorization: 'must-not-leak',
+      },
+    });
+    const response = await worker.fetch(
+      request,
+      { HF_TOKEN: 'hf_test_token' },
+      { waitUntil() {} },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(upstream.url, 'https://alpharius6769-pocket-reader.hf.space/api/sync/chapters?limit=1');
+    assert.equal(upstream.headers.get('Authorization'), 'Bearer hf_test_token');
+    assert.equal(upstream.headers.has('Cookie'), false);
+    assert.equal(upstream.headers.has('X-Pocket-Proxy-Key'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('scheduled sync manually rejects redirects while carrying the admin secret', async () => {
   const originalFetch = globalThis.fetch;
   let options;
@@ -142,6 +170,32 @@ test('scheduled sync manually rejects redirects while carrying the admin secret'
     );
     await Promise.all(pending);
     assert.equal(options.redirect, 'manual');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('scheduled sync forwards the HF bearer token to the private Space', async () => {
+  const originalFetch = globalThis.fetch;
+  let options;
+  globalThis.fetch = async (_url, init) => {
+    options = init;
+    return new Response('{}');
+  };
+  try {
+    const pending = [];
+    worker.scheduled(
+      {},
+      {
+        CHAPTER_SYNC_URL: 'https://backend.example/api/sync',
+        ADMIN_PUSH_SECRET: 'secret',
+        HF_TOKEN: 'hf_test_token',
+      },
+      { waitUntil(value) { pending.push(value); } },
+    );
+    await Promise.all(pending);
+    assert.equal(options.headers.Authorization, 'Bearer hf_test_token');
+    assert.equal(options.headers['X-Admin-Secret'], 'secret');
   } finally {
     globalThis.fetch = originalFetch;
   }

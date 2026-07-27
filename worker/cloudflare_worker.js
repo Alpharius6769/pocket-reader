@@ -424,9 +424,13 @@ export default {
     }
     ctx.waitUntil((async () => {
       try {
+        const headers = { "X-Admin-Secret": env.ADMIN_PUSH_SECRET };
+        if (env.HF_TOKEN) {
+          headers.Authorization = `Bearer ${env.HF_TOKEN}`;
+        }
         const response = await fetch(env.CHAPTER_SYNC_URL, {
           method: "POST",
-          headers: { "X-Admin-Secret": env.ADMIN_PUSH_SECRET },
+          headers,
           redirect: "manual",
           signal: AbortSignal.timeout(120000),
         });
