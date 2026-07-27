@@ -187,7 +187,7 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 });
 
 test('narration isolation and streamed PCM assets are versioned together', async () => {
-  const serviceWorker = await read('serviceworker.py');
+  const serviceWorker = await read('public/sw.js');
   assert.match(serviceWorker, /pocket-reader-core-v129/);
   assert.match(serviceWorker, /ui_controller\.js\?v=ui-v83/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
@@ -197,7 +197,7 @@ test('narration isolation and streamed PCM assets are versioned together', async
   assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v7/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
   const standardPage = await read('public/standard-page.html');
-  assert.match(standardPage, /serviceworker\.js\?v=129/);
+  assert.match(standardPage, /sw\.js\?v=129/);
 });
 
 test('Settings recognizes the active narration service worker revision', async () => {
@@ -213,21 +213,20 @@ test('Settings recognizes the active narration service worker revision', async (
   // two files agree, not that either holds a particular number.
   const version = settings.match(/NARRATION_SERVICE_WORKER_VERSION\s*=\s*'(\d+)'/)[1];
   const uiController = await read('public/assets/js/ui_controller.js');
-  const registered = [...uiController.matchAll(/\?v=(\d+)`?,\s*\{\s*scope/g)].map((m) => m[1]);
+  const registered = [...uiController.matchAll(/sw\.js\?v=(\d+)/g)].map((m) => m[1]);
   assert.ok(registered.length > 0, 'ui_controller performs no versioned SW registration');
   for (const v of registered) {
     assert.equal(v, version,
       `ui_controller registers ?v=${v} but NARRATION_SERVICE_WORKER_VERSION is ${version}`);
   }
 
-  // Both hosts run this module during the migration, so the worker path must be
-  // resolved at runtime. A hardcoded Anvil path would silently fail on Pages
-  // (unsupported MIME type) and take offline support and isolation with it.
+  // Anvil is deleted, so the worker path is a single static path. A leftover
+  // Anvil endpoint would fail with an HTML MIME type and silently take offline
+  // support and cross-origin isolation with it.
   for (const source of [uiController, settings]) {
-    assert.match(source, /hostname\.endsWith\('\.anvil\.app'\)/,
-      'service-worker path must branch on host while both Anvil and Pages are live');
-    assert.match(source, /'\/sw\.js'/, 'the static Pages worker path is missing');
-    assert.match(source, /'\/_\/api\/serviceworker\.js'/, 'the Anvil worker path is missing');
+    assert.match(source, /'\/sw\.js'/, 'the static worker path is missing');
+    assert.doesNotMatch(source, /_\/api\/serviceworker\.js/, 'an Anvil worker path survived');
+    assert.doesNotMatch(source, /hostname\.endsWith\('\.anvil\.app'\)/, 'host-aware branch is obsolete');
   }
 });
 
@@ -268,7 +267,7 @@ test('Away Mode guidance explains the queue, start, and resume workflow', async 
 test('story subscriptions use explicit AO3 state and push handoff', async () => {
   const library = await read('public/assets/js/library_manager.js');
   const settings = await read('public/assets/js/settings_manager.js');
-  const serviceWorker = await read('serviceworker.py');
+  const serviceWorker = await read('public/sw.js');
   const backend = await read('backend/app.py');
   assert.match(library, /window\.toggleStorySubscription/);
   assert.match(library, /window\.checkSubscribedStoryUpdates/);

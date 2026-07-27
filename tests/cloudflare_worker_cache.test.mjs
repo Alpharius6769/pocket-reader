@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import worker from '../worker/cloudflare_worker.js';
 
 const MODEL_URL = 'https://pocket-reader-proxy.example/models/Pocket%20TTS%20Onnx/english_2026-04/flow_lm_unified_block4_int8.onnx';
-const ORIGIN = 'https://hot-wiry-raven.anvil.app';
+const ORIGIN = 'https://pocket-reader-f2y.pages.dev';
 
 function installHarness() {
   const originalFetch = globalThis.fetch;

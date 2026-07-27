@@ -82,17 +82,14 @@ logging.basicConfig(
 log = logging.getLogger("pocket-reader.app")
 
 # Config
-# Exact-match origin list (no wildcards). The Cloudflare Pages entries are the
-# production origin and the stable per-branch preview alias; per-deployment
-# hash URLs are deliberately not listed. The .anvil.app origins are removed
-# when Anvil is deleted (MIGRATION_PLAN.md Phase 5).
+# Exact-match origin list (no wildcards): the production Pages origin and the
+# stable per-branch preview alias. Per-deployment hash URLs are deliberately not
+# listed. Anvil origins removed 2026-07-26 (MIGRATION_PLAN.md Phase 5).
 # NOTE: the ALLOWED_ORIGINS env var on the Hugging Face Space overrides this
 # entirely -- this default only applies when that variable is unset or empty.
 DEFAULT_ALLOWED_ORIGINS = (
     "https://pocket-reader-f2y.pages.dev,"
-    "https://phase3-preview.pocket-reader-f2y.pages.dev,"
-    "https://hot-wiry-raven.anvil.app,"
-    "https://vu5ls67qwlzkeklw.anvil.app"
+    "https://phase3-preview.pocket-reader-f2y.pages.dev"
 )
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
 if not ALLOWED_ORIGINS.strip():
@@ -131,7 +128,7 @@ if VAPID_PUBLIC and VAPID_PRIVATE and VAPID_SUB == "mailto:admin@example.com":
         "Push notifications will likely be rejected by push relay servers. "
         "Set VAPID_SUB to a real contact URI in HF Space secrets.")
 if ALLOWED_ORIGINS == "*":
-    log.warning("⚠️ ALLOWED_ORIGINS is set to '*'. This is insecure for production. Set to your specific Anvil app URL in Hugging Face secrets.")
+    log.warning("⚠️ ALLOWED_ORIGINS is set to '*'. This is insecure for production. Set it to the exact frontend origin(s) in the Hugging Face Space variables.")
 
 from contextlib import asynccontextmanager
 

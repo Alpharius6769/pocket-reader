@@ -7,7 +7,6 @@ const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 test('device calibration blocks profile setup until its local benchmark completes', async () => {
   const html = await read('public/index.html');
   const deviceSetup = await read('public/assets/js/device_setup.js');
-  const frontEndCode = await read('FrontEnd_code.py');
   const theme = await read('public/assets/css/theme.css');
   assert.ok(html.indexOf('id="device-setup-modal"') < html.indexOf('id="first-time-setup-modal"'));
   assert.match(html, /html:not\(\.pr-device-setup-complete\) #first-time-setup-modal/);
@@ -22,7 +21,13 @@ test('device calibration blocks profile setup until its local benchmark complete
   assert.match(html, /id="device-setup-start-btn"[^>]+disabled/);
   assert.match(deviceSetup, /setupStartButton\.disabled = false/);
   assert.match(theme, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
-  assert.ok(frontEndCode.indexOf("getItem('pr_device_setup_v2')") < frontEndCode.indexOf("getItem('pr_setup_complete')"));
+  // Ordering used to be an artefact of statement order in the Anvil form's
+  // Python boot. It is now enforced declaratively in the shell: first-time
+  // setup stays hidden until device setup has stamped its completion class, so
+  // calibration cannot be skipped. Verified live on a clean profile:
+  // device-setup-modal visible, first-time-setup-modal not.
+  assert.match(html, /html:not\(\.pr-device-setup-complete\)\s*#first-time-setup-modal\s*\{\s*display:\s*none/);
+  assert.match(html, /html\.pr-device-setup-complete\s*#device-setup-modal\s*\{\s*display:\s*none/);
 });
 
 test('settings risk gate appears only when Advanced Settings is opened', async () => {

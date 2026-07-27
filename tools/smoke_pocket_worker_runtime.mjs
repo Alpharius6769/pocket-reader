@@ -12,7 +12,7 @@ const { chromium } = require('../tests/webkit-smoke/node_modules/playwright');
 
 const noWrite = process.argv.includes('--no-write');
 const positional = process.argv.slice(2).filter((value) => !value.startsWith('--'));
-const root = resolve(positional[0] || 'anvil-app/theme/assets');
+const root = resolve(positional[0] || 'public/assets/js');
 const output = resolve(positional[1] || 'benchmark-results/pocket-worker-runtime-smoke.json');
 const chrome = resolve(process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe');
 statSync(root);
@@ -32,7 +32,7 @@ const commonHeaders = {
 };
 
 const pageHtml = `<!doctype html><meta charset="utf-8"><title>Pocket worker smoke</title>`;
-const productionOrigin = 'https://hot-wiry-raven.anvil.app';
+const productionOrigin = 'https://pocket-reader-f2y.pages.dev';
 const blockRelaxed = process.env.BLOCK_RELAXED === '1';
 const expectedRuntimeFlavor = blockRelaxed ? 'stock-wasm-only' : 'relaxed-simd-minimal-ort';
 const useLiveAssets = process.env.USE_LIVE_ASSETS === '1';

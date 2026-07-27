@@ -37,7 +37,7 @@ test('push writes and deletes require a server-issued ownership token', async ()
 });
 
 test('service-worker install failures reject and smoke targets the active revision', async () => {
-  const worker = await read('serviceworker.py');
+  const worker = await read('public/sw.js');
   const smoke = await read(path.join('tools', 'smoke_pocket_worker_runtime.mjs'));
   assert.match(worker, /pocket-reader-core-v129/);
   assert.match(worker, /Install failed:[\s\S]{0,100}throw err;/);
@@ -123,7 +123,11 @@ test('release checks validate deploy parity, config entrypoints, and non-writing
   const cacheTool = await read(path.join('tools', 'pocket_caching_expectations.mjs'));
   const smokeTool = await read(path.join('tools', 'smoke_pocket_worker_runtime.mjs'));
   const webkitPackage = JSON.parse(await read(path.join('tests', 'webkit-smoke', 'package.json')));
-  assert.match(parity, /path\.join\(root, 'anvil-app'\)/);
+  // The anvil-app leg is deleted with Anvil (Phase 5). What the parity tool must
+  // still cover is the one place content genuinely exists twice -- backend/
+  // versus the Hugging Face checkout -- plus the worker entrypoint.
+  assert.match(parity, /'Hugging Face Space'/);
+  assert.doesNotMatch(parity, /anvil-app/);
   assert.doesNotMatch(parity, /Anvil Pocket Reader Sync/);
   assert.match(parity, /wrangler\.toml/);
   assert.match(cacheTool, /--check/);

@@ -14,7 +14,7 @@ const { chromium } = require('../tests/webkit-smoke/node_modules/playwright');
 
 function parseArgs(argv) {
   const options = {
-    assetRoot: 'anvil-app/theme/assets',
+    assetRoot: 'public/assets/js',
     output: 'benchmark-results/pocket-pipeline-production.json',
     threads: [1, 2, 4],
     repeats: 3,
@@ -85,7 +85,7 @@ if (options.ortModelDir) statSync(options.ortModelDir);
 if (options.runtimeDir) statSync(options.runtimeDir);
 mkdirSync(dirname(options.output), { recursive: true });
 
-const productionOrigin = 'https://hot-wiry-raven.anvil.app';
+const productionOrigin = 'https://pocket-reader-f2y.pages.dev';
 const mime = {
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',

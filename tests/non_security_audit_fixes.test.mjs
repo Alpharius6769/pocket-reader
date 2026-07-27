@@ -5,11 +5,12 @@ import { readFile } from 'node:fs/promises';
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
 test('startup avoids hidden diagnostics polling and eager library rendering', async () => {
-  const frontend = await read('FrontEnd_code.py');
+  // The three assertions that guarded FrontEnd_code.py are gone with the file:
+  // the Anvil form no longer exists, so it cannot poll or eagerly render. The
+  // equivalent guard for the shell that replaced it is below.
+  const html = await read('public/index.html');
   const library = await read('public/assets/js/library_manager.js');
-  assert.doesNotMatch(frontend, /setInterval\(window\.refreshPerfPanel/);
-  assert.doesNotMatch(frontend, /window\.renderLibrary\(\)/);
-  assert.doesNotMatch(frontend, /window\.renderAchievements\(\)/);
+  assert.doesNotMatch(html, /setInterval\(\s*window\.refreshPerfPanel/);
   assert.doesNotMatch(library, /generateChunk\('\.'/);
   assert.doesNotMatch(library, /requestIdleCallback\(\(\) => \{\s*renderLibrary/);
 });
@@ -17,7 +18,7 @@ test('startup avoids hidden diagnostics polling and eager library rendering', as
 test('narration stays deferred while runtime and UI modules use canonical URLs', async () => {
   const html = await read('public/index.html');
   const loader = await read('public/assets/js/narration_runtime_loader.js');
-  const serviceWorker = await read('serviceworker.py');
+  const serviceWorker = await read('public/sw.js');
   const standardPage = await read('public/standard-page.html');
   const tagVersion = (source, module) =>
     source.match(new RegExp(`${module}\\.js\\?v=([a-z0-9-]+)`))?.[1];
@@ -46,7 +47,7 @@ test('narration stays deferred while runtime and UI modules use canonical URLs',
 });
 
 test('service worker uses bounded navigation and lifetime-protected cache writes', async () => {
-  const source = await read('serviceworker.py');
+  const source = await read('public/sw.js');
   assert.match(source, /pocket-reader-core-v129/);
   assert.match(source, /fetchWithTimeout\(event\.request, 6000\)/);
   assert.match(source, /event\.waitUntil\(updatePromise/);

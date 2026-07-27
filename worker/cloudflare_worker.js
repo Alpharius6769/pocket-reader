@@ -1,4 +1,4 @@
-﻿// SSRF guard: reject obviously-internal targets. Catches IP-literal private
+// SSRF guard: reject obviously-internal targets. Catches IP-literal private
 // ranges and well-known internal hostnames. Note: cannot resolve DNS names to
 // their IPs at the edge, so a hostname that resolves to a private IP is not
 // caught here; pair with network-level egress controls if that matters.
@@ -45,8 +45,7 @@ function hostAllowed(hostname, env) {
 // ALLOWED_ORIGINS Worker variable (comma-separated).
 function resolveAllowedOrigin(request, env) {
   const defaults = [
-    "https://vu5ls67qwlzkeklw.anvil.app",
-    "https://hot-wiry-raven.anvil.app",
+    "https://pocket-reader-f2y.pages.dev",
   ];
   const extra = (env && env.ALLOWED_ORIGINS)
     ? env.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
@@ -76,7 +75,7 @@ function isRedirectStatus(status) {
 
 function buildUpstreamHeaders(request) {
   const headers = new Headers();
-  for (const name of ["Accept", "Accept-Language", "Range", "User-Agent"]) {
+  for (const name of ["Accept", "Accept-Language", "Range", "User-Agent", "Content-Type", "Content-Length"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
@@ -180,7 +179,7 @@ export default {
       return new Response(null, {
         headers: {
           "Access-Control-Allow-Origin": corsOrigin,
-          "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+          "Access-Control-Allow-Methods": "GET, HEAD, POST, DELETE, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type, User-Agent, Accept, Accept-Language, Range, X-Pocket-Proxy-Key",
           "Access-Control-Max-Age": "86400",
           "Vary": "Origin",
@@ -194,8 +193,43 @@ export default {
         headers: { "Vary": "Origin", "Content-Type": "text/plain" },
       });
     }
+    if (url.pathname.startsWith("/api/")) {
+      const targetUrl = new URL(url.pathname + url.search, "https://alpharius6769-pocket-reader.hf.space");
+      const hfHeaders = buildUpstreamHeaders(request);
+      if (env.HF_TOKEN) {
+        hfHeaders.set("Authorization", `Bearer ${env.HF_TOKEN}`);
+      }
+      const fetchRequest = new Request(targetUrl, {
+        method: request.method,
+        headers: hfHeaders,
+        body: (request.method !== "GET" && request.method !== "HEAD") ? request.body : undefined,
+        redirect: "manual",
+        duplex: (request.method !== "GET" && request.method !== "HEAD") ? "half" : undefined
+      });
+      try {
+        let response = await fetch(fetchRequest, { signal: AbortSignal.timeout(60000) });
+        let newResponse = new Response(response.body, response);
+        newResponse.headers.set("Access-Control-Allow-Origin", corsOrigin);
+        newResponse.headers.set("Vary", "Origin");
+        newResponse.headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+        // Keep upstream CORS headers but ensure our origin is allowed
+        newResponse.headers.set("Access-Control-Expose-Headers", response.headers.get("Access-Control-Expose-Headers") || "*");
+        return newResponse;
+      } catch (err) {
+        return new Response(`API Proxy Error: ${err.message}`, {
+            status: 502,
+            headers: {
+              "Access-Control-Allow-Origin": corsOrigin,
+              "Cross-Origin-Resource-Policy": "cross-origin",
+              "Vary": "Origin",
+              "Content-Type": "text/plain"
+            }
+        });
+      }
+    }
+
     if (request.method !== "GET" && request.method !== "HEAD") {
-      return new Response("Only GET and HEAD are supported.", {
+      return new Response("Only GET and HEAD are supported for this route.", {
         status: 405,
         headers: { "Allow": "GET, HEAD, OPTIONS", "Vary": "Origin" },
       });

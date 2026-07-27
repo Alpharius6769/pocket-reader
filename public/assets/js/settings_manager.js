@@ -9,24 +9,14 @@ import {
 
 const NARRATION_SERVICE_WORKER_VERSION = '129';
 
-// Anvil serves the worker from a Python http_endpoint at /_/api/serviceworker.js;
-// Cloudflare Pages serves it as a static file at /sw.js. Both hosts run this
-// exact module during the migration, so the path is resolved at runtime rather
-// than hardcoded. Drop the Anvil branch when Anvil is deleted
-// (MIGRATION_PLAN.md Phase 5).
-export const SERVICE_WORKER_PATH = window.location.hostname.endsWith('.anvil.app')
-  ? '/_/api/serviceworker.js'
-  : '/sw.js';
+export const SERVICE_WORKER_PATH = '/sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
 
 function narrationServiceWorkerControlsPage() {
   const scriptUrl = navigator.serviceWorker?.controller?.scriptURL || '';
   try {
     const parsed = new URL(scriptUrl, window.location.origin);
-    // Accept either host's worker path.
-    const isOurWorker = parsed.pathname.endsWith('/serviceworker.js')
-      || parsed.pathname === '/sw.js';
-    return isOurWorker
+    return parsed.pathname === SERVICE_WORKER_PATH
       && parsed.searchParams.get('v') === NARRATION_SERVICE_WORKER_VERSION;
   } catch (_) {
     return false;

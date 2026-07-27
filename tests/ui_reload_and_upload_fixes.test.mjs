@@ -1,14 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 const norm = (s) => s.replace(/\r\n/g, '\n');
-
-// See tests/migration_parity.test.mjs: anvil-app is a bare gitlink, so it is
-// absent from CI checkouts.
-const anvilPresent = existsSync(new URL('../anvil-app/theme/assets', import.meta.url));
 
 // Regression guards for the 2026-07-23 upload/dedup + narration-reload/overlay UI
 // fixes and the follow-up audit hardening (author-guarded dedup, corrected
@@ -74,23 +69,6 @@ test('audio-cache clear is wrapped once with working feedback for both callers',
   assert.doesNotMatch(settings, /clearAudioCacheFromSettings/);
 });
 
-test('anvil-app assets mirror the upload/UI audit fixes', {
-  // Retired: Anvil has no users and is being deleted, and the modules now
-  // target Pages asset paths that Anvil cannot serve. See
-  // tests/migration_parity.test.mjs for the guard that replaced this.
-  skip: 'Anvil mirror retired -- modules target Cloudflare Pages',
-}, async () => {
-  // Canonical source now lives under public/; anvil-app keeps a flat mirror
-  // until Anvil is decommissioned (MIGRATION_PLAN.md Phase 4).
-  const sources = {
-    'api_core.js': 'public/assets/js/api_core.js',
-    'ui_controller.js': 'public/assets/js/ui_controller.js',
-    'settings_manager.js': 'public/assets/js/settings_manager.js',
-    'standard-page.html': 'public/standard-page.html',
-  };
-  for (const [name, canonical] of Object.entries(sources)) {
-    const root = norm(await read(canonical));
-    const mirror = norm(await read(`anvil-app/theme/assets/${name}`));
-    assert.equal(mirror, root, `${name} mirror drifted from ${canonical}`);
-  }
-});
+// The anvil-app mirror assertion that lived here is deleted along with Anvil
+// itself (Phase 5). tests/migration_parity.test.mjs asserts the property that
+// replaced it: no module builds an Anvil asset URL.
