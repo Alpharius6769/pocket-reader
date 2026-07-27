@@ -42,6 +42,12 @@ test('the static worker carries no Anvil-only paths', async () => {
     "the self-interception guard must match the static worker path");
 });
 
+test('the browser shell does not force a legacy Anvil direct-path frame escape', async () => {
+  const ui = await read('public/assets/js/ui_controller.js');
+  assert.ok(!ui.includes("window.top.location.href = window.location.origin + '/_/'"),
+    'public/assets/js/ui_controller.js still forces the legacy Anvil direct-path redirect');
+});
+
 test('no module builds an Anvil asset URL', async () => {
   const modules = [
     'audio_core.js', 'buffer_manager.js', 'pocket_worker.js', 'cinematic_ui.js',

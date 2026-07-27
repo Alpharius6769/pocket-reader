@@ -1285,19 +1285,9 @@ window._initMasterlistStickyScrollbar = _initMasterlistStickyScrollbar;
 //   and the debug env doesn't support SAB anyway.
 // - Production: auto-register for offline asset caching only.
 if ('serviceWorker' in navigator) {
-  // If the published app is framed, escape to Anvil's direct path so the app
-  // shell and service worker share the expected top-level scope.
-  if (window.self !== window.top && typeof SharedArrayBuffer === 'undefined') {
-    const isDebug = window.location.pathname.startsWith('/debug/');
-    if (!isDebug) {
-      console.log("[Service Worker] Framed app detected. Redirecting top window to direct path...");
-      try {
-        window.top.location.href = window.location.origin + '/_/';
-      } catch (e) {
-        console.warn("Failed to redirect top window:", e);
-      }
-    }
-  }
+  // The app now runs standalone on Pages, so the old Anvil frame escape is
+  // intentionally disabled. Redirecting a framed page to `/_/` would just send
+  // users into a dead local/dev path.
 
   const isDebug = window.location.pathname.startsWith('/debug/');
   if (isDebug) {
