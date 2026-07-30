@@ -54,6 +54,10 @@ jobs:
           #   __pycache__/     - build artefact
           #   curated_library/ - large LFS PDFs that change rarely; synced manually
           #                      so routine backend deploys cost no LFS bandwidth
+          #   .curated_updates/- local EPUB inputs for regenerating those PDFs.
+          #                      Gitignored, so CI should never see them, but the
+          #                      exclude stays as defence in depth: without it a
+          #                      stray commit would publish 4+ MB of story files.
           #   .git/            - never clobber the Space's own history
           #   .gitignore       - the Space keeps its own
           rsync -av --delete \
@@ -62,6 +66,7 @@ jobs:
             --exclude='.wrangler/' \
             --exclude='__pycache__/' \
             --exclude='curated_library/' \
+            --exclude='.curated_updates/' \
             --exclude='.git/' \
             --exclude='.gitignore' \
             backend/ hf-space/
@@ -103,10 +108,16 @@ jobs:
       # 200s, so health alone goes green while a broken build is still cooking.
       # Gate on the Spaces API instead: the Space must be on the commit we just
       # pushed AND in terminal stage RUNNING, and only then do we probe health.
+      #
+      # The health probe MUST send the token. The Space went private with
+      # MIGRATION_PLAN Option B, and HF answers 404 -- not 401 -- to an
+      # unauthenticated request for a private Space. An unauthenticated probe
+      # therefore never returns 200 and this gate could only ever time out.
       - name: Wait for the Space to rebuild onto the pushed commit
         if: steps.push.outputs.deployed == 'true'
         env:
           TARGET_SHA: ${{ steps.push.outputs.sha }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           API="https://huggingface.co/api/spaces/${HF_SPACE}"
           for i in $(seq 1 40); do
@@ -124,6 +135,7 @@ jobs:
 
             if [ "$sha" = "$TARGET_SHA" ] && [ "$stage" = "RUNNING" ]; then
               code=$(curl -s -o /dev/null -w '%{http_code}' \
+                -H "Authorization: Bearer ${HF_TOKEN}" \
                 "https://alpharius6769-pocket-reader.hf.space/api/health" || true)
               if [ "$code" = "200" ]; then
                 echo "Space is RUNNING on ${sha:0:7} and healthy."

@@ -49,18 +49,38 @@ Hugging Face backend must not become a public profile authority.
 
 ## 2. Current Release State
 
-Source is at `pocket-reader-core-v135` (2026-07-29 mobile reliability pass).
-**v135 is NOT deployed and NOT committed** — it exists only in the working tree.
+Production release: `pocket-reader-core-v135`, live and verified 2026-07-30.
 
-Last verified live release: `pocket-reader-core-v134` (Cloudflare Pages).
-Cloudflare production deployment `4040eb05-9008-4f7a-be42-454e9048e0c4`
-published the root `public/` tree to the `main` production branch on 2026-07-28.
-Direct asset probes, live release parity, and the production WebKit smoke test
-all passed after deployment.
+- **Committed and pushed** as `683560a` (this also captured the v134 tree, which
+  had never been committed — there is a rollback point again).
+- **Frontend:** deployed to Cloudflare Pages production `aacac0c2`, after
+  verifying the identical build on the `v135-verify` preview alias. Live probes
+  return 200 for `sw.js?v=135`, `audio-v58`, `storage-v9`, `buffer-v48`,
+  `settings-v48`, `narration-loader-v15`, and the served shell registers
+  `sw.js?v=135`.
+- **Backend:** Space commit `b289ace`, stage `RUNNING`, `/api/health` 200 with
+  `database_durable: true` on `/data/subscriptions.sqlite`. `/api/masterlist`,
+  `/api/library/curated`, `/api/vapid-public-key` and `/api/health/sites` all
+  200.
+- **Browser verification passed** before promotion: caching/playback harness
+  (cold cache, warm replay with `ensureCalls: 0`, 20-paragraph runway, stop
+  isolation), narration startup (deferred runtime, media before isolation),
+  device setup, and the WebKit smoke against the preview — zero page errors and
+  zero console errors.
 
-⚠️ The v134 tree was also never committed. Production is currently running code
-that exists in no git history, so there is no rollback point. Commit before the
-next deploy.
+⚠️ **The `HF_TOKEN` GitHub secret is invalid.** `Deploy backend to Hugging Face`
+has failed at the *clone* step since 2026-07-27 (`remote: Invalid username or
+password`), including on `683560a`. The backend above was therefore deployed
+**manually** from an authenticated local session, replicating the workflow's
+excludes, credential-shaped-file guard and rebuild gate. CI backend deploys stay
+broken until the secret is replaced with a valid HF **write** token:
+`gh secret set HF_TOKEN`. Verify after with a `workflow_dispatch` run.
+
+Note the direct probe `https://alpharius6769-pocket-reader.hf.space/api/health`
+returns **404 unauthenticated** — the Space is private, and HF answers 404 rather
+than 401. Use `Authorization: Bearer $HF_TOKEN`, or go through the Cloudflare
+Worker (which holds the token). The deploy workflow's gate was fixed to send the
+token; before that it could only ever have timed out.
 
 The frontend has no active secondary host or mirror. `public/` is the sole
 Cloudflare Pages source of truth. The Hugging Face backend, Cloudflare Worker,
@@ -94,7 +114,7 @@ WASM model family: english_2026-04-ort-r1
 WebGPU model family: certified R3 FP16 bundle with device-local calibration
 ```
 
-### 2026-07-29 source v135 — mobile/iPhone reliability (not deployed)
+### 2026-07-29 v135 — mobile/iPhone reliability (deployed 2026-07-30)
 
 Audit of the audio engine, WASM/SharedArrayBuffer/WebGPU paths, and asset
 fetching, focused on iOS. Ten fixes; guards in
