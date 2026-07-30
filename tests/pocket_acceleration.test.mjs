@@ -188,8 +188,8 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
-  assert.match(serviceWorker, /pocket-reader-core-v135/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v87/);
+  assert.match(serviceWorker, /pocket-reader-core-v136/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v88/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
   assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v45/);
@@ -197,12 +197,12 @@ test('narration isolation and streamed PCM assets are versioned together', async
   assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v7/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
   const shell = await read('public/index.html');
-  assert.match(shell, /sw\.js\?v=135/);
+  assert.match(shell, /sw\.js\?v=136/);
 });
 
 test('Settings recognizes the active narration service worker revision', async () => {
   const settings = await read('public/assets/js/settings_manager.js');
-  assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'135'/);
+  assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'136'/);
   assert.match(settings, /searchParams\.get\('v'\)\s*===\s*NARRATION_SERVICE_WORKER_VERSION/);
   // ui_controller performs the PRIMARY service-worker registration. Its ?v= MUST
   // match NARRATION_SERVICE_WORKER_VERSION, or narrationServiceWorkerControlsPage()
@@ -261,12 +261,17 @@ test('interrupted cache jobs checkpoint locally and only restore on foreground',
 test('Away Mode guidance explains the queue, start, and resume workflow', async () => {
   const form = await read('public/index.html');
   const buffer = await read('public/assets/js/buffer_manager.js');
-  const settings = await read('public/assets/js/settings_manager.js');
   assert.match(form, /Add stories with Queue Away/);
   assert.match(form, /start Away Mode in Library/);
   assert.match(form, /cache job resumes when you return/);
   assert.match(buffer, /Hide Cache Panel/);
-  assert.match(settings, /Away Mode:<\/b> Add stories with Queue Away/);
+  // The guidance lives in index.html, which is what users actually see.
+  // settings_manager.js used to carry a second copy inside refreshBgCachePanel,
+  // but that rendered into #bg-cache-panel -- an element present in no shell and
+  // created by no module -- so it never reached a user. Panel and copy deleted.
+  const settings = await read('public/assets/js/settings_manager.js');
+  assert.doesNotMatch(settings, /bg-cache-panel/,
+    'the dead background-cache panel must not come back');
 });
 
 test('story subscriptions use explicit AO3 state and push handoff', async () => {

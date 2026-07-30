@@ -48,7 +48,7 @@ test('narration stays deferred while runtime and UI modules use canonical URLs',
 
 test('service worker uses bounded navigation and lifetime-protected cache writes', async () => {
   const source = await read('public/sw.js');
-  assert.match(source, /pocket-reader-core-v135/);
+  assert.match(source, /pocket-reader-core-v136/);
   assert.match(source, /fetchWithTimeout\(event\.request, 6000\)/);
   assert.match(source, /event\.waitUntil\(updatePromise/);
   assert.match(source, /url\.searchParams\.has\('v'\)/);

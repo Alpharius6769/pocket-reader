@@ -543,7 +543,6 @@ export const BufferManager = {
   textEl: null,
   etaEl: null,
   pauseBtnEl: null,
-  settingsPanelEl: null,
   // Concurrency control
   activeWorkers: 0,
   maxWorkers: DEFAULT_MAX_WORKERS,
@@ -575,7 +574,6 @@ export const BufferManager = {
     this.etaEl = document.getElementById('reader-buffer-eta');
     this.pauseBtnEl = document.getElementById('cache-pause-btn');
     this.resumeBtnEl = document.getElementById('cache-resume-btn');
-    this.settingsPanelEl = document.getElementById('bg-cache-panel');
     this.cachingModalEl = document.getElementById('caching-progress-modal');
     this.cachingModalText = document.getElementById('caching-progress-text');
     this.cachingModalFill = document.getElementById('caching-progress-fill');
@@ -620,7 +618,6 @@ export const BufferManager = {
   updateUI() {
     if (!this.containerEl) this.initUI();
     this._syncUiTicker();
-    if (typeof window.refreshBgCachePanel === 'function') window.refreshBgCachePanel();
     if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
     if (typeof window.updatePlayButtons === 'function') window.updatePlayButtons();
     // Away Mode playback guard lives in audio_core.js togglePlayState() directly
@@ -796,21 +793,6 @@ export const BufferManager = {
           }
         }
       }
-    }
-    if (this.settingsPanelEl) {
-      this.settingsPanelEl.innerHTML = `<div style="margin-bottom:10px;">
-                <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:0.85rem;">
-                    <span>Progress</span><span>${pct}%</span>
-                </div>
-                <div style="height:6px;background:var(--app-bg);border-radius:3px;overflow:hidden;">
-                    <div style="height:100%;width:${pct}%;background:var(--accent-green);transition:width 0.3s;"></div>
-                </div>
-            </div>
-            <p style="font-size:0.8rem;color:var(--text-muted);margin:0;">
-                Items:${this.cachedCount}/${this.totalToCache}<br>
-                Status:${this.paused ? 'Paused' : (this.isActive ? 'Active' : 'Idle')}<br>
-                Mode:${this.mode}Cache
-            </p>`;
     }
   },
 
@@ -1131,7 +1113,6 @@ export const BufferManager = {
       btn.disabled = false;
       btn.classList.toggle('active', window.precacheQueue.length > 0);
     }
-    if (typeof window.refreshBgCachePanel === 'function') window.refreshBgCachePanel();
     if (this.queue.length === 0) {
       window._pocketThroughputCache = false;
       if (!window.isPlaying) window.stopBgKeepAlive?.();

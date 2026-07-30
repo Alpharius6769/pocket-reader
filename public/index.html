@@ -137,11 +137,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="/assets/js/pocket_backend_policy.js?v=backend-v20">
 <link rel="modulepreload" href="/assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="/assets/js/device_setup.js?v=device-setup-v7">
-<link rel="modulepreload" href="/assets/js/settings_manager.js?v=settings-v48">
+<link rel="modulepreload" href="/assets/js/settings_manager.js?v=settings-v49">
 <link rel="modulepreload" href="/assets/js/library_manager.js?v=library-v12">
 <link rel="modulepreload" href="/assets/js/cinematic_ui.js?v=cinematic-v6">
-<link rel="modulepreload" href="/assets/js/reader_features.js?v=features-v5">
-<link rel="modulepreload" href="/assets/js/ui_controller.js?v=ui-v87">
+<link rel="modulepreload" href="/assets/js/reader_features.js?v=features-v6">
+<link rel="modulepreload" href="/assets/js/ui_controller.js?v=ui-v88">
 <link rel="modulepreload" href="/assets/js/supabase_bridge.js?v=supabase-v4">
 
 <!-- ==========================================
@@ -155,7 +155,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
       window.__prServiceWorkerRegistration = navigator.serviceWorker
-        .register('/sw.js?v=135', { scope: '/' })
+        .register('/sw.js?v=136', { scope: '/' })
         .catch(function() {
           return navigator.serviceWorker.register('/sw.js', { scope: '/' });
         })
@@ -1343,10 +1343,10 @@ Playback-only modules remain deferred so they do not compete with first paint.
     <script src='/assets/js/tts_pronunciation_core.js?v=pron-v11' type='module'></script>
     <script src='/assets/js/library_manager.js?v=library-v12' type='module'></script>
     <script src='/assets/js/device_setup.js?v=device-setup-v7' type='module'></script>
-    <script src='/assets/js/settings_manager.js?v=settings-v48' type='module'></script>
+    <script src='/assets/js/settings_manager.js?v=settings-v49' type='module'></script>
     <script src='/assets/js/cinematic_ui.js?v=cinematic-v6' type='module'></script>
-    <script src='/assets/js/reader_features.js?v=features-v5' type='module'></script>
-    <script src='/assets/js/ui_controller.js?v=ui-v87' type='module'></script>
+    <script src='/assets/js/reader_features.js?v=features-v6' type='module'></script>
+    <script src='/assets/js/ui_controller.js?v=ui-v88' type='module'></script>
     <script src='/assets/js/supabase_bridge.js?v=supabase-v4' type='module'></script>
     <script src='/assets/js/data_transfer.js?v=transfer-v2' type='module'></script>
   </div>

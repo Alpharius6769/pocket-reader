@@ -11,7 +11,7 @@ test('heavy narration modules remain deferred until narration is requested', asy
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
   assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v58'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v48'\)/);
+  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v49'\)/);
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
@@ -92,10 +92,10 @@ test('a narration-resume fix advances the immutable module and service-worker re
     read('public/sw.js'),
     read('public/index.html'),
   ]);
-  assert.match(loader, /buffer_manager\.js\?v=buffer-v48/);
-  assert.match(worker, /buffer_manager\.js\?v=buffer-v48/);
-  assert.match(worker, /pocket-reader-core-v135/);
-  assert.match(shell, /sw\.js\?v=135/);
+  assert.match(loader, /buffer_manager\.js\?v=buffer-v49/);
+  assert.match(worker, /buffer_manager\.js\?v=buffer-v49/);
+  assert.match(worker, /pocket-reader-core-v136/);
+  assert.match(shell, /sw\.js\?v=136/);
   assert.match(buffer, /storyRef/);
 });
 

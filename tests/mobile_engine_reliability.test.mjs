@@ -326,6 +326,38 @@ test('audio chunks are fingerprinted so segmentation changes cannot desync playb
   assert.match(buffer, /saveAudioChunk\([^)]*this\.mode === 'Permanent', task\.text\)/);
 });
 
+test('no module renders into a container that does not exist', async () => {
+  const { readdir } = await import('node:fs/promises');
+  const html = await read('public/index.html');
+  const dir = new URL('../public/assets/js/', import.meta.url);
+  const names = (await readdir(dir)).filter((f) => f.endsWith('.js'));
+  let js = '';
+  for (const name of names) js += await read(`public/assets/js/${name}`) + '\n';
+
+  const htmlIds = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  // Ids a module assigns or emits itself (createElement().id = 'x', or markup
+  // built in a template literal) are legitimately absent from the shell.
+  const jsIds = new Set([
+    ...[...js.matchAll(/\.id\s*=\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
+    ...[...js.matchAll(/id="([^"]+)"/g)].map((m) => m[1]),
+    ...[...js.matchAll(/id='([^']+)'/g)].map((m) => m[1]),
+  ]);
+
+  const looked = new Set([
+    ...[...js.matchAll(/getElementById\(['"]([^'"]+)['"]\)/g)].map((m) => m[1]),
+    ...[...js.matchAll(/\bel\(['"]([^'"]+)['"]\)/g)].map((m) => m[1]),
+  ]);
+
+  const orphans = [...looked].filter((id) => !htmlIds.has(id) && !jsIds.has(id)).sort();
+
+  // This bug class shipped four times: #speed-slider and #speed-label (playback
+  // speed silently pinned to 1.0x on every paragraph), #bg-cache-panel and
+  // #offline-storage-manager (whole settings panels that never rendered). Each
+  // was a null-guarded lookup, so nothing ever threw and nothing was logged.
+  assert.deepEqual(orphans, [],
+    `modules look up ids that exist nowhere and are created by nothing: ${orphans.join(', ')}`);
+});
+
 test('every precached module URL resolves to a real file', async () => {
   const worker = await read('public/sw.js');
   const { access } = await import('node:fs/promises');

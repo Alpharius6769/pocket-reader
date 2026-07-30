@@ -39,7 +39,6 @@ export function showView(viewId) {
         if (typeof window._populateProfileSettings === 'function') window._populateProfileSettings();
         if (typeof window.refreshSiteHealth === 'function') window.refreshSiteHealth();
         if (typeof window.refreshPerfPanel === 'function') window.refreshPerfPanel();
-        if (typeof window.refreshBgCachePanel === 'function') window.refreshBgCachePanel();
         if (typeof window.renderPocketDeviceSetupSummary === 'function') window.renderPocketDeviceSetupSummary();
       }
 
@@ -1313,7 +1312,7 @@ if ('serviceWorker' in navigator) {
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
-    .register('/sw.js?v=135', { scope: '/' })
+    .register('/sw.js?v=136', { scope: '/' })
     .catch(() => navigator.serviceWorker.register('/sw.js', { scope: '/' }));
     window.__prServiceWorkerRegistration = registrationPromise
       .catch((err) => {
@@ -1344,11 +1343,6 @@ window._setupAvatarUpload = async function(ev) {
     if (img) img.src = prepared;
   } catch (error) {
     console.error('[Setup] Failed to prepare avatar:', error);
-    const status = document.getElementById('setup-auth-status');
-    if (status) {
-      status.style.display = 'block';
-      status.textContent = error?.message || 'Could not process that avatar image.';
-    }
   }
 };
 

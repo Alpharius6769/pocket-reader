@@ -27,7 +27,7 @@ const shell = `<!doctype html><meta charset="utf-8"><body>
     <span id="reader-buffer-text"></span><span id="reader-buffer-eta"></span>
     <button id="cache-pause-btn"></button><button id="cache-resume-btn"></button>
   </div>
-  <div id="bg-cache-panel"></div><div id="away-mode-bar"></div>
+  <div id="away-mode-bar"></div>
   <div id="caching-progress-modal"><span id="caching-progress-text"></span>
     <div id="caching-progress-fill"></div><span id="caching-progress-stats"></span>
     <button id="caching-progress-dismiss-btn"></button>
@@ -96,7 +96,6 @@ try {
     window._prosodyCacheTagVariants = () => [''];
     window.getStoryStableKey = (story) => story.storyKey || story.title;
     window.findLibraryStoryByRef = () => null;
-    window.refreshBgCachePanel = () => {};
     window.renderAwayModeUI = () => {};
     window.updatePlayButtons = () => {};
     window.updateReaderDrawerStatus = () => {};
@@ -117,7 +116,7 @@ try {
     };
 
     const storageModule = await import('/assets/js/storage_core.js?v=storage-v9');
-    await import('/assets/js/buffer_manager.js?v=buffer-v48');
+    await import('/assets/js/buffer_manager.js?v=buffer-v49');
     window.BufferManager.initUI();
 
     const repaired = storageModule.normalizeStoryChapters([{

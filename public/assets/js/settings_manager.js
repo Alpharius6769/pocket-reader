@@ -7,7 +7,7 @@ import {
   writePocketDeviceBackendPreference,
 } from './pocket_backend_policy.js?v=backend-v20';
 
-const NARRATION_SERVICE_WORKER_VERSION = '135';
+const NARRATION_SERVICE_WORKER_VERSION = '136';
 
 export const SERVICE_WORKER_PATH = '/sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1334,46 +1334,6 @@ export async function refreshPerfPanel() {
   }
 }
 window.refreshPerfPanel = refreshPerfPanel;
-
-// ── refreshBgCachePanel ──────────────────────────────────────────────────────
-export function refreshBgCachePanel() {
-  const p = document.getElementById('bg-cache-panel');
-  if (!p) return;
-  if (window.BufferManager) {
-    const queued  = window.BufferManager.queue.length;
-    const cached  = window.BufferManager.cachedCount;
-    const active  = window.BufferManager.isActive ? "Running" : (window.BufferManager.paused ? "Paused" : "Idle");
-    const workers = window.BufferManager.maxWorkers || '?';
-    let etaStr = "Calculating...";
-    if (window.BufferManager.isActive && window.BufferManager.startTime && cached > 0 && queued > 0) {
-      const elapsed = Date.now() - window.BufferManager.startTime;
-      const msPerItem = elapsed / cached;
-      const remainingMs = msPerItem * queued;
-      const remainingMin = Math.ceil(remainingMs / 60000);
-      etaStr = `~${remainingMin} min`;
-    } else if (!window.BufferManager.isActive || queued === 0) {
-      etaStr = "N/A";
-    }
-
-    const awayStories = window.precacheQueue ? window.precacheQueue.length : 0;
-    p.innerHTML = `<ul style="font-size:0.85rem;padding-left:20px;color:var(--text-main);line-height:1.6;margin-bottom:10px;">
-      <li><b>Status:</b> ${active}</li>
-      <li><b>Queue Depth:</b> ${queued} paragraphs</li>
-      <li><b>Session Cached:</b> ${cached} paragraphs</li>
-      <li><b>ETA:</b> ${etaStr}</li>
-      <li><b>Away Mode Queued:</b> ${awayStories} stories pending start</li>
-      <li><b>Max Workers:</b> ${workers}</li>
-    </ul>
-    <div style="background:rgba(255,165,0,0.1); border:1px solid rgba(255,165,0,0.3); padding:8px; border-radius:4px; font-size:0.8rem; margin-bottom:10px; color:var(--text-main);">
-      <b>Away Mode:</b> Add stories with Queue Away in the Library, then start Away Mode from the Library button. It prepares offline audio while the app is open. Hide the progress panel to use the app; pause or stop here before starting a different uncached story.
-    </div>
-    <button class="pr-btn-outline" style="width:100%; margin-top:5px;" onclick="window.BufferManager.stop(); if(window.refreshBgCachePanel) window.refreshBgCachePanel();">Stop Caching</button>
-    `;
-  } else {
-    p.innerHTML = `<p style="font-size:0.85rem;color:var(--text-muted);">Cache system offline.</p>`;
-  }
-}
-window.refreshBgCachePanel = refreshBgCachePanel;
 
 // ── Haptics click listener ───────────────────────────────────────────────────
 document.addEventListener('click', (e) => {

@@ -334,18 +334,6 @@ function recapMetrics(data) {
   return totals;
 }
 
-export async function renderOfflineStorageManager() {
-  const target = document.getElementById('offline-storage-manager');
-  if (!target) return;
-  let estimate = {};
-  try { estimate = await navigator.storage?.estimate?.() || {}; } catch (_) {}
-  const used = Number(estimate.usage) || 0;
-  const quota = Number(estimate.quota) || 0;
-  const pct = quota ? Math.round((used / quota) * 100) : 0;
-  target.innerHTML = `<div class="storage-meter"><div><strong>${(used / 1048576).toFixed(1)} MB used</strong><span>${quota ? `${(quota / 1073741824).toFixed(1)} GB browser allowance` : 'Browser quota unavailable'}</span></div><div class="progress-track"><span style="width:${pct}%"></span></div></div><div class="button-row"><button class="pr-btn-sub" onclick="openManagePermanentCaches()">Pinned audio</button><button class="pr-btn-sub" onclick="clearAudioCache(false)">Clear generated audio</button></div><p class="settings-help">Downloaded story text and generated narration remain on this device. Account sync stores only personal metadata.</p>`;
-}
-window.renderOfflineStorageManager = renderOfflineStorageManager;
-
 export function renderWorkflowSurfaces() {
   const data = ensureReaderFeatures();
   const home = document.getElementById('home-workflow-band');
@@ -365,7 +353,6 @@ export function renderWorkflowSurfaces() {
     collectionSelect.innerHTML = '<option value="">All collections</option>' + data.collections.map((collection) => `<option value="${esc(collection.id)}">${esc(collection.name)}</option>`).join('');
     collectionSelect.value = current;
   }
-  renderOfflineStorageManager();
 }
 window.renderWorkflowSurfaces = renderWorkflowSurfaces;
 

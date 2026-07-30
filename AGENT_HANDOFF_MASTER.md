@@ -49,14 +49,14 @@ Hugging Face backend must not become a public profile authority.
 
 ## 2. Current Release State
 
-Production release: `pocket-reader-core-v135`, live and verified 2026-07-30.
+Production release: `pocket-reader-core-v136`, live and verified 2026-07-30.
 
 - **Committed and pushed** as `683560a` (this also captured the v134 tree, which
   had never been committed — there is a rollback point again).
 - **Frontend:** deployed to Cloudflare Pages production `aacac0c2`, after
   verifying the identical build on the `v135-verify` preview alias. Live probes
-  return 200 for `sw.js?v=135`, `audio-v58`, `storage-v9`, `buffer-v48`,
-  `settings-v48`, `narration-loader-v15`, and the served shell registers
+  return 200 for `sw.js?v=135`, `audio-v58`, `storage-v9`, `buffer-v49`,
+  `settings-v49`, `narration-loader-v15`, and the served shell registers
   `sw.js?v=135`.
 - **Backend:** Space commit `b289ace`, stage `RUNNING`, `/api/health` 200 with
   `database_durable: true` on `/data/subscriptions.sqlite`. `/api/masterlist`,
@@ -90,9 +90,9 @@ Important frontend/service-worker versions currently in source (verify against
 `public/index.html`, `public/sw.js`, and the release tests — these move often):
 
 ```text
-Service worker shell: pocket-reader-core-v135
-UI controller: ui-v87
-Settings module: settings-v48
+Service worker shell: pocket-reader-core-v136
+UI controller: ui-v88
+Settings module: settings-v49
 Device setup module: device-setup-v7
 Theme stylesheet: midnight-v22
 Pocket audio module: audio-v58
@@ -100,19 +100,47 @@ Pocket worker: pocket-worker-v45
 Pocket backend policy: backend-v20
 Experience coordinator: experience-v5
 Virtue controller: virtue-v8
-Buffer manager: buffer-v48
+Buffer manager: buffer-v49
 API core: search-v17
 Library manager: library-v12
 Narration runtime loader: narration-loader-v15
 Pronunciation ruleset: pron-v11
 Story storage module: storage-v9
-Reader features module: features-v5
+Reader features module: features-v6
 PCM worklet: pcm-v1
 ONNX Runtime Web: 1.27.0
 WASM runtime: 1.27.0 relaxed-SIMD minimal ORT-format build
 WASM model family: english_2026-04-ort-r1
 WebGPU model family: certified R3 FP16 bundle with device-local calibration
 ```
+
+### 2026-07-30 v136 — dead UI code removed
+
+The v135 audit found that `#speed-slider`/`#speed-label` existed nowhere while
+seven call sites read them. A follow-up sweep for that same bug class -- a
+module rendering into a container no shell contains and no module creates --
+found three more. All were null-guarded, so nothing ever threw and nothing was
+logged; the features were simply absent.
+
+Deleted, 80 lines across four modules:
+
+- `renderOfflineStorageManager()` (`reader_features.js`) and its call in
+  `renderWorkflowSurfaces()`. It targeted `#offline-storage-manager`, so the
+  storage-usage meter and its "Pinned audio" / "Clear generated audio" buttons
+  never rendered. `clearAudioCache` remains reachable from Settings and the
+  reader storage panel, so no capability was lost.
+- `refreshBgCachePanel()` (`settings_manager.js`) plus its four call sites in
+  `buffer_manager.js` and `ui_controller.js`, and `BufferManager.settingsPanelEl`
+  with the progress markup it wrote. All targeted `#bg-cache-panel`.
+  Its Away Mode guidance text was a duplicate of copy that IS in `index.html`
+  and does reach users; only the unrendered copy went.
+- The `#setup-auth-status` branch in `ui_controller.js`, which meant an avatar
+  processing failure was logged but never shown. The `console.error` stays.
+
+`tests/mobile_engine_reliability.test.mjs` gains a guard that cross-references
+every `getElementById`/`el()` lookup against ids present in `index.html` or
+assigned in JS, and fails on any orphan. That closes the class rather than the
+four instances.
 
 ### 2026-07-29 v135 — mobile/iPhone reliability (deployed 2026-07-30)
 
