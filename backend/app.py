@@ -84,7 +84,7 @@ log = logging.getLogger("pocket-reader.app")
 # Config
 # Exact-match origin list (no wildcards): the production Pages origin and the
 # stable per-branch preview alias. Per-deployment hash URLs are deliberately not
-# listed. Anvil origins removed 2026-07-26 (MIGRATION_PLAN.md Phase 5).
+# listed. Retired frontend origins are intentionally not accepted.
 # NOTE: the ALLOWED_ORIGINS env var on the Hugging Face Space overrides this
 # entirely -- this default only applies when that variable is unset or empty.
 DEFAULT_ALLOWED_ORIGINS = (
@@ -1262,150 +1262,23 @@ async def ao3_chapter_count(url: str):
 
 @app.get("/api/masterlist")
 async def fetch_masterlist():
-    import csv
-    import io as _io
     cached = await MASTERLIST_CACHE.get("hmofa")
     if cached is not None:
         return cached
-    csv_url = "https://docs.google.com/spreadsheets/d/1CppkpE3PAspUk1JvJiAr80K0CsMUJvWKKRD2UPvc0dY/export?format=csv&gid=0"
+    # The previous community sheet is intentionally retired. Keep the HMOFA
+    # page/API contract, but serve only Pocket Reader's independent catalog.
     try:
-        async with make_client() as client:
-            resp = await client.get(csv_url, timeout=30)
-            resp.raise_for_status()
-        try:
-            decoded = resp.content.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            decoded = resp.content.decode("latin-1", errors="replace")
-
-        buf = _io.StringIO(decoded)
-        first_line = buf.readline()
-        looks_like_banner = (
-            len(first_line) > 80 or any(
-                p in first_line for p in (
-                    '!',
-                    '?',
-                    'please',
-                    'comment',
-                    'right click')))
-        if not looks_like_banner:
-            buf.seek(0)
-
-        reader = csv.DictReader(buf)
-        stories = []
-        for row in reader:
-            clean = {
-                (k.strip() if isinstance(k, str) else k): (v.strip() if isinstance(v, str) else v)
-                for k, v in row.items() if k and str(k).strip()
-            }
-            if any(v for v in clean.values() if v):
-                stories.append(clean)
-
-        if not stories:
-            return {"status": "empty", "stories": [], "count": 0,
-                    "error": "Sheet contained no parseable rows"}
-
-        payload_out = {
-            "status": "success",
-            "stories": stories,
-            "count": len(stories)}
+        payload_out = json.loads((BASE / "masterlist.json").read_text(encoding="utf-8"))
+        stories = payload_out.get("stories") if isinstance(payload_out, dict) else []
+        if not isinstance(stories, list):
+            stories = []
+        payload_out = {"status": "success", "source": "Pocket Reader independent catalog",
+                       "stories": stories, "count": len(stories)}
         await MASTERLIST_CACHE.put("hmofa", payload_out)
         return payload_out
-    except (httpx.TimeoutException, httpx.ConnectError):
-        raise HTTPException(
-            status_code=504,
-            detail="Google Sheets timed out or was unreachable — try again in a moment")
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Google Sheets returned HTTP {e.response.status_code}")
     except Exception:
-        log.exception("Masterlist fetch failed")
+        log.exception("Independent masterlist load failed")
         raise HTTPException(status_code=500, detail="Masterlist error")
-
-
-@app.post("/api/scrape")
-async def scrape_story(payload: ScrapeRequest, request: Request):
-    client_ip = request.client.host if request.client else "unknown"
-    if not _check_scrape_rate(client_ip):
-        raise HTTPException(status_code=429, detail="Too many scrape requests. Try again shortly.")
-    url = payload.url.strip()
-    if not is_valid_url(url):
-        raise HTTPException(status_code=400, detail="Invalid URL format")
-    # Shared SSRF guard rejects unsafe schemes, private/internal targets,
-    # credentials, unsafe ports, and fetch() revalidates every redirect hop.
-    try:
-        await asyncio.to_thread(assert_public_url, url)
-    except RuntimeError:
-        raise HTTPException(status_code=400, detail="That URL is not allowed.")
-    cache_key = url
-    cached = await SCRAPE_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
-    acquired = False
-    try:
-        await asyncio.wait_for(_SCRAPE_CONCURRENCY.acquire(), timeout=2)
-        acquired = True
-        result = await scrape_url(url, cookies=payload.cookies)
-        result_dict = asdict(result)
-        await SCRAPE_CACHE.put(cache_key, result_dict)
-        return result_dict
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=503, detail="Scraper is busy. Try again shortly.")
-    except CloudflareBlocked as cf:
-        return {"cloudflare_blocked": True, "url": cf.url, "reason": cf.reason}
-    except Exception:
-        safe_http_error("Scrape failed")
-    finally:
-        if acquired:
-            _SCRAPE_CONCURRENCY.release()
-
-
-@app.post("/api/upload")
-def upload_file(file: UploadFile = File(...)):
-    max_upload_bytes = int(
-        os.environ.get(
-            "MAX_UPLOAD_BYTES",
-            50 * 1024 * 1024))
-    total = 0
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp_path = os.path.join(tmpdir, os.path.basename(file.filename))
-        with open(tmp_path, "wb") as f:
-            while True:
-                chunk = file.file.read(1024 * 1024)
-                if not chunk:
-                    break
-                total += len(chunk)
-                if total > max_upload_bytes:
-                    raise HTTPException(
-                        status_code=413, detail="Uploaded file is too large")
-                f.write(chunk)
-
-        try:
-            meta = parsers_dispatcher.extract_metadata(tmp_path)
-            chapters = parsers_dispatcher.parse_file(tmp_path)
-            import re as _re
-            safe_filename = _re.sub(r'[^\w\-. ]', '_', os.path.basename(file.filename or "upload"))[:128]
-            return {
-                "filename": safe_filename,
-                "title": meta.get("title", ""),
-                "author": meta.get("author", "Unknown"),
-                "chapters": [asdict(ch) for ch in chapters]
-            }
-        except Exception as e:
-            log.warning("Upload parse failed for %s: %s", file.filename, e)
-            raise HTTPException(
-                status_code=400,
-                detail="Failed to parse document. Ensure it is a valid EPUB, PDF, DOCX, TXT, or HTML file.")
-
-
-@app.post("/api/state/save")
-async def save_user_state(req: StateSaveRequest):
-    # Disabled: this endpoint keyed state solely on a client-supplied user_id
-    # (an IDOR — any caller could read/overwrite any profile). Cross-device sync
-    # is not wired up in the frontend yet; re-enable behind real per-user auth
-    # when building it.
-    raise HTTPException(status_code=410, detail="Cloud sync is not available.")
-
 
 @app.get("/api/state/load/{user_id}")
 async def load_user_state(user_id: str):

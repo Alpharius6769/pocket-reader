@@ -16,9 +16,9 @@ jobs:
           # no test reads them. Leaving LFS off keeps CI off the metered
           # GitHub LFS bandwidth quota entirely.
           lfs: false
-          # anvil-app and "Hugging Face Space" are bare gitlinks with no
-          # .gitmodules; fetching submodules would fail. Tests that read them
-          # skip themselves when absent.
+          # "Hugging Face Space" is a bare gitlink with no .gitmodules;
+          # fetching submodules would fail. No test reads it -- assertions run
+          # against backend/, which is the source of truth.
           submodules: false
 
       - uses: actions/setup-node@v4

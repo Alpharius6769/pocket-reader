@@ -227,7 +227,7 @@ async function runThreadCount(browser, browserCdp, threads) {
         await route.fulfill({
           status: 200,
           headers: { ...isolatedHeaders, 'Content-Type': 'text/javascript; charset=utf-8' },
-          body: readFileSync(resolve(options.assetRoot, 'public/assets/js/pocket_worker.js')),
+          body: readFileSync(resolve(options.assetRoot, 'pocket_worker.js')),
         });
         return;
       }
@@ -267,7 +267,7 @@ async function runThreadCount(browser, browserCdp, threads) {
   const init = await page.evaluate(async ({
     threads, constrainedMemoryMode, voiceName, backend, graphCapture, mimiProvider, syncGroupBlocks, workerCount,
   }) => {
-    const workers = Array.from({ length: workerCount }, () => new Worker('/_/theme/benchmark_worker.js', { type: 'module' }));
+    const workers = Array.from({ length: workerCount }, () => new Worker('/assets/js/benchmark_worker.js', { type: 'module' }));
     const messages = Array.from({ length: workerCount }, () => []);
     const terminals = await Promise.all(workers.map((worker, workerIndex) => new Promise((resolveTerminal, rejectTerminal) => {
       const timeout = setTimeout(() => rejectTerminal(new Error(`Pocket worker ${workerIndex} initialization timed out.`)), 10 * 60 * 1000);
@@ -294,7 +294,7 @@ async function runThreadCount(browser, browserCdp, threads) {
         gpuSyncGroupBlocks: syncGroupBlocks,
       });
     })));
-    const voiceBuffer = await (await fetch('/_/theme/benchmark_voice.safetensors')).arrayBuffer();
+    const voiceBuffer = await (await fetch('/assets/voices/benchmark_voice.safetensors')).arrayBuffer();
     const view = new DataView(voiceBuffer);
     const headerLength = Number(view.getBigUint64(0, true));
     const header = JSON.parse(new TextDecoder().decode(new Uint8Array(voiceBuffer, 8, headerLength)));
@@ -486,7 +486,7 @@ try {
     mimiProvider: options.mimiProvider,
     syncGroupBlocks: options.syncGroupBlocks,
     workerCount: options.workerCount,
-    workerSha256: createHash('sha256').update(readFileSync(resolve(options.assetRoot, 'public/assets/js/pocket_worker.js'))).digest('hex'),
+    workerSha256: createHash('sha256').update(readFileSync(resolve(options.assetRoot, 'pocket_worker.js'))).digest('hex'),
     results,
   };
   writeFileSync(options.output, `${JSON.stringify(report, null, 2)}\n`);

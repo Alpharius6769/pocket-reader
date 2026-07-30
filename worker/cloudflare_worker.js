@@ -54,11 +54,16 @@ function resolveAllowedOrigin(request, env) {
   const allowed = [...defaults, ...extra];
   const origin = request.headers.get("Origin") || "";
   if (allowed.includes(origin)) return origin;
-  try {
-    const parsed = new URL(origin);
-    if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) return origin;
-  } catch (_) {
-    // Ignore malformed origins and fall through to the default deny.
+  // Loopback is a development affordance and must be opted into. It previously
+  // applied unconditionally, so production reflected CORS for any port or scheme
+  // on localhost/127.0.0.1/::1. Set ALLOW_LOCALHOST_ORIGINS=1 for local dev.
+  if (env && String(env.ALLOW_LOCALHOST_ORIGINS || "") === "1") {
+    try {
+      const parsed = new URL(origin);
+      if (["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase())) return origin;
+    } catch (_) {
+      // Ignore malformed origins and fall through to the default deny.
+    }
   }
   return null;
 }

@@ -941,22 +941,22 @@ body {
   font-weight: 650;
 }
 
-.virtue_annoyed { background-image: url('/_/theme/virtue_annoyed.webp'); }
-.virtue_waving { background-image: url('/_/theme/virtue_waving.webp'); }
-.virtue_thinking { background-image: url('/_/theme/virtue_thinking.webp'); }
-.virtue_story_loading { background-image: url('/_/theme/virtue_story_loading.webp'); }
-.virtue_achievement { background-image: url('/_/theme/virtue_achievement.webp'); }
-.virtue_changed_settings { background-image: url('/_/theme/virtue_changed_settings.webp'); }
-.virtue_favorite { background-image: url('/_/theme/virtue_favorite.webp'); }
-.virtue_wink { background-image: url('/_/theme/virtue_wink.webp'); }
-.virtue_happy_no_paws { background-image: url('/_/theme/virtue_happy_no_paws.webp'); }
-.virtue_happy_holding_bubble { background-image: url('/_/theme/virtue_happy_holding_bubble.webp'); }
-.virtue_point    { background-image: url('/_/theme/virtue_point.webp'); }
-.virtue_kneeling { background-image: url('/_/theme/virtue_kneeling.webp'); }
-.virtue_talking  { background-image: url('/_/theme/virtue_talking.webp'); }
-.virtue_smile    { background-image: url('/_/theme/virtue_smile.webp'); }
-.virtue_highscore { background-image: url('/_/theme/virtue_highscore.webp'); }
-.virtue_lowscore { background-image: url('/_/theme/virtue_lowscore.webp'); }
+.virtue_annoyed { background-image: url('/assets/img/virtue_annoyed.webp'); }
+.virtue_waving { background-image: url('/assets/img/virtue_waving.webp'); }
+.virtue_thinking { background-image: url('/assets/img/virtue_thinking.webp'); }
+.virtue_story_loading { background-image: url('/assets/img/virtue_story_loading.webp'); }
+.virtue_achievement { background-image: url('/assets/img/virtue_achievement.webp'); }
+.virtue_changed_settings { background-image: url('/assets/img/virtue_changed_settings.webp'); }
+.virtue_favorite { background-image: url('/assets/img/virtue_favorite.webp'); }
+.virtue_wink { background-image: url('/assets/img/virtue_wink.webp'); }
+.virtue_happy_no_paws { background-image: url('/assets/img/virtue_happy_no_paws.webp'); }
+.virtue_happy_holding_bubble { background-image: url('/assets/img/virtue_happy_holding_bubble.webp'); }
+.virtue_point    { background-image: url('/assets/img/virtue_point.webp'); }
+.virtue_kneeling { background-image: url('/assets/img/virtue_kneeling.webp'); }
+.virtue_talking  { background-image: url('/assets/img/virtue_talking.webp'); }
+.virtue_smile    { background-image: url('/assets/img/virtue_smile.webp'); }
+.virtue_highscore { background-image: url('/assets/img/virtue_highscore.webp'); }
+.virtue_lowscore { background-image: url('/assets/img/virtue_lowscore.webp'); }
 
 /* Per-sprite text overlay position adjustments */
 .virtue_point .virtue-text-overlay    { left: 38%; }
@@ -3319,12 +3319,12 @@ select, input, textarea {
 /* GENERATED INLINE STYLE MIGRATION END */
 
 /* Anthrostate release ------------------------------------------------------ */
-@font-face { font-family: 'Literata Local'; src: url('/_/theme/literata-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
-@font-face { font-family: 'Literata Local'; src: url('/_/theme/literata-600.woff2') format('woff2'); font-weight: 600; font-display: swap; }
-@font-face { font-family: 'Literata Local'; src: url('/_/theme/literata-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
-@font-face { font-family: 'IBM Plex Sans Local'; src: url('/_/theme/ibm-plex-sans-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
-@font-face { font-family: 'IBM Plex Sans Local'; src: url('/_/theme/ibm-plex-sans-500.woff2') format('woff2'); font-weight: 500; font-display: swap; }
-@font-face { font-family: 'IBM Plex Sans Local'; src: url('/_/theme/ibm-plex-sans-600.woff2') format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Literata Local'; src: url('/assets/fonts/literata-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Literata Local'; src: url('/assets/fonts/literata-600.woff2') format('woff2'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Literata Local'; src: url('/assets/fonts/literata-700.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+@font-face { font-family: 'IBM Plex Sans Local'; src: url('/assets/fonts/ibm-plex-sans-400.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'IBM Plex Sans Local'; src: url('/assets/fonts/ibm-plex-sans-500.woff2') format('woff2'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'IBM Plex Sans Local'; src: url('/assets/fonts/ibm-plex-sans-600.woff2') format('woff2'); font-weight: 600; font-display: swap; }
 
 :root {
   --app-bg: #111214;

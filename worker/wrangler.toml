@@ -11,6 +11,9 @@ head_sampling_rate = 1
 # Additive to the defaults in cloudflare_worker.js resolveAllowedOrigin().
 # Anvil origins removed 2026-07-26 (Phase 5).
 ALLOWED_ORIGINS = "https://pocket-reader-f2y.pages.dev,https://phase3-preview.pocket-reader-f2y.pages.dev"
+# Set to "1" only for local development. Production must not reflect CORS for
+# arbitrary localhost origins.
+ALLOW_LOCALHOST_ORIGINS = "0"
 ALLOWED_PROXY_HOSTS = "archiveofourown.org,fichub.net"
 CHAPTER_SYNC_URL = "https://alpharius6769-pocket-reader.hf.space/api/sync/chapters"
 

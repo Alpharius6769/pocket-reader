@@ -239,7 +239,7 @@ function _displayVirtue(triggerKey, variables = {}, isPriority = false) {
       container.classList.add(activeAsset);
       _syncVirtueAccessibility(container);
       // Do not rely only on an external stylesheet selector for the character
-      // art. This makes Virtue resilient to an Anvil theme stylesheet refresh.
+      // art. This makes Virtue resilient to a stylesheet refresh.
       container.style.backgroundImage = `url("${assetUrl}")`;
       if (img.naturalWidth && img.naturalHeight) {
         container.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;

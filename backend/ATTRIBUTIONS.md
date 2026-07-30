@@ -190,12 +190,6 @@ Pinned backend dependencies are listed in `requirements.txt`.
 - Provider: Hugging Face
 - Used as: Docker hosting for the FastAPI backend.
 
-### Anvil Works
-
-- Provider: Anvil
-- Source: https://anvil.works
-- Used as: Frontend hosting and authenticated profile-sync bridge.
-
 ### Cloudflare Workers
 
 - Provider: Cloudflare
@@ -264,18 +258,18 @@ Pinned backend dependencies are listed in `requirements.txt`.
 
 - Author: Chris (Alpharius67 / Fluffarius)
 - License: Proprietary; all rights reserved
-- Used as: Pocket Reader navigation and app icons in `_/theme/`.
+- Used as: Pocket Reader navigation and app icons in `public/assets/img/`.
 
 ### Game-Icons.net achievement icons
 
 - Authors: Lorc, Delapouite, and Game-Icons.net contributors
 - License: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
 - Source: https://game-icons.net/
-- Used as: Achievement SVG icons in `_/theme/achievements/`.
+- Used as: Achievement SVG icons in `public/assets/achievements/`.
 - Attribution requirement: retain credit to Game-Icons.net and authors.
 
-The Anvil frontend includes the complete upstream license text for both bundled
-font families. System and browser-provided fallback fonts retain their own
+The Cloudflare Pages frontend includes the complete upstream license text for
+both bundled font families. System and browser-provided fallback fonts retain their own
 platform licenses.
 
 ## Story-Source Platforms
@@ -297,9 +291,8 @@ using the app consistently with source-site terms and author permissions.
 
 ### HMOFA Masterlist
 
-- Curator: Therealwolfy
 - Used as: Public CSV source displayed in the HMOFA masterlist view.
-- Rights note: the list curation belongs to its maintainer; individual stories
+- Rights note: Pocket Reader maintains its own catalog; individual stories
   remain the property of their respective authors.
 
 ## Bundled Curated PDFs

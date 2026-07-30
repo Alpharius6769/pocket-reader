@@ -48,7 +48,7 @@ def main() -> int:
         "# GGML PocketTTS (audio.cpp)\n\n"
         "Native safetensors layout for [audio.cpp](https://github.com/0xShug0/audio.cpp) "
         "`pocket_tts` family (issue kyutai-labs/pocket-tts#203).\n\n"
-        "These weights are **not** loaded by the Anvil browser ORT worker. "
+        "These weights are **not** loaded by the Cloudflare Pages browser ORT worker. "
         "Browser production remains under `onnx/`. "
         "ONNX browser backup: `backup/onnx-ort-browser-20260717/`.\n\n"
         "Local run:\n"

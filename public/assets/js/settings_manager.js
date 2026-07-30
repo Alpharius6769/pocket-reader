@@ -1,13 +1,13 @@
 // settings_manager.js — Worker detection, GPU-aware advanced settings, diagnostics
 import {
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v9';
+} from './tts_pronunciation_core.js?v=pron-v11';
 import {
   readPocketDeviceBackendPreference,
   writePocketDeviceBackendPreference,
 } from './pocket_backend_policy.js?v=backend-v20';
 
-const NARRATION_SERVICE_WORKER_VERSION = '129';
+const NARRATION_SERVICE_WORKER_VERSION = '135';
 
 export const SERVICE_WORKER_PATH = '/sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -366,7 +366,7 @@ export function initSettingsUI() {
     expressiveToggle.dataset.prInitialized = '1';
     expressiveToggle.dataset.prLast = String(expressiveToggle.checked);
   }
-  if (el('voice-emotion-mode-select')) el('voice-emotion-mode-select').value = ['neutral', 'balanced'].includes(settings.voiceEmotionMode) ? settings.voiceEmotionMode : 'neutral';
+  if (el('voice-emotion-mode-select')) el('voice-emotion-mode-select').value = ['neutral', 'balanced'].includes(settings.voiceEmotionMode) ? settings.voiceEmotionMode : 'balanced';
   // Opt-in: comma/semicolon splitting creates many tiny synthesis chunks and is
   // the dominant cause of slow mobile caching when left on by default.
   if (el('punct-pause-toggle'))        el('punct-pause-toggle').checked        = settings.pausePunctuation === true;
@@ -419,11 +419,8 @@ export function initSettingsUI() {
     el('scroll-behavior-select').value = settings.scrollBehavior;
   }
 
-  // Speed slider on load
-  if (el('speed-slider') && settings.speed !== undefined) {
-    el('speed-slider').value = settings.speed;
-    if (el('speed-label')) el('speed-label').innerText = `${Number(settings.speed).toFixed(2)}x`;
-  }
+  // No speed slider/label exists. settings.speed is read directly at playback
+  // time by audio_core's getEffectivePlaybackRate().
 
   if (el('app-font-slider') && settings.appFontSize) {
     el('app-font-slider').value = settings.appFontSize;
@@ -599,7 +596,7 @@ export function applySettings() {
     }
     if (el('voice-emotion-mode-select')) {
       const mode = el('voice-emotion-mode-select').value;
-      settings.voiceEmotionMode = ['neutral', 'balanced'].includes(mode) ? mode : 'neutral';
+      settings.voiceEmotionMode = ['neutral', 'balanced'].includes(mode) ? mode : 'balanced';
     }
     if (el('punct-pause-toggle'))        settings.pausePunctuation   = el('punct-pause-toggle').checked;
     if (el('pause-tags-toggle'))         settings.pauseTags          = el('pause-tags-toggle').checked;
@@ -823,8 +820,8 @@ export async function handleAvatarUpload(event) {
       window.userProfile.settings = settings;
       window.saveLocalData();
     }
-    if (window._cloudPushAllowed && typeof window.anvilSaveAvatar === 'function') {
-      try { await window.anvilSaveAvatar(base64Str); } catch (cloudError) { console.warn('[CloudSync] Avatar upload failed:', cloudError); }
+    if (window._cloudPushAllowed && typeof window.pocketCloud?.saveAvatar === 'function') {
+      try { await window.pocketCloud.saveAvatar(base64Str); } catch (cloudError) { console.warn('[CloudSync] Avatar upload failed:', cloudError); }
     }
     if (typeof window.triggerVirtue === 'function') {
       window.triggerVirtue('virtue_holding_bubble_happy_no_paws');

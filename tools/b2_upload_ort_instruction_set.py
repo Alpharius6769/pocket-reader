@@ -14,13 +14,13 @@ from botocore.client import Config
 
 ENG = Path(r"C:\Users\Chris\Documents\Web Build Antigravity Branch")
 FILES = [
-    "pocket_worker.js",
-    "audio_core.js",
-    "buffer_manager.js",
-    "pocket_backend_policy.js",
-    "device_setup.js",
-    "settings_manager.js",
-    "serviceworker.py",
+    "public/assets/js/pocket_worker.js",
+    "public/assets/js/audio_core.js",
+    "public/assets/js/buffer_manager.js",
+    "public/assets/js/pocket_backend_policy.js",
+    "public/assets/js/device_setup.js",
+    "public/assets/js/settings_manager.js",
+    "public/sw.js",
     "AGENT_HANDOFF_MASTER.md",
 ]
 
@@ -32,14 +32,9 @@ def main() -> int:
         for name in FILES:
             path = ENG / name
             if not path.exists():
-                anv = ENG / "anvil-app" / "theme" / "assets" / name
-                path = anv if anv.exists() else path
-            if not path.exists() and name == "serviceworker.py":
-                path = ENG / "anvil-app" / "server_code" / "serviceworker.py"
-            if not path.exists():
                 print("skip missing", name)
                 continue
-            tar.add(path, arcname=f"onnx-browser-code/{name}")
+            tar.add(path, arcname=f"onnx-browser-code/{Path(name).name}")
     payload = buf.getvalue()
     key = f"backup/onnx-ort-browser-{stamp}/instruction-set-ort-browser.tar.gz"
     s3 = boto3.client(

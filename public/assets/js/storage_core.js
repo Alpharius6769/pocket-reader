@@ -127,10 +127,12 @@ export function initDB() {
 
         request.onerror = (event) => {
           console.error("IndexedDB initialization error:", event.target.error);
+          queueMicrotask(() => { dbPromise = null; });
           reject(event.target.error);
         };
       } catch (err) {
         console.error("IndexedDB blocked or unavailable:", err);
+        queueMicrotask(() => { dbPromise = null; });
         reject(err);
       }
     });
@@ -167,16 +169,182 @@ function _isRepeatedChapterHeading(paragraph, title) {
   return text.length <= heading.length + 12 && text.startsWith(heading);
 }
 
-export function normalizeStoryChapters(chapters) {
+const _NARRATION_FRONT_MATTER_TITLE_RE = /^(preface|foreword|introduction|intro|afterwords?|(?:author'?s?|authors?|translator'?s?|editor'?s?) notes?|(?:beginning|end|chapter|additional|closing|opening|further) notes?|endnotes?|footnotes?|acknowledg?ments?|dedication|epigraph|colophon|copyright(?: notice)?|title page|cover(?: page)?|(?:table of )?contents|toc|about the author|summary)$/i;
+const _AO3_EXPORT_SIGNATURE_RE = /posted\s+originally\s+on\s+the\s+archive\s+of\s+our\s+own/i;
+const _NUMBERED_CHAPTER_RE = /^(?:chapter|part|book)\s+(\d+|[ivxlcdm]+)\b/i;
+const _OPENING_META_MARKER_RE = /(?:^|\n)\s*(?:chapter\s+)?(?:summary|notes?)\s*:?\s*(?:\n|$)/i;
+const _END_META_MARKER_RE = /(?:^|\n)\s*(?:chapter\s+end\s+notes?|end\s+notes?|afterword)\s*:?\s*(?:\n|$)/i;
+const _NOTES_TO_STORY_RE = /see\s+the\s+end\s+of\s+the\s+chapter\s+for\s+more\s+notes[.!:]?/i;
+
+function _normalizeSectionTitle(value) {
+  return String(value || '').trim().toLowerCase()
+    .replace(/^[\s"'“”‘’()[\]\-—–:.]+|[\s"'“”‘’()[\]\-—–:.]+$/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function _isNarrationFrontMatterChapter(chapter) {
+  const title = _normalizeSectionTitle(chapter?.title);
+  const opening = (chapter?.paragraphs || []).slice(0, 12).join(' ').toLowerCase();
+  return _NARRATION_FRONT_MATTER_TITLE_RE.test(title)
+    || (_AO3_EXPORT_SIGNATURE_RE.test(opening) && /^(?:preface|summary|notes?)/i.test(title));
+}
+
+function _looksLikeAuthorNote(text) {
+  const value = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!value) return true;
+  return [
+    /\b(?:hello|hi|hey|dear)\s+(?:readers?|everyone|all|guys|folks)\b/,
+    /\bthanks?(?:\s+you)?\b.*\b(?:reading|support|comments?|kudos|beta)\b/,
+    /\b(?:my|this|the)\s+(?:other\s+)?(?:work|story|chapter|writing|outline|draft)\b/,
+    // First-person authorial only. This was a bare verb alternation
+    // (wrote|written|writing|...), which matches ordinary third-person
+    // narration -- "He had written to her every day that winter" was being
+    // deleted as an author note whenever it followed a Notes:/Summary: marker.
+    /\b(?:i|i've|i'm|we|we've)\s+(?:have\s+|had\s+|been\s+)?(?:wrote|written|writing|rewrote|rewritten|published|updated)\b/,
+    /\bbeta(?:\s+read(?:er|ing)?s?)\b/,
+    /\b(?:leave|drop)\s+(?:a\s+)?(?:comment|kudos)\b/,
+    /\b(?:without\s+further\s+ado|please\s+enjoy|hope\s+you\s+enjoy)\b/,
+    /\b(?:check\s+out|find\s+me|follow\s+me)\b.*\b(?:work|story|archive|ao3|tumblr|twitter)\b/,
+    /^(?:story\s+outline|pass\s+(?:one|two|\d+)|beta\s+pass|publish)\b/,
+    /\b(?:next|current)\s+(?:story\s+)?updates?\b/,
+  ].some((pattern) => pattern.test(value));
+}
+
+function _escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function _stripLeadingNarrationLabels(text, chapterTitle, context = {}) {
+  let value = String(text || '').trim();
+  const labels = [
+    chapterTitle,
+    context.title,
+    context.author,
+  ].filter(Boolean);
+
+  // New parser records preserve line boundaries, so remove every leading line
+  // that exactly matches a known title/byline or a numbered chapter heading.
+  let lines = value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  while (lines.length) {
+    const key = _chapterTextKey(lines[0]);
+    const known = labels.some((label) => key && key === _chapterTextKey(label));
+    const exportMetadata = _AO3_EXPORT_SIGNATURE_RE.test(lines[0])
+      || /^(?:preface|summary|(?:chapter\s+)?notes?)\s*:?\s*$/i.test(lines[0]);
+    if (!known && !_NUMBERED_CHAPTER_RE.test(lines[0]) && !exportMetadata) break;
+    lines.shift();
+  }
+  value = lines.join('\n').trim();
+
+  // Older IndexedDB records were whitespace-collapsed. Remove the same known
+  // label sequence from their prefix without guessing at arbitrary prose.
+  for (let pass = 0; pass < 8 && value; pass++) {
+    const before = value;
+    for (const label of labels) {
+      value = value.replace(new RegExp(`^${_escapeRegExp(label)}\\s+`, 'i'), '');
+    }
+    if (context.title) {
+      value = value.replace(new RegExp(
+        `^(?:chapter|part|book)\\s+(?:\\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten)\\s*[:\\-]\\s*${_escapeRegExp(context.title)}\\s+`,
+        'i',
+      ), '');
+    }
+    value = value.replace(/^(?:chapter|part|book)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten)\s+/i, '');
+    if (value === before) break;
+  }
+  return value.trim();
+}
+
+function _sanitizeNarrationParagraphs(chapterTitle, paragraphs, context = {}, hasAo3Signature = false) {
+  const values = (paragraphs || []).map((value) => String(value || '').trim()).filter(Boolean);
+  const cleaned = [];
+  let introMeta = false;
+  let sawIntroMeta = false;
+
+  for (let index = 0; index < values.length; index++) {
+    let text = values[index];
+    // Only an actual AO3 export may be truncated at an end-of-notes marker.
+    // This used to fire on ANY document, so a story containing a line that is
+    // exactly "End Notes" or "Afterword" -- an archivist reading a title aloud,
+    // a chapter break -- silently discarded every remaining paragraph of that
+    // chapter. In a genuine AO3 export the marker really does mean "notes from
+    // here on"; in arbitrary uploaded prose it means nothing.
+    const endMatch = hasAo3Signature ? text.match(_END_META_MARKER_RE) : null;
+    if (endMatch) {
+      const before = text.slice(0, endMatch.index).trim();
+      if (before) cleaned.push(before);
+      break;
+    }
+
+    const transition = text.match(_NOTES_TO_STORY_RE);
+    if (transition) {
+      text = text.slice(transition.index + transition[0].length).replace(/^[\s:\-]+/, '');
+      introMeta = false;
+      sawIntroMeta = true;
+      if (!text) continue;
+    }
+
+    if ((index < 20 || !cleaned.length) && _OPENING_META_MARKER_RE.test(text)) {
+      introMeta = true;
+      sawIntroMeta = true;
+      continue;
+    }
+    if (introMeta && _looksLikeAuthorNote(text)) continue;
+    if (introMeta) introMeta = false;
+
+    if (!cleaned.length) text = _stripLeadingNarrationLabels(text, chapterTitle, context);
+    if (text) cleaned.push(text);
+  }
+  return cleaned.length || sawIntroMeta || hasAo3Signature ? cleaned : values;
+}
+
+export function normalizeStoryChapters(chapters, context = {}) {
   if (!Array.isArray(chapters)) return [];
+  const narratable = chapters.filter((chapter) => !_isNarrationFrontMatterChapter(chapter));
+  // Never erase a document made entirely of a legitimately named "Preface" or
+  // "Introduction"; remove metadata sections only when actual story chapters
+  // remain beside them.
+  let sourceChapters = narratable.length ? narratable : chapters;
+  const documentOpening = sourceChapters.slice(0, 2)
+    .flatMap((chapter) => (chapter?.paragraphs || []).slice(0, 12))
+    .join(' ');
+  const hasAo3Signature = _AO3_EXPORT_SIGNATURE_RE.test(documentOpening);
+
+  if (hasAo3Signature) {
+    const expanded = [];
+    for (const source of sourceChapters) {
+      const values = Array.isArray(source?.paragraphs) ? source.paragraphs : [];
+      const boundaries = [];
+      values.forEach((paragraph, index) => {
+        const raw = String(paragraph || '').trim();
+        const firstLine = raw.split(/\r?\n/, 1)[0].trim();
+        const match = firstLine.match(_NUMBERED_CHAPTER_RE) || raw.match(_NUMBERED_CHAPTER_RE);
+        if (match) boundaries.push({ index, title: firstLine.match(_NUMBERED_CHAPTER_RE) ? firstLine : `Chapter ${match[1]}` });
+      });
+      if (boundaries.length && (boundaries[0].index > 0 || boundaries.length > 1)) {
+        boundaries.forEach((boundary, position) => {
+          const end = boundaries[position + 1]?.index ?? values.length;
+          expanded.push({ ...source, title: boundary.title, paragraphs: values.slice(boundary.index, end) });
+        });
+      } else {
+        expanded.push(source);
+      }
+    }
+    sourceChapters = expanded;
+  }
+
   const fingerprints = new Set();
   const chapterTextByTitle = new Map();
   const normalized = [];
 
-  for (const source of chapters) {
+  for (const source of sourceChapters) {
     if (!source || typeof source !== 'object') continue;
     const title = String(source.title || '').trim();
-    const paragraphs = Array.isArray(source.paragraphs) ? source.paragraphs : [];
+    const paragraphs = _sanitizeNarrationParagraphs(
+      title,
+      Array.isArray(source.paragraphs) ? source.paragraphs : [],
+      context,
+      hasAo3Signature,
+    );
     const cleaned = [];
     let previousKey = '';
     for (const raw of paragraphs) {
@@ -203,26 +371,37 @@ export function normalizeStoryChapters(chapters) {
     if (contentKey.length) chapterTextByTitle.set(titleKey, `${priorText} ${contentKey}`.trim());
     normalized.push({ ...source, title, paragraphs: cleaned });
   }
-  return normalized;
+
+  const collapsed = [];
+  for (const chapter of normalized) {
+    const match = String(chapter.title || '').trim().match(_NUMBERED_CHAPTER_RE);
+    const prior = collapsed[collapsed.length - 1];
+    const priorMatch = String(prior?.title || '').trim().match(_NUMBERED_CHAPTER_RE);
+    if (match && priorMatch && match[1].toLowerCase() === priorMatch[1].toLowerCase()) {
+      if ((prior.paragraphs || []).length <= 12 && chapter.paragraphs.length > prior.paragraphs.length) {
+        collapsed[collapsed.length - 1] = chapter;
+      } else {
+        prior.paragraphs.push(...chapter.paragraphs);
+      }
+    } else {
+      collapsed.push(chapter);
+    }
+  }
+  return collapsed;
 }
 window.normalizeStoryChapters = normalizeStoryChapters;
 
-export function mergeStoryChapters(existing, incoming) {
-  const base = normalizeStoryChapters(existing);
-  const fresh = normalizeStoryChapters(incoming);
-  return normalizeStoryChapters(base.concat(fresh));
+export function mergeStoryChapters(existing, incoming, context = {}) {
+  const base = normalizeStoryChapters(existing, context);
+  const fresh = normalizeStoryChapters(incoming, context);
+  return normalizeStoryChapters(base.concat(fresh), context);
 }
 window.mergeStoryChapters = mergeStoryChapters;
 
-export async function saveStoryChapters(title, chapters) {
+export async function saveStoryChapters(title, chapters, context = {}) {
   if (!title || !chapters) return;
-  const canonical = normalizeStoryChapters(chapters);
-  let db;
-  try {
-    db = await initDB();
-  } catch (e) {
-    return;
-  }
+  const canonical = normalizeStoryChapters(chapters, context);
+  const db = await initDB();
   return new Promise((resolve, reject) => {
     try {
       const tx = db.transaction('story_chapters', 'readwrite');
@@ -235,6 +414,7 @@ export async function saveStoryChapters(title, chapters) {
         }
         reject(tx.error);
       };
+      tx.onabort = () => reject(tx.error || new Error('Story chapter write was aborted.'));
     } catch (err) {
       reject(err);
     }
@@ -242,7 +422,7 @@ export async function saveStoryChapters(title, chapters) {
 }
 window._saveStoryChapters = saveStoryChapters;
 
-export async function loadStoryChapters(title) {
+export async function loadStoryChapters(title, context = {}) {
   if (!title) return null;
   const db = await initDB();
   return new Promise((resolve, reject) => {
@@ -252,11 +432,11 @@ export async function loadStoryChapters(title) {
     req.onsuccess = () => {
       const stored = req.result || null;
       if (!stored) { resolve(null); return; }
-      const canonical = normalizeStoryChapters(stored);
+      const canonical = normalizeStoryChapters(stored, context);
       if (JSON.stringify(canonical) !== JSON.stringify(stored)) {
         // Repair old local chapter data in the background. The current read
         // proceeds immediately, so this never delays opening a story.
-        saveStoryChapters(title, canonical).catch(() => {});
+        saveStoryChapters(title, canonical, context).catch(() => {});
       }
       resolve(canonical);
     };
@@ -349,11 +529,14 @@ export async function evictOldAudioChunks(db, options = {}) {
             }
             console.log(`[Storage] Evicted ${deleted} temp audio chunks (${aggressive ? 'aggressive, ' : ''}now ~${Math.round(tempBytes / 1048576)}MB)`);
           }
-          resolve();
         }
       };
-      req.onerror = () => resolve();
+      req.onerror = () => {
+        try { tx.abort(); } catch (_) {}
+      };
+      tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
     } catch (err) {
       console.warn("[Storage] Eviction check failed:", err);
       resolve();
@@ -370,19 +553,45 @@ function _putAudioChunk(db, key, record) {
       store.put(record, key);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('Audio cache write was aborted.'));
     } catch (err) {
       reject(err);
     }
   });
 }
 
-export async function saveAudioChunk(storyTitle, chapIdx, paraIdx, engine, voice, audioBlob, isPermanent = false) {
-  let db;
-  try {
-    db = await initDB();
-  } catch (e) {
-    return;
+/**
+ * Cheap synchronous content fingerprint (FNV-1a, 32-bit).
+ *
+ * Audio cache keys are purely positional --
+ * `${storyRef}_${chapIdx}_${paraIdx}_${engine}_${voice}` -- so any change to
+ * paragraph segmentation silently remaps existing audio onto different text.
+ * The narration sanitizer and the AO3 chapter re-split both change segmentation,
+ * which means a story cached before one of those changes would play paragraph
+ * N's audio while the reader is on N+1, with nothing to detect it. Storing the
+ * fingerprint of the text a chunk was synthesized from lets a read verify the
+ * chunk still belongs to the paragraph asking for it.
+ *
+ * Not crypto: this detects drift, not tampering, and must stay synchronous
+ * because it runs on every cache lookup during playback.
+ */
+export function paragraphFingerprint(text) {
+  const value = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!value) return '';
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
   }
+  return hash.toString(16);
+}
+window._paragraphFingerprint = paragraphFingerprint;
+
+export async function saveAudioChunk(storyTitle, chapIdx, paraIdx, engine, voice, audioBlob, isPermanent = false, text = null) {
+  if (!(audioBlob instanceof Blob) || audioBlob.size < 100) {
+    throw new Error('Refusing to cache an invalid audio blob.');
+  }
+  const db = await initDB();
 
   _saveCount++;
   if (_saveCount % 20 === 0) {
@@ -391,6 +600,8 @@ export async function saveAudioChunk(storyTitle, chapIdx, paraIdx, engine, voice
 
   const key = getAudioKey(storyTitle, chapIdx, paraIdx, engine, voice);
   const record = { blob: audioBlob, isPermanent: isPermanent, timestamp: Date.now(), storyRef: storyTitle };
+  const fingerprint = text == null ? '' : paragraphFingerprint(text);
+  if (fingerprint) record.textHash = fingerprint;
   try {
     return await _putAudioChunk(db, key, record);
   } catch (err) {
@@ -410,7 +621,24 @@ export async function saveAudioChunk(storyTitle, chapIdx, paraIdx, engine, voice
   }
 }
 
-export async function getAudioChunk(storyTitle, chapIdx, paraIdx, engine, voice) {
+// Drops a single stale chunk. Best-effort: a failure here only means the stale
+// entry lingers until eviction, and the caller has already treated it as a miss.
+async function deleteAudioChunk(key) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = db.transaction('audio_chunks', 'readwrite');
+      tx.objectStore('audio_chunks').delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error || new Error('Stale audio chunk delete was aborted.'));
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+export async function getAudioChunk(storyTitle, chapIdx, paraIdx, engine, voice, text = null) {
   // Never reject: any storage failure (e.g. iOS private mode, DB blocked) is
   // treated as a cache miss so playback falls through to live synthesis instead
   // of pausing on every paragraph.
@@ -420,13 +648,26 @@ export async function getAudioChunk(storyTitle, chapIdx, paraIdx, engine, voice)
   } catch (e) {
     return null;
   }
+  const expected = text == null ? '' : paragraphFingerprint(text);
   return new Promise((resolve) => {
     try {
       const tx = db.transaction('audio_chunks', 'readonly');
       const store = tx.objectStore('audio_chunks');
       const key = getAudioKey(storyTitle, chapIdx, paraIdx, engine, voice);
       const req = store.get(key);
-      req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+      req.onsuccess = () => {
+        const found = req.result;
+        if (!found) { resolve(null); return; }
+        // Chunks written before fingerprinting existed carry no textHash. Treat
+        // those as usable rather than wiping every user's cached narration on
+        // upgrade; from here on every new chunk is verifiable.
+        if (expected && found.textHash && found.textHash !== expected) {
+          deleteAudioChunk(key).catch(() => {});
+          resolve(null);
+          return;
+        }
+        resolve(found.blob || null);
+      };
       req.onerror = () => resolve(null);
     } catch (e) {
       resolve(null);

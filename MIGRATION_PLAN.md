@@ -1,17 +1,17 @@
-# Pocket Reader — Anvil Decommission & GitHub Migration Plan
+# Pocket Reader — Completed Hosting Migration Record
 
-Created: 2026-07-26. Status: **Phases 0–3 complete. Phase 4 (Supabase auth) next.**
+Created: 2026-07-26. Status: **Complete. Cloudflare Pages/Supabase is the sole active web stack.**
 
 - Repo: `github.com/Alpharius6769/pocket-reader` (private), CI green
 - **Frontend LIVE: https://pocket-reader-f2y.pages.dev** — narration, isolation
   and offline shell all verified in a real browser
 - Backend: Hugging Face, deployed from `backend/` by GitHub Actions
-- Anvil: superseded and awaiting deletion (no users, nothing to preserve)
+- Anvil: fully retired; no active runtime, account, or deployment dependency
 
-Authoritative plan for moving Pocket Reader off Anvil Works onto a private
+Historical record of moving Pocket Reader off Anvil Works onto a private
 GitHub repo + Cloudflare Pages, with Supabase owning auth and profile sync.
 Supersedes the hosting description in `AGENT_HANDOFF_MASTER.md` §1 once Phase 4
-completes. Until then, **Anvil remains production**.
+completed. Cloudflare Pages is production.
 
 ## Decisions (locked 2026-07-26)
 
@@ -350,7 +350,17 @@ Consequences:
   data theft — but it is not something the app can fix from inside the Space.
 - **This strengthens the case for Option B** (private Space behind the
   Cloudflare Worker): routing through infrastructure the maintainer controls is
-  the only way to get CORS actually enforced.
+  the only way to get CORS enforced *for browsers*.
+
+  **Corrected 2026-07-29.** CORS is a browser mechanism, not an authentication
+  one, and the Worker's `/api/*` branch rejects only requests that carry a
+  disallowed `Origin` header. A client that simply omits `Origin` (curl, any
+  script) still reaches the `HF_TOKEN`-authenticated proxy. That is unavoidable
+  while the frontend is unauthenticated — it cannot hold a secret — so the API
+  remains open to non-browser callers exactly as it was when the Space was
+  public. Option B privatises the backend **source**, not the API surface. The
+  generic `?url=` proxy is different: it requires an allowed origin *or* a valid
+  `X-Pocket-Proxy-Key`, and is genuinely closed.
 
 #### CORS trap — `ALLOWED_ORIGINS` lives in FOUR places
 
@@ -389,6 +399,11 @@ wipe push subscriptions.
       `<anvil-form>`, unescapes, rewrites 45 `_/theme/` assets onto
       `/assets/**`, repoints the service-worker registration, and emits a real
       document with `standard-page.html` as its `<head>`.
+      **DELETED 2026-07-29.** One-shot transitional tooling, like
+      `sync_to_anvil.ps1`. Once `standard-page.html` became a redirect stub it
+      would have regenerated `public/index.html` with that stub as the `<head>`,
+      destroying the real head (theme link, modulepreloads, SW registration,
+      anti-flash mask) and leaving a `location.replace('/')` redirect loop.
 - [x] `public/manifest.webmanifest` (Anvil auto-injected one; source had none)
 - [x] `public/_headers` — caching + security, **no COOP/COEP** (see win #2)
 - [x] Suite **154/154**, including new guards for the converted document, the

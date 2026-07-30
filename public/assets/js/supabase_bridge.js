@@ -1,21 +1,11 @@
 /**
- * Supabase auth + profile sync bridge. Replaces the Anvil Skulpt bridge.
+ * Supabase auth + profile sync bridge for the standalone Cloudflare Pages app.
  *
- * CONTRACT: implements the SAME nine window.anvil* names, signatures and return
- * shapes that FrontEnd_code.py installed, because ~25 call sites across
- * sync_core, ui_controller, library_manager, settings_manager and cinematic_ui
- * already depend on them. Renaming is deliberately deferred until after cutover
- * so this swap is one file plus a script tag. See MIGRATION_PLAN.md Phase 4.
+ * CONTRACT: exposes one window.pocketCloud API used by sync_core,
+ * ui_controller, library_manager, settings_manager, and cinematic_ui.
  *
- *   anvilGetCurrentUser()                        -> email string | null
- *   anvilLogin()                                 -> email string | null
- *   anvilLogout()                                -> true
- *   anvilSyncProfile(profile, isSyncing)         -> boolean
- *   anvilSyncProfileV3(profile, baseRev, devId)  -> { profile, revision, syncedAt }
- *   anvilLoadProfile()                           -> profile object | null
- *   anvilSaveAvatar(dataUrl)                     -> boolean
- *   anvilLoadAvatar()                            -> data URL string | null
- *   anvilDeleteAccountData(confirmation)         -> boolean
+ *   getCurrentUser(), login(), logout(), syncProfile(), saveProfile(),
+ *   loadProfile(), saveAvatar(), loadAvatar(), deleteAccountData()
  *
  * NO SDK. Talks to GoTrue and PostgREST over fetch(), matching the project's
  * existing discipline of self-hosting everything (ORT, fonts, icons) rather than
@@ -24,7 +14,7 @@
  * The publishable key below is designed to ship in frontend JS. Access is
  * enforced by Row Level Security, not by key secrecy.
  */
-import { mergeProfile, normalizeProfile } from './profile_merge.js?v=merge-v1';
+import { mergeProfile, normalizeProfile } from './profile_merge.js?v=merge-v2';
 
 const SUPABASE_URL = 'https://dctjxeqjtctyvvrdlcxo.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KUGiCZjxfxQb2eQwOTQO0A_MY8ihwur';
@@ -108,7 +98,7 @@ async function rest(path, { method = 'GET', body, headers = {} } = {}) {
 // ------------------------------------------------------------- login form ----
 
 /**
- * Anvil supplied login_with_form(); nothing replaces it, so this builds a
+ * The standalone site needs its own login UI, so this builds a
  * minimal modal. Resolves to an email on success, or null if dismissed --
  * matching the old contract, where a cancelled login was null rather than a
  * thrown error.
@@ -160,7 +150,7 @@ function showLoginForm() {
     const cancel = btn('Cancel');
     cancel.style.flex = '0 0 auto';
 
-    // Anvil Users provided password recovery and confirmation resend. Without
+    // Supabase provides password recovery and confirmation resend. Without
     // these a user who forgets a password, or loses the confirmation email, is
     // permanently locked out with no self-service path.
     const helpers = document.createElement('div');
@@ -329,8 +319,7 @@ async function readProfileRow() {
 /**
  * Merge locally, then commit through the compare-and-swap RPC. If another
  * device committed first the RPC returns nothing, so re-read and re-merge
- * rather than overwriting their work. This is the replacement for Anvil's
- * serializable transaction retry.
+ * rather than overwriting their work.
  */
 async function syncProfileV3(profileData, baseRevision = 0, deviceId = null) {
   const incoming = typeof profileData === 'string' ? profileData : JSON.stringify(profileData ?? {});
@@ -368,7 +357,7 @@ async function loadProfile() {
     return profile;
   } catch (err) {
     // Never surface as an exception: sync_core treats a throw as "no cloud
-    // profile" and can silently skip a real one (the Anvil Issue-10 behaviour).
+    // profile" and can silently skip a real one.
     log('WARN', 'Failed to load cloud profile', String(err));
     return null;
   }
@@ -451,32 +440,31 @@ async function deleteAccountData(confirmation) {
   }
 }
 
-// The nine names the existing call sites expect.
-window.anvilGetCurrentUser = getCurrentUser;
-window.anvilLogin = async () => {
+const login = async () => {
   const existing = await getCurrentUser();
   if (existing) return existing;
   return showLoginForm();
 };
-window.anvilLogout = async () => {
+const logout = async () => {
   const token = await accessToken();
   if (token) { try { await gotrue('/logout', { token }); } catch (_) { /* local sign-out still applies */ } }
   storeSession(null);
   return true;
 };
-window.anvilSyncProfileV3 = syncProfileV3;
-window.anvilSyncProfile = async (profileData) => {
+const saveProfile = async (profileData) => {
   try { return !!(await syncProfileV3(profileData, 0, null)); }
-  catch (err) { log('WARN', 'Legacy profile push failed', String(err)); return false; }
+  catch (err) { log('WARN', 'Profile push failed', String(err)); return false; }
 };
-window.anvilLoadProfile = loadProfile;
-window.anvilSaveAvatar = saveAvatar;
-window.anvilLoadAvatar = loadAvatar;
-window.anvilDeleteAccountData = deleteAccountData;
-
-// Forward-looking aliases; the anvil* names are removed once call sites move.
-window.pocketAuth = {
-  getCurrentUser, login: window.anvilLogin, logout: window.anvilLogout,
-  syncProfile: syncProfileV3, loadProfile, saveAvatar, loadAvatar, deleteAccountData,
+window.pocketCloud = {
+  getCurrentUser,
+  login,
+  logout,
+  syncProfile: syncProfileV3,
+  saveProfile,
+  loadProfile,
+  saveAvatar,
+  loadAvatar,
+  deleteAccountData,
   isSignedIn: () => !!session?.access_token,
 };
+window.pocketAuth = window.pocketCloud;

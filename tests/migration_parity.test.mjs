@@ -50,10 +50,10 @@ test('the browser shell does not force a legacy Anvil direct-path frame escape',
 
 test('login pulls the cloud profile from the logged-in account', async () => {
   const ui = await read('public/assets/js/ui_controller.js');
-  assert.ok(ui.includes("if (typeof window.anvilLoadProfile === 'function')"),
+  assert.ok(ui.includes("typeof window.pocketCloud?.loadProfile === 'function'"),
     'login should pull the cloud profile whenever loadProfile is available');
-  assert.ok(!ui.includes("typeof window.anvilSyncProfileV3 !== 'function'"),
-    'the dead gate on anvilSyncProfileV3 should not remain in the login flow');
+  assert.ok(!ui.includes('window.anvil'),
+    'retired hosting compatibility globals should not remain in the login flow');
 });
 
 test('Google sign-in preserves route and hash state on return', async () => {
@@ -87,6 +87,40 @@ test('nothing references Anvil origins or deleted Anvil files', async () => {
       assert.ok(!source.includes(token), `${file} still references ${token}`);
     }
   }
+});
+
+test('all public files are free of deleted Anvil asset paths', async () => {
+  const { readdir } = await import('node:fs/promises');
+  const { join } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const root = fileURLToPath(new URL('../public/', import.meta.url));
+  const offenders = [];
+  async function walk(dir, rel = '') {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const file = join(dir, entry.name);
+      const path = rel ? `${rel}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) await walk(file, path);
+      else {
+        const source = await readFile(file, 'utf8');
+        if (source.includes('/_/theme/') || source.includes('/_/api/')) offenders.push(path);
+      }
+    }
+  }
+  await walk(root);
+  assert.deepEqual(offenders, [], `public files still contain deleted Anvil paths: ${offenders.join(', ')}`);
+});
+
+// Asserted against `backend/`, not the "Hugging Face Space" checkout: that
+// checkout is a deploy target (and a bare gitlink CI does not fetch), so
+// reading it made this test fail with ENOENT on every CI run.
+test('HMOFA catalog uses the independent local source', async () => {
+  const [app, catalog] = await Promise.all([
+    readFile(new URL('../backend/app.py', import.meta.url), 'utf8'),
+    readFile(new URL('../backend/masterlist.json', import.meta.url), 'utf8'),
+  ]);
+  assert.doesNotMatch(app, /docs\.google\.com\/spreadsheets/);
+  assert.match(app, /Pocket Reader independent catalog/);
+  assert.deepEqual(JSON.parse(catalog).stories, []);
 });
 
 const precachedAssets = (source) =>

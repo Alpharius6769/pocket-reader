@@ -4,7 +4,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v9';
+} from './tts_pronunciation_core.js?v=pron-v11';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -376,25 +376,66 @@ function wasmModelPaths(language, filename) {
   ];
 }
 
+// Mobile networks fail transiently far more often than they fail persistently: a
+// tunnel, a cell handoff or a lift drops a few seconds of connectivity. Host
+// failover alone does not survive that, because both hosts are unreachable
+// through the same gap -- one blip used to fail the whole model load and surface
+// as "narration won't start". So each pass tries every host, and a pass whose
+// failures were all transient is retried after a short backoff.
+//
+// A 404/403 is not transient: the asset is genuinely absent from that host, so
+// failing over is right and retrying only wastes time on a slow connection.
+const MODEL_FETCH_PASSES = 3;
+const MODEL_FETCH_BACKOFF_MS = [400, 1200];
+
+function isTransientFetchFailure(status) {
+  // No status means a network error or timeout, which is the common mobile case.
+  if (!status) return true;
+  return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+const delay = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
 async function fetchFirstAvailable(urls, options = {}, timeoutMs = METADATA_TIMEOUT_MS) {
   let lastError = null;
-  for (let index = 0; index < urls.length; index += 1) {
-    const url = urls[index];
-    try {
-      const response = await fetchWithTimeout(url, options, timeoutMs);
-      if (response.ok) return response;
-      lastError = new Error(`HTTP ${response.status} from ${new URL(url).hostname}`);
-    } catch (error) {
-      lastError = error;
+
+  for (let pass = 0; pass < MODEL_FETCH_PASSES; pass += 1) {
+    let sawTransientFailure = false;
+
+    for (let index = 0; index < urls.length; index += 1) {
+      const url = urls[index];
+      let status = 0;
+      try {
+        const response = await fetchWithTimeout(url, options, timeoutMs);
+        if (response.ok) return response;
+        status = response.status;
+        lastError = new Error(`HTTP ${response.status} from ${new URL(url).hostname}`);
+      } catch (error) {
+        lastError = error;
+      }
+      if (isTransientFetchFailure(status)) sawTransientFailure = true;
+      if (index < urls.length - 1) {
+        postMessage({
+          type: "diagnostic",
+          level: "WARN",
+          message: `Model host unavailable; trying fallback (${lastError?.message || lastError})`,
+        });
+      }
     }
-    if (index < urls.length - 1) {
+
+    // Every host answered definitively (404/403). Another pass cannot help.
+    if (!sawTransientFailure) break;
+    if (pass < MODEL_FETCH_PASSES - 1) {
+      const backoff = MODEL_FETCH_BACKOFF_MS[pass] ?? MODEL_FETCH_BACKOFF_MS[MODEL_FETCH_BACKOFF_MS.length - 1];
       postMessage({
         type: "diagnostic",
         level: "WARN",
-        message: `Model host unavailable; trying fallback (${lastError?.message || lastError})`,
+        message: `All model hosts failed transiently; retrying in ${backoff}ms (${lastError?.message || lastError})`,
       });
+      await delay(backoff);
     }
   }
+
   throw lastError || new Error("No model asset host was available");
 }
 
@@ -427,7 +468,106 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = METADATA_TIMEOUT_
   }
 }
 
+// ── Durable model cache (groundwork) ─────────────────────────────────────────
+// Voices already get a CacheStorage layer (audio_core's 'pocket-voices'), but
+// the ONNX bundles and the ORT WASM runtime -- the ~80 MB the settings screen
+// warns about -- currently rely only on the HTTP cache plus the proxy's
+// `max-age=31536000, immutable`. iOS Safari evicts its HTTP cache far more
+// aggressively than Chrome or Firefox, so an iPhone can be made to re-download
+// the whole engine over cellular repeatedly. CacheStorage is not evicted on the
+// same terms and is the durable home for these bytes.
+//
+// The name deliberately contains BOTH substrings that the rest of the app keys
+// on, and `tests/mobile_engine_reliability.test.mjs` pins that contract:
+//   * 'onnx'   -> sw.js `activate` preserves it across every shell upgrade,
+//                 so a version bump never re-downloads the engine.
+//   * 'pocket' -> settings_manager's clearNeuralEngineCache still deletes it,
+//                 so the user-facing "free up space" button keeps working.
+const POCKET_MODEL_CACHE = 'pocket-onnx-models-v1';
+
+let modelCachePromise;
+
+// Returns null rather than throwing when CacheStorage is unavailable: iOS
+// private browsing rejects caches.open() with a SecurityError, and a durable
+// cache is an optimization -- never a prerequisite for narration working.
+function openModelCache() {
+  if (modelCachePromise !== undefined) return modelCachePromise;
+  modelCachePromise = (async () => {
+    try {
+      if (typeof caches === 'undefined') return null;
+      return await caches.open(POCKET_MODEL_CACHE);
+    } catch (error) {
+      postMessage({
+        type: 'diagnostic',
+        level: 'INFO',
+        message: `Model CacheStorage unavailable; using HTTP cache instead (${error?.name || error})`,
+      });
+      return null;
+    }
+  })();
+  return modelCachePromise;
+}
+
+async function readCachedModelBuffer(url) {
+  try {
+    const cache = await openModelCache();
+    if (!cache) return null;
+    const hit = await cache.match(url);
+    if (!hit?.ok) return null;
+    return await hit.arrayBuffer();
+  } catch (error) {
+    postMessage({
+      type: 'diagnostic',
+      level: 'WARN',
+      message: `Model cache read failed; refetching (${error?.message || error})`,
+    });
+    return null;
+  }
+}
+
+// Never fatal. A full device (QuotaExceededError) must not turn a model that
+// downloaded successfully into a failed narration start.
+async function writeCachedModelBuffer(url, buffer, contentType = 'application/octet-stream') {
+  try {
+    const cache = await openModelCache();
+    if (!cache) return false;
+    await cache.put(url, new Response(buffer, { headers: { 'Content-Type': contentType } }));
+    return true;
+  } catch (error) {
+    postMessage({
+      type: 'diagnostic',
+      level: 'WARN',
+      message: `Model cache write skipped (${error?.name || error?.message || error})`,
+    });
+    return false;
+  }
+}
+
+// The same asset is reachable through two hosts -- the Cloudflare proxy and B2
+// direct -- and which one answers is a network accident. Keying the cache on the
+// raw URL would store the engine twice and miss on the alternate host, so both
+// forms collapse onto the canonical B2 URL. This is the exact inverse of
+// proxifyUrl().
+const B2_ASSET_PREFIX = 'https://f005.backblazeb2.com/file/pocket-reader-assets';
+
+function canonicalModelCacheKey(url) {
+  const value = String(url);
+  const proxyPrefix = `${PROXY_BASE_URL}/models`;
+  if (value.startsWith(proxyPrefix)) return value.replace(proxyPrefix, B2_ASSET_PREFIX);
+  return value;
+}
+
+// NOTE ON INTEGRITY: model weights carry no pinned digest and never have --
+// pinnedModuleDigest() throws for them by design. The SHA-256 pinning covers
+// only executable JS (the ORT runtime and sentencepiece) loaded through
+// importVerifiedModule, which is a completely separate path. So caching weights
+// bypasses no integrity check. CacheStorage is origin-scoped and only this
+// worker writes it, meaning the realistic risk is corruption rather than
+// tampering; that is addressed by refusing to store a short read below, not by
+// re-hashing 80 MB on every cold start (which would cost mobile users the very
+// startup time this cache exists to save).
 async function fetchSingleModelWithProgress(url, asset, completedBytes) {
+  const cacheKey = canonicalModelCacheKey(url);
   const controller = new AbortController();
   let stallTimerId;
   const resetStallTimer = () => {
@@ -456,6 +596,9 @@ async function fetchSingleModelWithProgress(url, asset, completedBytes) {
           asset,
         },
       });
+      // arrayBuffer() resolves only for a fully received body, so this is safe
+      // to persist without a further length check.
+      await writeCachedModelBuffer(cacheKey, buffer);
       return buffer;
     }
 
@@ -495,7 +638,19 @@ async function fetchSingleModelWithProgress(url, asset, completedBytes) {
     }
 
     if (output) {
-      if (assetLoadedBytes === output.byteLength) return output.buffer;
+      if (assetLoadedBytes === output.byteLength) {
+        await writeCachedModelBuffer(cacheKey, output.buffer);
+        return output.buffer;
+      }
+      // The server declared a Content-Length and then delivered fewer bytes.
+      // The buffer is still returned (existing behaviour), but a short read must
+      // never be persisted: a truncated model cached as authoritative would fail
+      // on every subsequent cold start with no network involved to self-heal.
+      postMessage({
+        type: 'diagnostic',
+        level: 'WARN',
+        message: `${asset} delivered ${assetLoadedBytes} of ${output.byteLength} declared bytes; not caching`,
+      });
       return output.slice(0, assetLoadedBytes).buffer;
     }
 
@@ -505,6 +660,10 @@ async function fetchSingleModelWithProgress(url, asset, completedBytes) {
       output.set(chunk, offset);
       offset += chunk.byteLength;
     }
+    // No Content-Length was advertised, so "complete" means the stream ended
+    // cleanly (done === true) rather than a length match. A stall aborts before
+    // reaching here.
+    await writeCachedModelBuffer(cacheKey, output.buffer);
     return output.buffer;
   } catch (error) {
     if (error?.name === "AbortError") {
@@ -517,6 +676,34 @@ async function fetchSingleModelWithProgress(url, asset, completedBytes) {
 }
 
 async function fetchModelWithProgress(urls, asset, completedBytes) {
+  // Read once per asset, not once per host: both candidate URLs collapse to the
+  // same canonical key, so a second lookup could only repeat the same answer.
+  const cached = urls.length ? await readCachedModelBuffer(canonicalModelCacheKey(urls[0])) : null;
+  if (cached) {
+    const loadedBytes = completedBytes + cached.byteLength;
+    // Advance the bar exactly as a completed download would, so a cache hit is
+    // indistinguishable from a fast network rather than looking like a stall.
+    postMessage({
+      type: "progress",
+      info: {
+        status: "progress",
+        progress: Math.min(69.9, 30 + (40 * loadedBytes / currentModelDownloadTotalBytes)),
+        loadedBytes,
+        totalBytes: currentModelDownloadTotalBytes,
+        asset,
+        assetLoadedBytes: cached.byteLength,
+        assetTotalBytes: cached.byteLength,
+        fromCache: true,
+      },
+    });
+    postMessage({
+      type: "diagnostic",
+      level: "INFO",
+      message: `${asset} served from the durable model cache (${cached.byteLength} bytes)`,
+    });
+    return cached;
+  }
+
   let lastError = null;
   for (let index = 0; index < urls.length; index += 1) {
     try {
@@ -1536,12 +1723,27 @@ function releaseGpuDevice() {
   try { device.destroy(); } catch (_) {}
 }
 
+// A release failure must never abort the teardown. session.release() rejects on
+// a lost WebGPU device -- which is precisely when this runs -- and an unhandled
+// rejection here used to skip every null-assignment and GPU-tensor disposal
+// below, leaving stale session handles plus leaked voice tensors. The retry then
+// released the same dead sessions and threw again, wedging the engine until the
+// worker was terminated. Dropping the session reference is what matters; the
+// underlying memory is reclaimed with the device or the worker either way.
 async function releaseSession(session) {
   if (!session) {
     return;
   }
   if (typeof session.release === "function") {
-    await session.release();
+    try {
+      await session.release();
+    } catch (error) {
+      postMessage({
+        type: 'diagnostic',
+        level: 'WARN',
+        message: `Session release failed; dropping the handle anyway (${error?.message || error})`,
+      });
+    }
   }
 }
 

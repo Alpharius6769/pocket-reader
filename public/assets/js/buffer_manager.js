@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v6';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v9';
 import {
   evaluateCpuThermalRest,
   POCKET_THERMAL_HISTORY_LIMIT,
@@ -44,9 +44,7 @@ function _narrationRuntimeLabel() {
 }
 
 function _minimumPlaybackReadyCount(total) {
-  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
-    || (navigator.maxTouchPoints || 0) > 0;
-  return Math.min(mobile ? 3 : 30, Math.max(0, Number(total) || 0));
+  return Math.min(20, Math.max(0, Number(total) || 0));
 }
 window.getPocketPlaybackReadyCount = _minimumPlaybackReadyCount;
 
@@ -135,12 +133,42 @@ function _fastNarrationRequested() {
   return new URL(window.location.href).searchParams.get(FAST_NARRATION_PARAM) === '1';
 }
 
+function _snapshotNarrationStory(story, storyRef) {
+  if (!story) return null;
+  return {
+    title: story.title || '',
+    author: story.author || '',
+    storyKey: story.storyKey || storyRef || '',
+    url: story.url || '',
+    sourceUrl: story.sourceUrl || story.source_url || '',
+    progressChapter: Number(story.progressChapter) || 0,
+    progressParagraph: Number(story.progressParagraph) || 0,
+    narrationPreset: story.narrationPreset || null,
+  };
+}
+
+function _isLoadableHandoffRef(ref) {
+  const value = String(ref || '').trim();
+  if (/^(\/api\/|\/local-upload\/|local:\/\/)/i.test(value)) return true;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+}
+
 function _requestFastNarrationReload(mode, action = 'cache') {
   if (!_supportsFastNarrationSession() || _isolationReady()) return false;
   // Mobile relies on cross-origin isolation just as much as desktop: multi-thread
   // WASM needs SharedArrayBuffer, and field data shows 4-thread narration is ~5x
   // faster than the single-thread fallback on a Pixel 6 Pro.
   if (!window.currentStory?.title) return false;
+  const storyRef = window.currentStory.storyKey
+    || window.getStoryStableKey?.(window.currentStory)
+    || window.currentStory.title;
+  const loadRef = window.currentStory.url || window.currentStory.sourceUrl || storyRef;
+  const storySnapshot = _snapshotNarrationStory(window.currentStory, storyRef);
 
   // If ?tts_fast=1 is already present but isolation still failed, retry once
   // with a cache-busting query so the service worker re-applies COOP/COEP.
@@ -154,6 +182,9 @@ function _requestFastNarrationReload(mode, action = 'cache') {
   if (!sessionStorage.getItem(FAST_NARRATION_RESUME_KEY)) {
     sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
       title: window.currentStory.title,
+      storyRef,
+      loadRef,
+      storySnapshot,
       mode: mode || 'Normal',
       action: action || 'cache',
       requestedAt: Date.now(),
@@ -166,10 +197,16 @@ function _requestFastNarrationReload(mode, action = 'cache') {
       existing.action = action || existing.action || 'cache';
       existing.requestedAt = Date.now();
       if (!existing.title) existing.title = window.currentStory.title;
+      if (!existing.storyRef) existing.storyRef = storyRef;
+      if (!existing.loadRef) existing.loadRef = loadRef;
+      if (!existing.storySnapshot) existing.storySnapshot = storySnapshot;
       sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify(existing));
     } catch (_) {
         sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
           title: window.currentStory.title,
+          storyRef,
+          loadRef,
+          storySnapshot,
           mode: mode || 'Normal',
           action: action || 'cache',
           requestedAt: Date.now(),
@@ -286,15 +323,69 @@ async function _resumeFastNarrationCache() {
   // The reload reboots the app and briefly lands on Home before the reader is
   // restored. Keep an overlay up across that gap so it does not look like the
   // app is jumping around. (Issue: forced to homescreen when caching starts.)
-  window.showLoadingOverlay?.('Resuming narration', 'Re-opening your story in fast multi-threaded mode…');
+  window.showLoadingOverlay?.('Preparing narration', 'Opening your story in fast multi-threaded mode…');
 
+  const targetRef = resume.storyRef || resume.title;
   const startedAt = Date.now();
-  while (Date.now() - startedAt < 60000) {
-    const storyReady = window.userProfile?.library?.some((story) => story.title === resume.title);
-    if (storyReady && typeof window.loadStory === 'function') {
+  while (Date.now() - startedAt < 15000) {
+    const library = window.userProfile?.library;
+    const storyEntry = Array.isArray(library)
+      ? (window.findLibraryStoryByRef?.(targetRef, library)
+        || library.find((story) => story.storyKey === targetRef || story.title === resume.title))
+      : null;
+    const loadRef = storyEntry?.storyKey || storyEntry?.url || resume.loadRef || targetRef;
+    // A reload can finish before the guest profile has hydrated. The previous
+    // implementation waited only for that in-memory library entry, then gave
+    // up and returned Home even though the original story URL was available.
+    // Give hydration a brief head start, then restore directly from the
+    // handoff URL/reference instead of treating a slow profile as a failure.
+    if (!storyEntry && Date.now() - startedAt < 2500) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      continue;
+    }
+    let restoredFromStorage = false;
+    if (!storyEntry && typeof window._loadStoryChapters === 'function') {
+      try {
+        const snapshot = resume.storySnapshot || {};
+        let storedChapters = await window._loadStoryChapters(targetRef, snapshot);
+        if ((!storedChapters || !storedChapters.length) && targetRef !== resume.title) {
+          storedChapters = await window._loadStoryChapters(resume.title, snapshot);
+        }
+        if (storedChapters?.length) {
+          window.currentStory = {
+            ...snapshot,
+            title: snapshot.title || resume.title,
+            storyKey: snapshot.storyKey || targetRef,
+            chapters: storedChapters,
+          };
+          window.currentChapterIndex = Number(snapshot.progressChapter) || 0;
+          window.currentParagraphIndex = Number(snapshot.progressParagraph) || 0;
+          restoredFromStorage = true;
+          window.Diagnostics?.log('INFO', 'Restored narration handoff directly from local story storage', {
+            title: resume.title,
+            storyRef: targetRef,
+            chapters: storedChapters.length,
+          });
+        }
+      } catch (error) {
+        window.Diagnostics?.log('WARN', 'Direct story-storage restore was unavailable', {
+          title: resume.title,
+          reason: error?.message || String(error),
+        });
+      }
+    }
+    const canLoadHandoff = _isLoadableHandoffRef(loadRef);
+    if (restoredFromStorage || (typeof window.loadStory === 'function' && canLoadHandoff)) {
+      if (!storyEntry) {
+        window.Diagnostics?.log('WARN', 'Library hydration was slow; restoring from handoff reference', {
+          title: resume.title,
+          hasLoadRef: Boolean(resume.loadRef),
+          hasStoryRef: Boolean(resume.storyRef),
+        });
+      }
       // Isolation still missing after first reload — try one hard retry.
       if (!_isolationReady() && sessionStorage.getItem(FAST_NARRATION_RETRY_KEY) !== '1') {
-        window.currentStory = window.currentStory || { title: resume.title };
+        window.currentStory = window.currentStory || { title: resume.title, storyKey: targetRef };
         if (!window.currentStory.title) window.currentStory.title = resume.title;
         if (_requestFastNarrationReload(resume.mode || 'Normal', resume.action || 'cache')) return;
       }
@@ -309,7 +400,27 @@ async function _resumeFastNarrationCache() {
       const isPermanent = resume.mode === 'Permanent';
       window._pocketSuppressCacheDecision = true;
       try {
-        await window.loadStory(resume.title, { preventNavigate: isPermanent });
+        if (restoredFromStorage) {
+          if (!isPermanent) {
+            window.populateReaderUI?.(window.currentStory, window.currentStory.author || 'Unknown');
+            window.recordStoryHistory?.(window.currentStory);
+            window.showView?.('reading-view');
+          }
+        } else {
+          await Promise.race([
+            window.loadStory(loadRef, { preventNavigate: isPermanent }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Story restore timed out')), 20000)),
+          ]);
+        }
+      } catch (error) {
+        console.error('[PocketTTS] Story restore failed:', error);
+        sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
+        sessionStorage.removeItem(FAST_NARRATION_RETRY_KEY);
+        window._pocketSuppressCacheDecision = false;
+        window.closeCacheModal?.();
+        window.hideLoadingOverlay?.();
+        window.virtueSpeak?.('Narration could not resume. Please start playback or caching again.', 6000);
+        return;
       } finally {
         window._pocketSuppressCacheDecision = false;
       }
@@ -345,7 +456,9 @@ async function _resumeFastNarrationCache() {
       // alerts "Invalid story URL"), starting a cache job would spin on a story
       // that never really loaded.
       const storyLoaded = window.currentStory
-        && window.currentStory.title === resume.title
+        && (window.currentStory.storyKey === targetRef
+          || window.getStoryStableKey?.(window.currentStory) === targetRef
+          || window.currentStory.title === resume.title)
         && Array.isArray(window.currentStory.chapters)
         && window.currentStory.chapters.length > 0;
       if (storyLoaded) {
@@ -368,8 +481,11 @@ async function _resumeFastNarrationCache() {
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
+  window.closeCacheModal?.();
   window.hideLoadingOverlay?.();
   sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
+  sessionStorage.removeItem(FAST_NARRATION_RETRY_KEY);
+  window.virtueSpeak?.('Story preparation timed out. Open the story and try caching again.', 6000);
 }
 
 // ── Screen Wake Lock (keep the screen awake during active caching) ───────────
@@ -436,6 +552,21 @@ export const BufferManager = {
   MANUAL_CAP_WORKERS: MANUAL_CAP_WORKERS,  // ceiling when the user manually overrides (75% cores, max 8)
   _generation: 0,         // bumped on each (re)start so stale worker loops retire themselves
   _resumeAttempted: false,
+  sessionStoryRefs: new Set(),
+  _backendPreparationPromise: null,
+  _backendParallelStarted: false,
+
+  getReadyCount() {
+    return Math.max(0, Number(this.cachedCount || 0) - Number(this.skippedCount || 0));
+  },
+
+  isPlaybackReadyForStory(story) {
+    if (!story || this.mode === 'Permanent' || this.totalToCache <= 0) return true;
+    const ref = story.storyKey || window.getStoryStableKey?.(story) || story.title;
+    if (!ref || !this.sessionStoryRefs?.has(ref)) return true;
+    const complete = this.cachedCount >= this.totalToCache;
+    return complete || this.getReadyCount() >= _minimumPlaybackReadyCount(this.totalToCache);
+  },
 
   initUI() {
     this.containerEl = document.getElementById('reader-buffer-container');
@@ -622,6 +753,7 @@ export const BufferManager = {
 
       // ISSUE 19 FIX: Clean Modal Dismiss States
       const minReady = _minimumPlaybackReadyCount(this.totalToCache);
+      const readyCount = this.getReadyCount();
       if (this.cachingModalDismiss) {
         this.cachingModalDismiss.style.display = 'block';
         if (this.mode === 'Permanent') {
@@ -632,7 +764,7 @@ export const BufferManager = {
           this.cachingModalDismiss.innerText = 'Hide Cache Panel';
           this.cachingModalDismiss.onclick = window.dismissCachingModal;
         } else {
-          if (this.cachedCount >= minReady || this.cachedCount >= this.totalToCache || !this.isActive) {
+          if (readyCount >= minReady || this.cachedCount >= this.totalToCache) {
             this.cachingModalDismiss.disabled = false;
             this.cachingModalDismiss.style.cursor = 'pointer';
             this.cachingModalDismiss.style.borderColor = 'var(--accent-green)';
@@ -644,12 +776,22 @@ export const BufferManager = {
                 window.togglePlayState();
               }
             };
+          } else if (!this.isActive || this.paused) {
+            this.cachingModalDismiss.disabled = false;
+            this.cachingModalDismiss.style.cursor = 'pointer';
+            this.cachingModalDismiss.style.borderColor = 'var(--accent-blue)';
+            this.cachingModalDismiss.style.color = 'var(--accent-blue)';
+            this.cachingModalDismiss.innerText = `Resume Caching (${readyCount}/${minReady} ready)`;
+            this.cachingModalDismiss.onclick = () => {
+              if (this.paused) this.resume();
+              else this.start(this.mode || 'Normal');
+            };
           } else {
             this.cachingModalDismiss.disabled = true;
             this.cachingModalDismiss.style.cursor = 'not-allowed';
             this.cachingModalDismiss.style.borderColor = 'var(--text-muted)';
             this.cachingModalDismiss.style.color = 'var(--text-muted)';
-            this.cachingModalDismiss.innerText = `Playback unlocks at ${minReady} paragraphs (${this.cachedCount}/${minReady}) - or minimize below to keep caching`;
+            this.cachingModalDismiss.innerText = `Playback unlocks at ${minReady} paragraphs (${readyCount}/${minReady} ready) - or minimize below to keep caching`;
             this.cachingModalDismiss.onclick = null;
           }
         }
@@ -678,6 +820,7 @@ export const BufferManager = {
     this.totalToCache = 0;
     this.cachedCount = 0;
     this.skippedCount = 0;
+    this.sessionStoryRefs = new Set();
     const engine = _resolveActiveEngine();
     if (engine !== 'pocket') {
       if (this.containerEl) this.containerEl.style.display = 'none';
@@ -694,7 +837,7 @@ export const BufferManager = {
       if (!chap.paragraphs) continue;
       for (let p = 0; p < chap.paragraphs.length; p++) {
         const text = chap.paragraphs[p].trim();
-        if (text && !this._isMetaParagraph(text, window.currentStory.title, chap.title)) {
+        if (text && !this._isMetaParagraph(text, window.currentStory.title, chap.title, window.currentStory.author)) {
           this.queue.push({
             storyTitle: window.currentStory.title,
             storyRef: window.currentStory.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory.title,
@@ -705,6 +848,9 @@ export const BufferManager = {
             voice: voice
           });
           this.totalToCache++;
+          this.sessionStoryRefs.add(
+            window.currentStory.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory.title,
+          );
         }
       }
     }
@@ -726,6 +872,8 @@ export const BufferManager = {
     // of no-opping on a stale active flag or leaving zombie loops behind.
     const gen = ++this._generation;
     this.isActive = false;
+    this._backendPreparationPromise = null;
+    this._backendParallelStarted = false;
     // Load worker settings from user profile (auto‑detected or manual)
     const settings = window.userProfile?.settings || {};
     this.maxWorkers = Number(settings.maxWorkers) || this.DEFAULT_MAX_WORKERS;
@@ -746,7 +894,6 @@ export const BufferManager = {
     }
     if (activeEngine === 'pocket') {
       this.maxWorkers = 1;
-      const selectedVoice = document.getElementById('voice-selector')?.value || POCKET_DEFAULT_VOICE;
       const earlyModal = document.getElementById('caching-progress-modal');
       if (earlyModal) {
         this.cachingModalEl = earlyModal;
@@ -755,31 +902,11 @@ export const BufferManager = {
       }
       const runtime = window._pocketBackendRuntime;
       const backendHint = runtime?.selectedBackend === 'webgpu'
-        ? 'Loading WebGPU FP16 narration...'
+        ? 'Checking cached WebGPU narration...'
         : (_isolationReady()
-          ? 'Preparing threaded WASM narration...'
-          : 'Preparing narration (unlocking multi-thread mode)...');
+          ? 'Checking cached narration...'
+          : 'Preparing narration session...');
       this._showModalStatus(backendHint);
-      try {
-        await window.ensurePocketBackendOptimized?.(selectedVoice);
-        const after = window._pocketBackendRuntime;
-        if (after?.selectedBackend === 'webgpu') {
-          this._showModalStatus(after.calibration?.optimistic
-            ? 'Starting WebGPU FP16 caching...'
-            : 'WebGPU narration ready...');
-        } else {
-          this._showModalStatus(`Starting caching — ${_narrationRuntimeLabel()}`);
-        }
-      } catch (error) {
-        console.warn('[Cache] Backend optimization retained WASM:', error?.message || error);
-        this._showModalStatus(`Starting caching — ${_narrationRuntimeLabel()}`);
-      }
-      try {
-        this.maxWorkers = Math.max(1, Number(await window.preparePocketCacheWorkerPool?.()) || 1);
-      } catch (error) {
-        this.maxWorkers = 1;
-        console.warn('[Cache] Parallel worker preparation retained one worker:', error?.message || error);
-      }
     }
 
     this.buildQueue();
@@ -790,6 +917,9 @@ export const BufferManager = {
         ? 'Everything here is already cached.'
         : 'The story text is still loading — try caching again in a moment.');
       if (this.cachingModalDismiss) this.cachingModalDismiss.style.display = 'block';
+      window._pocketThroughputCache = false;
+      window.trimPocketCacheWorkerPool?.();
+      if (!window.isPlaying) window.stopBgKeepAlive?.();
       setTimeout(() => window.dismissCachingModal?.(), 3500);
       return;
     }
@@ -797,7 +927,7 @@ export const BufferManager = {
     this.isActive = true;
     this.consecutiveErrors = 0;
     this.activeWorkers = 0;
-    // Re-query DOM refs — Anvil may have re-rendered the page since initUI ran
+    // Re-query DOM refs because responsive view transitions can replace panels.
     const _freshModal = document.getElementById('caching-progress-modal');
     if (_freshModal) this.cachingModalEl = _freshModal;
     const _freshText = document.getElementById('caching-progress-text');
@@ -829,9 +959,9 @@ export const BufferManager = {
     }
     if (_awayHint)    _awayHint.style.display    = _isAway ? 'block' : 'none';
     this.updateUI();
-    for (let i = 0; i < this.maxWorkers; i++) {
-      setTimeout(() => this._loop(gen), i * 250);
-    }
+    // Start with one lightweight cache reader. The full model and any parallel
+    // worker are initialized only when this reader finds a real cache miss.
+    setTimeout(() => this._loop(gen), 0);
   },
 
   pause() {
@@ -881,6 +1011,7 @@ export const BufferManager = {
     const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     if (window.userProfile?.settings?.lowMemoryMode || conn?.saveData) {
       if (typeof window.virtueSpeak === 'function') window.virtueSpeak('Away Mode is disabled in Low Memory Mode or Data Saver.', 5000);
+      if (!window.isPlaying) window.stopBgKeepAlive?.();
       return;
     }
     if (this.isActive) {
@@ -915,13 +1046,16 @@ export const BufferManager = {
     this._coolingUntil = 0;
     this.queue = [];
     this.totalToCache = 0;
+    this._backendPreparationPromise = null;
+    this._backendParallelStarted = false;
     const selectedEngine = document.getElementById('voice-engine-select')?.value || 'pocket';
     if (selectedEngine !== 'pocket') {
       if (btn) {
-        btn.innerHTML = 'Away Mode &nbsp;<span id="precache-count" class="away-mode-badge">0 queued</span>';
+        btn.innerHTML = `Away Mode &nbsp;<span id="precache-count" class="away-mode-badge">${window.precacheQueue.length} queued</span>`;
         btn.disabled = false;
         btn.classList.toggle('active', window.precacheQueue.length > 0);
       }
+      if (!window.isPlaying) window.stopBgKeepAlive?.();
       if (typeof window.virtueSpeak === 'function') window.virtueSpeak('Away Mode caching requires Pocket TTS. Switch to Pocket TTS and try again.', 5000);
       return;
     }
@@ -931,19 +1065,12 @@ export const BufferManager = {
       ? window.canonicalPocketVoice(selectedVoice)
       : String(selectedVoice || defaultVoice).toLowerCase().trim();
     const voice = POCKET_VOICES.includes(cleanVoice) ? cleanVoice : defaultVoice;
-    try {
-      await window.ensurePocketBackendOptimized?.(voice);
-    } catch (error) {
-      console.warn('[Away Mode] Backend optimization retained WASM:', error?.message || error);
-    }
-    try {
-      this.maxWorkers = Math.max(1, Number(await window.preparePocketCacheWorkerPool?.()) || 1);
-    } catch (error) {
-      this.maxWorkers = 1;
-      console.warn('[Away Mode] Parallel worker preparation retained one worker:', error?.message || error);
-    }
-    for (let i = 0; i < window.precacheQueue.length; i++) {
-      const storyRef = window.precacheQueue[i];
+    this.maxWorkers = 1;
+    const requestedQueue = [...window.precacheQueue];
+    const consumedRefs = new Set();
+    this.sessionStoryRefs = new Set();
+    for (let i = 0; i < requestedQueue.length; i++) {
+      const storyRef = requestedQueue[i];
       if (!window.userProfile || !window.userProfile.library) continue;
       const story = window.findLibraryStoryByRef?.(storyRef);
       if (!story) continue;
@@ -951,10 +1078,10 @@ export const BufferManager = {
       const storyTitle = story.title;
       let chapters = story.chapters;
       if (!chapters && typeof window._loadStoryChapters === 'function') {
-        chapters = await window._loadStoryChapters(stableRef);
+        chapters = await window._loadStoryChapters(stableRef, story);
         if (!chapters && stableRef !== storyTitle) {
-          chapters = await window._loadStoryChapters(storyTitle);
-          if (chapters) window._saveStoryChapters?.(stableRef, chapters).catch(() => {});
+          chapters = await window._loadStoryChapters(storyTitle, story);
+          if (chapters) window._saveStoryChapters?.(stableRef, chapters, story).catch(() => {});
         }
       }
       if (!chapters && typeof window._silentFetchStoryChapters === 'function' && story.url) {
@@ -963,7 +1090,7 @@ export const BufferManager = {
         try {
           chapters = await window._silentFetchStoryChapters(story.url);
           if (chapters && typeof window._saveStoryChapters === 'function') {
-            await window._saveStoryChapters(stableRef, chapters);
+            await window._saveStoryChapters(stableRef, chapters, story);
           }
         } catch (e) {
           console.error("Silent fetch failed", e);
@@ -972,12 +1099,13 @@ export const BufferManager = {
       }
       if (!chapters) continue;
 
+      const queueStart = this.queue.length;
       for (let c = 0; c < chapters.length; c++) {
         const chap = chapters[c];
         if (!chap.paragraphs) continue;
         for (let p = 0; p < chap.paragraphs.length; p++) {
           const text = chap.paragraphs[p].trim();
-          if (text && !this._isMetaParagraph(text, story.title, chap.title)) {
+          if (text && !this._isMetaParagraph(text, story.title, chap.title, story.author)) {
             this.queue.push({
               storyTitle: story.title,
               storyRef: stableRef,
@@ -991,15 +1119,22 @@ export const BufferManager = {
           }
         }
       }
+      if (this.queue.length > queueStart) {
+        consumedRefs.add(storyRef);
+        this.sessionStoryRefs.add(stableRef);
+      }
     }
-    window.precacheQueue = [];
+    window.precacheQueue = requestedQueue.filter((ref) => !consumedRefs.has(ref));
+    try { localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue)); } catch (_) {}
     if (btn) {
-      btn.innerHTML = 'Away Mode &nbsp;<span id="precache-count" class="away-mode-badge">0 queued</span>';
+      btn.innerHTML = `Away Mode &nbsp;<span id="precache-count" class="away-mode-badge">${window.precacheQueue.length} queued</span>`;
       btn.disabled = false;
-      btn.classList.remove('active');
+      btn.classList.toggle('active', window.precacheQueue.length > 0);
     }
     if (typeof window.refreshBgCachePanel === 'function') window.refreshBgCachePanel();
     if (this.queue.length === 0) {
+      window._pocketThroughputCache = false;
+      if (!window.isPlaying) window.stopBgKeepAlive?.();
       if (typeof window.triggerVirtue === 'function') {
         window.triggerVirtue('virtue_thinking');
         window.virtueSpeak('Those stories appear to be empty or already cached.');
@@ -1013,6 +1148,7 @@ export const BufferManager = {
     this.startTime = Date.now();
     this.consecutiveErrors = 0;
     this.cachedCount = 0;
+    this.skippedCount = 0;
     this.activeWorkers = 0;
     const _freshModal = document.getElementById('caching-progress-modal');
     if (_freshModal) this.cachingModalEl = _freshModal;
@@ -1021,18 +1157,23 @@ export const BufferManager = {
       this.cachingModalEl.classList.add('active');
     }
     this.updateUI();
-    for (let i = 0; i < this.maxWorkers; i++) {
-      setTimeout(() => this._loop(gen), i * 250);
-    }
+    setTimeout(() => this._loop(gen), 0);
   },
 
   stop() {
+    // Invalidate every in-flight loop. A synthesis promise cannot always be
+    // cancelled in the browser, but its eventual result must not write audio
+    // or increment the counters of a later story/run.
+    this._generation++;
     this.isActive = false;
     this.paused = false;
     this.queue = [];
-    this.totalToCache = 0;
-    this.cachedCount = 0;
-    this.skippedCount = 0;
+    this.activeWorkers = 0;
+    // Retain the session totals and story guard. "Stop caching" must not turn
+    // an incomplete 14/20 runway into an accidental playback unlock. A new
+    // buildQueue() replaces these values when another story starts caching.
+    this._backendPreparationPromise = null;
+    this._backendParallelStarted = false;
     window._pocketThroughputCache = false;
     window.trimPocketCacheWorkerPool?.();
     if (!window.isPlaying) window.stopBgKeepAlive?.();
@@ -1142,7 +1283,11 @@ export const BufferManager = {
   _scheduleLoop(gen, delay = 0) {
     if (document.hidden || (typeof document !== 'undefined' && !document.hasFocus()) || delay === 0) {
       const channel = new MessageChannel();
-      channel.port1.onmessage = () => this._loop(gen);
+      channel.port1.onmessage = () => {
+        channel.port1.close();
+        channel.port2.close();
+        this._loop(gen);
+      };
       channel.port2.postMessage(0);
       return;
     }
@@ -1206,6 +1351,35 @@ export const BufferManager = {
     }
   },
 
+  async _ensureCacheBackendReady(gen, voice) {
+    if (!this._backendPreparationPromise) {
+      this._backendPreparationPromise = (async () => {
+        this._showModalStatus('Loading the narration engine for uncached audio...');
+        await window.ensurePocketBackendOptimized?.(voice);
+        let workers = 1;
+        try {
+          workers = Math.max(1, Number(await window.preparePocketCacheWorkerPool?.()) || 1);
+        } catch (error) {
+          console.warn('[Cache] Parallel worker preparation retained one worker:', error?.message || error);
+        }
+        this.maxWorkers = workers;
+        this._showModalStatus(`Caching narration — ${_narrationRuntimeLabel()}`);
+        if (workers > 1 && !this._backendParallelStarted && gen === this._generation) {
+          this._backendParallelStarted = true;
+          for (let i = 1; i < workers; i++) {
+            setTimeout(() => this._loop(gen), i * 250);
+          }
+        }
+      })();
+    }
+    try {
+      await this._backendPreparationPromise;
+    } catch (error) {
+      this._backendPreparationPromise = null;
+      throw error;
+    }
+  },
+
   async _loop(gen) {
     if (gen !== this._generation) return;   // a newer run has superseded this loop
     if (this.queue.length === 0 && this.activeWorkers > 0 && !this.paused && this.isActive) {
@@ -1259,10 +1433,19 @@ export const BufferManager = {
         ? window._prosodyCacheTagVariants(task.engine)
         : [window._prosodyCacheTag ? window._prosodyCacheTag(task.engine) : ''];
       for (const tag of tagVariants) {
-        existingBlob = await getAudioChunk(task.storyRef || task.storyTitle, task.chapIdx, task.paraIdx, task.engine, routedVoice + tag);
+        existingBlob = await getAudioChunk(task.storyRef || task.storyTitle, task.chapIdx, task.paraIdx, task.engine, routedVoice + tag, task.text);
         if (existingBlob) break;
       }
+      if (gen !== this._generation || !this.isActive) {
+        this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+        return;
+      }
       if (!existingBlob) {
+        await this._ensureCacheBackendReady(gen, routedVoice);
+        if (gen !== this._generation || !this.isActive) {
+          this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+          return;
+        }
         if (window._pocketLiveSynthActive) {
           this.queue.unshift(task);
           this.activeWorkers = Math.max(0, this.activeWorkers - 1);
@@ -1309,6 +1492,10 @@ export const BufferManager = {
         this._currentSynthStartedAt = Date.now();
         try {
           audioBlob = await window.generateChunk(task.text, routedVoice);
+          if (gen !== this._generation || !this.isActive) {
+            this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+            return;
+          }
           this._currentSynthStartedAt = null;
           this._lastSynthMs = Math.round(performance.now() - synthStartedAt);
           const diag = window._lastPocketSynthTelemetry || null;
@@ -1355,7 +1542,11 @@ export const BufferManager = {
         }
         if (audioBlob) {
           const writeStartedAt = performance.now();
-          await saveAudioChunk(task.storyRef || task.storyTitle, task.chapIdx, task.paraIdx, task.engine, cacheVoice, audioBlob, this.mode === 'Permanent');
+          await saveAudioChunk(task.storyRef || task.storyTitle, task.chapIdx, task.paraIdx, task.engine, cacheVoice, audioBlob, this.mode === 'Permanent', task.text);
+          if (gen !== this._generation || !this.isActive) {
+            this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+            return;
+          }
           window.Diagnostics?.log('INFO', 'Pocket background cache write', {
             indexedDbWriteMs: Math.round(performance.now() - writeStartedAt),
             bytes: audioBlob.size,
@@ -1366,6 +1557,13 @@ export const BufferManager = {
         } else {
           this.consecutiveErrors++;
           task.failCount = (task.failCount || 0) + 1;
+          // generateChunk already made its one lower-temperature quality retry.
+          // Re-running the same deterministic paragraph two more times only
+          // wastes cache time and produces the same rejected audio.
+          const qualityFailure = window._lastPocketQualityFailure;
+          if (qualityFailure?.text === task.text && qualityFailure?.voice === routedVoice) {
+            task.failCount = 3;
+          }
 
           if (task.failCount >= 3) {
             console.warn(`[BufferManager] Paragraph ${task.chapIdx}:${task.paraIdx} failed 3 times. Circuit breaker skipping paragraph to prevent infinite loop.`);
@@ -1479,11 +1677,11 @@ export const BufferManager = {
     return true;
   },
 
-  _isMetaParagraph(text, storyTitle = null, chapterTitle = null) {
+  _isMetaParagraph(text, storyTitle = null, chapterTitle = null, storyAuthor = null) {
     // Delegates to the canonical detector (ui_controller -> window) so the
     // background cache skips exactly the paragraphs playback skips.
     if (typeof window.isMetaParagraph === 'function') {
-      return window.isMetaParagraph(text, storyTitle, chapterTitle);
+      return window.isMetaParagraph(text, storyTitle, chapterTitle, storyAuthor);
     }
     return !text || !text.trim();
   }
@@ -1545,13 +1743,15 @@ function _markCacheDecisionMade() {
 // instant, offline-safe restore.
 async function _persistCurrentStoryChapters() {
   const story = window.currentStory;
-  if (!story || !Array.isArray(story.chapters) || story.chapters.length === 0) return;
-  if (typeof window._saveStoryChapters !== 'function') return;
+  if (!story || !Array.isArray(story.chapters) || story.chapters.length === 0) return false;
+  if (typeof window._saveStoryChapters !== 'function') return false;
   const ref = story.storyKey || window.getStoryStableKey?.(story) || story.title;
   try {
-    await window._saveStoryChapters(ref, story.chapters);
+    await window._saveStoryChapters(ref, story.chapters, story);
+    return true;
   } catch (e) {
     console.warn('[PocketTTS] Could not persist chapters before fast-narration reload:', e);
+    return false;
   }
 }
 
@@ -1560,8 +1760,10 @@ async function _continueCaching(mode) {
   _markCacheDecisionMade();
   // Persist chapters BEFORE the isolation reload so resume restores from cache
   // instead of re-fetching over the network (see _persistCurrentStoryChapters).
-  await _persistCurrentStoryChapters();
-  if (_requestFastNarrationReload(mode, 'cache')) {
+  const chaptersPersisted = await _persistCurrentStoryChapters();
+  const loadRef = window.currentStory?.url || window.currentStory?.sourceUrl;
+  if ((chaptersPersisted || _isLoadableHandoffRef(loadRef))
+      && _requestFastNarrationReload(mode, 'cache')) {
     if (typeof window.closeCacheModal === 'function') window.closeCacheModal();
     return;
   }

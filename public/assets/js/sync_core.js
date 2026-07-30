@@ -282,14 +282,14 @@ function publishState() {
 
 export async function flushCloudSync() {
   if (SYNC_STATE.inFlight) return SYNC_STATE.inFlight;
-  if (!window._cloudPushAllowed || typeof window.anvilSyncProfileV3 !== 'function' || !navigator.onLine) return false;
+  if (!window._cloudPushAllowed || typeof window.pocketCloud?.syncProfile !== 'function' || !navigator.onLine) return false;
   const pending = await loadOutbox();
   if (!pending) return true;
   SYNC_STATE.status = 'syncing';
   publishState();
   SYNC_STATE.inFlight = (async () => {
     try {
-      const result = await window.anvilSyncProfileV3(pending.profile, pending.baseRevision || 0, getDeviceId());
+      const result = await window.pocketCloud.syncProfile(pending.profile, pending.baseRevision || 0, getDeviceId());
       if (!result?.profile) throw new Error('Cloud returned an invalid profile.');
       const latest = await loadOutbox();
       if (latest?.queueId && latest.queueId !== pending.queueId) {
@@ -347,11 +347,11 @@ export async function queueCloudSync(reason = 'profile', options = {}) {
 window.queueCloudSync = queueCloudSync;
 
 export async function pullCloudProfileOnStartup() {
-  if (typeof window.anvilGetCurrentUser !== 'function') return null;
-  // Anvil owns the authenticated browser session. This device-local preference
+  if (typeof window.pocketCloud?.getCurrentUser !== 'function') return null;
+  // Supabase owns the authenticated browser session. This device-local preference
   // only controls whether Pocket Reader resumes that session automatically.
   if (localStorage.getItem('pr_remember_login') === 'false') return null;
-  const email = await window.anvilGetCurrentUser();
+  const email = await window.pocketCloud.getCurrentUser();
   if (!email) return null;
   const owner = localStorage.getItem('pr_profile_owner') || '';
   if (owner && owner !== email) {
@@ -365,9 +365,9 @@ export async function pullCloudProfileOnStartup() {
   window.userProfile.cloudEmail = email;
   window._cloudPushAllowed = true;
   await queueCloudSync('startup', { immediate: true });
-  if (typeof window.anvilLoadAvatar === 'function') {
+  if (typeof window.pocketCloud?.loadAvatar === 'function') {
     try {
-      const avatar = await window.anvilLoadAvatar();
+      const avatar = await window.pocketCloud.loadAvatar();
       if (avatar) {
         window.userProfile.avatar = avatar;
         if (typeof window._saveUserAvatar === 'function') await window._saveUserAvatar(avatar);

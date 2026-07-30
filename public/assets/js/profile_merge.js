@@ -2,11 +2,11 @@
  * Schema-v3 profile normalisation and merge.
  *
  * A faithful port of Server_code.py's _normalize_profile / _merge_profile and
- * their helpers, which ran inside an Anvil serializable transaction. See
+ * their helpers, which previously ran inside a server-side transaction. See
  * MIGRATION_PLAN.md Phase 4.
  *
  * WHY THIS RUNS CLIENT-SIDE NOW
- * Anvil executed the merge on the server. Here it runs in the browser and the
+ * The old service executed the merge on the server. Here it runs in the browser and the
  * result is committed through commit_user_profile(), a Postgres compare-and-swap
  * keyed on `revision`: if another device wrote first, the commit returns nothing
  * and the caller re-reads and re-merges. That reproduces the property that
@@ -126,7 +126,7 @@ function normalizeAchievements(value) {
       const key = String(item.id);
       const stamp = asInt(item.unlockedAt, 0, 0);
       const current = result.get(key);
-      // Earliest unlock wins, matching the Anvil merge.
+      // Earliest unlock wins across devices.
       if (!current || stamp < asInt(current.unlockedAt, stamp, 0)) result.set(key, { id: key, unlockedAt: stamp });
     }
   }

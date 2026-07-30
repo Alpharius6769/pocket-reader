@@ -10,8 +10,8 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v54'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v43'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v58'\)/);
+  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v48'\)/);
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
@@ -58,13 +58,45 @@ test('post-isolation mobile resume requires a fresh user gesture', async () => {
   assert.match(resume, /await _awaitMobileNarrationGesture\(resume\.action/);
   assert.match(resume, /_requestFastNarrationReload\(resume\.mode \|\| 'Normal', resume\.action \|\| 'cache'\)/);
   assert.match(buffer, /preparePocketMobileMediaSession\?\.\(\)/);
-  const readyBranch = resume.slice(resume.indexOf('if (storyReady'));
+  const readyBranch = resume.slice(resume.indexOf('if (storyLoaded)'));
   const gestureAt = readyBranch.indexOf('await _awaitMobileNarrationGesture(resume.action');
-  const removeAt = readyBranch.indexOf('sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY)');
+  const removeAt = readyBranch.indexOf('sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY)', gestureAt);
   assert.ok(
     gestureAt >= 0 && removeAt > gestureAt,
     'resume intent must survive until the post-reload user gesture completes',
   );
+});
+
+test('failed narration resume cannot leave the loading overlay stuck', async () => {
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  const resume = buffer.match(/async function _resumeFastNarrationCache\(\)[\s\S]*?\n}\n\n\/\/ /)?.[0] || '';
+  assert.match(resume, /Promise\.race\(/, 'story restore needs a bounded timeout');
+  assert.match(resume, /catch \(error\)/, 'story restore errors must be handled');
+  assert.match(resume, /closeCacheModal\?\.\(\)/, 'failed restore must close cache UI');
+  assert.match(resume, /hideLoadingOverlay\?\.\(\)/, 'failed restore must hide the resume overlay');
+});
+
+test('post-reload narration restore can fall back to the original story URL before library hydration', async () => {
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  const resume = buffer.match(/async function _resumeFastNarrationCache\(\)[\s\S]*?\n}\n\n\/\/ /)?.[0] || '';
+  assert.match(buffer, /loadRef[,:]/, 'handoff record must retain a loadable story reference');
+  assert.match(resume, /const loadRef = /, 'resume must derive a fallback load reference');
+  assert.match(resume, /window\.loadStory\(loadRef/, 'resume must not require the in-memory library entry');
+  assert.match(resume, /Library hydration was slow/, 'fallback must leave useful diagnostic evidence');
+});
+
+test('a narration-resume fix advances the immutable module and service-worker revisions', async () => {
+  const [buffer, loader, worker, shell] = await Promise.all([
+    read('public/assets/js/buffer_manager.js'),
+    read('public/assets/js/narration_runtime_loader.js'),
+    read('public/sw.js'),
+    read('public/index.html'),
+  ]);
+  assert.match(loader, /buffer_manager\.js\?v=buffer-v48/);
+  assert.match(worker, /buffer_manager\.js\?v=buffer-v48/);
+  assert.match(worker, /pocket-reader-core-v135/);
+  assert.match(shell, /sw\.js\?v=135/);
+  assert.match(buffer, /storyRef/);
 });
 
 test('first requested paragraph supplies calibration telemetry without a throwaway synthesis', async () => {
@@ -76,13 +108,13 @@ test('first requested paragraph supplies calibration telemetry without a throwaw
   assert.match(audio, /realTimeFactor:\s*telemetry\?\.realTimeFactor/);
 });
 
-test('mobile caching unlocks playback quickly and starts keep-alive from the tap', async () => {
+test('caching requires a twenty-paragraph runway or story completion before playback', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
   const audio = await read('public/assets/js/audio_core.js');
 
-  assert.match(buffer, /function _minimumPlaybackReadyCount[\s\S]*?mobile\s*\?\s*3\s*:\s*30/);
+  assert.match(buffer, /function _minimumPlaybackReadyCount[\s\S]*?Math\.min\(20,/);
   assert.match(audio, /getPocketPlaybackReadyCount\?\.\(total\)/);
-  assert.doesNotMatch(audio, /cachedCount < 30/);
+  assert.match(audio, /Math\.min\(20,\s*total\)/);
 
   const startCaching = buffer.match(/window\.startCaching = async function[\s\S]*?\n};/)?.[0] || '';
   assert.match(startCaching, /preparePocketMobileMediaSession\?\.\(\)/);
@@ -90,6 +122,16 @@ test('mobile caching unlocks playback quickly and starts keep-alive from the tap
     startCaching.indexOf('preparePocketMobileMediaSession?.()') < startCaching.indexOf('await _ensureCachingStory'),
     'media activation must happen synchronously before the first await',
   );
+});
+
+test('fast narration handoff restores URL-less library stories from IndexedDB', async () => {
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  const resume = buffer.match(/async function _resumeFastNarrationCache\(\)[\s\S]*?\n}\n\n\/\/ /)?.[0] || '';
+
+  assert.match(buffer, /storySnapshot/, 'handoff must retain minimal story metadata');
+  assert.match(resume, /_loadStoryChapters/, 'resume must query persisted chapters directly');
+  assert.match(resume, /restoredFromStorage/, 'direct storage restore needs an explicit branch');
+  assert.match(resume, /_isLoadableHandoffRef/, 'opaque story keys must not be sent to URL validation');
 });
 
 test('periodic worker recycle is serialized and never begins during active synthesis', async () => {
@@ -110,10 +152,22 @@ test('quality recovery never resets the shared engine while another synthesis is
   assert.match(generate, /catch \(e\)[\s\S]*?if \(canResetSharedEngine\(\)\)\s*\{[\s\S]*?_resetPocketEngineForBackend/);
 });
 
+test('a failed cache render gets one varied quality retry instead of three identical reruns', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  const generate = audio.match(/window\.generateChunk = async function[\s\S]*?\n};/)?.[0] || '';
+
+  assert.match(generate, /throughputRetry/);
+  assert.match(generate, /_generatePocketAttempt\(null,\s*text,\s*route,\s*1\)/);
+  assert.match(generate, /_lastPocketQualityFailure/);
+  assert.match(buffer, /qualityFailure\?\.text === task\.text/);
+  assert.match(buffer, /task\.failCount = 3/);
+});
+
 test('every pronunciation consumer uses the current ruleset URL', async () => {
   for (const file of ['public/assets/js/audio_core.js', 'public/assets/js/settings_manager.js', 'public/assets/js/library_manager.js', 'public/assets/js/pocket_worker.js']) {
     const source = await read(file);
-    assert.doesNotMatch(source, /tts_pronunciation_core\.js\?v=pron-v7/, `${file} still imports pron-v7`);
-    assert.match(source, /tts_pronunciation_core\.js\?v=pron-v9/, `${file} must import pron-v9`);
+    assert.doesNotMatch(source, /tts_pronunciation_core\.js\?v=pron-v9/, `${file} still imports pron-v9`);
+    assert.match(source, /tts_pronunciation_core\.js\?v=pron-v11/, `${file} must import pron-v11`);
   }
 });

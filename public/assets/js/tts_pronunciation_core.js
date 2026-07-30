@@ -1,8 +1,8 @@
 // Browser-safe Pocket TTS pronunciation and tuning helpers.
 // Keep this module free of Node-only APIs; it is imported by the app and worker.
 
-export const PRONUNCIATION_RULESET_VERSION = 'pron-v9'; // v9: added can't/shan't expansion + "'s been/got"->"has" (fixes "it is been"); v6: dropped ambiguous 'd->would + "no"->"number" over-match; paired with tamed emotion prosody (busts audio cache)
-export const DEFAULT_POCKET_PLAYBACK_SPEED = 1.08;
+export const PRONUNCIATION_RULESET_VERSION = 'pron-v11'; // v11: current narration/parser release; v10 set natural 1.0x voice default
+export const DEFAULT_POCKET_PLAYBACK_SPEED = 1.0;
 export const DEFAULT_POCKET_TEMPERATURE_PRESET = 'balanced';
 export const DEFAULT_POCKET_QUALITY_MODE = 'mobile';
 

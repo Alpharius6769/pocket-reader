@@ -19,7 +19,6 @@ test('narration stays deferred while runtime and UI modules use canonical URLs',
   const html = await read('public/index.html');
   const loader = await read('public/assets/js/narration_runtime_loader.js');
   const serviceWorker = await read('public/sw.js');
-  const standardPage = await read('public/standard-page.html');
   const tagVersion = (source, module) =>
     source.match(new RegExp(`${module}\\.js\\?v=([a-z0-9-]+)`))?.[1];
   // Heavy narration modules must not be executable script tags in the form
@@ -37,18 +36,19 @@ test('narration stays deferred while runtime and UI modules use canonical URLs',
     assert.ok(pageTag, `${module} script tag missing from FrontEnd_html.html`);
     assert.equal(tagVersion(serviceWorker, module), pageTag,
       `${module}: serviceworker precache differs from form-template tag`);
-    assert.equal(tagVersion(standardPage, module), pageTag,
-      `${module}: standard-page modulepreload differs from form-template tag`);
   }
   assert.match(loader, /ensureNarrationRuntime/);
   const deferredActions = loader.match(/const DEFERRED_NARRATION_ACTIONS = \[[\s\S]*?\];/)?.[0] || '';
   assert.doesNotMatch(deferredActions, /onSpeedSliderInput/);
-  assert.match(loader, /window\.onSpeedSliderInput = function onSpeedSliderInput/);
+  // There is no speed slider or label in the app. The handler that used to
+  // mirror slider input into a label is gone; playback speed comes from the
+  // profile/preset via audio_core's getEffectivePlaybackRate().
+  assert.doesNotMatch(loader, /onSpeedSliderInput/);
 });
 
 test('service worker uses bounded navigation and lifetime-protected cache writes', async () => {
   const source = await read('public/sw.js');
-  assert.match(source, /pocket-reader-core-v129/);
+  assert.match(source, /pocket-reader-core-v135/);
   assert.match(source, /fetchWithTimeout\(event\.request, 6000\)/);
   assert.match(source, /event\.waitUntil\(updatePromise/);
   assert.match(source, /url\.searchParams\.has\('v'\)/);
@@ -81,4 +81,27 @@ test('backend database durability and health refresh are fail-visible and single
   assert.match(source, /database_durable/);
   assert.match(source, /SITE_HEALTH_REFRESH_LOCK/);
   assert.match(source, /client\.stream\("GET", url\)/);
+});
+
+test('narration defaults to natural speed and an emotion-aware profile', async () => {
+  const tuning = await read('public/assets/js/tts_pronunciation_core.js');
+  const library = await read('public/assets/js/library_manager.js');
+  const features = await read('public/assets/js/reader_features.js');
+  const html = await read('public/index.html');
+
+  assert.match(tuning, /DEFAULT_POCKET_PLAYBACK_SPEED = 1(?:\.0)?;/);
+  assert.match(library, /voiceEmotionMode:\s*"balanced"/);
+  assert.match(features, /_migratedEmotionBalanced/);
+  assert.match(html, /<option value="balanced" selected>/);
+});
+
+test('stored AO3 export front matter is removed before narration', async () => {
+  const storage = await read('public/assets/js/storage_core.js');
+  const ui = await read('public/assets/js/ui_controller.js');
+
+  assert.match(storage, /function _isNarrationFrontMatterChapter/);
+  assert.match(storage, /preface/);
+  assert.match(storage, /posted\\s\+originally\\s\+on\\s\+the\\s\+archive\\s\+of\\s\+our\\s\+own/i);
+  assert.match(ui, /storyAuthor/);
+  assert.match(ui, /chapter\|part\|book/);
 });

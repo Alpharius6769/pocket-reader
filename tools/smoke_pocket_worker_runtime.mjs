@@ -3,8 +3,8 @@
 // and records the runtime flavor selected by the worker.
 
 import { createServer } from 'node:http';
-import { readFileSync, statSync, writeFileSync } from 'node:fs';
-import { resolve, extname, basename } from 'node:path';
+import { readFileSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { resolve, extname, basename, dirname } from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -122,7 +122,7 @@ try {
   if (useLiveAssets) {
     await page.goto(`${productionOrigin}/__pocket_worker_smoke__?bootstrap=1`, { waitUntil: 'load' });
     await page.evaluate(async () => {
-      await navigator.serviceWorker.register('/_/api/serviceworker.js?v=129', { scope: '/' });
+      await navigator.serviceWorker.register('/sw.js?v=135', { scope: '/' });
       await navigator.serviceWorker.ready;
       if (!navigator.serviceWorker.controller) {
         await new Promise((resolveController, rejectController) => {
@@ -140,7 +140,7 @@ try {
   }
   const result = await page.evaluate(async () => {
     const messages = [];
-    const worker = new Worker('/_/theme/pocket_worker.js?v=pocket-worker-v43', { type: 'module' });
+    const worker = new Worker('/assets/js/pocket_worker.js?v=pocket-worker-v45', { type: 'module' });
     const terminal = await new Promise((resolveTerminal, rejectTerminal) => {
       const timeout = setTimeout(() => rejectTerminal(new Error('Worker initialization timed out.')), 10 * 60 * 1000);
       worker.onmessage = (event) => {
@@ -199,7 +199,10 @@ try {
       && result.telemetry?.ortWasmRuntimeFlavor === expectedRuntimeFlavor,
     expectedRuntimeFlavor,
   };
-  if (!noWrite) writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
+  if (!noWrite) {
+    mkdirSync(dirname(output), { recursive: true });
+    writeFileSync(output, `${JSON.stringify(report, null, 2)}\n`);
+  }
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   if (!report.passed) process.exitCode = 1;
 } finally {

@@ -46,7 +46,7 @@ test('loading overlay reveal is delayed and cancellable', async () => {
 });
 
 test('fast-narration reload paints a self-removing, theme-aware anti-flash mask', async () => {
-  const page = await read('public/standard-page.html');
+  const page = await read('public/index.html');
   assert.match(page, /pr-iso-mask/);
   // Gated on an actively-pending resume so a bare ?tts_fast=1 reload is untouched.
   assert.match(page, /pr_fast_narration_resume_v1/);

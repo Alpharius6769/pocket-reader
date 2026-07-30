@@ -117,7 +117,8 @@ def main():
         "note": (
             "Unused/unloaded ONNX+ORT browser instruction set backup. "
             "Restore by copying keys back under onnx/ and models/Pocket TTS Onnx/, "
-            "then redeploy Anvil with the prior pocket_worker/audio_core ORT path."
+            "then redeploy the Cloudflare Pages public/ build with the prior "
+            "pocket_worker/audio_core ORT path."
         ),
         "restoreHint": {
             "serviceWorker": "pocket-reader-core-v109 era ORT WASM/WebGPU path",
@@ -136,7 +137,7 @@ def main():
         "## Restore\n"
         "1. Copy objects from this prefix back to their original keys (strip the "
         f"`{dest_root}/` prefix).\n"
-        "2. Redeploy Anvil theme assets from the last known-good ORT commit "
+        "2. Redeploy Cloudflare Pages from the last known-good ORT commit "
         "(pocket-reader-core-v109 / pocket-worker-v33 era).\n"
         "3. Keep Cloudflare `/models` and `/onnx` routes unchanged.\n"
     )

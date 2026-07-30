@@ -8,8 +8,8 @@ export function ensureNarrationRuntime() {
   if (narrationRuntimePromise) return narrationRuntimePromise;
 
   window.__pocketNarrationRuntimeLoading = true;
-  narrationRuntimePromise = import('./audio_core.js?v=audio-v54')
-    .then(() => import('./buffer_manager.js?v=buffer-v43'))
+  narrationRuntimePromise = import('./audio_core.js?v=audio-v58')
+    .then(() => import('./buffer_manager.js?v=buffer-v48'))
     .then(() => {
       window.__pocketNarrationRuntimeLoaded = true;
       window.__pocketNarrationRuntimeLoading = false;
@@ -28,13 +28,6 @@ export function ensureNarrationRuntime() {
   return narrationRuntimePromise;
 }
 window.ensureNarrationRuntime = ensureNarrationRuntime;
-
-// Slider movement only updates a label. Keep that interaction lightweight so
-// settings initialization and touch input do not initialize the TTS runtime.
-window.onSpeedSliderInput = function onSpeedSliderInput(value) {
-  const label = document.getElementById('speed-label');
-  if (label) label.innerText = `${Number.parseFloat(value).toFixed(2)}x`;
-};
 
 const POCKET_DEFERRED_SILENCE =
   'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
@@ -90,7 +83,6 @@ const DEFERRED_NARRATION_ACTIONS = [
   'seekToChapter',
   'saveBookmark',
   'applyPlaybackSpeed',
-  'applyPlaybackSpeedSlider',
   'onVoiceSelectionChange',
   'preparePocketCacheWorkerPool',
   'rerunPocketBackendOptimization',

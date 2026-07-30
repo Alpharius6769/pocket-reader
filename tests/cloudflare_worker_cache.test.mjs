@@ -99,9 +99,25 @@ test('generic proxy accepts allowed localhost browser origins without a proxy ke
       'https://pocket-reader-proxy.example/?url=' + encodeURIComponent(target),
       { headers: { Origin: 'http://localhost:3000' } },
     );
-    const response = await worker.fetch(request, {}, { waitUntil() {} });
+    // Loopback is a development affordance and must be opted into. Without the
+    // flag, production reflected CORS for any port or scheme on localhost.
+    const response = await worker.fetch(
+      request,
+      { ALLOW_LOCALHOST_ORIGINS: '1' },
+      { waitUntil() {} },
+    );
     assert.equal(response.status, 200);
     assert.equal(upstream.method, 'GET');
+
+    const denied = await worker.fetch(
+      new Request(
+        'https://pocket-reader-proxy.example/?url=' + encodeURIComponent(target),
+        { headers: { Origin: 'http://localhost:3000' } },
+      ),
+      {},
+      { waitUntil() {} },
+    );
+    assert.equal(denied.status, 403, 'localhost must be denied unless explicitly enabled');
   } finally {
     globalThis.fetch = originalFetch;
   }

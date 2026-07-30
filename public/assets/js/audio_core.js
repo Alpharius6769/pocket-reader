@@ -1,11 +1,11 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v6';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v9';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v9';
+} from './tts_pronunciation_core.js?v=pron-v11';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -122,11 +122,13 @@ const POCKET_BALANCED_EMOTION_MAP = {
   confused: 'worried',
 };
 const POCKET_EMOTION_PATTERN = new RegExp(`_(${POCKET_ALL_EMOTIONS.join('|')})$`);
-// narrv16: flow-model latent noise is now deterministically seeded per chunk
+// narrv18: embedded AO3 metadata removal and outline-less chapter splitting can
+// shift chapter/paragraph indices, so old position-keyed audio must not be reused.
+// must never be reused for the newly normalized story layout.
 // (voice+emotion+text) on all generation paths — bumped so existing position-
 // keyed cached audio re-renders with the consistent engine instead of the old
 // per-render variation.
-const POCKET_NARRATION_CACHE_VERSION = 'narrv16';
+const POCKET_NARRATION_CACHE_VERSION = 'narrv18';
 const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // Identity-anchored voice pack subpath on B2 (see Back end/tools/build_anchored_pack_v2.py).
 // Every v2 emotion state shares a neutral identity anchor, so emotion switches keep
@@ -194,8 +196,8 @@ function _emotionFromAssetVoice(voice) {
 }
 
 function _emotionMode() {
-  const mode = window.currentStory?.narrationPreset?.emotion || window.userProfile?.settings?.voiceEmotionMode || 'neutral';
-  return ['neutral', 'balanced'].includes(mode) ? mode : 'neutral';
+  const mode = window.currentStory?.narrationPreset?.emotion || window.userProfile?.settings?.voiceEmotionMode || 'balanced';
+  return ['neutral', 'balanced'].includes(mode) ? mode : 'balanced';
 }
 
 function _detectPocketEmotion(text) {
@@ -1132,8 +1134,8 @@ async function _loadPocketEngine() {
       return new Promise((resolveSpawn) => {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
-        // can resolve under an Anvil shell subpath.
-        const workerScript = '/assets/js/pocket_worker.js?v=pocket-worker-v43';
+        // resolves consistently from every static-app route.
+        const workerScript = '/assets/js/pocket_worker.js?v=pocket-worker-v45';
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -1598,7 +1600,9 @@ export function preparePocketMobileMediaSession() {
   _bindMediaElementSession(_premiumAudio);
   window.currentAudio = _premiumAudio;
   const keepAlive = _ensureBgKeepAlive();
-  if (!_premiumAudio.src || _premiumAudio.dataset?.pocketUnlock !== '1') {
+  const hasPausedNarration = _premiumAudio.dataset?.pocketNarration === '1'
+    && Boolean(_premiumAudio.src);
+  if (!hasPausedNarration && (!_premiumAudio.src || _premiumAudio.dataset?.pocketUnlock !== '1')) {
     _premiumAudio.src = keepAlive.src;
     _premiumAudio.loop = true;
     _premiumAudio.volume = 0.001;
@@ -1606,9 +1610,10 @@ export function preparePocketMobileMediaSession() {
     _premiumAudio.play().catch(() => {});
   }
 
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!_audioCtx && AudioContextClass) _audioCtx = new AudioContextClass();
-  if (_audioCtx?.state === 'suspended') _audioCtx.resume().catch(() => {});
+  // No AudioContext is created here. Mobile narration plays through the media
+  // element above and never routes through a graph, so the context this used to
+  // build was resumed on every paragraph and then never connected to anything --
+  // dead weight on the platform most sensitive to audio-session churn.
   return true;
 }
 window.preparePocketMobileMediaSession = preparePocketMobileMediaSession;
@@ -2518,6 +2523,7 @@ async function _maybeRecyclePocketEngine() {
 // Live generator with one quality-guard retry around Pocket output.
 window.generateChunk = async function(text, voice) {
   if (!text || text.trim() === '') return null;
+  window._lastPocketQualityFailure = null;
   _cancelWorkerIdleRelease();
   const engine = _resolveActiveEngine();
   if (engine !== 'pocket') return null;
@@ -2555,17 +2561,21 @@ window.generateChunk = async function(text, voice) {
     // Background caching skips the full re-render retry: a second pass doubles
     // wall time on phones. Empty/fatal still fails the paragraph so the loop
     // can resurface the error instead of storing silence.
-    const allowQualityRetry = !_isPocketThroughputCache()
-      && shouldRetryPocketQuality(first.quality)
-      && canResetSharedEngine();
+    const qualityRetryNeeded = shouldRetryPocketQuality(first.quality);
+    const allowQualityRetry = qualityRetryNeeded && canResetSharedEngine();
     if (allowQualityRetry) {
       // Re-render once with clean worker state at lower temperature.
-      _logPocketQuality('WARN', 'Pocket synth quality guard retrying with clean worker session', first, { retryUsed: false });
-      window._pocketParagraphCount = 0;
-      try {
-        await _resetPocketEngineForBackend();
-        await _loadPocketEngine();
-      } catch (_) {}
+      const throughputRetry = _isPocketThroughputCache();
+      _logPocketQuality('WARN', throughputRetry
+        ? 'Pocket synth quality guard retrying failed cache paragraph'
+        : 'Pocket synth quality guard retrying with clean worker session', first, { retryUsed: false });
+      if (!throughputRetry) {
+        window._pocketParagraphCount = 0;
+        try {
+          await _resetPocketEngineForBackend();
+          await _loadPocketEngine();
+        } catch (_) {}
+      }
       const retry = await _generatePocketAttempt(null, text, route, 1);
       retryUsed = true;
       if (!retry.quality.fatal) {
@@ -2575,6 +2585,11 @@ window.generateChunk = async function(text, voice) {
           retryUsed: true,
           firstReason: first.quality.reasons.join(', '),
         });
+        window._lastPocketQualityFailure = {
+          text,
+          voice,
+          reason: retry.quality.reasons.join(', '),
+        };
         return null;
       }
     } else if (first.quality.fatal) {
@@ -2582,6 +2597,11 @@ window.generateChunk = async function(text, voice) {
         ? 'no retry in throughput mode'
         : 'shared engine is serving another synthesis';
       _logPocketQuality('ERROR', `Pocket synth quality guard rejected paragraph (${reason})`, first, { retryUsed: false });
+      window._lastPocketQualityFailure = {
+        text,
+        voice,
+        reason: first.quality.reasons.join(', '),
+      };
       return null;
     } else if (!first.quality.ok) {
       _logPocketQuality('WARN', 'Pocket synth accepted with a soft quality warning', first, { retryUsed: false });
@@ -2615,7 +2635,9 @@ window.generateChunk = async function(text, voice) {
 
     if (!accepted.result || !accepted.result.audio || accepted.result.audio.length === 0) return null;
     const wavStartedAt = performance.now();
-    const wav = _encodeWAV(accepted.result.audio, accepted.result.sampleRate || 24000);
+    const wav = _encodeWAV(accepted.result.audio, accepted.result.sampleRate || 24000, {
+      fadeInSec: _onsetFadeSecFor(route.voiceId),
+    });
     window.Diagnostics?.log('INFO', 'Pocket WAV encoded', { wavEncodingMs: Math.round(performance.now() - wavStartedAt), bytes: wav.size });
     return wav;
   } catch (e) {
@@ -2663,7 +2685,9 @@ window.generateChunkStream = async function(text, voice, onSegment) {
     _recordPocketTtsCalibrationFromTelemetry(streamTelemetry);
     window.Diagnostics?.log('INFO', 'Pocket streamed synthesis complete', streamTelemetry);
     const wavStartedAt = performance.now();
-    const wav = _encodeWAV(attempt.result.audio, attempt.result.sampleRate || 24000);
+    const wav = _encodeWAV(attempt.result.audio, attempt.result.sampleRate || 24000, {
+      fadeInSec: _onsetFadeSecFor(route.voiceId),
+    });
     window.Diagnostics?.log('INFO', 'Pocket streamed WAV encoded', { wavEncodingMs: Math.round(performance.now() - wavStartedAt), bytes: wav.size });
     return wav;
   } catch (error) {
@@ -2716,35 +2740,32 @@ export function togglePlayState() {
     return;
   }
 
-  // Keep a short runway while the current story is actively caching. Mobile
-  // needs only three ready paragraphs; making iOS wait for thirty turned a
-  // healthy x2 cache into a several-minute play-button lockout.
-  if (!window.isPlaying && window.BufferManager && window.BufferManager.isActive) {
-    const activeJob = window.BufferManager.queue && window.BufferManager.queue[0];
-    if (activeJob && activeJob.storyTitle === window.currentStory.title) {
-      const cachedCount = window.BufferManager.cachedCount || 0;
-      const total = window.BufferManager.totalToCache || 999;
-      const minReady = window.getPocketPlaybackReadyCount?.(total) ?? Math.min(3, total);
-      if (cachedCount < minReady && cachedCount < total) {
-        if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_explaining');
-        if (typeof window.virtueSpeak === 'function') {
-          window.virtueSpeak(`Still securing the text! Please let me cache ${minReady} paragraphs before we begin reading.`, 4500, true);
-        } else {
-          alert(`Still caching! Please wait for ${minReady} paragraphs before playing.`);
-        }
-        return;
-      }
+  // Keep a full twenty-successful-paragraph runway. This check is deliberately
+  // independent of the worker's active/paused state: a failed or paused cache
+  // job must not turn a partial runway into an accidental playback unlock.
+  if (!window.isPlaying && window.BufferManager?.isPlaybackReadyForStory
+      && !window.BufferManager.isPlaybackReadyForStory(window.currentStory)) {
+    const readyCount = window.BufferManager.getReadyCount?.() || 0;
+    const total = window.BufferManager.totalToCache || 0;
+    const minReady = window.getPocketPlaybackReadyCount?.(total) ?? Math.min(20, total);
+    if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_explaining');
+    if (typeof window.virtueSpeak === 'function') {
+      window.virtueSpeak(`Still securing the text! ${readyCount} of ${minReady} paragraphs are ready.`, 4500, true);
+    } else {
+      alert(`Still caching! ${readyCount} of ${minReady} paragraphs are ready.`);
     }
+    return;
   }
 
+  let resumePausedPocketAudio = false;
   if (!window.isPlaying && _resolveActiveEngine() === 'pocket') {
     // Run synchronously in the tap before any model/network await. If isolation
     // requires a navigation, the resume path asks for one fresh tap afterward.
     preparePocketMobileMediaSession();
     if (window.requestPocketNarrationIsolation?.('playback', 'Normal')) return;
+    resumePausedPocketAudio = _canResumePausedPocketAudio();
   }
 
-  const playBtn = document.getElementById('play-btn-main');
   window.isPlaying = !window.isPlaying;
 
   if (window.isPlaying) {
@@ -2752,7 +2773,8 @@ export function togglePlayState() {
     if (typeof window._setControlsLocked === 'function') window._setControlsLocked(true);
     startBgKeepAlive();
     _signalColdStartOnce();
-    playCurrentParagraph();
+    if (!resumePausedPocketAudio) playCurrentParagraph();
+    else _resumePausedPocketAudio();
   } else {
     _updatePlayButton(false);
     if (typeof window._setControlsLocked === 'function') window._setControlsLocked(false);
@@ -2765,12 +2787,15 @@ export async function playCurrentParagraph() {
   if (!window.isPlaying) return;
 
   const story = window.currentStory;
-  if (!story || !story.chapters) return;
+  if (!story || !story.chapters) {
+    pausePlayback();
+    return;
+  }
   if (typeof window._updateMediaSessionMetadata === 'function') window._updateMediaSessionMetadata();
 
   const chap = story.chapters[window.currentChapterIndex];
   if (!chap || !chap.paragraphs) {
-    window.isPlaying = false;
+    pausePlayback();
     return;
   }
 
@@ -2807,11 +2832,6 @@ window.playCurrentParagraph = playCurrentParagraph;
 
 let _premiumAudio = window.__pocketMobileMediaElement || null;
 let _audioCtx = window.__pocketMobileAudioContext || null;
-let _audioSource = null;
-let _splitter = null;
-let _merger = null;
-let _monoGainL = null;
-let _monoGainR = null;
 let _pocketWorkletModulePromise = null;
 let _activePocketStream = null;
 
@@ -2845,7 +2865,7 @@ async function _createPocketPcmStream(onEnded) {
         node.port.postMessage({
           type: 'configure',
           sampleRate: this.sourceSampleRate,
-          playbackRate: parseFloat(document.getElementById('speed-slider')?.value || '1'),
+          playbackRate: getEffectivePlaybackRate(),
         });
       }
       this.segments += 1;
@@ -2878,61 +2898,51 @@ async function _createPocketPcmStream(onEnded) {
 }
 
 function _preferDirectMobileMediaPlayback() {
-  // Direct HTMLAudioElement output bypasses AudioContext background suspension
-  // across desktop, laptop, mobile, PWA, and locked-screen sessions.
-  return true;
+  // Gates the AudioWorklet streaming path only. Desktop can stream PCM through
+  // an AudioContext to cut first-audio latency; mobile must not, because iOS
+  // suspends an AudioContext on screen lock while a bare media element keeps
+  // playing under OS control. Returning true means "play whole paragraphs from
+  // the media element", which is also the fallback whenever streaming fails.
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
+    || (navigator.maxTouchPoints || 0) > 1;
 }
 
-function _setupAudioRouting(audioElement) {
-  if (!audioElement) return;
-  if (_audioSource) return; // already set up
-
-  try {
-    _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    _audioSource = _audioCtx.createMediaElementSource(audioElement);
-
-    _splitter = _audioCtx.createChannelSplitter(2);
-    _merger = _audioCtx.createChannelMerger(2);
-
-    // Route channel 0 (single narrator voice) to both L and R outputs
-    _monoGainL = _audioCtx.createGain();
-    _monoGainR = _audioCtx.createGain();
-
-    _audioSource.connect(_splitter);
-    _splitter.connect(_monoGainL, 0, 0);
-    _splitter.connect(_monoGainR, 0, 0);
-    _monoGainL.connect(_merger, 0, 0);
-    _monoGainR.connect(_merger, 0, 1);
-    _merger.connect(_audioCtx.destination);
-  } catch (e) {
-    console.warn("Failed to initialize Web Audio routing:", e);
-  }
-}
+// The narration media element is no longer routed through an AudioContext on
+// any platform. That graph existed to host the emotion-boundary gain ramp and
+// to duplicate channel 0 across L/R, but the ramp now lives in the encoded
+// samples and the encoder emits mono (numChannels = 1), which browsers already
+// play to both outputs. Removing it means desktop and mobile share one playback
+// path, so what is exercised on desktop is what ships to phones -- and nothing
+// holds a MediaElementSource that iOS would suspend on screen lock.
+//
+// _audioCtx itself is retained: the desktop AudioWorklet streaming path
+// (_startPocketStream) still needs it.
 
 // ── Emotion-boundary onset fade ──────────────────────────────────────────────
 // When consecutive paragraphs use different voice conditioning (emotion
-// switch), the timbre steps at the chunk boundary. A short gain ramp on the
-// incoming chunk softens the onset so residual differences the anchored pack
-// doesn't remove read as delivery, not a speaker change.
-let _lastPlayedVoiceAsset = null;
+// switch), the timbre steps at the chunk boundary. A short onset ramp on the
+// incoming chunk softens it so residual differences the anchored pack doesn't
+// remove read as delivery, not a speaker change.
+//
+// The ramp is now baked into the samples at encode time (see _encodeWAV) rather
+// than applied by a Web Audio gain node, because the gain path was unreachable
+// on every phone. Tracking therefore moves from "last played" to "last
+// synthesized": paragraphs are synthesized in reading order by the live player,
+// the lookahead and the background cacher alike, so the preceding synthesis is
+// the preceding paragraph.
+//
+// TRADEOFF: the ramp is part of the cached bytes, so a paragraph is no longer a
+// pure function of (text, voice) -- one cached during a switch keeps its ramp if
+// later replayed after the same emotion. That is inaudible in practice, since
+// every paragraph already starts from silence after a paragraph pause, and it
+// buys a fade that actually works on the platform most users are on.
+let _lastSynthesizedVoiceAsset = null;
 const EMOTION_FADE_SEC = 0.12;
 
-function _applyEmotionBoundaryFade(voiceAsset) {
-  const switched = _lastPlayedVoiceAsset !== null && voiceAsset !== _lastPlayedVoiceAsset;
-  _lastPlayedVoiceAsset = voiceAsset;
-  if (!_audioCtx || !_monoGainL || !_monoGainR) return;
-  try {
-    const now = _audioCtx.currentTime;
-    for (const gain of [_monoGainL, _monoGainR]) {
-      gain.gain.cancelScheduledValues(now);
-      if (switched) {
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(1, now + EMOTION_FADE_SEC);
-      } else {
-        gain.gain.setValueAtTime(1, now);
-      }
-    }
-  } catch (e) { /* cosmetic only — never block playback */ }
+function _onsetFadeSecFor(voiceAsset) {
+  const switched = _lastSynthesizedVoiceAsset !== null && voiceAsset !== _lastSynthesizedVoiceAsset;
+  _lastSynthesizedVoiceAsset = voiceAsset;
+  return switched ? EMOTION_FADE_SEC : 0;
 }
 
 
@@ -2988,14 +2998,14 @@ async function _ensurePlaybackLookahead() {
       // Already rendered under either render-mode tag? Then this slot is safe.
       let cached = false;
       for (const tag of _prosodyCacheTagVariants(engine)) {
-        if (await getAudioChunk(storyRef, c, p, engine, cleanVoice + tag)) { cached = true; break; }
+        if (await getAudioChunk(storyRef, c, p, engine, cleanVoice + tag, text)) { cached = true; break; }
       }
       if (cached) continue;
       if (_lookaheadShouldYield()) break;   // re-check right before committing the worker
       const audioBlob = await window.generateChunk(text, cleanVoice);
       if (audioBlob) {
         const cacheVoice = cleanVoice + (typeof _prosodyCacheTag === 'function' ? _prosodyCacheTag(engine) : '');
-        await saveAudioChunk(storyRef, c, p, engine, cacheVoice, audioBlob, false).catch(() => {});
+        await saveAudioChunk(storyRef, c, p, engine, cacheVoice, audioBlob, false, text).catch(() => {});
         window.Diagnostics?.log?.('INFO', 'Playback lookahead cached paragraph ahead of the cursor', { chapIdx: c, paraIdx: p });
       }
     }
@@ -3014,7 +3024,6 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
   // the background cacher (buffer_manager.js) passes the same ctx, so both
   // resolve the identical emotion → identical voice asset → identical cache key.
   const cleanVoice = resolveVoiceWithSentiment(engine, voice, text, { storyTitle: title, chapIdx, paraIdx });
-  if (engine === 'pocket') await _ensurePocketBackendOptimizedForVoice(cleanVoice);
   // Try every render-mode cache key: the background cacher stores under the
   // throughput tag while live playback computes the non-throughput tag, and
   // both are valid renders of this paragraph. Exact-key misses here used to
@@ -3026,13 +3035,14 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
 
   let audioBlob = null;
   for (const tag of _prosodyCacheTagVariants(engine)) {
-    audioBlob = await getAudioChunk(storyRef, chapIdx, paraIdx, engine, cleanVoice + tag);
+    audioBlob = await getAudioChunk(storyRef, chapIdx, paraIdx, engine, cleanVoice + tag, text);
     if (!audioBlob && storyRef !== title) {
-      audioBlob = await getAudioChunk(title, chapIdx, paraIdx, engine, cleanVoice + tag);
-      if (audioBlob) saveAudioChunk(storyRef, chapIdx, paraIdx, engine, cleanVoice + tag, audioBlob, false).catch(() => {});
+      audioBlob = await getAudioChunk(title, chapIdx, paraIdx, engine, cleanVoice + tag, text);
+      if (audioBlob) saveAudioChunk(storyRef, chapIdx, paraIdx, engine, cleanVoice + tag, audioBlob, false, text).catch(() => {});
     }
     if (audioBlob) break;
   }
+  if (!(audioBlob instanceof Blob) || audioBlob.size < 100) audioBlob = null;
   let streamedPlayback = false;
 
   if (!audioBlob) {
@@ -3045,12 +3055,15 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
 
     let stream = null;
     try {
-      try {
-        stream = await _createPocketPcmStream(() => {
-          if (window.isPlaying) _handleParagraphEnd();
-        });
-      } catch (streamError) {
-        window.Diagnostics?.log('WARN', 'Pocket streaming unavailable; using full-paragraph playback', { error: streamError?.message || String(streamError) });
+      if (engine === 'pocket') await _ensurePocketBackendOptimizedForVoice(cleanVoice);
+      if (!_preferDirectMobileMediaPlayback()) {
+        try {
+          stream = await _createPocketPcmStream(() => {
+            if (window.isPlaying) _handleParagraphEnd();
+          });
+        } catch (streamError) {
+          window.Diagnostics?.log('WARN', 'Pocket streaming unavailable; using full-paragraph playback', { error: streamError?.message || String(streamError) });
+        }
       }
       audioBlob = stream
         ? await window.generateChunkStream(text, cleanVoice, (segment) => {
@@ -3083,7 +3096,7 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
 
     if (audioBlob) {
       const writeStartedAt = performance.now();
-      saveAudioChunk(storyRef, chapIdx, paraIdx, engine, cacheVoice, audioBlob, false)
+      saveAudioChunk(storyRef, chapIdx, paraIdx, engine, cacheVoice, audioBlob, false, text)
         .then(() => window.Diagnostics?.log('INFO', 'Pocket playback cache write', {
           indexedDbWriteMs: Math.round(performance.now() - writeStartedAt),
           bytes: audioBlob.size,
@@ -3110,10 +3123,9 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
   if (!window.currentAudio || !(window.currentAudio instanceof HTMLAudioElement)) {
     if (!_premiumAudio) {
       _premiumAudio = new Audio();
-      // iOS can suspend a Web Audio graph after the screen locks even while
-      // the media element remains eligible for OS-controlled playback. Keep
-      // phone/tablet narration on the direct HTMLAudioElement path.
-      if (!_preferDirectMobileMediaPlayback()) _setupAudioRouting(_premiumAudio);
+      // Direct HTMLAudioElement output on every platform: iOS suspends a Web
+      // Audio graph after the screen locks even while a bare media element
+      // stays eligible for OS-controlled playback.
       _bindMediaElementSession(_premiumAudio);
     }
     window.currentAudio = _premiumAudio;
@@ -3129,7 +3141,13 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
   window.currentAudio.loop = false;
   window.currentAudio.volume = 1;
   if (window.currentAudio.dataset) delete window.currentAudio.dataset.pocketUnlock;
-  window.currentAudio.playbackRate = parseFloat(document.getElementById('speed-slider')?.value || '1');
+  if (window.currentAudio.dataset) {
+    window.currentAudio.dataset.pocketNarration = '1';
+    window.currentAudio.dataset.pocketStoryRef = String(storyRef);
+    window.currentAudio.dataset.pocketChapter = String(chapIdx);
+    window.currentAudio.dataset.pocketParagraph = String(paraIdx);
+  }
+  window.currentAudio.playbackRate = getEffectivePlaybackRate();
   window.currentAudio.load();
 
   window.currentAudio.onended = () => {
@@ -3152,14 +3170,14 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
 
 
   try {
-    // Wake the routing graph if the browser suspended it (routine on mobile
-    // when backgrounded/locked). A suspended context freezes currentTime, which
-    // would otherwise leave the emotion-fade gain ramp stuck near zero → silent
-    // playback. resume() on an already-running context is a harmless no-op.
+    // Only the desktop AudioWorklet streaming path owns an AudioContext now, and
+    // this element does not route through it. Resume it anyway when one exists
+    // and the browser suspended it, so a backgrounded tab does not strand a
+    // streamed segment. resume() on a running context is a harmless no-op, and
+    // on mobile there is no context to resume.
     if (_audioCtx && _audioCtx.state === 'suspended') {
       try { await _audioCtx.resume(); } catch (e) {}
     }
-    _applyEmotionBoundaryFade(cleanVoice);
     await window.currentAudio.play();
     // Play-start latency telemetry — flags the "stuck play button" class of
     // issues (cache miss forcing an on-the-fly synth) in diagnostic files.
@@ -3197,7 +3215,7 @@ async function _playWebSpeech(text) {
 
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = parseFloat(document.getElementById('speed-slider')?.value || '1');
+  utterance.rate = getEffectivePlaybackRate();
   const voices = window.speechSynthesis.getVoices();
   const preferredName = document.getElementById('voice-selector')?.value || '';
   let picked = voices.find(v => v.name === preferredName) || voices.find(v => v.lang.startsWith('en'));
@@ -3240,6 +3258,28 @@ export function pausePlayback() {
 }
 window.pausePlayback = pausePlayback;
 
+function _canResumePausedPocketAudio() {
+  const audio = window.currentAudio;
+  if (!(audio instanceof HTMLAudioElement) || !audio.paused || audio.ended) return false;
+  if (audio.dataset?.pocketNarration !== '1' || !audio.src) return false;
+  const story = window.currentStory;
+  const storyRef = story?.storyKey || window.getStoryStableKey?.(story) || story?.title;
+  return audio.dataset.pocketStoryRef === String(storyRef)
+    && Number(audio.dataset.pocketChapter) === Number(window.currentChapterIndex)
+    && Number(audio.dataset.pocketParagraph) === Number(window.currentParagraphIndex);
+}
+
+async function _resumePausedPocketAudio() {
+  try {
+    await window.currentAudio.play();
+    _updatePlayButton(true);
+  } catch (error) {
+    console.warn('Could not resume paused narration; reloading the paragraph.', error);
+    _releaseCurrentAudio();
+    if (window.isPlaying) playCurrentParagraph();
+  }
+}
+
 // Drop our reference to the current audio, first revoking the reusable element's
 // blob URL if it has one. Manual skip/seek pauses the element and reloads a new
 // source, so the normal end-of-paragraph revoke (in onended) never fires for the
@@ -3251,6 +3291,12 @@ function _releaseCurrentAudio() {
   const a = window.currentAudio;
   if (a instanceof HTMLAudioElement && typeof a.src === 'string' && a.src.startsWith('blob:')) {
     try { URL.revokeObjectURL(a.src); } catch (e) {}
+  }
+  if (a instanceof HTMLAudioElement && a.dataset) {
+    delete a.dataset.pocketNarration;
+    delete a.dataset.pocketStoryRef;
+    delete a.dataset.pocketChapter;
+    delete a.dataset.pocketParagraph;
   }
   window.currentAudio = null;
 }
@@ -3339,8 +3385,12 @@ function _advanceIndices() {
 
 function _finishStory() {
   window.isPlaying = false;
-  const playBtn = document.getElementById('play-btn-main');
   _updatePlayButton(false);
+  if (typeof window._setControlsLocked === 'function') window._setControlsLocked(false);
+  _activePocketStream?.stop?.();
+  _activePocketStream = null;
+  stopBgKeepAlive();
+  _scheduleWorkerIdleRelease();
 
   if (typeof window.incrementDeviceStat === 'function') window.incrementDeviceStat('finishedStories', 1);
   else if (window.userProfile?.stats) window.userProfile.stats.finishedStories = (window.userProfile.stats.finishedStories || 0) + 1;
@@ -3478,30 +3528,54 @@ export function seekToChapter(chapterIndexStr) {
 }
 window.seekToChapter = seekToChapter;
 
-export function applyPlaybackSpeed() {
-  const el = document.getElementById('speed-slider');
-  const rate = parseFloat(el?.value || '1');
+/**
+ * The effective playback rate: per-story narration preset first, then the
+ * profile setting, then 1.0.
+ *
+ * There is deliberately NO speed slider or label in the UI. Every playback path
+ * used to look up a range input by id and fall back to "1" -- an element that
+ * exists nowhere in the app and is created by no module -- so the rate resolved
+ * to 1.0 on every paragraph and silently clobbered anything set elsewhere.
+ * `settings.speed` and `narrationPreset.speed` were stored, cloud-synced and
+ * merged, but never reached playback at all. Speed now comes from the profile,
+ * which is the only place it is actually recorded.
+ */
+export function getEffectivePlaybackRate() {
+  const preset = window.currentStory?.narrationPreset || {};
+  const raw = Number(preset.speed) || Number(window.userProfile?.settings?.speed) || 1;
+  if (!Number.isFinite(raw)) return 1;
+  // HTMLAudioElement tolerates a wide range but pitch-corrects poorly outside
+  // this band, and the PCM worklet already clamps to the same limits.
+  return Math.min(2, Math.max(0.5, raw));
+}
+window.getEffectivePlaybackRate = getEffectivePlaybackRate;
+
+/**
+ * Applies a playback rate and persists it to the profile.
+ *
+ * Takes the rate as an argument now. It previously read the phantom slider, so
+ * it could only ever apply 1.0 -- including its "pause first" guard, which could
+ * never actually change anything.
+ */
+export function applyPlaybackSpeed(rate) {
+  const requested = Number(rate);
+  const next = Number.isFinite(requested)
+    ? Math.min(2, Math.max(0.5, requested))
+    : getEffectivePlaybackRate();
 
   if (window.isPlaying) {
     if (window.virtueSpeak) window.virtueSpeak("Please pause the story first before changing playback speed.", 4000);
     else alert("Please pause the story first before changing playback speed.");
-    const currentRate = window.currentAudio ? (window.currentAudio.playbackRate || 1.0) : (window.userProfile?.settings?.speed || 1.0);
-    if (el) {
-      el.value = currentRate;
-      if (window.onSpeedSliderInput) {
-        window.onSpeedSliderInput(currentRate);
-      }
-    }
     return;
   }
 
   if (window.userProfile && window.userProfile.settings) {
-    window.userProfile.settings.speed = rate;
+    window.userProfile.settings.speed = next;
   }
   if (typeof window.saveLocalData === 'function') window.saveLocalData();
 
   if (window.currentAudio instanceof HTMLAudioElement) {
-    window.currentAudio.playbackRate = rate;
+    window.currentAudio.playbackRate = next;
   } else if (window.currentAudio instanceof SpeechSynthesisUtterance) {
     const wasPlaying = window.isPlaying;
     if (wasPlaying) {
@@ -3516,15 +3590,6 @@ export function applyPlaybackSpeed() {
   if (typeof window.updateTimeRemaining === 'function') window.updateTimeRemaining();
 }
 window.applyPlaybackSpeed = applyPlaybackSpeed;
-
-window.onSpeedSliderInput = function(val) {
-  const label = document.getElementById('speed-label');
-  if (label) label.innerText = parseFloat(val).toFixed(2) + 'x';
-};
-
-window.applyPlaybackSpeedSlider = function(val) {
-  applyPlaybackSpeed();
-};
 
 export function switchReaderVoiceEngine(engineVal, silent = false) {
   if (!engineVal) {
@@ -3724,12 +3789,29 @@ function _isMetaParagraph(text) {
     ? story.chapters[window.currentChapterIndex].title
     : null;
   if (typeof window.isMetaParagraph === 'function') {
-    return window.isMetaParagraph(text, story ? story.title : null, chapTitle);
+    return window.isMetaParagraph(text, story ? story.title : null, chapTitle, story ? story.author : null);
   }
   return !text || !text.trim();
 }
 
-function _encodeWAV(samples, sampleRate) {
+/**
+ * PCM -> 16-bit mono WAV.
+ *
+ * `fadeInSec` applies a raised-cosine onset ramp to the head of the clip. It
+ * replaces the old Web Audio gain ramp (_applyEmotionBoundaryFade), which could
+ * never run on mobile: the gain nodes it needed were created by
+ * _setupAudioRouting, which was deliberately skipped on phones because routing
+ * narration through an AudioContext makes iOS suspend it on screen lock. So
+ * every iPhone heard an abrupt timbre step at each emotion change while desktop
+ * heard it smoothed. Shaping the samples themselves works identically on both
+ * platforms and survives the direct-media-element path.
+ *
+ * Raised cosine rather than linear: a linear ramp has a discontinuous first
+ * derivative at both ends, which is faintly audible as a click on a voice
+ * onset. The old implementation got away with linear because it was applied to
+ * a gain node rather than to the waveform.
+ */
+function _encodeWAV(samples, sampleRate, { fadeInSec = 0 } = {}) {
   const bytesPerSample = 2;
   const buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
   const view = new DataView(buffer);
@@ -3752,9 +3834,18 @@ function _encodeWAV(samples, sampleRate) {
   ws(36, 'data');
   view.setUint32(40, samples.length * bytesPerSample, true);
 
+  // Never ramp across more than the clip itself, however short it is.
+  const fadeSamples = Math.min(
+    samples.length,
+    Math.max(0, Math.round((Number(fadeInSec) || 0) * sampleRate)),
+  );
+
   const int16 = new Int16Array(buffer, 44);
   for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
+    let s = Math.max(-1, Math.min(1, samples[i]));
+    if (i < fadeSamples) {
+      s *= 0.5 - 0.5 * Math.cos((Math.PI * i) / fadeSamples);
+    }
     int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
   }
 

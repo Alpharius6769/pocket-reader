@@ -160,11 +160,11 @@ window.openDeleteAccountDialog = () => {
 
 window.confirmDeleteAccountData = async () => {
   const confirmation = document.getElementById('delete-account-confirm')?.value.trim();
-  if (!confirmation || typeof window.anvilDeleteAccountData !== 'function') return;
+  if (!confirmation || typeof window.pocketCloud?.deleteAccountData !== 'function') return;
   const button = document.querySelector('#feature-dialog-actions .pr-btn-danger');
   if (button) button.disabled = true;
   try {
-    await window.anvilDeleteAccountData(confirmation);
+    await window.pocketCloud.deleteAccountData(confirmation);
     localStorage.removeItem('pr_profile_owner');
     localStorage.removeItem('pr_setup_complete');
     await window._wipeLocalUserData?.();

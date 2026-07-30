@@ -35,7 +35,7 @@ Last reviewed: 2026-07-15.
 
 ## Other Project Components
 
-Pocket TTS, Voice-Zero, ONNX Runtime Web, Motion, Anvil Works, Hugging Face,
+Pocket TTS, Voice-Zero, ONNX Runtime Web, Motion, Hugging Face,
 Cloudflare, Backblaze B2, Zyte, story-source platforms, Game-Icons.net assets,
 and project-owned artwork are documented in the backend repository's full
 `ATTRIBUTIONS.md` and `NOTICE` files.

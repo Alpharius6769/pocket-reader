@@ -31,9 +31,15 @@ export function ensureReaderFeatures() {
   data.settings.motionPreset ||= window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'reduced' : (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'standard' : 'cinematic');
   data.settings.companionFrequency ||= 'contextual';
   data.settings.libraryDensity ||= 'comfortable';
-  if (!data.settings._migratedEmotionNeutral) {
-    data.settings.voiceEmotionMode = 'neutral';
-    data.settings._migratedEmotionNeutral = true;
+  // The old migration forced every profile to neutral, which made the separate
+  // "Emotion-aware delivery" toggle look enabled while all emotion routing was
+  // actually suppressed. Upgrade that forced default once; explicit choices
+  // made after this migration remain untouched.
+  if (!data.settings._migratedEmotionBalanced) {
+    if (!data.settings.voiceEmotionMode || data.settings._migratedEmotionNeutral) {
+      data.settings.voiceEmotionMode = 'balanced';
+    }
+    data.settings._migratedEmotionBalanced = true;
   }
   return data;
 }
@@ -235,7 +241,7 @@ export function openStoryNarrationPreset(story = window.currentStory) {
   showFeatureDialog('Story narration', `
     <label class="field-row"><span>Voice</span><select id="story-preset-voice" class="settings-control"><option value="">Use global voice</option>${(window.POCKET_VOICES || []).map((voice) => `<option value="${esc(voice)}" ${preset.voice === voice ? 'selected' : ''}>${esc(voice.replaceAll('_', ' '))}</option>`).join('')}</select></label>
     <label class="field-row"><span>Emotion</span><select id="story-preset-emotion" class="settings-control"><option value="">Use global setting</option><option value="neutral">Neutral</option><option value="balanced">Balanced</option><option value="full">Full</option></select></label>
-    <label class="field-row"><span>Speed</span><input id="story-preset-speed" type="range" min="0.8" max="1.5" step="0.02" value="${Number(preset.speed) || 1.08}"><output>${Number(preset.speed) || 1.08}x</output></label>
+    <label class="field-row"><span>Speed</span><input id="story-preset-speed" type="range" min="0.8" max="1.5" step="0.02" value="${Number(preset.speed) || 1.0}"><output>${Number(preset.speed) || 1.0}x</output></label>
     <label class="field-row"><span>Story pronunciations</span><textarea id="story-preset-pronunciation" class="settings-control" rows="4" maxlength="2000" placeholder="Alopex = al-oh-pex">${esc((preset.pronunciationOverrides || []).map((entry) => `${entry.term} = ${entry.soundsLike}`).join('\n'))}</textarea><small>One term per line. These rules override global pronunciations for this story.</small></label>`,
   '<button class="pr-btn-sub" onclick="closeFeatureDialog()">Cancel</button><button class="pr-btn-primary" onclick="saveStoryNarrationPreset()">Save preset</button>');
   const emotion = document.getElementById('story-preset-emotion');
@@ -257,7 +263,7 @@ export function saveStoryNarrationPreset() {
   story.narrationPreset = {
     voice: document.getElementById('story-preset-voice')?.value || '',
     emotion: document.getElementById('story-preset-emotion')?.value || '',
-    speed: Number(document.getElementById('story-preset-speed')?.value) || 1.08,
+    speed: Number(document.getElementById('story-preset-speed')?.value) || 1.0,
     pronunciationOverrides,
   };
   const libraryStory = ensureReaderFeatures().library.find((item) => stableKey(item) === stableKey(story));

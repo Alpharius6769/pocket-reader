@@ -4,9 +4,9 @@ import {
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v9';
+} from './tts_pronunciation_core.js?v=pron-v11';
 
-// --- DATA DEFINITIONS (Attached to window to prevent Anvil Scope/ReferenceErrors) ---
+// --- DATA DEFINITIONS (Attached to window for cross-module access) ---
 window._ACH_ICONS = {
   'alexandrian': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMzQxLjc5IDk1LjUgNjUuNTQgMTY2LjM3OWwxMjcuODQgNTguMTEgMjc2LjAyNS03Mi42NEwzNDEuNzg5IDk1LjV6bS0xLjU3NyAxOC45ODQgNzQuODU4IDMzLjA1OS03Mi41NTEgMTkuMDktNzcuMjU4LTMyLjkxNiA3NC45NTEtMTkuMjMzem0xNDIuODEzIDUyLjM5NUwxOTQuODY0IDI0Mi43MWwtMy4wNTcuODA1aC0uMDAybC0uMDQxLjAxLTIuODU3LTEuM0w0NC43MyAxNzguMTVsLS4xODQtLjA5MmMtNS41ODUtMi43OTMtOC4wMTItMS45OTItMTAuNzcuMTEtMi43NTcgMi4xLTUuNTE1IDYuODgtNi4yNzUgMTIuOTU2LTEuNTE5IDEyLjE1MyAzLjYxNiAyNy41OCAyMy45MTYgMzQuMzQ2bC40MTIuMTM5TDE5My4zMzggMjg4LjVsMTczLjIzNS00NS41ODhWMjEyLjQ1bDc2LTE4LjM0NXYyOC44MDZsNDIuMTczLTExLjA5N2MtNC4zNi0xNC4wMzctNS4zMy0yOS4xNDYtMS43Mi00NC45MzR6bS01OC40NTMgNTAuMDg2LTQwIDkuNjU2djEwMy4xODZsMjEuOTQ3LTIxLjk0OCAxOC4wNTMgMTIuNDk4VjIxNi45NjV6bTU4LjQ1MyAxMy45MTQtNDAuNDUzIDEwLjY0NnY0NS4zODVsNDIuMTczLTExLjA5OGMtNC4zNi0xNC4wMzYtNS4zMy0yOS4xNDUtMS43Mi00NC45MzN6TTM4LjQyIDI0MC4yNjhjLTEuODAzLjAzNi0zLjE3Ny43ODItNC42NDIgMS44OTgtMi43NTggMi4xMDEtNS41MTYgNi44OC02LjI3NiAxMi45NTctMS41MTkgMTIuMTUzIDMuNjE2IDI3LjU3OSAyMy45MTYgMzQuMzQ2bC40MTIuMTM4TDE5My4zMzggMzUyLjVsMTczLjIzNS00NS41ODh2LTQ1LjM4N2wtMTc0Ljc2NiA0NS45OS0xNDYuNjItNjUuMTYxYTYxLjYwMiA2MS42MDIgMCAwIDEtNC44MDItMS44NzQgOC4zMTcgOC4zMTcgMCAwIDAtMS45NjUtLjIxMnptNi43NjggMi4wODYuMDIxLjAwOC0uMjc5LS4xMjUuMjU4LjExN3ptNDM3LjgzOCA1Mi41MjUtNDAuNDUzIDEwLjY0NnY0NS4zODVsNDIuMTczLTExLjA5N2MtNC4zNi0xNC4wMzctNS4zMy0yOS4xNDYtMS43Mi00NC45MzR6TTM4LjQyIDMwNC4yNjhjLTEuODAzLjAzNi0zLjE3Ny43ODItNC42NDIgMS44OTgtMi43NTggMi4xMDEtNS41MTYgNi44OC02LjI3NiAxMi45NTctMS41MTkgMTIuMTUzIDMuNjE2IDI3LjU3OSAyMy45MTYgMzQuMzQ2bC40MTIuMTM4TDE5My4zMzggNDE2LjVsMTczLjIzNS00NS41ODh2LTQ1LjM4N2wtMTc0Ljc2NiA0NS45OS0xNDYuNjItNjUuMTYxYTYxLjYwMiA2MS42MDIgMCAwIDEtNC44MDItMS44NzQgOC4zMTcgOC4zMTcgMCAwIDAtMS45NjUtLjIxMnptNi43NjggMi4wODYuMDIxLjAwOC0uMjc5LS4xMjUuMjU4LjExN3ptMzYzLjQzNyAyNC44NTUtMzguODYzIDM4Ljg2MyA2OC44MzQtMTguMTE1LTI5Ljk3LTIwLjc0OHoiLz48L3N2Zz4=',
   'annual_edition': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMTM0LjU5NCA3My4zNzVjLTE3LjUyMiA1LjY1LTMxLjIzMiAxMS44NTQtNDguMTI1IDI0LjI1YTIyMS4wMTYgMjIxLjAxNiAwIDAgMC02LjQ0IDYuNDA2Yy4yNC41NjYuNjEgMS4yNjUgMS4xNTcgMi4yNSAxLjAxNiAxLjgzMiAyLjc2NyA0LjAyMyA0Ljk3IDYuMTlhMjUxLjc4OCAyNTEuNzg4IDAgMCAwLTkuNSAxNi42MjRjLTMuNjY0LTMuMDQtNi45NTItNi40MjMtOS41OTQtMTAuMjJhMjE2LjQ1NyAyMTYuNDU3IDAgMCAwLTIwLjQzOCAzMC40NGMuMzk1IDEuNjM2IDEuNTU3IDMuNDIgMy43OCA1LjgxIDIuNjU2IDIuODUzIDYuODA1IDUuOCAxMS42MjYgOC4zMTQtMi4wMjQgNi4xMTctMy43NiAxMi4yMDQtNS4xODYgMTguMjgtNy40NC0zLjM4LTE0LjI0NS03Ljc2OC0xOS41OTQtMTMuMzQzYTIxMS41OTUgMjExLjU5NSAwIDAgMC0xMy40MDYgNDMuNjU2YzEuMzM1IDIuNDM0IDMuNzE0IDQuNjYzIDcuMzEyIDcuMDMyIDUuMDcyIDMuMzQgMTIuMzYgNi4wNzYgMjAuMjgyIDcuNjU3LS4wNDUgNi40MzcuMjUgMTIuODIyLjgxMiAxOS4xMjQtMTEuNDA3LTEuNjczLTIyLjQwNS01LjI0OC0zMS4zNzUtMTEuMTU2LS4wNS0uMDM0LS4xMDYtLjA2LS4xNTYtLjA5NGEyMTQuMjcgMjE0LjI3IDAgMCAwIDEuMDkzIDQ1LjkwNmMyLjMxIDMuNDggNi4xNzYgNS45NTcgMTEuOTM3IDcuOTM4IDcuNDA2IDIuNTQ2IDE3LjQ3MiAzLjM0NCAyNy43MiAyLjMxMiAyIDYuMTIyIDQuMjc1IDEyLjEzIDYuODEgMTgtMTMuOTcgMi4wOTgtMjguMjM3IDEuNjIyLTQwLjU5My0yLjYyNS0uMzM3LS4xMTYtLjY2NS0uMjUyLTEtLjM3NWEyMTQuNjY1IDIxNC42NjUgMCAwIDAgMTYuODQ0IDQ0LjQwNmMzLjU1MyAyLjgwNCA4LjM1IDQuMjE2IDE0LjcyIDQuNjU2IDkuMy42NDQgMjEuMTQ0LTEuNzMgMzIuNDM4LTYuMzQzYTIzMS4wMjcgMjMxLjAyNyAwIDAgMCAxMS43NSAxNS4yNWMtMTQuNTcgNi43MTUtMzAuMzYgMTAuNjc1LTQ1LjA2MyA5Ljc1YTIxNy4yNDcgMjE3LjI0NyAwIDAgMCAzNC44NDQgMzkuNzVjNC4yNiAxLjQ0NiA5LjMgMS40NjUgMTUuMzc0LjI4IDkuNi0xLjg3MyAyMC44NTUtNy40MDQgMzEuMDMtMTUgLjAwOC4wMDUuMDI2LS4wMDUuMDMyIDBhMjMwLjI5NiAyMzAuMjk2IDAgMCAwIDE1LjkwNiAxMS4yNWMtMTEuOTc2IDkuOTEtMjUuNjI1IDE3LjY5Ni0zOS41MyAyMS4yMmEyMTQuMDk5IDIxNC4wOTkgMCAwIDAgMzcuMzQzIDIwLjE4NmM0LjkzNy40MjMgMTAuMjktLjk2IDE2LjM0NC0zLjkwNiA3LjY3Mi0zLjczNSAxNS43OC0xMC4yNTIgMjMuMDMtMTguMjggMTcuMDM2IDYuNzgzIDM0LjczMiAxMS4yMiA1Mi41NjMgMTIuOTA1bDEuNzgtMTguNjI1Yy0xNC4yNjgtMS4zNS0yOC41ODQtNC43Ny00Mi41NjItOS45MzggNi44ODMtMTEuMTA4IDExLjYxLTIzLjE3MyAxMi45NC0zMy40MzcgMS4xNzgtOS4xMTQuMDgzLTE2LjE1Ny0zLjc4Mi0yMS40MzgtOC4wOC0xLjU4LTE1Ljg5LTMuOTQtMjMuMzc1LTctLjE3MiA2LjQ3LTEuNzA2IDEyLjk4Ny00LjIyIDE5LjA5NC0zLjc0NSA5LjEwMy05LjUyIDE3Ljc5OC0xNi41MyAyNS43MmEyMTEuNTQ4IDIxMS41NDggMCAwIDEtMTUuNjU3LTEwLjYyNWM2LjYyLTcuMTgyIDExLjkyMy0xNC45NyAxNC45MDYtMjIuMjIgMy44MDYtOS4yNDYgNC4xNzMtMTYuNTc4LjYyNS0yMi44MS03Ljc0OC00Ljk1Ny0xNS4wMDMtMTAuNzM3LTIxLjcxOC0xNy4yMi0xLjc3MyA0LjMtNC4xODcgOC4zNy03LjAzMiAxMi4wOTQtNS40NzYgNy4xNjUtMTIuNTcyIDEzLjUxLTIwLjU2MyAxOC45MDUtNC4xMi00LjcyLTguMDUyLTkuNjAzLTExLjc1LTE0LjY4OCA3LjE1Mi00LjY5NCAxMy4yOTYtMTAuMSAxNy40Ny0xNS41NjIgNS4wMzgtNi41OTQgNy4yMi0xMi40MSA2LjQ2OC0xOC4wOTRhMTYyLjA3MiAxNjIuMDcyIDAgMCAxLTEzLjUtMjEgNTAuMDE3IDUwLjAxNyAwIDAgMS03LjY1NyA3LjI4M2MtNi43NTggNS4xNzUtMTQuNzk4IDkuMTU1LTIzLjQwNiAxMi4wMy0yLjU5NS01LjY5LTQuOTU3LTExLjQ5OC03LTE3LjQzNyA3LjQyNy0yLjQwNSAxNC4xMy01LjY4MyAxOS4wMy05LjQzNyA1LjY5Ni00LjM2MiA4LjgwMi04LjU0NSA5LjUzMi0xMy4yNWExNzkuODM0IDE3OS44MzQgMCAwIDEtNy40MDYtMjQuOTA4IDQ1LjMxMSA0NS4zMTEgMCAwIDEtNS44MTIgMi44MTNjLTcuNDUgMi45NDctMTUuNzUgNC40MzQtMjQuMjggNC43NWExNzYuNjcgMTc2LjY3IDAgMCAxLTEuMDMzLTE4LjcyYzYuOTU3LS4yNjMgMTMuNDY0LTEuNDM3IDE4LjQ0LTMuNDA1IDQuNi0xLjgyIDcuNTk1LTMuOCA5LjM0My02LjI1YTE5Mi4xMjcgMTkyLjEyNyAwIDAgMS0uODEzLTI5LjgxM2MtLjY1LjEwNC0xLjI5LjE4LTEuOTM4LjI1LTYuNjI0LjcyNS0xMy41NTYuMTUtMjAuNDA2LTEuMzQzIDEuMzctNS45OCAzLjA3LTEyLjAxIDUuMDk0LTE4LjA2MyA0Ljg3LjkzMyA5LjUzOCAxLjIyMyAxMy4yOC44MTQgMi42MTQtLjI4NiA0LjUzMi0uNzU2IDYtMS40MDZhMTg4Ljk5IDE4OC45OSAwIDAgMSA1Ljk3LTI2LjAzMmMtNC4xODItLjczNi04LjI4NC0yLjA5Mi0xMi4yNS0zLjg3NWEyMzguODQ3IDIzOC44NDcgMCAwIDEgOS4zNDQtMTYuNDA1YzIuNDE0Ljk2MyA0LjcxNiAxLjY2NSA2LjY4NyAxLjk3IDEuMTA3LjE3IDIuMDIzLjI2NSAyLjc4Mi4yOCAxLjk0Ni00LjY0IDQuMDIyLTkuMTcgNi4yODItMTMuNTYzIDUuODk4LTExLjgwMiAxMi40MTUtMjQuMjUgMTctMzcuOTM3em0yNDQuMzc1IDBjNC41ODMgMTMuNjg2IDExLjEgMjYuMTM1IDE3IDM3LjkzOGExOTEuMTY2IDE5MS4xNjYgMCAwIDEgNi4zMSAxMy41NjJjLjc1Mi0uMDE2IDEuNjYtLjExMyAyLjc1LS4yOCAxLjk4LS4zMDYgNC4yOTYtMSA2LjcyLTEuOTdhMjM4LjYyOCAyMzguNjI4IDAgMCAxIDkuMzQ0IDE2LjQwNmMtMy45NzYgMS43ODYtOC4wOTYgMy4xNC0xMi4yOCAzLjg3NiAyLjU2MyA4LjM5IDQuNTczIDE3LjEgNS45NjcgMjYuMDMgMS40NzQuNjU4IDMuNDA0IDEuMTIgNi4wMzMgMS40MDggMy43NDIuNDEgOC40MS4xMiAxMy4yOC0uODEzYTE5Mi41OTMgMTkyLjU5MyAwIDAgMSA1LjA2MyAxOC4wOTVjLTYuODM3IDEuNDg3LTEzLjc2MiAyLjAzNi0yMC4zNzUgMS4zMTNhNDAuNTA2IDQwLjUwNiAwIDAgMS0xLjk2Ny0uMjUgMTkyLjE0NiAxOTIuMTQ2IDAgMCAxLS43ODIgMjkuODEyYzEuNzUgMi40NSA0Ljc0NSA0LjQzIDkuMzQ1IDYuMjUgNC45NjcgMS45NjUgMTEuNDYyIDMuMTQgMTguNDA2IDMuNDA2YTE3Ny4yMiAxNzcuMjIgMCAwIDEtMS4wMyAxOC43MmMtOC41Mi0uMzItMTYuODA4LTEuODA4LTI0LjI1LTQuNzVhNDUuNTk3IDQ1LjU5NyAwIDAgMS01LjgxMy0yLjgxNCAxNzkuOTM0IDE3OS45MzQgMCAwIDEtNy40MDYgMjQuODc1Yy43MTUgNC43MiAzLjc5NSA4LjkxMiA5LjUgMTMuMjgyIDQuOTA0IDMuNzUzIDExLjYwNSA3LjAzIDE5LjAzMyA5LjQzNi0yLjA0NCA1Ljk0LTQuNDA1IDExLjc0Ny03IDE3LjQzOC04LjU5OC0yLjg3NS0xNi42MjQtNi44NjItMjMuMzc1LTEyLjAzYTUwLjA0NiA1MC4wNDYgMCAwIDEtNy42ODgtNy4yODNjLTQuMDEgNy40MjItOC41MiAxNC40NDQtMTMuNSAyMS0uNzYgNS42ODIgMS40MyAxMS41MDIgNi40NyAxOC4wOTUgNC4xNjggNS40NTcgMTAuMzEzIDEwLjg3IDE3LjQ2NyAxNS41NjMtMy42OTcgNS4wODUtNy42MyA5Ljk2Ni0xMS43NSAxNC42ODctNy45OS01LjM5Ni0xNS4wODYtMTEuNzQtMjAuNTYyLTE4LjkwNi0yLjgzOC0zLjcxNS01LjIzNC03Ljc3OC03LTEyLjA2NC02LjcxIDYuNDc4LTEzLjk3NiAxMi4yMzYtMjEuNzIgMTcuMTg4LTMuNTQ3IDYuMjMzLTMuMTggMTMuNTY1LjYyNiAyMi44MTIgMi45ODUgNy4yNSA4LjI4OCAxNS4wMzcgMTQuOTA4IDIyLjIyYTIxMi4yOTUgMjEyLjI5NSAwIDAgMS0xNS42ODggMTAuNjI0Yy03LjAwMy03LjkyMi0xMi43NTQtMTYuNjE3LTE2LjUtMjUuNzItMi41MTMtNi4xMDYtNC4wNDctMTIuNjIzLTQuMjItMTkuMDkyYTEyNS4zODIgMTI1LjM4MiAwIDAgMS0yMy40MDUgN2MtMy44NzMgNS4yOC00Ljk2IDEyLjMyNC0zLjc4IDIxLjQzNyAxLjMyNyAxMC4yNjQgNi4wOCAyMi4zMyAxMi45NjcgMzMuNDM4LTEzLjk3NCA1LjE2OC0yOC4yOTMgOC41ODctNDIuNTYyIDkuOTM3bDEuNzUgMTguNjI1YzE3Ljg0LTEuNjg3IDM1LjU0Ni02LjExNiA1Mi41OTQtMTIuOTA2IDcuMjUgOC4wMjggMTUuMzU4IDE0LjU0NSAyMy4wMyAxOC4yOCA2LjA1NiAyLjk0NyAxMS40MDggNC4zMyAxNi4zNDUgMy45MDZhMjEzLjc5MiAyMTMuNzkyIDAgMCAwIDM3LjM0Mi0yMC4xODdjLTEzLjg5Ni0zLjUyLTI3LjU2Mi0xMS4yOTMtMzkuNTMtMjEuMTkgNS40NDItMy41MDQgMTAuNzQtNy4yOTMgMTUuOTA2LTExLjI4IDEwLjE4IDcuNjA0IDIxLjQ1NiAxMy4xMjYgMzEuMDYyIDE1IDYuMDU2IDEuMTgyIDExLjA5IDEuMTg1IDE1LjM0NC0uMjVhMjE3LjM1NCAyMTcuMzU0IDAgMCAwIDM0Ljg3NS0zOS43OGMtMTQuNzA1LjkyNS0zMC41MjYtMy4wMzUtNDUuMDk1LTkuNzUgNC4xMi00LjkxMyA4LjA2Ni05Ljk5IDExLjc4LTE1LjI1IDExLjI5NSA0LjYxIDIzLjEzOCA2Ljk4NiAzMi40NCA2LjM0MiA2LjM2OC0uNDQgMTEuMTY2LTEuODUyIDE0LjcxNy00LjY1NmEyMTQuNjg3IDIxNC42ODcgMCAwIDAgMTYuODQ0LTQ0LjQwNmMtLjMzNS4xMjMtLjY2My4yNi0xIC4zNzUtMTIuMzU1IDQuMjQ3LTI2LjYyMyA0LjcyMy00MC41OTQgMi42MjVhMjA5LjIwOCAyMDkuMjA4IDAgMCAwIDYuODEzLTE4YzEwLjIzNiAxLjAyNyAyMC4yOS4yMyAyNy42ODgtMi4zMTMgNS43NjUtMS45OCA5LjY1LTQuNDU1IDExLjk2OC03LjkzN2EyMTQuNDIgMjE0LjQyIDAgMCAwIDEuMDY0LTQ1LjkwNmMtLjA0My4wMjgtLjA4Mi4wNjUtLjEyNS4wOTQtOC45NyA1LjkwOC0xOS45NyA5LjQ4My0zMS4zNzYgMTEuMTU2LjU2My02LjMwMi44NTYtMTIuNjg3LjgxMi0xOS4xMjUgNy45Mi0xLjU4MiAxNS4yMS00LjMxNyAyMC4yOC03LjY1NyAzLjU5My0yLjM2NiA1Ljk0Ni00LjYwNCA3LjI4My03LjAzMmEyMTEuNzkyIDIxMS43OTIgMCAwIDAtMTMuNDA4LTQzLjY1NWMtNS4zNDcgNS41Ny0xMi4xMzMgOS45Ni0xOS41NjIgMTMuMzQ0YTIxMi45MzMgMjEyLjkzMyAwIDAgMC01LjE4OC0xOC4yODJjNC44MDUtMi41MTMgOC45NDItNS40NjQgMTEuNTk0LTguMzEzIDIuMjEyLTIuMzc2IDMuNDAyLTQuMTUgMy44MTMtNS43OGEyMTYuNDggMjE2LjQ4IDAgMCAwLTIwLjQ0LTMwLjQ3Yy0yLjY0MiAzLjc5Ni01LjkzIDcuMTgtOS41OTIgMTAuMjJhMjUyLjQ3MSAyNTIuNDcxIDAgMCAwLTkuNS0xNi42MjZjMi4yMDgtMi4xNjYgMy45NTMtNC4zNiA0Ljk2OC02LjE5LjUzOC0uOTcuOTItMS42NTYgMS4xNTYtMi4yMThhMjIxLjc4OCAyMjEuNzg4IDAgMCAwLTYuNDY4LTYuNDM3Yy0xNi44OTMtMTIuMzk2LTMwLjYwMy0xOC42LTQ4LjEyNS0yNC4yNXpNMTUyLjgxIDEzNC4zMTNsMjQuMDk0IDEyOS43MThIMzQxbDIyLjkwNi0xMjQuNS01Ny45MzcgNjMuNUwyNjEgMTM1Ljg0NWwtNDUgNjcuMTg3LTYzLjE4OC02OC43MTh6bTI3LjU2MyAxNDguNDA2IDMuNTYzIDE5LjIxN0gzMzQuMDNsMy41MzMtMTkuMjE4SDE4MC4zNzV6Ii8+PC9zdmc+',
@@ -160,7 +160,7 @@ function normalizePocketVoiceSetting(profile) {
     settings.expressiveProsody = true;
   }
   if (!['neutral', 'balanced'].includes(settings.voiceEmotionMode)) {
-    settings.voiceEmotionMode = 'neutral';
+    settings.voiceEmotionMode = 'balanced';
   }
   if (settings.pausePunctuation === undefined) settings.pausePunctuation = true;
   if (settings.pauseTags === undefined) settings.pauseTags = true;
@@ -176,6 +176,14 @@ function normalizePocketVoiceSetting(profile) {
   }
   if (settings.speed === undefined || settings.speed === null || Number.isNaN(Number(settings.speed))) {
     settings.speed = DEFAULT_POCKET_PLAYBACK_SPEED;
+  }
+  // Move only the former untouched default to natural 1.0x. The one-time flag
+  // prevents a later deliberate 1.08x choice from being silently changed.
+  if (!settings._migratedNaturalVoiceSpeed) {
+    if (Math.abs(Number(settings.speed) - 1.08) < 0.0001) {
+      settings.speed = DEFAULT_POCKET_PLAYBACK_SPEED;
+    }
+    settings._migratedNaturalVoiceSpeed = true;
   }
   if (!['stable', 'balanced', 'expressive'].includes(settings.pocketTemperaturePreset)) {
     settings.pocketTemperaturePreset = DEFAULT_POCKET_TEMPERATURE_PRESET;
@@ -347,7 +355,7 @@ function _escapeHtml(s) {
 window._escapeHtml = _escapeHtml;
 
 // Cloud pushes stay disabled until the profile's owner has been reconciled
-// with the logged-in Anvil account (see checkCloudSyncOnStartup /
+// with the logged-in Supabase account (see checkCloudSyncOnStartup /
 // triggerCloudLogin). This stops boot-time saves from writing one user's
 // local data into a different user's cloud row on shared devices.
 if (typeof window._cloudPushAllowed === 'undefined') window._cloudPushAllowed = false;
@@ -362,7 +370,7 @@ function _defaultProfile() {
       expressiveProsody: true,
       pausePunctuation: true,
       pauseTags: true,
-      voiceEmotionMode: "neutral",
+      voiceEmotionMode: "balanced",
       pocketTemperaturePreset: DEFAULT_POCKET_TEMPERATURE_PRESET,
       pocketQualityMode: DEFAULT_POCKET_QUALITY_MODE,
       pocketBackend: "auto",
@@ -632,7 +640,7 @@ function _flushLocalData(options = {}) {
     // the logged-in account (prevents cross-user writes on shared devices).
     if (!options.skipCloud && window._cloudPushAllowed && !window.userProfile.isSyncing) {
       if (typeof window.queueCloudSync === 'function') window.queueCloudSync('profile-save');
-      else if (window.anvilSyncProfile) window.anvilSyncProfile(liteProfile, true);
+      else if (window.pocketCloud?.saveProfile) window.pocketCloud.saveProfile(liteProfile);
     }
   } catch (e) {
     console.error("saveLocalData failed:", e);
@@ -740,9 +748,9 @@ export async function checkCloudSyncOnStartup() {
     try { await window.pullCloudProfileOnStartup(); } catch (error) { console.error('[CloudSync] Startup sync failed:', error); }
     return;
   }
-  if (typeof window.anvilGetCurrentUser !== 'function') return;
+  if (typeof window.pocketCloud?.getCurrentUser !== 'function') return;
   try {
-    const userEmail = await window.anvilGetCurrentUser();
+    const userEmail = await window.pocketCloud.getCurrentUser();
     if (userEmail) {
       console.log("[CloudSync] Auto-logged in on boot:", userEmail);
 
@@ -771,8 +779,8 @@ export async function checkCloudSyncOnStartup() {
       // this device's local-only/default profile over the user's real cloud row
       // before it has even been fetched (Issue 6).
 
-      if (typeof window.anvilLoadProfile === 'function') {
-        const cloudProfile = await window.anvilLoadProfile();
+      if (typeof window.pocketCloud?.loadProfile === 'function') {
+        const cloudProfile = await window.pocketCloud.loadProfile();
         if (cloudProfile) {
           console.log("[CloudSync] Loaded cloud profile:", cloudProfile);
           const merged = mergeProfileIntoCurrent(cloudProfile, { purgeStorage: true });
@@ -1015,10 +1023,10 @@ window.checkStoryUpdate = async function(storyRef, url, btnElement = null, optio
   stage('virtue_thinking');
 
   try {
-    let stored = (await window._loadStoryChapters(storageRef)) || [];
+    let stored = (await window._loadStoryChapters(storageRef, entry)) || [];
     if (!stored.length && storageRef !== title) {
-      stored = (await window._loadStoryChapters(title)) || [];
-      if (stored.length) window._saveStoryChapters?.(storageRef, stored).catch(() => {});
+      stored = (await window._loadStoryChapters(title, entry)) || [];
+      if (stored.length) window._saveStoryChapters?.(storageRef, stored, entry).catch(() => {});
     }
     let aoCount = null;
     if (/archiveofourown\.org\/works\/\d+/i.test(url)) {
@@ -1063,10 +1071,10 @@ window.checkStoryUpdate = async function(storyRef, url, btnElement = null, optio
       return;
     }
     let realFresh = (aoCount !== null && fresh.length > aoCount) ? fresh.slice(0, aoCount) : fresh;
-    realFresh = window.normalizeStoryChapters?.(realFresh) || realFresh;
+    realFresh = window.normalizeStoryChapters?.(realFresh, entry) || realFresh;
 
     if (baselineCount === 0) {
-      await window._saveStoryChapters(storageRef, realFresh);
+      await window._saveStoryChapters(storageRef, realFresh, entry);
       entry.totalChapters = realFresh.length;
       if (typeof window.saveLocalData === 'function') window.saveLocalData();
       if (window.currentStory && window.currentStory.title === title) {
@@ -1102,14 +1110,14 @@ window.checkStoryUpdate = async function(storyRef, url, btnElement = null, optio
     }
 
     const base = stored.length ? stored : realFresh.slice(0, baselineCount);
-    const merged = window.mergeStoryChapters?.(base, realFresh)
+    const merged = window.mergeStoryChapters?.(base, realFresh, entry)
       || base.concat(realFresh.slice(base.length));
     const added = Math.max(0, merged.length - base.length);
     if (!added) {
       announce("I checked the latest copy. There are no new chapters yet.", 4500);
       return;
     }
-    await window._saveStoryChapters(storageRef, merged);
+    await window._saveStoryChapters(storageRef, merged, entry);
     entry.workComplete = Number(entry.declaredChapters || 0) > 0
       && Number(entry.publishedChapters || 0) >= Number(entry.declaredChapters);
     entry.totalChapters = merged.length;
@@ -1657,7 +1665,7 @@ export async function loadHMOFA() {
     renderMasterlist();
     if (typeof window.triggerVirtue === 'function') {
       window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
-      window.virtueSpeak("Masterlist refreshed! Therealwolfy has been busy curating.");
+      window.virtueSpeak("Masterlist refreshed!");
     }
   } catch (e) {
     console.error("HMOFA Fetch Error:", e);

@@ -1,6 +1,6 @@
 # Alpharius' Pocket Reader - Master Agent Handoff
 
-Last reviewed: 2026-07-24
+Last reviewed: 2026-07-28
 
 This is the authoritative handoff for agents working on Pocket Reader. It
 describes the current architecture, production paths, major changes, removed
@@ -9,7 +9,7 @@ limitations. Do not treat older handoff notes as current release state.
 
 **GGML / audio.cpp (issue #203):** see `GGML_NATIVE_PATH.md`. Browser production
 remains ONNX Runtime Web. Native GGML weights live on B2 under `ggml/pocket-tts/`
-and are not loaded by the Anvil worker. Full unused ONNX rollback:
+and are not loaded by the browser worker. Full unused ONNX rollback:
 `backup/onnx-ort-browser-20260717/` on B2.
 
 ## 1. Project Identity and Boundaries
@@ -47,39 +47,173 @@ pocket-reader-assets
 Supabase owns authentication and private profile synchronization (Phase 4). The
 Hugging Face backend must not become a public profile authority.
 
-## 2. Current Production Release
+## 2. Current Release State
 
-Production release: `mobile-narration-startup-v129` (Cloudflare Pages).
+Source is at `pocket-reader-core-v135` (2026-07-29 mobile reliability pass).
+**v135 is NOT deployed and NOT committed** — it exists only in the working tree.
 
-Deployed and live-verified on 2026-07-26 (post-Anvil Phase 5).
-The Hugging Face backend and Cloudflare Worker were also redeployed.
+Last verified live release: `pocket-reader-core-v134` (Cloudflare Pages).
+Cloudflare production deployment `4040eb05-9008-4f7a-be42-454e9048e0c4`
+published the root `public/` tree to the `main` production branch on 2026-07-28.
+Direct asset probes, live release parity, and the production WebKit smoke test
+all passed after deployment.
 
-Important frontend/service-worker versions currently in source and production
-(verify against the script tags in `FrontEnd_html.html` / `standard-page.html`
-and the pins in `tests/pocket_acceleration.test.mjs` — these move often):
+⚠️ The v134 tree was also never committed. Production is currently running code
+that exists in no git history, so there is no rollback point. Commit before the
+next deploy.
+
+The frontend has no active secondary host or mirror. `public/` is the sole
+Cloudflare Pages source of truth. The Hugging Face backend, Cloudflare Worker,
+B2 assets, and Supabase are separate services.
+
+Important frontend/service-worker versions currently in source (verify against
+`public/index.html`, `public/sw.js`, and the release tests — these move often):
 
 ```text
-Service worker shell: pocket-reader-core-v129
-UI controller: ui-v82
-Settings module: settings-v42
-Device setup module: device-setup-v6
-Theme stylesheet: midnight-v21
-Pocket audio module: audio-v53
-Pocket worker: pocket-worker-v43
+Service worker shell: pocket-reader-core-v135
+UI controller: ui-v87
+Settings module: settings-v48
+Device setup module: device-setup-v7
+Theme stylesheet: midnight-v22
+Pocket audio module: audio-v58
+Pocket worker: pocket-worker-v45
 Pocket backend policy: backend-v20
-Experience coordinator: experience-v4
-Virtue controller: virtue-v6
-Buffer manager: buffer-v43
-API core: search-v16
-Library manager: library-v8
-Narration runtime loader: narration-loader-v10
-Pronunciation ruleset: pron-v9
+Experience coordinator: experience-v5
+Virtue controller: virtue-v8
+Buffer manager: buffer-v48
+API core: search-v17
+Library manager: library-v12
+Narration runtime loader: narration-loader-v15
+Pronunciation ruleset: pron-v11
+Story storage module: storage-v9
+Reader features module: features-v5
 PCM worklet: pcm-v1
 ONNX Runtime Web: 1.27.0
 WASM runtime: 1.27.0 relaxed-SIMD minimal ORT-format build
 WASM model family: english_2026-04-ort-r1
 WebGPU model family: certified R3 FP16 bundle with device-local calibration
 ```
+
+### 2026-07-29 source v135 — mobile/iPhone reliability (not deployed)
+
+Audit of the audio engine, WASM/SharedArrayBuffer/WebGPU paths, and asset
+fetching, focused on iOS. Ten fixes; guards in
+`tests/mobile_engine_reliability.test.mjs` (suite 208).
+
+- `releaseSession` swallows a failed `session.release()`. It rejects on a lost
+  WebGPU device — exactly when teardown runs — and the rejection used to abort
+  `releaseAllSessions` before its null-assignments and GPU-tensor disposal,
+  leaving stale handles plus leaked voice tensors. The retry then released the
+  same dead sessions and threw again, wedging the engine until worker
+  termination, and `dispose_backend` never posted `backend_disposed`.
+- `fetchFirstAvailable` retries transient failures (network error, timeout,
+  408/425/429/5xx) across up to 3 passes with 400 ms/1200 ms backoff. Host
+  failover alone could not survive a tunnel or cell handoff, because both hosts
+  are unreachable through the same gap. A definitive 404/403 from every host
+  still breaks out immediately.
+- The service worker no longer revalidates `?v=` assets. Those URLs are
+  immutable by construction, yet every load background-fetched all ~25 modules,
+  re-downloading the whole JS bundle per launch on cellular and competing with
+  the model/voice downloads that gate narration starting. Unversioned assets
+  keep network-first.
+- Service-worker install is no longer all-or-nothing. Fonts and the icon sprite
+  (`OPTIONAL_ASSETS`) and the lazy narration modules (`DEFERRED_ASSETS`) are
+  cached best-effort; only `CORE_ASSETS` stays atomic. One failed woff2 on a
+  weak connection used to leave the device with no offline shell at all.
+
+- Model weights and the ORT runtime now use a durable CacheStorage layer
+  (`POCKET_MODEL_CACHE = 'pocket-onnx-models-v1'`). They previously relied only
+  on the HTTP cache, which iOS Safari evicts far more aggressively than other
+  browsers, so an iPhone could be made to re-download the ~80 MB engine over
+  cellular repeatedly. The name is load-bearing in two directions and pinned by
+  test: `'onnx'` keeps `sw.js` `activate` from deleting it on every shell bump,
+  `'pocket'` keeps `clearNeuralEngineCache` able to free it. Both proxy and
+  direct-B2 URLs collapse to one canonical key via `canonicalModelCacheKey`, so
+  the engine is not stored twice or missed when the alternate host answers.
+  A short read (Content-Length declared, fewer bytes delivered) is returned but
+  never persisted — a truncated model cached as authoritative would fail every
+  later cold start with no network involved to self-heal.
+  Note: model weights carry no pinned digest and never have. The SHA-256 pinning
+  covers only executable JS loaded via `importVerifiedModule`, a separate path,
+  so caching weights bypasses no integrity check.
+- The emotion-boundary fade now works on mobile. It was a gain-node ramp
+  (`_applyEmotionBoundaryFade`) whose gain nodes came from `_setupAudioRouting`,
+  which was deliberately skipped on phones so iOS would not suspend the graph on
+  screen lock — so every iPhone heard an abrupt timbre step at each emotion
+  change while desktop heard it smoothed. The ramp is now baked into the samples
+  at encode time (`_encodeWAV`'s `fadeInSec`, raised-cosine over 120 ms) and
+  works identically on both platforms. The routing graph, its splitter/merger/
+  gain globals, and the unused mobile `AudioContext` are deleted; desktop and
+  mobile now share one playback path. `_preferDirectMobileMediaPlayback` is
+  retained — it still gates the desktop-only PCM streaming path.
+  TRADEOFF: the ramp is part of the cached bytes, so a paragraph is no longer a
+  pure function of (text, voice). Inaudible in practice — every paragraph starts
+  from silence after a paragraph pause — and it buys a fade that actually runs
+  on the platform most users are on.
+
+#### Full-codebase audit pass (2026-07-29, same v135 release)
+
+- **Playback speed was permanently 1.0x.** `speed-slider`/`speed-label` exist
+  nowhere — not in `index.html`, not created by any module — yet five call sites
+  read them: the media-element rate (reset on *every* paragraph), the PCM
+  worklet config, the Web Speech `utterance.rate`, `applyPlaybackSpeed()`, and
+  the reader time estimate. `settings.speed` and `narrationPreset.speed` were
+  stored, cloud-synced and merged but never reached playback. There is now no
+  slider by design: `getEffectivePlaybackRate()` resolves preset → profile → 1.0
+  (clamped 0.5–2.0) and every consumer goes through it. `applyPlaybackSpeed`
+  takes the rate as an argument; `applyPlaybackSpeedSlider` and
+  `onSpeedSliderInput` are deleted.
+- **The narration sanitizer silently destroyed story text.** Reproduced in both
+  `storage_core.js` and `parsers_core.py`: a paragraph that is exactly
+  `End Notes`/`Afterword` hit a `break` and discarded the entire rest of the
+  chapter, and `_looksLikeAuthorNote`'s bare verb alternation
+  (`wrote|written|writing|…`) deleted ordinary third-person narration after any
+  `Notes:` marker. Worse, `loadStoryChapters` writes the normalized result back
+  to IndexedDB, so truncation permanently replaced the user's cached copy.
+  End-marker truncation is now gated on the AO3 export signature, and the
+  author-note detector requires first-person authorial framing. Genuine AO3 end
+  notes are still stripped; verify with the probes described below.
+- **Audio chunks are fingerprinted.** Keys are positional
+  (`story_chap_para_engine_voice`), so the v134 sanitizer and AO3 chapter
+  re-split could remap existing audio onto different text with nothing to detect
+  it. `paragraphFingerprint()` (FNV-1a) is stored as `textHash` on write and
+  checked on read; a mismatch deletes the chunk and reports a miss. Chunks
+  written before this carry no `textHash` and are **grandfathered** rather than
+  wiping every user's cached narration — pre-v135 audio for an AO3-re-split story
+  may still be misaligned, and the Settings "clear audio cache" button is the
+  remedy.
+- Worker: loopback CORS is now opt-in via `ALLOW_LOCALHOST_ORIGINS` (it applied
+  unconditionally, so production reflected CORS for any localhost port/scheme).
+- Removed 142 lines of unreachable legacy masterlist code from `backend/app.py`
+  (it referenced `csv`/`_io`, no longer imported). HMOFA behaviour unchanged.
+- Corrected two overstated docs: MIGRATION_PLAN's claim that the Worker makes
+  CORS enforceable (it does so for browsers only — an `Origin`-less client still
+  reaches the authenticated `/api/*` proxy, which is unavoidable while the
+  frontend holds no secret), and this file's reference to committed
+  `benchmark-results/` reports that do not exist.
+
+Audit surfaces verified clean: all JS/Python parse; every referenced `/assets/`
+path exists; no version drift across 25 pinned modules; all inline HTML handlers
+resolve; no duplicate element ids; every frontend `/api/` call maps to a backend
+route; CORP `cross-origin` on all model routes.
+
+### 2026-07-28 production v134
+
+- Story caching checks IndexedDB before initializing the TTS model and lazily
+  initializes inference only on the first real cache miss.
+- Playback requires 20 successfully cached paragraphs or completed short-story
+  caching. Pausing, stopping, worker failure, skipped paragraphs, or the final
+  in-flight task cannot bypass the runway.
+- Mobile narration uses the direct media-element path, preserves and resumes a
+  paused narration blob, and does not let the media unlock prime overwrite it.
+- IndexedDB initialization retries after transient failure; writes and eviction
+  wait for transaction commit/abort and storage failures remain visible.
+- Cache completion, empty jobs, Away Mode early exits, MessageChannel hops, and
+  story completion release their keep-alive/worker resources.
+- Stored and newly parsed AO3 exports remove embedded summaries, chapter notes,
+  end notes, author notes, repeated headings, and outline-less chapter markers.
+- Active frontend code uses `window.pocketCloud` for Supabase; no retired-host
+  compatibility globals remain.
 
 ### 2026-07-24 production v129
 
@@ -96,22 +230,20 @@ WebGPU model family: certified R3 FP16 bundle with device-local calibration
 - The throwaway calibration phrase was removed. The first real requested
   paragraph now supplies calibration telemetry, avoiding an extra model
   inference and transient allocation at startup.
-- Mobile playback can begin after a three-paragraph starting buffer instead of
-  waiting for 30 paragraphs. Desktop retains the larger 30-paragraph threshold.
+- Playback begins only after 20 successfully cached paragraphs, or after cache
+  completion when a story has fewer than 20 narratable paragraphs.
 - Periodic recycle and quality-recovery resets are serialized and do not reset
   a shared engine while another synthesis is active.
 - Post-reload cache/play intent remains in session storage until the user
   completes the resume gesture, so an iOS suspension while the prompt is open
   can recover on the next launch.
-- `FrontEnd_code.py` is aligned with the deployable form controller: local data
-  loading starts once, UI setup waits for the controller module, and a restored
-  reader view is not overwritten by Home.
+- The standalone controller loads local data once, waits for dependent modules,
+  and does not overwrite a restored reader view with Home.
 
 ### 2026-07-23 releases (v128 era)
 
-Four deploys landed on 2026-07-23, all verified live on
-`hot-wiry-raven.anvil.app`. The first two were frontend-only (Anvil); the last
-two were no-op redeploys of unchanged services to refresh them.
+Four historical deploys landed on 2026-07-23. The old host and its commit
+identifiers are retired and must not be treated as release inputs.
 
 - **Uploaded-story scrape 400 + duplicate-on-upload** (api_core `search-v15`;
   stale commit ref). `loadStory` now intercepts app-internal
@@ -126,8 +258,8 @@ two were no-op redeploys of unchanged services to refresh them.
   so re-uploading a newer PDF of an already-fetched story updates it (keeping
   existing chapters' cached audio) instead of creating a duplicate.
 - **Story-load Home/white flash, intrusive loading overlay, settings button
-  lag** (ui `ui-v81`, settings `settings-v40`; anvil `af8667e` / root
-  `1b1737a`). (1) The one-time `?tts_fast=1` reload that unlocks multi-threaded
+  lag** (ui `ui-v81`, settings `settings-v40`). (1) The one-time
+  `?tts_fast=1` reload that unlocks multi-threaded
   narration reboots to the default Home view before the reader is restored — a
   visible white/Home flash. Added a self-contained inline anti-flash mask in
   `standard-page.html` that paints on the first frame whenever a resume record
@@ -152,7 +284,7 @@ long-form reliability (recycle cadence, false-positive skip fixes, caching
 completion past un-synthesizable paragraphs, backend-aware worker recycle),
 contraction pronunciation fixes, deterministic per-chunk TTS seeding, seed
 perturb-on-retry, a playback lookahead buffer, and a memory/perf idle-release
-pass. Those were frontend-only (Anvil); see `git log` and the agent memory notes
+pass. See `git log` and the agent memory notes
 for per-release detail rather than reconstructing it here.
 
 The 2026-07-20 release resolved several critical UX, narration default, and background-caching issues:
@@ -185,8 +317,7 @@ opened unless `ALLOW_EPHEMERAL_DB=true` is explicitly set. Production reports
 singleflight and reads only a bounded response prefix. Cloudflare requests that
 carry credentials or admin secrets manually reject redirects.
 
-The release was published as Anvil commits `c4e2a86`, `194c798`, and `b7097e6`,
-Hugging Face commit `cea9b6e`, and Cloudflare Worker version
+The release used Hugging Face commit `cea9b6e` and Cloudflare Worker version
 `4733eab5-c9a5-4fd3-bc80-7e12528edb69`. B2 was intentionally unchanged because
 no model or bucket-hosted binary changed.
 
@@ -196,10 +327,9 @@ upload parser resource limits, scraper rate/concurrency/response limits,
 post-connect DNS validation, Worker proxy authentication/header filtering,
 scheduled-secret redirect handling, and pinned SHA-256 verification for
 dynamically loaded ORT/SentencePiece modules. It also adds release parity and
-non-writing audit modes. It was published on 2026-07-18 as Anvil commit
-`55b84c4`, Hugging Face commit `46aaaa3`, and Cloudflare Worker version
-`e369de8e-50cd-4b65-b522-28cbcfb1b347`. Live Anvil v117 assets and the Hugging
-Face health endpoint were rechecked after deployment.
+non-writing audit modes. It was published on 2026-07-18 with Hugging Face
+commit `46aaaa3` and Cloudflare Worker version
+`e369de8e-50cd-4b65-b522-28cbcfb1b347`.
 
 The 2026-07-16 release moved English relaxed-SIMD WASM to ORT-format models and
 an operator-reduced runtime (2,165,701 bytes versus 13,310,728 bytes for the
@@ -422,7 +552,7 @@ The runtime supports:
 
 ### Narration behavior
 
-- Default new-profile playback speed is `1.08x`.
+- Default new-profile playback speed is `1.0x`.
 - Balanced narration temperature is currently `0.80`.
 - Temperature caps are applied per emotion to control artifacts.
 - Emotion selection is paragraph-level and uses confidence/hysteresis. Punctuation
@@ -609,7 +739,7 @@ provides:
 - Browser push subscription registration and story update subscriptions.
 - Admin-only chapter refresh sweep at `/api/sync/chapters`.
 - Admin-only diagnostic logs and push delivery.
-- Disabled legacy `/api/state/*` endpoints; Anvil owns profile sync.
+- Disabled legacy `/api/state/*` endpoints; Supabase owns profile sync.
 
 ### AO3, FicHub, and Zyte routing
 
@@ -632,7 +762,7 @@ FicHub fetches, and every redirect hop.
 
 ## 9. Authentication, Profiles, and Sync
 
-Anvil Users is the authentication authority. Supported account options are
+Supabase is the authentication authority. Supported account options are
 guest, Google OAuth, and email/password with confirmation, password reset,
 remembered sessions, logout, account switching, export, and deletion.
 
@@ -733,7 +863,7 @@ Verify the published URL after pushing:
 
 ```powershell
 Invoke-WebRequest https://pocket-reader-f2y.pages.dev/assets/js/<asset>?v=<version>
-Invoke-WebRequest https://pocket-reader-f2y.pages.dev/sw.js?v=129
+Invoke-WebRequest https://pocket-reader-f2y.pages.dev/sw.js?v=135
 ```
 
 For backend changes, merging to `main` triggers the GitHub Action deploy:
@@ -758,7 +888,7 @@ For current frontend regression coverage:
 node --test tests/*.test.mjs
 ```
 
-The current suite has 169 passing Node tests and four passing backend regression
+The current suite has 195 passing Node tests and eight passing backend regression
 tests covering Pocket generation, WebGPU
 calibration/fallback, narration isolation, service-worker revision, mobile
 playback, interrupted cache jobs, Away Mode guidance, subscriptions, menu
@@ -769,10 +899,14 @@ SharedArrayBuffer availability, zero reload loops, and zero page/console errors.
 The first-device browser harness also exercises Chromium,
 desktop WebKit, and simulated iPhone 13 Pro WebKit for setup ordering, safe
 actions, acknowledgement gating, local-only storage, and backend selection.
-Release benchmark reports are under `benchmark-results/`;
-the final candidate files are `release-candidate-wasm-x1-x2-x4.json`,
-`release-candidate-true-x1.json`, `release-candidate-constrained-x2.json`, and
-`release-candidate-webgpu-x4.json`.
+`tools/test_caching_playback_browser.mjs` runs the real buffer manager and
+IndexedDB in Chromium and verifies cold caching, all-cache-hit replay without
+model initialization, the 20-paragraph runway, and stop/cancellation isolation.
+Benchmark tooling writes to `benchmark-results/` (git-ignored, created on demand
+by `tools/benchmark_pocket_worker_pipeline.mjs` and
+`tools/smoke_pocket_worker_runtime.mjs`). The directory does not exist in a fresh
+checkout, and the earlier `release-candidate-*.json` reports are not committed —
+regenerate them with those tools rather than expecting them on disk.
 
 Before a major release, also run browser/device smoke tests for onboarding,
 Google/email login, search, manual story add, reader controls, cache resume,
@@ -782,7 +916,7 @@ sync, and account deletion.
 ## 14. Known Limitations and Open Risks
 
 - AO3 and FicHub are external integrations and can still be slow or blocked.
-- Full multi-device account conflict testing requires real Anvil accounts and
+- Full multi-device account conflict testing requires real Supabase accounts and
   two devices; automated merge tests do not prove OAuth configuration.
 - Background synthesis/caching under locked-screen mobile conditions is not
   guaranteed by the web platform.
@@ -813,8 +947,8 @@ sync, and account deletion.
 - Keep Supabase as the profile/auth authority and keep device-local assets local.
 - Update versioned service-worker/module references whenever cached frontend
   assets change.
-- Synchronize equivalent files across the active workspace, Anvil checkout,
-  Hugging Face checkout, and Cloudflare source where the file is shared.
+- Synchronize equivalent files across the root `public/` Cloudflare Pages build,
+  Hugging Face backend checkout, and Cloudflare Worker source where shared.
 - Never silently overwrite unrelated user changes.
 - Test syntax and the full suite before committing.
 - Verify the live published URL after every deploy.

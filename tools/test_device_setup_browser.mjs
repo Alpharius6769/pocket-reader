@@ -6,7 +6,7 @@ const root = new URL('../', import.meta.url);
 const files = new Map([
   ['/device_setup.js', 'public/assets/js/device_setup.js'],
   ['/pocket_backend_policy.js', 'public/assets/js/pocket_backend_policy.js'],
-  ['/_/theme/device_benchmark_worker.js', 'public/assets/js/device_benchmark_worker.js'],
+  ['/assets/js/device_benchmark_worker.js', 'public/assets/js/device_benchmark_worker.js'],
 ]);
 
 const html = `<!doctype html><html><body>

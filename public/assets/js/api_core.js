@@ -420,8 +420,8 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
       if (_existing.url) newStory.url = _existing.url;
       if (typeof window._loadStoryChapters === 'function') {
         try {
-          const _stored = (await window._loadStoryChapters(newStory.storyKey))
-            || (await window._loadStoryChapters(_existing.title)) || [];
+          const _stored = (await window._loadStoryChapters(newStory.storyKey, newStory))
+            || (await window._loadStoryChapters(_existing.title, newStory)) || [];
           const _flatten = (chs) => (chs || [])
             .map((c) => (c.paragraphs || []).join('\n')).join('\n\n');
           if (!_stored.length) {
@@ -430,7 +430,7 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
             // Newer upload: keep existing chapters + their audio, append only the
             // newly-added ones.
             const _added = newStory.chapters.length - _stored.length;
-            newStory.chapters = window.mergeStoryChapters?.(_stored, newStory.chapters)
+            newStory.chapters = window.mergeStoryChapters?.(_stored, newStory.chapters, newStory)
               || _stored.concat(newStory.chapters.slice(_stored.length));
             if (!silent && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
             if (!silent && window.virtueSpeak) window.virtueSpeak(`Added ${_added} new chapter${_added > 1 ? 's' : ''} from your upload - your existing audio is kept.`, 6000);
@@ -453,7 +453,7 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
           _existing.totalChapters = newStory.chapters.length;
           _existing.publishedChapters = Math.max(Number(_existing.publishedChapters || 0), newStory.chapters.length);
           _existing.isFinished = false;
-          if (typeof window._saveStoryChapters === 'function') await window._saveStoryChapters(newStory.storyKey, newStory.chapters);
+          if (typeof window._saveStoryChapters === 'function') await window._saveStoryChapters(newStory.storyKey, newStory.chapters, newStory);
         } catch (e) { console.warn('Upload merge check failed:', e); }
       }
     }
@@ -465,9 +465,9 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
     // Persist the uploaded chapters to IndexedDB under storyKey, title, and url.
     if (typeof window._saveStoryChapters === 'function' && Array.isArray(newStory.chapters)) {
       try {
-        await window._saveStoryChapters(newStory.storyKey, newStory.chapters);
-        await window._saveStoryChapters(newStory.title, newStory.chapters);
-        if (newStory.url) await window._saveStoryChapters(newStory.url, newStory.chapters);
+        await window._saveStoryChapters(newStory.storyKey, newStory.chapters, newStory);
+        await window._saveStoryChapters(newStory.title, newStory.chapters, newStory);
+        if (newStory.url) await window._saveStoryChapters(newStory.url, newStory.chapters, newStory);
       } catch (e) { console.warn('Failed to persist uploaded story chapters:', e); }
     }
     if (!silent && typeof window.populateReaderUI === 'function') window.populateReaderUI(window.currentStory, newStory.author);
@@ -947,19 +947,26 @@ export async function loadStory(url, options = {}) {
         const storyRef = existingLibEntry.storyKey
           || window.getStoryStableKey?.(existingLibEntry)
           || existingLibEntry.title;
-        let cachedChapters = await window._loadStoryChapters(storyRef);
+        let cachedChapters = await window._loadStoryChapters(storyRef, existingLibEntry);
         if ((!cachedChapters || !cachedChapters.length) && storyRef !== existingLibEntry.title) {
-          cachedChapters = await window._loadStoryChapters(existingLibEntry.title);
+          cachedChapters = await window._loadStoryChapters(existingLibEntry.title, existingLibEntry);
           if (cachedChapters?.length) {
-            window._saveStoryChapters?.(storyRef, cachedChapters).catch(() => {});
+            window._saveStoryChapters?.(storyRef, cachedChapters, existingLibEntry).catch(() => {});
           }
         }
         if (cachedChapters && cachedChapters.length > 0) {
           console.log("Loading story chapters from local storage:", existingLibEntry.title);
           window.currentStory = existingLibEntry;
           window.currentStory.chapters = cachedChapters;
-          window.currentChapterIndex = existingLibEntry.progressChapter || 0;
-          window.currentParagraphIndex = existingLibEntry.progressParagraph || 0;
+          window.currentChapterIndex = Math.max(
+            0,
+            Math.min(Number(existingLibEntry.progressChapter) || 0, cachedChapters.length - 1),
+          );
+          const activeParagraphs = cachedChapters[window.currentChapterIndex]?.paragraphs || [];
+          window.currentParagraphIndex = Math.max(
+            0,
+            Math.min(Number(existingLibEntry.progressParagraph) || 0, Math.max(0, activeParagraphs.length - 1)),
+          );
 
           // Backfill word count dynamically if missing
           if (!window.currentStory.words || window.currentStory.words === '-' || window.currentStory.words === '0') {

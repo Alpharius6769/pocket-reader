@@ -1,13 +1,9 @@
 /**
  * Local-data export / import.
  *
- * WHY THIS EXISTS
- * IndexedDB and localStorage are scoped to an origin. Moving Pocket Reader from
- * hot-wiry-raven.anvil.app to pocket-reader-f2y.pages.dev therefore strands
- * every user's cached story text, generated narration, reading progress,
- * bookmarks, favourites and settings on the old origin, with no way for the new
- * one to reach it. This module lets a user carry that data across by hand.
- * See MIGRATION_PLAN.md, "Known migration costs".
+ * IndexedDB and localStorage are scoped to one browser origin and device. This
+ * module provides a portable, offline backup for cached story text, generated
+ * narration, reading progress, bookmarks, favourites, and settings.
  *
  * FORMAT (container, not JSON — audio is binary and base64 would add ~33%)
  *
@@ -266,12 +262,7 @@ export async function importPocketReaderData(file, options = {}) {
 const fmtBytes = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 /**
- * Mounts a self-contained migration panel.
- *
- * Deliberately builds its own DOM instead of relying on markup: the Anvil
- * form template is frozen at its pre-Phase-3 state, so the old origin -- the
- * one users must EXPORT from -- cannot receive HTML changes. One script tag is
- * enough to give both origins a working UI.
+ * Mounts a self-contained backup and restore panel.
  *
  * Styling is inline and theme-neutral so it does not depend on theme.css
  * having loaded, and it uses textContent throughout: story titles and file
@@ -367,7 +358,7 @@ export function mountDataTransferUI(target = document.body) {
   return panel;
 }
 
-// Exposed for the Settings UI, for the migration panel, and for hand-running
+// Exposed for the Settings UI, for the backup panel, and for hand-running
 // from a console.
 if (typeof window !== 'undefined') {
   window.exportPocketReaderData = exportPocketReaderData;
@@ -375,10 +366,9 @@ if (typeof window !== 'undefined') {
   window.importPocketReaderData = importPocketReaderData;
   window.mountDataTransferUI = mountDataTransferUI;
 
-  // Opt-in only: ?migrate=1 shows the panel. Nothing changes for anyone who
-  // does not follow a migration link, so this cannot disturb normal use.
+  // Opt-in only: ?backup=1 shows the panel.
   try {
-    if (new URLSearchParams(location.search).get('migrate') === '1') {
+    if (new URLSearchParams(location.search).get('backup') === '1') {
       if (document.body) mountDataTransferUI();
       else document.addEventListener('DOMContentLoaded', () => mountDataTransferUI(), { once: true });
     }

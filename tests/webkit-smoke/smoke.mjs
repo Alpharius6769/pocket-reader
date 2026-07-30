@@ -16,7 +16,7 @@
 
 import { webkit } from 'playwright';
 
-const APP_URL = process.argv[2] || 'https://hot-wiry-raven.anvil.app';
+const APP_URL = process.argv[2] || 'https://pocket-reader-f2y.pages.dev';
 const SETTLE_MS = 12000;
 
 function section(title) {

@@ -31,7 +31,7 @@
 2. GLOBAL STYLESHEET
 ========================================== -->
 <!-- Links the optimized CSS file we just created -->
-<link rel="stylesheet" href="/assets/css/theme.css?v=midnight-v21">
+<link rel="stylesheet" href="/assets/css/theme.css?v=midnight-v22">
 
 <!-- ==========================================
 2a. FAST-NARRATION RELOAD MASK (anti-flash)
@@ -122,35 +122,27 @@ Fully self-contained so no versioned module needs to change.
 2b. MODULE PRELOAD (flatten the ES-module waterfall)
 ========================================== -->
 <!--
-The FrontEnd form loads its JS as an ES-module graph (both via <script type=module>
-in the form HTML and via anvil.js.import_from at form init). Because those modules
-are only discovered once the Skulpt runtime boots and parses each parent module,
-they otherwise download in a serial waterfall that gates first paint / LCP.
-These hints let the browser start fetching the render-critical modules in parallel
-during initial HTML parse, before the runtime asks for them. URLs (and ?v= query
-strings) MUST match the script-tag / import_from URLs exactly, or the browser
-double-fetches. audio_core, buffer_manager and tts_pronunciation_core are
-intentionally omitted: they are only needed for playback, so leaving them to load
-after paint keeps them from competing with the render-critical modules.
+Preload render-critical modules in parallel during initial HTML parsing.
+Playback-only modules remain deferred so they do not compete with first paint.
 -->
 <link rel="modulepreload" href="/assets/js/diagnostics.js?v=diag-v4">
 <link rel="modulepreload" href="/assets/js/motion_lite.js">
-<link rel="modulepreload" href="/assets/js/storage_core.js?v=storage-v6">
-<link rel="modulepreload" href="/assets/js/sync_core.js?v=sync-v5">
+<link rel="modulepreload" href="/assets/js/storage_core.js?v=storage-v9">
+<link rel="modulepreload" href="/assets/js/sync_core.js?v=sync-v6">
 <link rel="modulepreload" href="/assets/js/engine_utils.js">
-<link rel="modulepreload" href="/assets/js/narration_runtime_loader.js?v=narration-loader-v10">
-<link rel="modulepreload" href="/assets/js/api_core.js?v=search-v16">
+<link rel="modulepreload" href="/assets/js/narration_runtime_loader.js?v=narration-loader-v15">
+<link rel="modulepreload" href="/assets/js/api_core.js?v=search-v17">
 <link rel="modulepreload" href="/assets/js/experience_coordinator.js?v=experience-v5">
-<link rel="modulepreload" href="/assets/js/virtue_controller.js?v=virtue-v7">
+<link rel="modulepreload" href="/assets/js/virtue_controller.js?v=virtue-v8">
 <link rel="modulepreload" href="/assets/js/pocket_backend_policy.js?v=backend-v20">
 <link rel="modulepreload" href="/assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="/assets/js/device_setup.js?v=device-setup-v7">
-<link rel="modulepreload" href="/assets/js/settings_manager.js?v=settings-v43">
-<link rel="modulepreload" href="/assets/js/library_manager.js?v=library-v9">
-<link rel="modulepreload" href="/assets/js/cinematic_ui.js?v=cinematic-v5">
-<link rel="modulepreload" href="/assets/js/reader_features.js?v=features-v3">
-<link rel="modulepreload" href="/assets/js/ui_controller.js?v=ui-v83">
-<link rel="modulepreload" href="/assets/js/supabase_bridge.js?v=supabase-v3">
+<link rel="modulepreload" href="/assets/js/settings_manager.js?v=settings-v48">
+<link rel="modulepreload" href="/assets/js/library_manager.js?v=library-v12">
+<link rel="modulepreload" href="/assets/js/cinematic_ui.js?v=cinematic-v6">
+<link rel="modulepreload" href="/assets/js/reader_features.js?v=features-v5">
+<link rel="modulepreload" href="/assets/js/ui_controller.js?v=ui-v87">
+<link rel="modulepreload" href="/assets/js/supabase_bridge.js?v=supabase-v4">
 
 <!-- ==========================================
 3. SERVICE WORKER REGISTRATION
@@ -163,7 +155,7 @@ after paint keeps them from competing with the render-critical modules.
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
       window.__prServiceWorkerRegistration = navigator.serviceWorker
-        .register('/sw.js?v=129', { scope: '/' })
+        .register('/sw.js?v=135', { scope: '/' })
         .catch(function() {
           return navigator.serviceWorker.register('/sw.js', { scope: '/' });
         })
@@ -185,17 +177,9 @@ after paint keeps them from competing with the render-critical modules.
 </script>
 
 <!-- ==========================================
-4. ANVIL COMPONENT DROP ZONE
+4. STATIC APP SHELL
 ========================================== -->
-<!-- 
-This acts as the blank canvas. Your FrontEnd Form.html 
-(which starts with <div class="app-wrapper">) will be injected here. 
-By keeping this wrapper classless, we prevent Anvil's default 
-padding/margins from interfering with your 100dvh full-screen layout.
--->
-<div>
-  <div anvil-drop-here></div>
-</div>
+<!-- The static app shell continues below. -->
 </head>
 <body>
 <script>
@@ -971,10 +955,10 @@ padding/margins from interfering with your 100dvh full-screen layout.
 
             <label class="settings-label pr-layout-118" for="voice-emotion-mode-select">Voice emotion profile</label>
             <select id="voice-emotion-mode-select" name="voice-emotion-mode-select" class="settings-control" onchange="applySettings()">
-              <option value="neutral" selected>Neutral only (Recommended)</option>
-              <option value="balanced">Balanced emotional references</option>
+              <option value="neutral">Neutral only</option>
+              <option value="balanced" selected>Balanced emotional references (Recommended)</option>
             </select>
-            <p class="pr-layout-123">Neutral avoids sudden changes in tone. Balanced uses emotion tags but can introduce strange voice issues.</p>
+            <p class="pr-layout-123">Balanced follows sustained scene emotion while keeping voice changes stable. Neutral keeps one tone throughout.</p>
 
             <label class="settings-label pr-layout-118" for="punct-pause-toggle">Punctuation pauses (slower; off by default)</label>
             <input id="punct-pause-toggle" name="punct-pause-toggle" type="checkbox" onchange="applySettings()">
@@ -1187,7 +1171,7 @@ padding/margins from interfering with your 100dvh full-screen layout.
 
                 <h3>Community &amp; story sources</h3>
                 <ul>
-                  <li><b>HMOFA Masterlist</b> - curated and maintained by <b>Therealwolfy</b>. The curated list itself is his work; the individual stories it catalogues remain the property of their respective authors.</li>
+                  <li><b>HMOFA Masterlist</b> - maintained by Pocket Reader as an independent catalog. Individual stories remain the property of their respective authors.</li>
                   <li><b>Story sources</b> (fetched on demand - each author retains all rights):
                     <a class="pr-layout-159" href="https://archiveofourown.org" target="_blank">Archive of Our Own</a>,
                     <a class="pr-layout-159" href="https://www.royalroad.com" target="_blank">Royal Road</a>,
@@ -1221,7 +1205,7 @@ padding/margins from interfering with your 100dvh full-screen layout.
 
                     <p class="pr-layout-164">Assets &amp; platforms</p>
                     <p><b>Game-Icons.net:</b> <a class="pr-layout-159" href="https://game-icons.net/" target="_blank">Website</a> &middot; <a class="pr-layout-159" href="https://creativecommons.org/licenses/by/3.0/" target="_blank">CC-BY 3.0</a>. Achievement icons by <b>Lorc, Delapouite</b> &amp; contributors.</p>
-                    <p><b>Hosting:</b> <a class="pr-layout-159" href="https://huggingface.co/spaces" target="_blank">Hugging Face Spaces</a> (backend) &middot; <a class="pr-layout-159" href="https://anvil.works" target="_blank">Anvil</a> (frontend) &middot; <a class="pr-layout-159" href="https://www.jsdelivr.com/" target="_blank">jsDelivr</a> (CDN).</p>
+                    <p><b>Hosting:</b> Cloudflare Pages (frontend) &middot; <a class="pr-layout-159" href="https://huggingface.co/spaces" target="_blank">Hugging Face Spaces</a> (backend) &middot; Cloudflare Worker/B2 (proxy and assets).</p>
                     <p class="pr-layout-165">Full license texts and attributions are in the repository's <a class="pr-layout-159" href="https://huggingface.co/spaces/alpharius6769/Pocket_Reader/tree/main/NOTICE" target="_blank"><code>NOTICE</code></a> and <a class="pr-layout-159" href="https://huggingface.co/spaces/alpharius6769/Pocket_Reader/tree/main/ATTRIBUTIONS.md" target="_blank"><code>ATTRIBUTIONS.md</code></a>.</p>
                   </div>
                 </details>
@@ -1279,7 +1263,6 @@ padding/margins from interfering with your 100dvh full-screen layout.
             </div>
           </div>
 
-          <div class="pr-layout-008"><div anvil-drop-here></div></div>
         </div>
       </div>
 
@@ -1350,22 +1333,22 @@ padding/margins from interfering with your 100dvh full-screen layout.
       </div>
     </div>
     <script src='/assets/js/diagnostics.js?v=diag-v4' type='module'></script>
-    <script src='/assets/js/storage_core.js?v=storage-v6' type='module'></script>
-    <script src='/assets/js/sync_core.js?v=sync-v5' type='module'></script>
-    <script src='/assets/js/api_core.js?v=search-v16' type='module'></script>
+    <script src='/assets/js/storage_core.js?v=storage-v9' type='module'></script>
+    <script src='/assets/js/sync_core.js?v=sync-v6' type='module'></script>
+    <script src='/assets/js/api_core.js?v=search-v17' type='module'></script>
     <script src='/assets/js/experience_coordinator.js?v=experience-v5' type='module'></script>
-    <script src='/assets/js/virtue_controller.js?v=virtue-v7' type='module'></script>
+    <script src='/assets/js/virtue_controller.js?v=virtue-v8' type='module'></script>
     <script src='/assets/js/engine_utils.js' type='module'></script>
-    <script src='/assets/js/narration_runtime_loader.js?v=narration-loader-v10' type='module'></script>
-    <script src='/assets/js/tts_pronunciation_core.js?v=pron-v9' type='module'></script>
-    <script src='/assets/js/library_manager.js?v=library-v9' type='module'></script>
+    <script src='/assets/js/narration_runtime_loader.js?v=narration-loader-v15' type='module'></script>
+    <script src='/assets/js/tts_pronunciation_core.js?v=pron-v11' type='module'></script>
+    <script src='/assets/js/library_manager.js?v=library-v12' type='module'></script>
     <script src='/assets/js/device_setup.js?v=device-setup-v7' type='module'></script>
-    <script src='/assets/js/settings_manager.js?v=settings-v43' type='module'></script>
-    <script src='/assets/js/cinematic_ui.js?v=cinematic-v5' type='module'></script>
-    <script src='/assets/js/reader_features.js?v=features-v3' type='module'></script>
-    <script src='/assets/js/ui_controller.js?v=ui-v83' type='module'></script>
-    <script src='/assets/js/supabase_bridge.js?v=supabase-v3' type='module'></script>
-    <script src='/assets/js/data_transfer.js?v=transfer-v1' type='module'></script>
+    <script src='/assets/js/settings_manager.js?v=settings-v48' type='module'></script>
+    <script src='/assets/js/cinematic_ui.js?v=cinematic-v6' type='module'></script>
+    <script src='/assets/js/reader_features.js?v=features-v5' type='module'></script>
+    <script src='/assets/js/ui_controller.js?v=ui-v87' type='module'></script>
+    <script src='/assets/js/supabase_bridge.js?v=supabase-v4' type='module'></script>
+    <script src='/assets/js/data_transfer.js?v=transfer-v2' type='module'></script>
   </div>
 </body>
 </html>

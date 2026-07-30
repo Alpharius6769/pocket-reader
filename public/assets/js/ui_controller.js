@@ -103,7 +103,7 @@ export function showView(viewId) {
       const transition = document.startViewTransition(() => {
         try { doSwitch(); } catch (e) { console.error('View transition error:', e); }
       });
-      // Anvil can take longer than the browser's View Transition DOM-update
+      // Some browsers can exceed the View Transition DOM-update
       // budget during startup. The view is already switched; consume the
       // non-fatal timeout so it does not become an app-level runtime error.
       [transition.ready, transition.updateCallbackDone, transition.finished]
@@ -323,7 +323,7 @@ export function populateReaderUI(storyObj, authorFallback) {
       const chTitle = c.title || '';
       (c.paragraphs || []).forEach(p => {
         // Skip author notes, chapter headings repeated as text, URLs, etc.
-        if (_isMetaParagraph(p, storyObj.title, chTitle)) return;
+        if (_isMetaParagraph(p, storyObj.title, chTitle, safeAuthor)) return;
         totalWords += p.split(/\s+/).filter(Boolean).length;
       });
     });
@@ -370,10 +370,10 @@ export function populateReaderUI(storyObj, authorFallback) {
   const preset = libEntry?.narrationPreset || storyObj.narrationPreset || {};
   if (Object.keys(preset).length) storyObj.narrationPreset = { ...preset };
   const voice = preset.voice || window.userProfile?.settings?.pocketVoice;
-  const speed = Number(preset.speed || window.userProfile?.settings?.speed) || 1.08;
   if (voice && el('voice-selector')) el('voice-selector').value = voice;
-  if (el('speed-slider')) el('speed-slider').value = String(speed);
-  if (el('speed-label')) el('speed-label').textContent = `${speed.toFixed(2)}x`;
+  // The story's narrationPreset.speed is applied by audio_core's
+  // getEffectivePlaybackRate() when the next paragraph plays; there is no
+  // slider or label to mirror it into.
 
   window._readerHasScrolled = false;
   renderFullStory(storyObj);
@@ -405,7 +405,7 @@ export function renderFullStory(storyObj) {
     }
 
     (chapter.paragraphs || []).forEach((para, p) => {
-      const isMeta = _isMetaParagraph(para, storyObj.title, chapterTitle);
+      const isMeta = _isMetaParagraph(para, storyObj.title, chapterTitle, storyObj.author);
       const cls = isMeta ? 'reader-paragraph meta' : 'reader-paragraph';
       const metaAttr = isMeta ? ' data-meta="true"' : '';
       parts.push(
@@ -457,7 +457,7 @@ function _wordsRemaining() {
     const startP = (c === ci) ? pi : 0;
     for (let p = startP; p < chap.paragraphs.length; p++) {
       const para = chap.paragraphs[p];
-      if (_isMetaParagraph(para, story.title, chap.title || '')) continue;
+      if (_isMetaParagraph(para, story.title, chap.title || '', story.author)) continue;
       words += para.split(/\s+/).filter(Boolean).length;
     }
   }
@@ -469,7 +469,12 @@ export function updateTimeRemaining() {
   if (!elT) return;
   const story = window.currentStory;
   if (!story || !story.chapters) { elT.innerText = ''; return; }
-  const speed = parseFloat(document.getElementById('speed-slider')?.value || '1') || 1;
+  // Reads the profile/preset rate, not a DOM control -- the time estimate was
+  // always computed at 1.0x regardless of the user's configured speed.
+  const speed = window.getEffectivePlaybackRate?.()
+    || Number(window.currentStory?.narrationPreset?.speed)
+    || Number(window.userProfile?.settings?.speed)
+    || 1;
   const words = _wordsRemaining();
   if (words <= 0) { elT.innerText = '✓ Finished'; return; }
   const mins = Math.max(1, Math.ceil(words / (250 * speed)));
@@ -489,6 +494,7 @@ function _buildReaderProgressIndex(storyObj) {
   let total = 0;
   const chapters = (storyObj && storyObj.chapters) || [];
   const title = storyObj && storyObj.title;
+  const storyAuthor = storyObj && storyObj.author;
   // First pass: chapter offsets + narratable word count per global paragraph.
   const perPara = [];
   chapters.forEach((ch) => {
@@ -497,7 +503,7 @@ function _buildReaderProgressIndex(storyObj) {
     const chTitle = (ch && ch.title) || '';
     for (let p = 0; p < paras.length; p++) {
       const para = paras[p];
-      perPara.push(_isMetaParagraph(para, title, chTitle) ? 0 : para.split(/\s+/).filter(Boolean).length);
+      perPara.push(_isMetaParagraph(para, title, chTitle, storyAuthor) ? 0 : para.split(/\s+/).filter(Boolean).length);
     }
     total += paras.length;
   });
@@ -621,7 +627,7 @@ function _escapeHtml(s) {
 // Design rule: false-positives (reading a real note as story) are ACCEPTABLE.
 // False-negatives (skipping real story content) are NOT acceptable.
 // Only return true when confidence is very high.  If in doubt, return false.
-function _isMetaParagraph(text, storyTitle = null, chapterTitle = null) {
+function _isMetaParagraph(text, storyTitle = null, chapterTitle = null, storyAuthor = null) {
   if (!text || !text.trim()) return true; // empty
   const raw   = text.trim();
   const lower = raw.toLowerCase();
@@ -675,6 +681,14 @@ function _isMetaParagraph(text, storyTitle = null, chapterTitle = null) {
     const nc = norm(chapterTitle);
     if (nc.length >= 3 && normText === nc) return true;
     if (nc.length >= 3 && normText.startsWith(nc) && normText.length <= nc.length + 8) return true;
+    // AO3/PDF exports often emit "Chapter 1" as a separate line immediately
+    // before the fuller "Chapter 1: Title" heading.
+    if (/^(chapter|part|book)\s+(?:\d+|[ivxlcdm]+)$/i.test(raw)
+        && nc.startsWith(normText)) return true;
+  }
+  if (storyAuthor) {
+    const na = norm(storyAuthor);
+    if (na.length >= 3 && normText === na) return true;
   }
 
   // ── Tier 3: Multi-signal detection for SHORT paragraphs only ────────────
@@ -999,7 +1013,7 @@ window.addEventListener('appinstalled', () => {
 });
 
 // Show on load for mobile non-PWA users (iOS never fires beforeinstallprompt, so
-// the banner has to be shown proactively). Anvil loads theme modules after the
+// the banner has to be shown proactively). Deferred modules load after the
 // document is already parsed, so DOMContentLoaded has usually fired by the time
 // this runs — call directly in that case rather than waiting for an event that
 // will never arrive (which is why the banner previously didn't appear on iOS).
@@ -1281,13 +1295,11 @@ function _initMasterlistStickyScrollbar() {
 window._initMasterlistStickyScrollbar = _initMasterlistStickyScrollbar;
 
 // Service worker strategy:
-// - Debug env (/debug/ URL): unregister everything — Anvil's own SW must run unobstructed
-//   and the debug env doesn't support SAB anyway.
+// - Debug env (/debug/ URL): unregister everything; the debug environment does
+//   not support SharedArrayBuffer and must remain unobstructed.
 // - Production: auto-register for offline asset caching only.
 if ('serviceWorker' in navigator) {
-  // The app now runs standalone on Pages, so the old Anvil frame escape is
-  // intentionally disabled. Redirecting a framed page to `/_/` would just send
-  // users into a dead local/dev path.
+  // The app runs standalone on Pages; no host-shell frame escape is needed.
 
   const isDebug = window.location.pathname.startsWith('/debug/');
   if (isDebug) {
@@ -1301,7 +1313,7 @@ if ('serviceWorker' in navigator) {
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
-    .register('/sw.js?v=129', { scope: '/' })
+    .register('/sw.js?v=135', { scope: '/' })
     .catch(() => navigator.serviceWorker.register('/sw.js', { scope: '/' }));
     window.__prServiceWorkerRegistration = registrationPromise
       .catch((err) => {
@@ -1469,7 +1481,7 @@ window._setupCloudLogin = async function() {
   const modal = document.getElementById('first-time-setup-modal');
   _persistSetupDraft();
   if (_deferCloudLoginOutsideFastNarration('setup')) return;
-  if (!window.anvilLogin) {
+  if (!window.pocketCloud?.login) {
     if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Cloud service is not ready yet. Please wait a moment and try again.'; }
     return;
   }
@@ -1478,7 +1490,7 @@ window._setupCloudLogin = async function() {
   if (btn) btn.disabled = true;
   const gatewayButtons = [...document.querySelectorAll('#setup-account-gateway .account-option')];
   gatewayButtons.forEach((button) => { button.disabled = true; });
-  // Anvil displays its secure login form above the app shell. Leaving this
+  // The cloud bridge displays its secure login form above the app shell. Leaving this
   // high-z-index onboarding overlay visible intercepts the form and looks like
   // a frozen screen, especially on mobile/PWA.
   const reopenSetup = modal?.style.display === 'flex' || getComputedStyle(modal || document.body).display === 'flex';
@@ -1488,7 +1500,7 @@ window._setupCloudLogin = async function() {
     await new Promise((resolve) => requestAnimationFrame(resolve));
   }
   try {
-    const email = await window.anvilLogin();
+    const email = await window.pocketCloud.login();
     if (email) {
       // First-time setup runs on a fresh profile, so the account logging in
       // simply adopts it as owner.
@@ -1546,8 +1558,8 @@ window.completeFirstTimeSetup = () => {
   // Canonical profile fields — these are what the rest of the app reads.
   p.displayName = username;
   if (avatar && avatar.startsWith('data:')) p.avatar = avatar;
-  if (avatar && avatar.startsWith('data:') && window._cloudPushAllowed && typeof window.anvilSaveAvatar === 'function') {
-    window.anvilSaveAvatar(avatar).catch((error) => console.warn('[CloudSync] Setup avatar upload failed:', error));
+  if (avatar && avatar.startsWith('data:') && window._cloudPushAllowed && typeof window.pocketCloud?.saveAvatar === 'function') {
+    window.pocketCloud.saveAvatar(avatar).catch((error) => console.warn('[CloudSync] Setup avatar upload failed:', error));
   }
   p.userCategory = userCategory;
   p.companion = companion;
@@ -1716,7 +1728,7 @@ window.renderProfileExtras = function() {
 
 window.triggerCloudLogin = async function() {
   if (_deferCloudLoginOutsideFastNarration('profile')) return;
-  if (!window.anvilLogin) {
+  if (!window.pocketCloud?.login) {
     if (typeof window.triggerVirtue === 'function') {
       window.triggerVirtue('virtue_annoyed_bubble');
       window.virtueSpeak('Cloud service is not ready yet. Please wait a moment and try again.', 4000);
@@ -1725,7 +1737,7 @@ window.triggerCloudLogin = async function() {
   }
   try {
     if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_thinking');
-    const email = await window.anvilLogin();
+    const email = await window.pocketCloud.login();
     if (email) {
       // ── Account isolation ────────────────────────────────────────────────
       // If this device's local profile belongs to a DIFFERENT account, wipe it
@@ -1747,8 +1759,8 @@ window.triggerCloudLogin = async function() {
       window.userProfile.cloudEmail = email;
 
       // Pull cloud profile
-      if (typeof window.anvilLoadProfile === 'function') {
-        const cloudProfile = await window.anvilLoadProfile();
+      if (typeof window.pocketCloud?.loadProfile === 'function') {
+        const cloudProfile = await window.pocketCloud.loadProfile();
         if (cloudProfile) {
           console.log("[CloudSync] Loaded cloud profile during login:", cloudProfile);
           // If the user is mid first-time-setup, the choices they just made in
@@ -1773,11 +1785,11 @@ window.triggerCloudLogin = async function() {
       if (typeof window.queueCloudSync === 'function') {
         await window.queueCloudSync('login', { immediate: true });
         await window.flushCloudSync?.();
-      } else if (typeof window.anvilSyncProfile === 'function') {
+      } else if (typeof window.pocketCloud?.saveProfile === 'function') {
         const localForPush = typeof window.cloneProfileForSync === 'function'
           ? window.cloneProfileForSync()
           : JSON.parse(JSON.stringify(window.userProfile));
-        try { await window.anvilSyncProfile(localForPush, false); } catch (_) {}
+        try { await window.pocketCloud.saveProfile(localForPush); } catch (_) {}
       }
 
       // Reflect the (merged) display name in the topbar — not the raw email,
@@ -1808,7 +1820,7 @@ async function _resumeDeferredCloudLogin() {
   if (!action || new URL(window.location.href).searchParams.get('tts_fast') === '1') return;
   const startedAt = Date.now();
   while (Date.now() - startedAt < 30000) {
-    if (typeof window.anvilLogin === 'function') {
+    if (typeof window.pocketCloud?.login === 'function') {
       sessionStorage.removeItem('pr_resume_cloud_login_v1');
       if (action === 'setup') await window._setupCloudLogin?.();
       else await window.triggerCloudLogin?.();
@@ -1862,10 +1874,10 @@ if ('serviceWorker' in navigator) {
 }
 
 window.triggerCloudLogout = async function() {
-  if (typeof window.anvilLogout !== 'function') return;
+  if (typeof window.pocketCloud?.logout !== 'function') return;
   if (!confirm("Log out? Your library, settings, and reading progress will be removed from this device so the next reader starts fresh. Everything stays safe in your cloud profile — log back in anytime to restore it.")) return;
   try {
-    await window.anvilLogout();
+    await window.pocketCloud.logout();
     localStorage.removeItem('pr_remember_login');
     window._cloudPushAllowed = false;
 
@@ -1884,7 +1896,7 @@ window.triggerCloudLogout = async function() {
 window.triggerCloudSync = async function() {
   // Verify live auth state — don't rely solely on the cached isLoggedIn flag,
   // which may not be set after a page reload if checkCloudSyncOnStartup didn't run.
-  if (typeof window.anvilGetCurrentUser !== 'function' || typeof window.anvilSyncProfile !== 'function') return;
+  if (typeof window.pocketCloud?.getCurrentUser !== 'function' || typeof window.pocketCloud?.saveProfile !== 'function') return;
   const _say = (msg, dur) => {
     if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_thinking');
     if (typeof window.virtueSpeak === 'function') window.virtueSpeak(msg, dur || 4000);
@@ -1899,7 +1911,7 @@ window.triggerCloudSync = async function() {
   };
   try {
     _say("Syncing with cloud...");
-    const email = await window.anvilGetCurrentUser();
+    const email = await window.pocketCloud.getCurrentUser();
     if (!email) {
       _fail("You're not logged in. Use 'Log In / Sync' first.");
       return;
@@ -1936,11 +1948,11 @@ window.triggerCloudSync = async function() {
     const localForPush = typeof window.cloneProfileForSync === 'function'
       ? window.cloneProfileForSync()
       : JSON.parse(JSON.stringify(window.userProfile));
-    await window.anvilSyncProfile(localForPush, false);
+    await window.pocketCloud.saveProfile(localForPush);
 
     // ── Step 2: pull cloud → local and merge ──────────────────────────────
-    if (typeof window.anvilLoadProfile === 'function') {
-      const cloudProfile = await window.anvilLoadProfile();
+    if (typeof window.pocketCloud?.loadProfile === 'function') {
+      const cloudProfile = await window.pocketCloud.loadProfile();
       if (cloudProfile && typeof window.mergeProfileIntoCurrent === 'function') {
         window.mergeProfileIntoCurrent(cloudProfile, { localSettingsWin: true, purgeStorage: true });
       }
@@ -1948,8 +1960,8 @@ window.triggerCloudSync = async function() {
 
     // ── Step 3: persist merged state locally and refresh UI ───────────────
     if (typeof window.saveLocalData === 'function') window.saveLocalData();
-    if (typeof window.anvilSyncProfile === 'function' && typeof window.cloneProfileForSync === 'function') {
-      try { await window.anvilSyncProfile(window.cloneProfileForSync(), false); } catch (_) {}
+    if (typeof window.pocketCloud?.saveProfile === 'function' && typeof window.cloneProfileForSync === 'function') {
+      try { await window.pocketCloud.saveProfile(window.cloneProfileForSync()); } catch (_) {}
     }
     if (typeof window.renderLibrary === 'function') window.renderLibrary();
     if (typeof window.initSettingsUI === 'function') window.initSettingsUI();
@@ -2001,7 +2013,7 @@ window._populateProfileSettings = function() {
 };
 
 window._setControlsLocked = function(locked) {
-  ['reader-engine-select', 'voice-selector', 'speed-slider', 'voice-engine-select'].forEach(id => {
+  ['reader-engine-select', 'voice-selector', 'voice-engine-select'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.disabled = locked;

@@ -40,7 +40,7 @@ test("ambiguous 'd contractions are still left native (deliberate)", () => {
 });
 
 test("pronunciation ruleset version bumped so cached audio re-renders", () => {
-  assert.equal(PRONUNCIATION_RULESET_VERSION, 'pron-v9');
+  assert.equal(PRONUNCIATION_RULESET_VERSION, 'pron-v11');
 });
 
 // ── #3 — seed-perturb on a failed paragraph's retry (worker) ──────────────────

@@ -32,7 +32,7 @@ This includes, without limitation:
 
 - The Virtue character name, visual design, personality, dialogue style, lore,
   and worldbuilding.
-- Virtue WebP sprites in `_/theme/`, including `virtue_waving.webp`,
+- Virtue WebP sprites in `public/assets/img/`, including `virtue_waving.webp`,
   `virtue_annoyed.webp`, `virtue_thinking.webp`,
   `virtue_happy_no_paws.webp`, `virtue_happy_holding_bubble.webp`,
   `virtue_kneeling.webp`, `virtue_story_loading.webp`,

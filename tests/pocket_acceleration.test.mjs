@@ -146,7 +146,7 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(audio, /wasm_rtf_sample/);
   assert.match(audio, /shouldProbeBundle/);
   assert.match(audio, /wasmReferenceRtf: _pocketBackendRuntime\.wasmReferenceRtf/);
-  assert.match(audio, /pocket-worker-v43/);
+  assert.match(audio, /pocket-worker-v45/);
   assert.match(worker, /wasmReferenceRtf/);
   assert.match(worker, /releaseAllSessions/);
   assert.match(worker, /wasm_rtf_sample/);
@@ -188,21 +188,21 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
-  assert.match(serviceWorker, /pocket-reader-core-v129/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v83/);
+  assert.match(serviceWorker, /pocket-reader-core-v135/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v87/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
-  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v43/);
+  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v45/);
   assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v20/);
   assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v7/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
-  const standardPage = await read('public/standard-page.html');
-  assert.match(standardPage, /sw\.js\?v=129/);
+  const shell = await read('public/index.html');
+  assert.match(shell, /sw\.js\?v=135/);
 });
 
 test('Settings recognizes the active narration service worker revision', async () => {
   const settings = await read('public/assets/js/settings_manager.js');
-  assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'129'/);
+  assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'135'/);
   assert.match(settings, /searchParams\.get\('v'\)\s*===\s*NARRATION_SERVICE_WORKER_VERSION/);
   // ui_controller performs the PRIMARY service-worker registration. Its ?v= MUST
   // match NARRATION_SERVICE_WORKER_VERSION, or narrationServiceWorkerControlsPage()
@@ -237,7 +237,12 @@ test('mobile playback uses one media-session transport map with seek support', a
   assert.match(audio, /setPositionState/);
   assert.match(audio, /_bindMediaElementSession\(_premiumAudio\)/);
   assert.match(audio, /function _preferDirectMobileMediaPlayback\(\)/);
-  assert.match(audio, /if \(!_preferDirectMobileMediaPlayback\(\)\) _setupAudioRouting\(_premiumAudio\)/);
+  // The narration element is no longer routed through an AudioContext on any
+  // platform: the graph existed to host the emotion-boundary gain ramp, which
+  // now lives in the encoded samples (_encodeWAV fadeInSec) so it also works on
+  // phones. _preferDirectMobileMediaPlayback now gates only PCM streaming.
+  assert.doesNotMatch(audio, /_setupAudioRouting\(/);
+  assert.match(audio, /if \(!_preferDirectMobileMediaPlayback\(\)\) \{/);
   assert.doesNotMatch(audio, /function _setupMediaSession\(/);
 });
 
