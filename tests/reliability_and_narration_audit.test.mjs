@@ -36,9 +36,16 @@ test('cache lifecycle always releases keep-alive resources and MessageChannel po
   const finish = audio.match(/function _finishStory\(\)[\s\S]*?\n}\n\nexport function skipParagraph/)?.[0] || '';
   assert.match(finish, /stopBgKeepAlive\(\)/);
   assert.match(finish, /_scheduleWorkerIdleRelease\(\)/);
-  const scheduler = buffer.match(/_scheduleLoop\(gen, delay = 0\)[\s\S]*?\n  },/)?.[0] || '';
-  assert.match(scheduler, /channel\.port1\.close\(\)/);
-  assert.match(scheduler, /channel\.port2\.close\(\)/);
+  // The unthrottled hop moved out of _scheduleLoop into _messageChannelHop when
+  // the scheduler learned to keep its backoff on unfocused-but-visible pages.
+  // What matters is unchanged: wherever a MessageChannel is created for the
+  // cache loop, both ports are closed once it fires.
+  const hop = buffer.match(/_messageChannelHop\(gen\) \{[\s\S]*?\n  },/)?.[0] || '';
+  assert.match(hop, /new MessageChannel\(\)/);
+  assert.match(hop, /channel\.port1\.close\(\)/);
+  assert.match(hop, /channel\.port2\.close\(\)/);
+  assert.equal((buffer.match(/new MessageChannel\(\)/g) || []).length, 1,
+    'the cache loop should create its MessageChannel in exactly one place');
 });
 
 test('stopped or superseded cache loops cannot write into a later run', async () => {
