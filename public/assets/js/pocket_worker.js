@@ -338,8 +338,19 @@ let constrainedMemoryMode = false;
 
 let stTensors = [];
 let stTensorCache = new Map();
+// Mutual-exclusion flag: true from the moment startGeneration begins until its
+// finally. The ONNX sessions and Mimi state are module-level singletons, so two
+// generations must never overlap. Cancellation therefore sets cancelRequested
+// (below) instead of clearing this — clearing it mid-run let
+// processGenerationQueue start a second generation on top of the first.
 let isGenerating = false;
+// Cooperative stop signal. The chunk/frame loops poll it and unwind cleanly.
+let cancelRequested = false;
 let isReady = false;
+
+function generationShouldContinue() {
+  return isGenerating && !cancelRequested;
+}
 
 function activeBundleName(language, backend = currentBackend) {
   return backend === 'webgpu' && language === DEFAULT_LANGUAGE ? POCKET_WEBGPU_BUNDLE : language;
@@ -2673,15 +2684,26 @@ self.onmessage = async (e) => {
 
     if (type === 'cancel_generation') {
       const targetId = data.id;
-      generationQueue = generationQueue.filter((job) => targetId != null && job.jobId !== targetId);
-      if (targetId == null || targetId === activeGenerationJobId) isGenerating = false;
+      // Queued-but-unstarted jobs are dropped here, so settle each one — the
+      // main thread is holding a promise for every id it dispatched.
+      const dropped = targetId == null
+        ? generationQueue.splice(0)
+        : generationQueue.filter((job) => job.jobId === targetId);
+      if (targetId != null) generationQueue = generationQueue.filter((job) => job.jobId !== targetId);
+      dropped.forEach((job) => postMessage({ type: 'generate_error', id: job.jobId, error: 'Generation was cancelled.' }));
+      // Signal the running job cooperatively. Clearing isGenerating here would
+      // drop the mutual exclusion that keeps two generations off the shared
+      // ONNX sessions; the loops poll cancelRequested and unwind on their own.
+      if (targetId == null || targetId === activeGenerationJobId) cancelRequested = true;
       postMessage({ type: 'generation_cancelled', id: targetId ?? null });
       return;
     }
 
     if (type === 'dispose_backend') {
-      isGenerating = false;
-      generationQueue = [];
+      cancelRequested = true;
+      generationQueue.splice(0).forEach((job) => {
+        postMessage({ type: 'generate_error', id: job.jobId, error: 'Narration backend was disposed.' });
+      });
       await releaseAllSessions();
       releaseGpuDevice();
       isReady = false;
@@ -2716,8 +2738,12 @@ self.onmessage = async (e) => {
     }
 
     if (type === "stop") {
-      isGenerating = false;
-      generationQueue = []; // Clear queue on stop request
+      cancelRequested = true;
+      // Settle every queued job before dropping it, or the main thread waits out
+      // its per-job timeout for work that will never run.
+      generationQueue.splice(0).forEach((job) => {
+        postMessage({ type: 'generate_error', id: job.jobId, error: 'Narration was stopped.' });
+      });
       postMessage({ type: "status", status: "Stopped", state: "idle" });
       return;
     }
@@ -2790,14 +2816,36 @@ self.onmessage = async (e) => {
     }
   } catch (err) {
     console.error("Worker error:", err);
-    const errorType = data?.type === "init" ? "init_error" : (data?.type === "generate" ? "generate_error" : "error");
+    // stream_generate must settle as generate_error too. It used to fall through
+    // to a bare 'error' with no id, which the main thread cannot match to the
+    // promise it parked in ttsQueue -- so a streamed paragraph that threw here
+    // hung until the generation timeout instead of failing fast.
+    const isGenerateJob = data?.type === "generate" || data?.type === "stream_generate";
+    const errorType = data?.type === "init" ? "init_error" : (isGenerateJob ? "generate_error" : "error");
     postMessage({ type: errorType, id: data?.id, error: err?.message || String(err) });
   }
 };
 
 async function startGeneration(text, voiceName, jobId, opts) {
   isGenerating = true;
+  cancelRequested = false;
   activeGenerationJobId = jobId;
+  // The main thread parks a promise in ttsQueue[jobId] and only resolves it on
+  // 'complete' or 'generate_error'. Anything that returns from here without one
+  // of those strands that promise until _runPocketWorkerGeneration's timeout --
+  // 60s in the foreground, 600s backgrounded, after which the whole engine is
+  // reset. So every exit path must settle the job exactly once.
+  let jobSettled = false;
+  const settleWithAudio = (audio, telemetry) => {
+    if (jobSettled) return;
+    jobSettled = true;
+    postMessage({ type: 'complete', id: jobId, audio, sampleRate: currentSampleRate, telemetry }, [audio.buffer]);
+  };
+  const settleWithError = (error) => {
+    if (jobSettled) return;
+    jobSettled = true;
+    postMessage({ type: 'generate_error', id: jobId, error: String(error) });
+  };
   postMessage({ type: "status", status: "Generating...", state: "running" });
   postMessage({ type: "generation_started", data: { time: performance.now() } });
 
@@ -2849,7 +2897,7 @@ async function startGeneration(text, voiceName, jobId, opts) {
       });
     }
 
-    if (isGenerating && allChunks.length > 0) {
+    if (allChunks.length > 0) {
       const totalLength = allChunks.reduce((acc, c) => acc + c.length, 0);
       const combined = new Float32Array(totalLength);
       let offset = 0;
@@ -2857,14 +2905,15 @@ async function startGeneration(text, voiceName, jobId, opts) {
         combined.set(c, offset);
         offset += c.length;
       }
-
-      postMessage({
-        type: 'complete',
-        id: jobId,
-        audio: combined,
-        sampleRate: currentSampleRate,
-        telemetry: pipelineTelemetry,
-      }, [combined.buffer]);
+      settleWithAudio(combined, pipelineTelemetry);
+    } else if (cancelRequested) {
+      settleWithError('Generation was cancelled.');
+    } else {
+      // The pipeline ran to completion but every chunk was skipped -- the usual
+      // cause is text that tokenizes to nothing (a scene break like "* * *", a
+      // line of ellipses, an emoji-only paragraph). This used to post nothing at
+      // all and strand the caller on its timeout.
+      settleWithError('This paragraph produced no speakable audio.');
     }
 
     // Sustained-latency fallback: keep this paragraph's audio, but if WebGPU
@@ -2911,9 +2960,12 @@ async function startGeneration(text, voiceName, jobId, opts) {
     }
   } catch (err) {
     console.error("Generation error:", err);
-    postMessage({ type: "generate_error", id: jobId, error: err.toString() });
+    settleWithError(err?.message || err);
   } finally {
+    // Backstop: whatever happened above, this job must not be left hanging.
+    settleWithError('Generation ended without producing audio.');
     isGenerating = false;
+    cancelRequested = false;
     activeGenerationJobId = null;
     postMessage({ type: "status", status: "Finished", state: "idle" });
     setTimeout(processGenerationQueue, 0); // Sequentially trigger the next task
@@ -3023,7 +3075,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
 
   try {
   for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
-    if (!isGenerating) break;
+    if (!generationShouldContinue()) break;
 
     const meta = (chunkMeta && chunkMeta[chunkIdx]) || {};
     const framesAfterEos = meta.framesAfterEos != null ? meta.framesAfterEos : 0;
@@ -3130,7 +3182,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
       seedRandom(chunkNoiseSeed);
       try {
         let blockCursor = 0;
-        while (blockCursor < frameLimit && !chunkEnded && isGenerating) {
+        while (blockCursor < frameLimit && !chunkEnded && generationShouldContinue()) {
           // First audio synchronizes after one block. Once playback can start,
           // queue several fixed-shape blocks before one grouped GPU download.
           const targetBlocks = isFirstAudioChunk ? 1 : gpuSyncGroupBlocks;
@@ -3286,7 +3338,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
       seedRandom(chunkNoiseSeed);
       try {
         let blockCursor = 0;
-        while (blockCursor < frameLimit && !chunkEnded && isGenerating) {
+        while (blockCursor < frameLimit && !chunkEnded && generationShouldContinue()) {
           const randomLatents = wasmRandomTensor.data;
           for (let index = 0; index < randomLatents.length; index++) {
             let u = 0;
@@ -3406,7 +3458,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
       // made the same text render with a different tone every time).
       seedRandom(chunkNoiseSeed);
       for (let step = 0; step < frameLimit; step++) {
-      if (!isGenerating) break;
+      if (!generationShouldContinue()) break;
       const stepStart = performance.now();
       const arResult = await flowLmMainSession.run({
         sequence: currentLatent,
@@ -3532,7 +3584,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
     // Inter-chunk silence: punctuation/emotion-aware when enabled, else the
     // original fixed gap. Skipped after the final chunk unless the pause was
     // explicitly requested via an inline [Ns] tag.
-    if (chunkEnded && isGenerating) {
+    if (chunkEnded && generationShouldContinue()) {
       const isLast = chunkIdx >= chunks.length - 1;
       const gapSec = meta.pauseAfterSec != null ? meta.pauseAfterSec : CHUNK_GAP_SEC;
       if (!control.suppressPauses && (!isLast || meta.explicit) && gapSec > 0) {
