@@ -384,10 +384,7 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
     if (_m.status) newStory.status = _m.status;
     if (_m.extraMeta) newStory.extraMeta = _m.extraMeta;
     newStory.storyKey = window.getStoryStableKey?.(newStory) || `${newStory.title}|${newStory.author}`;
-    if (_m.source) newStory.url = _m.source;
-    else if (!newStory.url) newStory.url = `/local-upload/${encodeURIComponent(newStory.storyKey)}`;
-    if (_m.status) newStory.status = _m.status;
-    if (_m.extraMeta) newStory.extraMeta = _m.extraMeta;
+    if (!newStory.url) newStory.url = `/local-upload/${encodeURIComponent(newStory.storyKey)}`;
 
     // Manual-upload update: reconcile against an existing library entry for the
     // SAME story so a re-uploaded / newer file updates it in place instead of
@@ -517,6 +514,23 @@ function _escapeSearchHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// "Open exact AO3 search" as a real link rather than onclick="window.open('…')".
+// The search term reaches this URL, and neither encodeURIComponent nor HTML
+// escaping makes a value safe inside a single-quoted JS string in an attribute:
+// encodeURIComponent leaves ' alone, and &#39; is decoded back to ' before the
+// JS parser runs. An href needs only attribute escaping, so there is no JS
+// context to break out of. Same reasoning as the Cloudflare fallback dialog.
+function _externalSearchLink(rawUrl, label = 'Open exact AO3 search') {
+  let href;
+  try {
+    href = new URL(String(rawUrl), window.location.href);
+  } catch (_) {
+    return '';
+  }
+  if (href.protocol !== 'http:' && href.protocol !== 'https:') return '';
+  return `<a class="pr-btn-outline" href="${_escapeSearchHtml(href.href)}" target="_blank" rel="noopener noreferrer">${_escapeSearchHtml(label)}</a>`;
 }
 
 function _readAo3SearchPayloadFromUrl(rawUrl) {
@@ -729,7 +743,7 @@ export async function handleSearchSubmit(query, options = {}) {
   if (lastErr) {
     const externalUrl = `https://archiveofourown.org/works/search?work_search%5Bquery%5D=${encodeURIComponent(displayTerm)}`;
     if (resultsPanel) {
-      resultsPanel.innerHTML = `<div class="pr-card search-state-card"><p>AO3 search timed out or failed.</p><p>Open the exact AO3 search, try again, or paste a story URL directly.</p><button class="pr-btn-outline" onclick="window.open('${externalUrl}','_blank')">Open exact AO3 search</button></div>`;
+      resultsPanel.innerHTML = `<div class="pr-card search-state-card"><p>AO3 search timed out or failed.</p><p>Open the exact AO3 search, try again, or paste a story URL directly.</p>${_externalSearchLink(externalUrl)}</div>`;
     }
     return;
   }
@@ -737,7 +751,7 @@ export async function handleSearchSubmit(query, options = {}) {
   if (!data || data.status !== 'ok') {
     const externalUrl = data?.url || `https://archiveofourown.org/works/search?work_search%5Bquery%5D=${encodeURIComponent(displayTerm)}`;
     if (resultsPanel) {
-      resultsPanel.innerHTML = `<div class="pr-card search-state-card"><p>${_escapeSearchHtml(data?.reason || 'AO3 search is temporarily unavailable.')}</p><p>Try again in a minute, open the exact AO3 search, or paste a story URL directly.</p><button class="pr-btn-outline" onclick="window.open('${_escapeSearchHtml(externalUrl)}','_blank')">Open exact AO3 search</button></div>`;
+      resultsPanel.innerHTML = `<div class="pr-card search-state-card"><p>${_escapeSearchHtml(data?.reason || 'AO3 search is temporarily unavailable.')}</p><p>Try again in a minute, open the exact AO3 search, or paste a story URL directly.</p>${_externalSearchLink(externalUrl)}</div>`;
     }
     return;
   }
@@ -926,6 +940,10 @@ export async function loadStory(url, options = {}) {
 
   let fetchUrl = url;
   let existingLibEntry = null;
+  // This call's own abort controller, once one is created. Compared against the
+  // module-level _activeLoadAbort in the finally block so a slow unwind cannot
+  // clear a newer load's registration.
+  let ownAbort = null;
 
   // 1. Try to load from local IndexedDB cache first (checking both URL and Title)
   if (window.userProfile && window.userProfile.library && typeof window._loadStoryChapters === 'function') {
@@ -1064,6 +1082,7 @@ export async function loadStory(url, options = {}) {
     } else if (_isAo3) {
       // ── AO3 stories: FicHub EPUB first, backend scrape fallback ──
       const ao3Controller = new AbortController();
+      ownAbort = ao3Controller;
       _activeLoadAbort = ao3Controller;
       const ao3Timeout = setTimeout(() => ao3Controller.abort(), 120000);
       const _cancelFetch = () => { window._storyFetchCancelled = true; try { ao3Controller.abort(); } catch (e) {} };
@@ -1187,14 +1206,24 @@ export async function loadStory(url, options = {}) {
 
     } else {
       // ── Non-AO3 URLs: backend scrape directly ──
+      // Registered as the active load so a newer loadStory() can supersede this
+      // one. Previously only the AO3 branch published a controller, so a
+      // non-AO3 fetch ran to completion in the background and could clobber
+      // currentStory after the user had already opened something else.
+      const scrapeController = new AbortController();
+      ownAbort = scrapeController;
+      _activeLoadAbort = scrapeController;
       const cookies = window._cookiesForUrl(fetchUrl);
       const body = cookies ? { url: fetchUrl, cookies } : { url: fetchUrl };
       let response = null, lastErr = null;
       for (let attempt = 1; attempt <= 2; attempt++) {
+        if (window._storyFetchCancelled || scrapeController.signal.aborted) break;
         const controller = new AbortController();
         // Match the AO3 fallback budget: a full Zyte browser render can take
         // ~35s+, and the old 15s abort killed legitimate slow scrapes early.
         const timeoutId = setTimeout(() => controller.abort(), 45000);
+        const _propagateAbort = () => { try { controller.abort(); } catch (_) {} };
+        scrapeController.signal.addEventListener('abort', _propagateAbort, { once: true });
         try {
           response = await window._rateLimitedFetch('scrape', () =>
             fetch(`${window.HF_API_BASE}/api/scrape`, {
@@ -1205,13 +1234,19 @@ export async function loadStory(url, options = {}) {
             })
                                                    );
           clearTimeout(timeoutId);
+          scrapeController.signal.removeEventListener('abort', _propagateAbort);
           if (response.ok) break;
           lastErr = new Error('SCRAPE_FAILED');
         } catch (e) {
           clearTimeout(timeoutId);
+          scrapeController.signal.removeEventListener('abort', _propagateAbort);
           lastErr = e;
         }
         if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
+      }
+      if (scrapeController._superseded) {
+        if (scrapeController._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+        return;
       }
       if (!response || !response.ok) throw (lastErr || new Error('SCRAPE_FAILED'));
 
@@ -1237,7 +1272,11 @@ export async function loadStory(url, options = {}) {
     if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
     if (!preventNavigate) showCloudflareFallback();
   } finally {
-    _activeLoadAbort = null;
+    // Only clear the slot if it is still OURS. A newer loadStory() may have
+    // already installed its own controller while this one was unwinding;
+    // blanking it unconditionally left that newer load unabortable, so the load
+    // after it could not supersede anything.
+    if (_activeLoadAbort === ownAbort) _activeLoadAbort = null;
   }
 }
 window.loadStory = loadStory;

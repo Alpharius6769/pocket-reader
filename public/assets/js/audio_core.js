@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v9';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v11';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -1048,8 +1048,7 @@ function _recoverFromPocketWorkerCrash(workerObj, reason) {
     try { entry.reject(new Error('Narration worker crashed; retrying.')); } catch (_) {}
   });
   ttsQueue = {};
-  _encodedPocketVoices = new Set();
-  _pocketVoiceLoadPromises.clear();
+  _resetPocketVoiceRegistry();
   _pocketBackendOptimizationPromise = null;
   _setNeuralState('idle');
   loadedVoiceEngine = null;
@@ -1072,8 +1071,7 @@ async function _loadPocketEngine() {
       try { entry.reject(new Error('TTS engine reloaded')); } catch(_) {}
     });
     ttsQueue = {};
-    _encodedPocketVoices = new Set();
-    _pocketVoiceLoadPromises.clear();
+    _resetPocketVoiceRegistry();
     _setNeuralState('idle');
     loadedVoiceEngine = null;
   }
@@ -1135,7 +1133,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = '/assets/js/pocket_worker.js?v=pocket-worker-v45';
+        const workerScript = '/assets/js/pocket_worker.js?v=pocket-worker-v46';
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -1312,7 +1310,17 @@ async function _loadPocketEngine() {
           } else if (data.type === 'audio_segment') {
             ttsQueue[data.id]?.onSegment?.(data);
           } else if (data.type === 'voice_evicted') {
-            _encodedPocketVoices.delete(String(data.voiceName || ''));
+            const evicted = String(data.voiceName || '');
+            _encodedPocketVoices.delete(evicted);
+            // Drop any request that had been resolved onto this asset, so the
+            // next lookup reloads instead of returning an id the worker just
+            // dropped from its voice table.
+            for (const [requested, resolved] of _pocketVoiceFallbacks) {
+              if (resolved === evicted) {
+                _pocketVoiceFallbacks.delete(requested);
+                _encodedPocketVoices.delete(requested);
+              }
+            }
           } else if (data.type === 'init_done' || data.type === 'ready' || data.type === 'loaded' || data.type === 'bundle_loaded') {
             if (!workerObj.ready) {
               workerObj.ready = true;
@@ -1366,13 +1374,16 @@ async function _loadPocketEngine() {
               }
             }
           } else if (data.type === 'generate_done' || data.type === 'complete') {
-            workerObj.activeTasks = Math.max(0, workerObj.activeTasks - 1);
+            // activeTasks is released in _runPocketWorkerGeneration's finally,
+            // which covers this path AND the timeout path. Decrementing here too
+            // released one dispatch twice, so with a two-worker cache pool a
+            // still-busy worker reported activeTasks 0 and _selectReadyPocketWorker
+            // stacked the next paragraph onto it while the other worker idled.
             if (ttsQueue[data.id]) {
               ttsQueue[data.id].resolve(data);
               delete ttsQueue[data.id];
             }
           } else if (data.type === 'generate_error') {
-            workerObj.activeTasks = Math.max(0, workerObj.activeTasks - 1);
             if (ttsQueue[data.id]) {
               ttsQueue[data.id].reject(new Error(data.error));
               delete ttsQueue[data.id];
@@ -1731,7 +1742,27 @@ function _parseSafetensors(arrayBuffer) {
 }
 
 let _encodedPocketVoices = new Set();
+// requested asset id -> the asset id actually registered in the workers. Only
+// differs when a voice+emotion file was missing and the loader fell back.
+const _pocketVoiceFallbacks = new Map();
 const _pocketVoiceLoadPromises = new Map();
+
+// Bumped by every reset. A voice load that started before the reset must not
+// write its result into the registry afterwards: the workers it registered with
+// are gone, so the memo would claim a voice is loaded in a fresh worker that
+// never received it, and the next generate would dispatch a voice name that
+// worker does not know.
+let _pocketVoiceRegistryGeneration = 0;
+
+// Every worker teardown path invalidates the registrations, so the memo of what
+// is loaded must be dropped with them or the next generate would target a voice
+// the fresh worker has never been given.
+function _resetPocketVoiceRegistry() {
+  _pocketVoiceRegistryGeneration += 1;
+  _encodedPocketVoices = new Set();
+  _pocketVoiceFallbacks.clear();
+  _pocketVoiceLoadPromises.clear();
+}
 
 function _sameBaseFallbackVoiceIds(targetVoice) {
   const baseVoice = _baseVoiceId(targetVoice);
@@ -1756,8 +1787,17 @@ async function ensurePocketVoiceLoaded(voiceName) {
   let targetVoice = typeof window.resolvePocketAssetVoiceId === 'function'
     ? window.resolvePocketAssetVoiceId(voiceName)
     : String(voiceName || `${POCKET_DEFAULT_VOICE}_neutral`).toLowerCase();
-  if (_encodedPocketVoices.has(targetVoice)) return targetVoice;
+  // A previously-resolved request may have landed on a different asset (this
+  // emotion state 404s). Return the asset actually registered in the workers,
+  // otherwise generation would be dispatched with a voice name they don't know.
+  if (_encodedPocketVoices.has(targetVoice)) {
+    return _pocketVoiceFallbacks.get(targetVoice) || targetVoice;
+  }
   if (_pocketVoiceLoadPromises.has(targetVoice)) return _pocketVoiceLoadPromises.get(targetVoice);
+
+  // Snapshot the registry generation this load belongs to. Registration below
+  // is only recorded if no teardown happened while we were awaiting.
+  const registryGeneration = _pocketVoiceRegistryGeneration;
 
   const loadPromise = (async () => {
     let loadedVoice = targetVoice;
@@ -1769,6 +1809,9 @@ async function ensurePocketVoiceLoaded(voiceName) {
     const proxyBase = window.PR_PROXY_BASE || window.POCKET_READER_CONFIG?.proxyBase || 'https://pocket-reader-proxy.christopher-gotham67.workers.dev';
     const directB2Base = 'https://f005.backblazeb2.com/file/pocket-reader-assets';
     let url = `${proxyBase}/models/voices/${POCKET_VOICE_PACK_PATH}${targetVoice}.${fileExt}?rev=${POCKET_VOICE_PACK_REV}`;
+    // The key this request started at. `url` is reassigned when a fallback
+    // candidate wins, so keep the original for the Cache Storage write below.
+    const requestedUrl = url;
     const directPrimaryUrl = `${directB2Base}/voices/${POCKET_VOICE_PACK_PATH}${targetVoice}.${fileExt}?rev=${POCKET_VOICE_PACK_REV}`;
 
     let cache = null;
@@ -1842,7 +1885,15 @@ async function ensurePocketVoiceLoaded(voiceName) {
 
       if (cache && buffer) {
         try {
+          // Store under BOTH the URL the bytes came from and the URL this
+          // request started at. Without the second key a fallback asset was
+          // written under the fallback URL while the next lookup only ever
+          // checked the original — so every paragraph re-ran the whole fetch +
+          // candidate chain instead of hitting Cache Storage.
           await cache.put(url, new Response(buffer.slice(0)));
+          if (url !== requestedUrl) {
+            await cache.put(requestedUrl, new Response(buffer.slice(0)));
+          }
           console.log(`[PocketTTS] Saved voice ${loadedVoice} to Cache Storage.`);
         } catch (e) {
           console.warn("Unable to cache Pocket TTS voice", e);
@@ -1892,7 +1943,23 @@ async function ensurePocketVoiceLoaded(voiceName) {
     });
 
     await Promise.all(loadPromises);
+    // A worker crash / engine reset / idle release during the awaits above
+    // replaced the whole pool, so this registration describes workers that no
+    // longer exist. Return the voice for THIS caller but do not memoise it, or
+    // the next request would skip loading and dispatch to a worker that was
+    // never given the voice.
+    if (registryGeneration !== _pocketVoiceRegistryGeneration) {
+      console.log(`[PocketTTS] Voice ${loadedVoice} loaded into a retired worker pool; not memoising.`);
+      return loadedVoice;
+    }
     _encodedPocketVoices.add(loadedVoice);
+    // Also mark the voice that was ASKED for as resolved. The early-return at the
+    // top of this function tests targetVoice, so when a request fell back to a
+    // different asset (a 404 on this emotion state) nothing was ever memoised
+    // under targetVoice and every subsequent paragraph re-ran the full fetch →
+    // candidate chain → worker re-registration cycle.
+    _encodedPocketVoices.add(targetVoice);
+    _pocketVoiceFallbacks.set(targetVoice, loadedVoice);
     console.log(`[PocketTTS] Custom voice loaded in workers: ${loadedVoice}`);
     return loadedVoice;
   })();
@@ -1996,8 +2063,7 @@ async function _resetPocketEngineForBackend() {
     try { entry.reject(new Error('Pocket backend reset')); } catch (_) {}
   });
   ttsQueue = {};
-  _encodedPocketVoices = new Set();
-  _pocketVoiceLoadPromises.clear();
+  _resetPocketVoiceRegistry();
   _pocketBackendPlanPromise = null;
   _pocketBackendOptimizationPromise = null;
   _setNeuralState('idle');
@@ -2036,8 +2102,7 @@ window.trimPocketCacheWorkerPool = function trimPocketCacheWorkerPool() {
       try { entry.reject(new Error('Pocket memory-safe cache session released')); } catch (_) {}
     });
     ttsQueue = {};
-    _encodedPocketVoices = new Set();
-    _pocketVoiceLoadPromises.clear();
+    _resetPocketVoiceRegistry();
     _pocketBackendOptimizationPromise = null;
     _pocketBackendRuntime.cacheWorkerCount = 0;
     _setNeuralState('idle');
@@ -2079,8 +2144,7 @@ function _releaseIdlePocketWorkers() {
     try { entry.reject(new Error('Pocket engine released after idle')); } catch (_) {}
   });
   ttsQueue = {};
-  _encodedPocketVoices = new Set();
-  _pocketVoiceLoadPromises.clear();
+  _resetPocketVoiceRegistry();
   _pocketBackendOptimizationPromise = null;
   _pocketBackendRuntime.cacheWorkerCount = 0;
   _setNeuralState('idle');
@@ -3434,7 +3498,11 @@ export function skipParagraph(offset) {
     p += offset;
     while (p < 0 && c > 0) {
       c--;
-      p += story.chapters[c].paragraphs.length;
+      // Guarded like the forward branch above. A chapter without a paragraphs
+      // array threw a TypeError here and killed the whole skip -- reachable
+      // because curated .json stories are returned verbatim and never pass
+      // through normalizeStoryChapters, so their shape is not guaranteed.
+      p += story.chapters[c]?.paragraphs?.length || 0;
     }
     if (p < 0) {
       c = 0;
@@ -3574,14 +3642,13 @@ export function applyPlaybackSpeed(rate) {
   }
   if (typeof window.saveLocalData === 'function') window.saveLocalData();
 
+  // Only the media element can take a new rate in place. A WebSpeech utterance
+  // bakes its rate in at speak() time, so the next paragraph picks the new value
+  // up via getEffectivePlaybackRate() — there is nothing to re-apply here. (The
+  // old SpeechSynthesisUtterance branch tried to restart playback, but it was
+  // unreachable: the guard above returns early whenever isPlaying is true.)
   if (window.currentAudio instanceof HTMLAudioElement) {
     window.currentAudio.playbackRate = next;
-  } else if (window.currentAudio instanceof SpeechSynthesisUtterance) {
-    const wasPlaying = window.isPlaying;
-    if (wasPlaying) {
-      pausePlayback();
-      playCurrentParagraph();
-    }
   }
 
   if (!window.isPlaying && window.virtueSpeak) {

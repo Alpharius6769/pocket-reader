@@ -1839,7 +1839,11 @@ async function _resumeStoryUpdateFromNotification() {
       return candidate === sourceUrl;
     });
     if (story && typeof window.checkStoryUpdate === 'function') {
-      await window.checkStoryUpdate(story.title, sourceUrl);
+      // checkStoryUpdate resolves its first argument through findLibraryStoryByRef,
+      // which only falls back to a title match when that title is UNIQUE. Passing
+      // a title meant two same-titled library entries resolved to null and the
+      // update check silently did nothing. The story object is already in hand.
+      await window.checkStoryUpdate(story.storyKey || window.getStoryStableKey?.(story) || story.title, sourceUrl);
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -1863,7 +1867,9 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type !== 'story-update' || !event.data.storyUrl) return;
     const story = (window.userProfile?.library || []).find((item) => (item.sourceUrl || item.url) === event.data.storyUrl);
-    if (story) window.checkStoryUpdate?.(story.title, event.data.storyUrl);
+    if (story) {
+      window.checkStoryUpdate?.(story.storyKey || window.getStoryStableKey?.(story) || story.title, event.data.storyUrl);
+    }
   });
 }
 
