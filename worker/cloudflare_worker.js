@@ -199,6 +199,16 @@ export default {
       });
     }
 
+    // Non-browser callers (the backend's own proxy hop, ops tooling) present a
+    // shared token instead of an Origin. Resolved once here because BOTH the
+    // /api/ backend proxy and the generic ?url= proxy gate on it.
+    const proxyKey = request.headers.get("X-Pocket-Proxy-Key") || "";
+    const backendAuthorized = Boolean(
+      env.PROXY_AUTH_TOKEN
+      && proxyKey
+      && timingSafeEqual(proxyKey, env.PROXY_AUTH_TOKEN),
+    );
+
     if (request.headers.get("Origin") && !allowedOrigin) {
       return new Response("Forbidden: origin is not allowed.", {
         status: 403,
@@ -206,6 +216,17 @@ export default {
       });
     }
     if (url.pathname.startsWith("/api/")) {
+      // This route attaches HF_TOKEN and forwards to a PRIVATE Space, so an
+      // absent Origin must not mean "unchecked". Browsers always send Origin on
+      // a cross-origin fetch, so the app is unaffected; a header-less caller
+      // (curl, a script) previously reached every backend route with the
+      // Worker's own credentials attached, burning Zyte quota and Space CPU.
+      if (!allowedOrigin && !backendAuthorized) {
+        return new Response("Forbidden: proxy authentication is required.", {
+          status: 403,
+          headers: { "Vary": "Origin", "Content-Type": "text/plain" },
+        });
+      }
       const targetUrl = new URL(url.pathname + url.search, "https://alpharius6769-pocket-reader.hf.space");
       const hfHeaders = buildUpstreamHeaders(request);
       if (env.HF_TOKEN) {
@@ -285,7 +306,10 @@ export default {
             await response.body?.cancel?.();
             throw new Error(`B2 redirect rejected (HTTP ${response.status}).`);
           }
-          if (response.status !== 404 || request.method !== "GET" && request.method !== "HEAD") {
+          // Only a 404 is worth trying the next candidate path. (The method
+          // check that used to be OR'd in here was unreachable — non-GET/HEAD
+          // requests are already rejected above.)
+          if (response.status !== 404) {
             break;
           }
           if (index < candidateUrls.length - 1) {
@@ -349,18 +373,29 @@ export default {
 
     const targetUrlString = url.searchParams.get("url");
     if (!targetUrlString) {
-      return new Response("Missing 'url' parameter or not a /models|/ggml|/backup request", { status: 400 });
+      // CORS headers on the error paths too, so a browser surfaces this message
+      // instead of an opaque "failed to fetch".
+      return new Response("Missing 'url' parameter or not a /models|/ggml|/backup request", {
+        status: 400,
+        headers: { "Access-Control-Allow-Origin": corsOrigin, "Vary": "Origin", "Content-Type": "text/plain" },
+      });
     }
 
     let targetUrl;
     try {
       targetUrl = new URL(decodeURIComponent(targetUrlString));
     } catch (err) {
-      return new Response("Invalid 'url' parameter", { status: 400 });
+      return new Response("Invalid 'url' parameter", {
+        status: 400,
+        headers: { "Access-Control-Allow-Origin": corsOrigin, "Vary": "Origin", "Content-Type": "text/plain" },
+      });
     }
 
     if (targetUrl.hostname.includes("workers.dev")) {
-        return new Response("Forbidden: Circular proxying is not allowed.", { status: 403 });
+        return new Response("Forbidden: Circular proxying is not allowed.", {
+          status: 403,
+          headers: { "Access-Control-Allow-Origin": corsOrigin, "Vary": "Origin", "Content-Type": "text/plain" },
+        });
     }
 
     if (targetUrl.protocol !== "http:" && targetUrl.protocol !== "https:") {
@@ -388,12 +423,6 @@ export default {
             status: 403, headers: { "Access-Control-Allow-Origin": corsOrigin, "Vary": "Origin" }
         });
     }
-    const proxyKey = request.headers.get("X-Pocket-Proxy-Key") || "";
-    const backendAuthorized = Boolean(
-      env.PROXY_AUTH_TOKEN
-      && proxyKey
-      && timingSafeEqual(proxyKey, env.PROXY_AUTH_TOKEN),
-    );
     if (!allowedOrigin && !backendAuthorized) {
       return new Response("Forbidden: proxy authentication is required.", {
         status: 403,

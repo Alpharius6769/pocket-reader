@@ -163,28 +163,61 @@ test('generic proxy accepts the backend token, strips sensitive headers, and is 
   }
 });
 
-test('HF Space proxy forwards the Worker secret as a bearer token', async () => {
+test('HF Space proxy forwards the Worker secret only to authorised callers', async () => {
   const originalFetch = globalThis.fetch;
   let upstream;
   globalThis.fetch = async (request) => {
     upstream = request;
     return new Response('ok');
   };
+  const url = 'https://pocket-reader-proxy.example/api/sync/chapters?limit=1';
   try {
-    const request = new Request('https://pocket-reader-proxy.example/api/sync/chapters?limit=1', {
-      headers: {
-        Authorization: 'must-not-leak',
-      },
-    });
-    const response = await worker.fetch(
-      request,
+    // No Origin and no token. This route attaches HF_TOKEN and forwards to a
+    // PRIVATE Space, so it must fail closed — previously an absent Origin
+    // skipped the check entirely and any caller reached the whole backend with
+    // the Worker's own credentials attached.
+    upstream = undefined;
+    const anonymous = await worker.fetch(
+      new Request(url),
+      { HF_TOKEN: 'hf_test_token', PROXY_AUTH_TOKEN: 'server-secret' },
+      { waitUntil() {} },
+    );
+    assert.equal(anonymous.status, 403, 'an origin-less, token-less caller must be refused');
+    assert.equal(upstream, undefined, 'the upstream must never be contacted for a refused caller');
+
+    // A disallowed Origin is refused for the same reason.
+    const wrongOrigin = await worker.fetch(
+      new Request(url, { headers: { Origin: 'https://evil.example' } }),
       { HF_TOKEN: 'hf_test_token' },
       { waitUntil() {} },
     );
-    assert.equal(response.status, 200);
+    assert.equal(wrongOrigin.status, 403);
+
+    // The browser app: an allowed Origin is accepted and gets the bearer token.
+    const browser = await worker.fetch(
+      new Request(url, {
+        headers: {
+          Origin: 'https://pocket-reader-f2y.pages.dev',
+          Authorization: 'must-not-leak',
+        },
+      }),
+      { HF_TOKEN: 'hf_test_token' },
+      { waitUntil() {} },
+    );
+    assert.equal(browser.status, 200);
     assert.equal(upstream.url, 'https://alpharius6769-pocket-reader.hf.space/api/sync/chapters?limit=1');
     assert.equal(upstream.headers.get('Authorization'), 'Bearer hf_test_token');
     assert.equal(upstream.headers.has('Cookie'), false);
+    assert.equal(upstream.headers.has('X-Pocket-Proxy-Key'), false);
+
+    // Non-browser callers (ops tooling, the backend's own hop) use the token.
+    const tokened = await worker.fetch(
+      new Request(url, { headers: { 'X-Pocket-Proxy-Key': 'server-secret' } }),
+      { HF_TOKEN: 'hf_test_token', PROXY_AUTH_TOKEN: 'server-secret' },
+      { waitUntil() {} },
+    );
+    assert.equal(tokened.status, 200);
+    assert.equal(upstream.headers.get('Authorization'), 'Bearer hf_test_token');
     assert.equal(upstream.headers.has('X-Pocket-Proxy-Key'), false);
   } finally {
     globalThis.fetch = originalFetch;
