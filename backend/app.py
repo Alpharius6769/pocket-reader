@@ -41,11 +41,11 @@ from pydantic import BaseModel
 from scrapers_dispatcher import scrape_url
 from scrapers_cloudflare import CloudflareBlocked, detect_cloudflare
 from scrapers_core import (
-    make_client, zyte_fetch, host_is_blocked, assert_public_url,
-    zyte_fetch_binary, proxy_fetch, proxy_fetch_binary,
+    make_client, assert_public_url, proxy_fetch, proxy_fetch_binary,
     _assert_public_connected_peer, _worker_proxy_headers,
 )
 from scrapers_ao3 import ao3_published_chapter_count, parse_ao3_chapter_info, parse_published_chapter_count
+from parsers_core import ScrapeResult, sanitize_narration_chapters
 import parsers_dispatcher
 
 try:
@@ -252,6 +252,23 @@ _PUSH_USER_ID_RE = re.compile(
     re.IGNORECASE,
 )
 
+def _client_ip(request: Request) -> str:
+    """Best-effort caller identity for the per-caller rate limiters.
+
+    Behind the Cloudflare Worker every request arrives from a Cloudflare edge
+    address, so keying on request.client.host collapses the entire user base
+    onto a handful of IPs and makes a per-caller budget behave like a global
+    one (5 subscriptions per 10 minutes for EVERYONE). Prefer the forwarded
+    client address; fall back to the socket peer for direct calls and local
+    development.
+    """
+    for header in ("cf-connecting-ip", "x-forwarded-for"):
+        value = request.headers.get(header, "")
+        if value:
+            return value.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def _check_subscribe_rate(ip: str) -> bool:
     now = _time.time()
     window = _subscribe_rate.setdefault(ip, [])
@@ -426,15 +443,11 @@ def is_valid_url(url: str) -> bool:
         return False
 
 
-def _resolve_is_blocked(host: str) -> bool:
-    """True if host resolves to a private/loopback/link-local/reserved address.
-
-    SSRF guard for user-supplied scrape URLs. Delegates to the shared
-    scrapers_core.host_is_blocked so the initial-URL check and the per-redirect-hop
-    checks inside scrapers_core.fetch() stay in lockstep. Redirect hops are
-    re-validated there, and hosts are resolved again before each fetch.
-    """
-    return host_is_blocked(host)
+# SSRF guarding for user-supplied scrape URLs goes through
+# scrapers_core.assert_public_url (which itself calls host_is_blocked), so the
+# initial-URL check and the per-redirect-hop checks inside scrapers_core.fetch()
+# stay in lockstep. The former _resolve_is_blocked wrapper around
+# host_is_blocked had no remaining callers.
 
 
 def safe_http_error(
@@ -789,7 +802,7 @@ def _ao3_search_payload_from_url(raw: str) -> dict:
 
 
 @app.post("/api/search")
-async def search_ao3(request: SearchRequest):
+async def search_ao3(request: SearchRequest, http_request: Request):
     started = _time.time()
     search_url = "https://archiveofourown.org/works/search"
     raw_query = (request.query or "").strip()
@@ -834,6 +847,15 @@ async def search_ao3(request: SearchRequest):
     cached = await SEARCH_CACHE.get(cache_key)
     if cached is not None:
         return cached
+
+    # Every cache miss spends Zyte credit against a shared egress IP, so the same
+    # per-caller admission control the scrape route uses applies here too. Checked
+    # AFTER the cache so a repeated query never consumes budget it does not need.
+    if not _check_scrape_rate(_client_ip(http_request)):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many searches — wait a moment and try again.",
+            headers={"Retry-After": str(_SCRAPE_RATE_WINDOW)})
 
     def _url_for(search_payload: dict) -> str:
         return str(httpx.URL(search_url, params=search_payload))
@@ -1292,8 +1314,7 @@ async def subscribe(sub: PushSubscription, request: Request):
         raise HTTPException(status_code=503, detail="Database unavailable")
     _validate_push_identity(sub.user_id)
     _validate_push_subscription(sub.subscription)
-    client_ip = request.client.host if request.client else "unknown"
-    if not _check_subscribe_rate(client_ip):
+    if not _check_subscribe_rate(_client_ip(request)):
         raise HTTPException(status_code=429, detail="Too many subscription requests. Try again later.")
     try:
         sanitized_profile = _sanitize_push_profile(sub.profile)
@@ -1787,6 +1808,179 @@ async def fetch_ao3_story(url: str):
     await SCRAPE_CACHE.put(canonical_url, result)
     log.info("ao3: parsed %d chapters for '%s'", len(result["chapters"]), result["title"])
     return result
+
+
+def _scrape_result_payload(result: ScrapeResult, url: str) -> dict:
+    """Shape a ScrapeResult into the story object the reader consumes."""
+    chapters = sanitize_narration_chapters(
+        list(result.chapters or []),
+        story_title=result.title or "",
+        author=result.author or "",
+    )
+    if not chapters:
+        raise HTTPException(
+            status_code=422,
+            detail="No readable story text could be extracted from this page.")
+    words = sum(len(p.split()) for ch in chapters for p in (ch.paragraphs or []))
+    payload = {
+        "title": (result.title or "").strip() or "Untitled",
+        "author": (result.author or "").strip() or "Unknown",
+        "url": url,
+        "words": f"{words:,}",
+        "chapters": [asdict(ch) for ch in chapters],
+    }
+    if result.synopsis:
+        payload["synopsis"] = result.synopsis
+    if result.artwork_url:
+        payload["artwork_url"] = result.artwork_url
+    for field_name in ("genres", "fandoms", "additional_tags"):
+        value = getattr(result, field_name, None)
+        if value:
+            payload[field_name] = list(value)
+    if result.content_rating:
+        payload["content_rating"] = result.content_rating
+    return payload
+
+
+@app.post("/api/scrape")
+async def scrape_story(req: ScrapeRequest, request: Request):
+    """Fetch and parse a story from a supported site.
+
+    Primary ingestion path for every non-AO3 source, and the AO3 fallback when
+    FicHub is unavailable. Admission control is deliberate: the shared egress IP
+    is the scarce resource, so this is rate limited per caller and bounded by a
+    global concurrency semaphore before any outbound request is made.
+    """
+    url = (req.url or "").strip()
+    if not is_valid_url(url):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid URL format — provide a public http(s) address.")
+    try:
+        # Resolves the hostname and rejects private/loopback/link-local targets.
+        # Redirect hops are re-validated inside scrapers_core.fetch().
+        await asyncio.to_thread(assert_public_url, url)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=400,
+            detail="That address is not reachable from this service.")
+
+    cache_key = url.split("#")[0]
+    cached = await SCRAPE_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    if not _check_scrape_rate(_client_ip(request)):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many story requests — wait a moment and try again.",
+            headers={"Retry-After": str(_SCRAPE_RATE_WINDOW)})
+
+    cookies = req.cookies if isinstance(req.cookies, dict) else None
+    try:
+        async with _SCRAPE_CONCURRENCY:
+            result = await scrape_url(url, cookies)
+    except CloudflareBlocked as exc:
+        # A soft response, not an error: the frontend renders its "save the page
+        # and upload it" recovery flow off this flag.
+        return {
+            "cloudflare_blocked": True,
+            "reason": str(exc) or "The site's bot shield blocked this request.",
+            "url": url,
+        }
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)[:200])
+    except Exception:
+        safe_http_error(
+            f"scrape failed for {url[:120]}",
+            "Could not read this story. The site may be down or blocking us.",
+            status_code=502)
+
+    payload = _scrape_result_payload(result, url)
+    await SCRAPE_CACHE.put(cache_key, payload)
+    log.info("scrape: parsed %d chapters for '%s'",
+             len(payload["chapters"]), payload["title"])
+    return payload
+
+
+MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", 50 * 1024 * 1024))
+_UPLOAD_SUFFIXES = {".pdf", ".epub", ".docx", ".txt", ".html", ".htm"}
+
+
+@app.post("/api/upload")
+async def upload_document(file: UploadFile = File(...)):
+    """Parse an uploaded document into chapters.
+
+    Also the parse step of the AO3 FicHub path: the client downloads the EPUB
+    and posts it here rather than parsing a zip container in the browser.
+    """
+    filename = os.path.basename(file.filename or "").strip() or "document"
+    suffix = pathlib.Path(filename).suffix.lower()
+    if suffix not in _UPLOAD_SUFFIXES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type '{suffix or filename}'. "
+                   "Supported: EPUB, PDF, DOCX, TXT, HTML.")
+
+    # Stream to disk with a hard ceiling so a large upload can never be buffered
+    # whole in memory before the size is known (Content-Length is not trusted).
+    with tempfile.TemporaryDirectory() as tmpdir:
+        local_path = os.path.join(tmpdir, f"upload{suffix}")
+        total = 0
+        try:
+            with open(local_path, "wb") as out:
+                while True:
+                    chunk = await file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > MAX_UPLOAD_BYTES:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"File is too large (limit "
+                                   f"{MAX_UPLOAD_BYTES // (1024 * 1024)} MB).")
+                    out.write(chunk)
+        finally:
+            await file.close()
+
+        if total == 0:
+            raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+
+        try:
+            meta = await asyncio.to_thread(
+                parsers_dispatcher.extract_metadata, local_path)
+            chapters = await asyncio.to_thread(
+                parsers_dispatcher.parse_file, local_path)
+        except HTTPException:
+            raise
+        except (ValueError, RuntimeError) as exc:
+            # Unsupported format / zip-bomb guard / zero parseable chapters all
+            # carry a message written for the reader, so surface it verbatim.
+            raise HTTPException(status_code=422, detail=str(exc)[:200])
+        except Exception:
+            safe_http_error(
+                f"upload parse failed for {filename[:120]}",
+                "Could not parse this document. Try a different file or format.",
+                status_code=422)
+
+    meta = meta or {}
+    words = sum(len(p.split()) for ch in chapters for p in (ch.paragraphs or []))
+    stem = pathlib.Path(filename).stem.replace("_", " ").replace("-", " ").strip()
+    payload = {
+        "filename": filename,
+        "title": (meta.get("title") or "").strip() or stem or "Untitled",
+        "author": (meta.get("author") or "").strip() or "Unknown",
+        "words": f"{words:,}",
+        "chapters": [asdict(ch) for ch in chapters],
+    }
+    synopsis = (meta.get("description") or meta.get("synopsis") or "").strip()
+    if synopsis:
+        payload["synopsis"] = synopsis
+    log.info("upload: parsed %d chapters from '%s' (%d bytes)",
+             len(payload["chapters"]), filename, total)
+    return payload
 
 
 @app.get("/api/fetch-epub")
