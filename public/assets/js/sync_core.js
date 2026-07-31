@@ -63,6 +63,23 @@ function normalizeAchievement(item) {
   return { ...item, id: String(item.id), unlockedAt: Number(item.unlockedAt) || 0 };
 }
 
+// Collapse duplicate ids, keeping the earliest KNOWN unlock time. unlockedAt 0
+// means "no timestamp recorded" (legacy string-form achievements), so it must
+// lose to any real time rather than pinning the achievement to the epoch.
+// Mirrors earlierUnlock/normalizeAchievements in profile_merge.js.
+function dedupeAchievements(items) {
+  const byId = new Map();
+  for (const entry of items) {
+    const current = byId.get(entry.id);
+    if (!current) { byId.set(entry.id, entry); continue; }
+    const a = Number(current.unlockedAt) || 0;
+    const b = Number(entry.unlockedAt) || 0;
+    const unlockedAt = !a ? b : (!b ? a : Math.min(a, b));
+    byId.set(entry.id, { ...current, ...entry, unlockedAt });
+  }
+  return [...byId.values()];
+}
+
 function normalizeBookmarks(items = []) {
   if (!Array.isArray(items)) return [];
   return items.filter((item) => item && typeof item === 'object').map((item) => {
@@ -120,7 +137,9 @@ export function normalizeProfileV3(input) {
   if (!Object.keys(profile.statsByDevice).length && profile.stats && typeof profile.stats === 'object') {
     profile.statsByDevice[getDeviceId()] = { ...profile.stats };
   }
-  profile.achievements = (Array.isArray(profile.achievements) ? profile.achievements : []).map(normalizeAchievement).filter(Boolean);
+  profile.achievements = dedupeAchievements(
+    (Array.isArray(profile.achievements) ? profile.achievements : []).map(normalizeAchievement).filter(Boolean),
+  );
   profile.library = (Array.isArray(profile.library) ? profile.library : []).filter((story) => story && typeof story === 'object').map((story) => {
     const base = Number(story.updatedAt || story.lastRead || story.addedAt) || now();
     const sync = story.sync && typeof story.sync === 'object' ? story.sync : {};
@@ -283,11 +302,17 @@ function publishState() {
 export async function flushCloudSync() {
   if (SYNC_STATE.inFlight) return SYNC_STATE.inFlight;
   if (!window._cloudPushAllowed || typeof window.pocketCloud?.syncProfile !== 'function' || !navigator.onLine) return false;
-  const pending = await loadOutbox();
-  if (!pending) return true;
-  SYNC_STATE.status = 'syncing';
-  publishState();
+  // Claim the slot SYNCHRONOUSLY, before the first await. The guard above used
+  // to be checked before `await loadOutbox()` but set after it, so two of the
+  // five triggers (online, visibilitychange, the retry timer, the re-queue
+  // timer, queueCloudSync's timer) could both slip through that gap and run two
+  // syncProfile commits against the same baseRevision -- one wins the CAS and
+  // the other can apply a staler canonical profile over the newer one.
   SYNC_STATE.inFlight = (async () => {
+    const pending = await loadOutbox();
+    if (!pending) return true;
+    SYNC_STATE.status = 'syncing';
+    publishState();
     try {
       const result = await window.pocketCloud.syncProfile(pending.profile, pending.baseRevision || 0, getDeviceId());
       if (!result?.profile) throw new Error('Cloud returned an invalid profile.');

@@ -14,7 +14,7 @@
  * The publishable key below is designed to ship in frontend JS. Access is
  * enforced by Row Level Security, not by key secrecy.
  */
-import { mergeProfile, normalizeProfile } from './profile_merge.js?v=merge-v2';
+import { mergeProfile, normalizeProfile } from './profile_merge.js?v=merge-v5';
 
 const SUPABASE_URL = 'https://dctjxeqjtctyvvrdlcxo.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KUGiCZjxfxQb2eQwOTQO0A_MY8ihwur';
@@ -63,22 +63,44 @@ async function gotrue(path, { method = 'POST', body, token } = {}) {
   return json;
 }
 
+// Single-flight refresh. GoTrue ROTATES refresh tokens: the first exchange
+// invalidates the presented token, so concurrent refreshes make every loser see
+// "Invalid Refresh Token" -- which this code reasonably reads as "session over"
+// and signs the user out. Startup reliably overlaps (getCurrentUser, then
+// syncProfile -> readProfileRow, then loadAvatar all call accessToken), so
+// without this the user gets logged out at random. Every caller now awaits the
+// same in-flight exchange.
+let refreshInFlight = null;
+
+async function refreshSession(refreshToken) {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      const next = await gotrue('/token?grant_type=refresh_token', { body: { refresh_token: refreshToken } });
+      storeSession(next);
+      return next.access_token;
+    } catch (err) {
+      // A refresh token that no longer works means the session is genuinely over.
+      log('WARN', 'Supabase session refresh failed; signing out', String(err));
+      storeSession(null);
+      return null;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
 /** Refresh when the access token is within 60s of expiry. Returns a token or null. */
 async function accessToken() {
+  // A refresh may already be running from another caller; wait for it rather
+  // than reading a token that is about to be replaced.
+  if (refreshInFlight) return refreshInFlight;
   if (!session?.access_token) return null;
   const expiresAt = Number(session.expires_at || 0) * 1000;
   if (expiresAt && Date.now() < expiresAt - 60000) return session.access_token;
   if (!session.refresh_token) { storeSession(null); return null; }
-  try {
-    const next = await gotrue('/token?grant_type=refresh_token', { body: { refresh_token: session.refresh_token } });
-    storeSession(next);
-    return next.access_token;
-  } catch (err) {
-    // A refresh token that no longer works means the session is genuinely over.
-    log('WARN', 'Supabase session refresh failed; signing out', String(err));
-    storeSession(null);
-    return null;
-  }
+  return refreshSession(session.refresh_token);
 }
 
 async function rest(path, { method = 'GET', body, headers = {} } = {}) {
@@ -209,7 +231,15 @@ function showLoginForm() {
     row2.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
     row2.append(google, cancel);
 
-    const close = (value) => { backdrop.remove(); resolve(value); };
+    // Every exit path runs through close(), so the Escape handler is detached
+    // whichever way the form goes away. It used to be removed only when Escape
+    // itself was pressed, leaving one live document listener per login attempt.
+    const onKeyDown = (e) => { if (e.key === 'Escape') close(null); };
+    const close = (value) => {
+      document.removeEventListener('keydown', onKeyDown);
+      backdrop.remove();
+      resolve(value);
+    };
     const busy = (on) => [signIn, signUp, google].forEach((b) => { b.disabled = on; });
 
     const attempt = async (fn, okMessage) => {
@@ -264,9 +294,7 @@ function showLoginForm() {
 
     cancel.addEventListener('click', () => close(null));
     backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(null); });
-    document.addEventListener('keydown', function esc(e) {
-      if (e.key === 'Escape') { document.removeEventListener('keydown', esc); close(null); }
-    });
+    document.addEventListener('keydown', onKeyDown);
 
     card.append(h, sub, email, password, row1, row2, helpers, status);
     backdrop.appendChild(card);

@@ -31,6 +31,30 @@ const MAGIC = 'PRBACKUP1';
 const JSON_STORES = ['story_chapters', 'user_profile'];
 const BLOB_STORE = 'audio_chunks';
 
+/**
+ * localStorage keys that must never leave this device in a backup.
+ *
+ * A .prbackup is a file the user downloads, keeps and copies between machines.
+ * The Supabase session entry holds a live access token AND a refresh token, so
+ * exporting it turns a backup into account credentials for anyone who obtains
+ * the file. The identity keys are excluded for a different reason: restoring
+ * them makes two devices claim the same device id, which then collides in the
+ * per-device stats the sync layer keys on.
+ *
+ * Applied on import as well as export, so a backup written before this existed
+ * still cannot re-inject a stale session.
+ */
+const EXCLUDED_LOCAL_KEYS = new Set([
+  'pr_supabase_session_v1',  // access_token + refresh_token
+  'pr_device_id',            // per-device identity for statsByDevice
+  'pr_profile_owner',        // which account owns this device's local profile
+  'pr_sync_outbox',          // transient; replaying it could resurrect deleted rows
+]);
+
+const isExportableLocalKey = (key) => typeof key === 'string'
+  && key.length > 0
+  && !EXCLUDED_LOCAL_KEYS.has(key);
+
 const openDb = () => new Promise((resolve, reject) => {
   const req = indexedDB.open(DB_NAME, DB_VERSION);
   req.onsuccess = () => resolve(req.result);
@@ -70,9 +94,14 @@ export async function exportPocketReaderData(options = {}) {
   try {
     onProgress('Reading settings…');
     const local = {};
+    let excludedKeys = 0;
     for (let i = 0; i < localStorage.length; i += 1) {
       const key = localStorage.key(i);
+      if (!isExportableLocalKey(key)) { excludedKeys += 1; continue; }
       local[key] = localStorage.getItem(key);
+    }
+    if (excludedKeys) {
+      warnings.push(`${excludedKeys} device/session key(s) excluded from the backup by design`);
     }
 
     const stores = {};
@@ -203,6 +232,9 @@ export async function importPocketReaderData(file, options = {}) {
     if (overwriteSettings && manifest.localStorage) {
       onProgress('Restoring settings…');
       for (const [key, value] of Object.entries(manifest.localStorage)) {
+        // Enforced here too: a backup written before these were excluded would
+        // otherwise restore someone else's session or device identity.
+        if (!isExportableLocalKey(key)) continue;
         try { localStorage.setItem(key, value); restored.settingsKeys += 1; }
         catch (_) { /* quota or a blocked key: keep going, settings are re-derivable */ }
       }
