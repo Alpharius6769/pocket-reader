@@ -117,21 +117,44 @@ function normalizeBookmarks(bookmarks) {
   return out.slice(-100);
 }
 
+/**
+ * Earliest KNOWN unlock wins.
+ *
+ * unlockedAt 0 means "no timestamp recorded" -- legacy achievements were stored
+ * as bare id strings and normalise to 0. Treating that as a real time made 0 the
+ * earliest possible value, so once any device contributed a string-form
+ * achievement no genuine timestamp could ever replace it and the achievement
+ * showed as unlocked in 1970 on every device, permanently. An unknown time must
+ * lose to a known one; only among known times does the earliest win.
+ */
+export function earlierUnlock(left, right) {
+  const a = asInt(left, 0, 0);
+  const b = asInt(right, 0, 0);
+  if (!a) return b;
+  if (!b) return a;
+  return Math.min(a, b);
+}
+
 function normalizeAchievements(value) {
   const result = new Map();
   for (const item of Array.isArray(value) ? value : []) {
-    if (typeof item === 'string') {
-      result.set(item, { id: item, unlockedAt: 0 });
-    } else if (isPlainObject(item) && item.id) {
-      const key = String(item.id);
-      const stamp = asInt(item.unlockedAt, 0, 0);
-      const current = result.get(key);
-      // Earliest unlock wins across devices.
-      if (!current || stamp < asInt(current.unlockedAt, stamp, 0)) result.set(key, { id: key, unlockedAt: stamp });
-    }
+    const key = typeof item === 'string'
+      ? item
+      : (isPlainObject(item) && item.id ? String(item.id) : null);
+    if (!key) continue;
+    const stamp = typeof item === 'string' ? 0 : asInt(item.unlockedAt, 0, 0);
+    const current = result.get(key);
+    result.set(key, { id: key, unlockedAt: current ? earlierUnlock(current.unlockedAt, stamp) : stamp });
   }
   return [...result.values()];
 }
+
+// Absolute refusal point for a payload we have not parsed yet. This is a
+// sanity bound against a pathological input, NOT the storage target: a profile
+// between MAX_PROFILE_BYTES and this is parsed and then pruned down to fit by
+// shrinkProfileToFit(). Rejecting at the storage target meant a library that
+// simply grew past 1 MB could never be read or written again.
+const MAX_PARSE_BYTES = 8 * MAX_PROFILE_BYTES;
 
 function parseProfile(profileData) {
   let parsed = profileData;
@@ -139,12 +162,64 @@ function parseProfile(profileData) {
     if (typeof parsed !== 'string') break;
     const raw = parsed.trim();
     if (!raw) return {};
-    if (new TextEncoder().encode(raw).length > MAX_PROFILE_BYTES) throw new Error('Profile payload is too large');
+    if (new TextEncoder().encode(raw).length > MAX_PARSE_BYTES) throw new Error('Profile payload is too large');
     try { parsed = JSON.parse(raw); } catch (_) { throw new Error('profile_data must be valid JSON'); }
   }
   if (parsed == null) return {};
   if (!isPlainObject(parsed)) throw new Error('profile_data must be a JSON object');
   return structuredClone(parsed);
+}
+
+/**
+ * Bring an oversized profile under MAX_PROFILE_BYTES by shedding regenerable
+ * data, heaviest and least valuable first.
+ *
+ * Previously normalizeProfile simply threw once a profile passed 1 MB. Because
+ * mergeProfile ends by calling it, a user whose library grew past the cap got a
+ * permanent sync failure: syncProfile threw, flushCloudSync went to its
+ * exponential backoff, and every later attempt failed identically with a
+ * message offering no way out. Nothing pruned, so it could never recover.
+ *
+ * Only DERIVED data is dropped -- reading history, day buckets and activity
+ * stamps, all of which regenerate as the user reads. Library entries,
+ * bookmarks, collections and settings are user-authored and are never trimmed
+ * to make room; if the irreducible core alone still exceeds the cap we throw,
+ * because silently deleting someone's bookmarks would be far worse than a
+ * loud failure.
+ */
+export function shrinkProfileToFit(value, maxBytes = MAX_PROFILE_BYTES) {
+  if (compactSize(value) <= maxBytes) return { value, pruned: [] };
+  const pruned = [];
+
+  const trimDailyStats = (keepDays) => {
+    for (const days of Object.values(value.dailyStatsByDevice || {})) {
+      if (!isPlainObject(days)) continue;
+      for (const day of Object.keys(days).sort().slice(0, -keepDays)) delete days[day];
+    }
+  };
+
+  const steps = [
+    ['history', () => { value.history = (value.history || []).slice(-100); }],
+    ['dailyStats', () => trimDailyStats(120)],
+    ['activityDays', () => { value.activityDays = (value.activityDays || []).slice(-400); }],
+    ['history', () => { value.history = (value.history || []).slice(-25); }],
+    ['dailyStats', () => trimDailyStats(30)],
+    ['activityDays', () => { value.activityDays = (value.activityDays || []).slice(-180); }],
+    ['history', () => { value.history = []; }],
+    ['dailyStats', () => { value.dailyStatsByDevice = {}; }],
+  ];
+
+  for (const [label, apply] of steps) {
+    apply();
+    if (!pruned.includes(label)) pruned.push(label);
+    if (compactSize(value) <= maxBytes) return { value, pruned };
+  }
+
+  throw new Error(
+    `Profile payload is too large: ${value.library.length} stories still exceed the `
+    + `${Math.round(maxBytes / 1024)} KB sync limit after pruning reading history and stats. `
+    + 'Remove some stories from your library to resume syncing.',
+  );
 }
 
 export function normalizeProfile(profile, deviceId = null) {
@@ -194,8 +269,7 @@ export function normalizeProfile(profile, deviceId = null) {
   value.readingQueue = Array.isArray(value.readingQueue) ? value.readingQueue : [];
   value.readingQueueUpdatedAt = asInt(value.readingQueueUpdatedAt, value.updatedAt, 0);
   value.goals = isPlainObject(value.goals) ? value.goals : {};
-  if (compactSize(value) > MAX_PROFILE_BYTES) throw new Error('Profile payload is too large');
-  return value;
+  return shrinkProfileToFit(value).value;
 }
 
 function mergeClockedMap(cloudValues, incomingValues, cloudClocks, incomingClocks) {
@@ -226,13 +300,22 @@ function mergeStory(cloudStory, incomingStory) {
   const incomingSync = { ...((incomingStory || {}).sync || {}) };
   for (const [group, fields] of Object.entries(STORY_FIELD_GROUPS)) {
     const incomingStamp = asInt(incomingSync[group], 0, 0);
+
+    // Bookmarks are an add-only set keyed by id, so they ALWAYS union — running
+    // mergeBookmarks only when this device's group stamp won meant the losing
+    // device's bookmarks were dropped outright. Two devices each adding a
+    // bookmark lost whichever synced second, permanently: applyCanonicalProfile
+    // then overwrites that device's local copy with the merged result.
+    // mergeBookmarks already resolves per-id conflicts by newest-wins.
+    if (group === 'bookmarks') {
+      result.bookmarks = mergeBookmarks(result.bookmarks, (incomingStory || {}).bookmarks);
+      cloudSync[group] = Math.max(incomingStamp, asInt(cloudSync[group], 0, 0));
+      continue;
+    }
+
     if (incomingStamp >= asInt(cloudSync[group], 0, 0)) {
-      if (group === 'bookmarks') {
-        result.bookmarks = mergeBookmarks(result.bookmarks, incomingStory.bookmarks);
-      } else {
-        for (const field of fields) {
-          if (Object.prototype.hasOwnProperty.call(incomingStory, field)) result[field] = incomingStory[field];
-        }
+      for (const field of fields) {
+        if (Object.prototype.hasOwnProperty.call(incomingStory, field)) result[field] = incomingStory[field];
       }
       cloudSync[group] = incomingStamp;
     }
@@ -279,9 +362,14 @@ export function mergeProfile(cloudProfile, incomingProfile, deviceId) {
   const achievements = new Map();
   for (const item of [...cloud.achievements, ...incoming.achievements]) {
     const key = item.id;
-    const stamp = asInt(item.unlockedAt, 0, 0);
     const current = achievements.get(key);
-    if (!current || stamp < asInt(current.unlockedAt, stamp, 0)) achievements.set(key, { ...item });
+    achievements.set(key, {
+      ...(current || {}),
+      ...item,
+      // A device that only knows the achievement as a legacy string reports 0;
+      // that must not erase a real unlock time recorded elsewhere.
+      unlockedAt: current ? earlierUnlock(current.unlockedAt, item.unlockedAt) : asInt(item.unlockedAt, 0, 0),
+    });
   }
   result.achievements = [...achievements.values()];
 
