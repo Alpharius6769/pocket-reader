@@ -81,9 +81,14 @@ export async function prepareAvatarForStorage(input) {
 }
 window.prepareAvatarForStorage = prepareAvatarForStorage;
 
+// How long to wait for another tab to release a blocking connection before
+// treating storage as unavailable for this attempt.
+const DB_BLOCKED_TIMEOUT_MS = 10000;
+
 export function initDB() {
   if (!dbPromise) {
     dbPromise = new Promise((resolve, reject) => {
+      let blockedTimerId = null;
       try {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
@@ -104,6 +109,8 @@ export function initDB() {
         };
 
         request.onsuccess = (event) => {
+          // The block cleared on its own; cancel the give-up timer.
+          if (blockedTimerId) { clearTimeout(blockedTimerId); blockedTimerId = null; }
           const db = event.target.result;
           // If another tab later opens this DB at a higher version, close this
           // connection so its upgrade is not blocked. Without this, the other
@@ -120,12 +127,22 @@ export function initDB() {
         request.onblocked = () => {
           // A pre-existing connection in another tab is holding the old version
           // open. Its onversionchange handler (above) closes it, after which our
-          // onsuccess fires. Log only — never reject, so the normal short wait
-          // still resolves rather than degrading every storage op to a miss.
+          // onsuccess fires — so the normal case is a short wait, not an error.
           console.warn("[Storage] IndexedDB upgrade waiting on another open tab to close.");
+          // But that other tab may be frozen (a backgrounded iOS tab does not
+          // run onversionchange promptly), and this promise is awaited by EVERY
+          // storage call. Never settling meant playback and caching hung
+          // indefinitely rather than degrading to a cache miss. Bound the wait:
+          // callers already treat a rejection as a miss, and clearing dbPromise
+          // lets the next call reopen once the other tab lets go.
+          blockedTimerId = setTimeout(() => {
+            queueMicrotask(() => { dbPromise = null; });
+            reject(new Error('IndexedDB is blocked by another open tab.'));
+          }, DB_BLOCKED_TIMEOUT_MS);
         };
 
         request.onerror = (event) => {
+          if (blockedTimerId) { clearTimeout(blockedTimerId); blockedTimerId = null; }
           console.error("IndexedDB initialization error:", event.target.error);
           queueMicrotask(() => { dbPromise = null; });
           reject(event.target.error);
@@ -422,6 +439,30 @@ export async function saveStoryChapters(title, chapters, context = {}) {
 }
 window._saveStoryChapters = saveStoryChapters;
 
+// Structural comparison instead of JSON.stringify on both sides. Opening a long
+// story serialised its entire text twice just to decide whether a repair write
+// was needed; this walks the arrays and stops at the first difference, so the
+// common "already canonical" case costs one pass over the paragraph references
+// and allocates nothing.
+function _chaptersDiffer(stored, canonical) {
+  if (!Array.isArray(stored) || !Array.isArray(canonical)) return true;
+  if (stored.length !== canonical.length) return true;
+  for (let i = 0; i < stored.length; i += 1) {
+    const a = stored[i];
+    const b = canonical[i];
+    if (!a || !b) return true;
+    if ((a.title || '') !== (b.title || '')) return true;
+    const pa = a.paragraphs;
+    const pb = b.paragraphs;
+    if (!Array.isArray(pa) || !Array.isArray(pb)) return true;
+    if (pa.length !== pb.length) return true;
+    for (let j = 0; j < pa.length; j += 1) {
+      if (pa[j] !== pb[j]) return true;
+    }
+  }
+  return false;
+}
+
 export async function loadStoryChapters(title, context = {}) {
   if (!title) return null;
   const db = await initDB();
@@ -433,7 +474,7 @@ export async function loadStoryChapters(title, context = {}) {
       const stored = req.result || null;
       if (!stored) { resolve(null); return; }
       const canonical = normalizeStoryChapters(stored, context);
-      if (JSON.stringify(canonical) !== JSON.stringify(stored)) {
+      if (_chaptersDiffer(stored, canonical)) {
         // Repair old local chapter data in the background. The current read
         // proceeds immediately, so this never delays opening a story.
         saveStoryChapters(title, canonical, context).catch(() => {});

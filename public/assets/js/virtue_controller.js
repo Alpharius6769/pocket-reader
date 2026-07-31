@@ -3,6 +3,10 @@ import { animate } from './motion_lite.js';
 export const virtueState = {
   virtueCooldown: false,
   virtueActiveTimeout: null,
+  // Tracked so overlapping speeches cannot stack cooldown timers. An untracked
+  // setTimeout meant the FIRST one to fire cleared the flag, ending the idle
+  // cooldown early and letting chatter resume ahead of schedule.
+  virtueCooldownTimeout: null,
   virtueData: {},
   dismissWaiters: new Set(),
 };
@@ -319,7 +323,11 @@ function _showVirtueSpeech(text, duration = 10000, priority = false) {
   // short global gap so priority spam cannot chain immediately.
   if (!priority) {
     virtueState.virtueCooldown = true;
-    setTimeout(() => {
+    // Restart the window from THIS appearance rather than leaving an older
+    // timer to expire against it.
+    if (virtueState.virtueCooldownTimeout) clearTimeout(virtueState.virtueCooldownTimeout);
+    virtueState.virtueCooldownTimeout = setTimeout(() => {
+      virtueState.virtueCooldownTimeout = null;
       virtueState.virtueCooldown = false;
     }, (window.userProfile?.settings?.companionFrequency || 'contextual') === 'expressive' ? 45000 : 120000);
   }
@@ -383,6 +391,12 @@ function _fitVirtueSpeech(overlay) {
 }
 
 export function virtueSpeak(text, duration = 10000, priority = false) {
+  // Bail before the queue, exactly as triggerVirtue does. _showVirtueSpeech
+  // no-ops when the companion is off / low-memory mode / low battery, but the
+  // enqueued run() still parked _waitForVirtueDismiss for the full duration --
+  // so with the companion disabled every call held the experience queue for
+  // 4-10s and serialised everything behind narration that was never shown.
+  if (!_isVirtueEnabled()) return Promise.resolve(false);
   const effectivePriority = priority || Number(virtueState.lastPriorityUntil || 0) > Date.now();
   const frequency = window.userProfile?.settings?.companionFrequency || 'contextual';
   if ((frequency === 'quiet' || document.body.classList.contains('experience-suppressed')) && !effectivePriority) return Promise.resolve(false);

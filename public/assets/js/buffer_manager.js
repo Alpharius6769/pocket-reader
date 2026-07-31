@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v9';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v11';
 import {
   evaluateCpuThermalRest,
   POCKET_THERMAL_HISTORY_LIMIT,
@@ -48,11 +48,22 @@ function _minimumPlaybackReadyCount(total) {
 }
 window.getPocketPlaybackReadyCount = _minimumPlaybackReadyCount;
 
-function _persistCacheJob(manager) {
+// updateUI() runs on a 1s ticker for the whole job, and it used to persist the
+// resume record on every tick — a synchronous JSON write to localStorage once a
+// second for hours. The record only has to survive a crash or a background kill,
+// so a periodic write plus the explicit pagehide/visibilitychange/pause flushes
+// is equivalent in practice at a fraction of the main-thread cost.
+const CACHE_JOB_PERSIST_INTERVAL_MS = 15000;
+let _lastCacheJobPersistAt = 0;
+
+function _persistCacheJob(manager, { force = true } = {}) {
+  const now = Date.now();
+  if (!force && now - _lastCacheJobPersistAt < CACHE_JOB_PERSIST_INTERVAL_MS) return;
   const activeTask = manager.queue?.[0];
   const storyTitle = activeTask?.storyTitle || window.currentStory?.title;
   const storyRef = activeTask?.storyRef || window.currentStory?.storyKey || window.getStoryStableKey?.(window.currentStory) || storyTitle;
   if (!storyTitle) return;
+  _lastCacheJobPersistAt = now;
   try {
     localStorage.setItem(CACHE_JOB_RESUME_KEY, JSON.stringify({
       active: Boolean(manager.isActive && !manager.paused),
@@ -70,6 +81,15 @@ function _persistCacheJob(manager) {
 function _escapeCacheStatus(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Encode a value for use inside a single-quoted JS string in an inline onclick.
+// encodeURIComponent deliberately leaves ' unescaped, and HTML entity decoding
+// runs BEFORE the JS parser, so &#39; would still close the string — the apostrophe
+// has to become %27 before it ever reaches the attribute. Matches the guard used
+// at every other inline-handler call site (library_manager, storage_core, api_core).
+function _encodeForInlineHandler(value) {
+  return encodeURIComponent(String(value ?? '')).replace(/'/g, '%27');
 }
 
 function _clearPersistedCacheJob() {
@@ -647,7 +667,9 @@ export const BufferManager = {
       if (typeof document !== 'undefined' && document.hidden && typeof window.startBgKeepAlive === 'function') {
         window.startBgKeepAlive();
       }
-      _persistCacheJob(this);
+      // Rate-limited: this is the 1s UI ticker. The pagehide, visibilitychange
+      // and pause() paths still force an immediate write.
+      _persistCacheJob(this, { force: false });
     } else if (this.paused) {
       statusText = `Paused - ${pct}% cached`;
       if (awayBar) awayBar.classList.remove('caching');
@@ -1262,17 +1284,33 @@ export const BufferManager = {
   // MessageChannel hop is never throttled, so hidden sessions continue at full
   // synthesis speed; visible sessions keep the polite delay.
   _scheduleLoop(gen, delay = 0) {
-    if (document.hidden || (typeof document !== 'undefined' && !document.hasFocus()) || delay === 0) {
-      const channel = new MessageChannel();
-      channel.port1.onmessage = () => {
-        channel.port1.close();
-        channel.port2.close();
-        this._loop(gen);
-      };
-      channel.port2.postMessage(0);
+    // Only a HIDDEN page suffers timer throttling. The old condition also took
+    // the zero-delay path whenever the window merely lost focus, which silently
+    // cancelled every deliberate backoff — most importantly the 1500ms pause
+    // after a failed paragraph, turning it into an immediate retry storm on any
+    // unfocused-but-visible window.
+    if (delay === 0) {
+      this._messageChannelHop(gen);
+      return;
+    }
+    if (document.hidden) {
+      // Hidden pages clamp chained setTimeout to 1s, and to once per MINUTE
+      // after five minutes hidden. Wait out the intended delay on a timer that
+      // is allowed to be slow, then resume on an unthrottled MessageChannel hop.
+      setTimeout(() => this._messageChannelHop(gen), delay);
       return;
     }
     setTimeout(() => this._loop(gen), delay);
+  },
+
+  _messageChannelHop(gen) {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      channel.port2.close();
+      this._loop(gen);
+    };
+    channel.port2.postMessage(0);
   },
 
   // Feed the CPU thermal guard. Only WASM synthesis counts: the WebGPU path
@@ -1917,7 +1955,7 @@ window.renderAwayModeUI = function() {
       const title = _escapeCacheStatus(story ? story.title : ref);
       return `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--panel-bg); padding:8px 12px; border-radius:4px; border:1px solid var(--border-color);">
         <span style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%;" title="${title}">${title}</span>
-        <button class="pr-btn-outline" style="padding:4px 8px; font-size:0.8rem; margin:0;" onclick="window.removeStoryFromAwayQueue('${encodeURIComponent(ref)}')">Remove</button>
+        <button class="pr-btn-outline" style="padding:4px 8px; font-size:0.8rem; margin:0;" onclick="window.removeStoryFromAwayQueue('${_encodeForInlineHandler(ref)}')">Remove</button>
       </div>`;
     }).join('');
   }
@@ -1936,7 +1974,7 @@ window.renderAwayModeUI = function() {
       const title = _escapeCacheStatus(s.title);
       return `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--panel-bg); padding:8px 12px; border-radius:4px; border:1px solid var(--border-color);">
         <span style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%;" title="${title}">${title}</span>
-        <button class="pr-btn-primary" style="padding:4px 8px; font-size:0.8rem; margin:0;" onclick="window.addStoryToAwayQueue('${encodeURIComponent(ref)}')">Add</button>
+        <button class="pr-btn-primary" style="padding:4px 8px; font-size:0.8rem; margin:0;" onclick="window.addStoryToAwayQueue('${_encodeForInlineHandler(ref)}')">Add</button>
       </div>`;
     }).join('');
   }

@@ -608,25 +608,34 @@ function _flushLocalData(options = {}) {
   try {
     window.userProfile = normalizeProfileObject(window.userProfile);
     sanitizeProfileLibrary(window.userProfile, { purgeStorage: false });
-    const liteProfile = JSON.parse(JSON.stringify(window.userProfile));
+    // Strip chapters BEFORE cloning, not after. loadStory() attaches the opened
+    // story's full text to its library entry (currentStory IS that entry), and
+    // this runs on every playback checkpoint — i.e. once per paragraph. Cloning
+    // first meant serialising and re-parsing megabytes of prose on every
+    // paragraph purely to delete it on the next line.
+    const { library, avatar, ...profileRest } = window.userProfile;
+    const liteProfile = JSON.parse(JSON.stringify(profileRest));
     liteProfile.schemaVersion = PROFILE_SCHEMA_VERSION;
     liteProfile.updatedAt = Date.now();
-    if (Array.isArray(liteProfile.library)) {
-      liteProfile.library.forEach((story) => {
-        if (story.chapters) delete story.chapters;
-        story.storyKey = story.storyKey || getStoryStableKey(story);
-        story.updatedAt = story.updatedAt || story.lastRead || story.addedAt || Date.now();
+    if (Array.isArray(library)) {
+      liteProfile.library = library.map((story) => {
+        const { chapters, ...rest } = story;
+        const copy = JSON.parse(JSON.stringify(rest));
+        copy.storyKey = copy.storyKey || getStoryStableKey(copy);
+        copy.updatedAt = copy.updatedAt || copy.lastRead || copy.addedAt || Date.now();
+        return copy;
       });
+    } else {
+      liteProfile.library = [];
     }
 
-    // Persist avatar to IndexedDB instead of localStorage to prevent QuotaExceededError
-    if (window.userProfile.avatar) {
-      if (window._saveUserAvatar) {
-        window._saveUserAvatar(window.userProfile.avatar).catch(e => {
-          console.error("Failed to save avatar to IndexedDB:", e);
-        });
-      }
-      delete liteProfile.avatar;
+    // Persist avatar to IndexedDB instead of localStorage to prevent
+    // QuotaExceededError. It is destructured out of the clone above, so it is
+    // never serialised here — only handed to the IndexedDB writer.
+    if (avatar && window._saveUserAvatar) {
+      window._saveUserAvatar(avatar).catch(e => {
+        console.error("Failed to save avatar to IndexedDB:", e);
+      });
     }
 
     // Protect sensitive cookies from cloud storage
