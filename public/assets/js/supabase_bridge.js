@@ -302,9 +302,7 @@ function showLoginForm() {
       // navigations here, but a redirect avoids the popup-blocker and
       // isolation pitfalls entirely.
       const currentUrl = new URL(window.location.href);
-      const redirect = encodeURIComponent(
-        currentUrl.origin + currentUrl.pathname + currentUrl.search + currentUrl.hash,
-      );
+      const redirect = encodeURIComponent(currentUrl.origin + currentUrl.pathname);
       window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirect}`;
     });
 

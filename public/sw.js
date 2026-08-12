@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v141';
+var CACHE_NAME = 'pocket-reader-core-v142';
 
 function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
@@ -77,9 +77,7 @@ var OPTIONAL_ASSETS = [
     'assets/fonts/literata-400.woff2',
     'assets/fonts/literata-600.woff2',
     'assets/fonts/literata-700.woff2',
-    'assets/fonts/ibm-plex-sans-400.woff2',
-    'assets/fonts/ibm-plex-sans-500.woff2',
-    'assets/fonts/ibm-plex-sans-600.woff2'
+    'assets/fonts/lucide.woff2?v=1'
 ];
 
 // Large narration-runtime modules. They are lazy-loaded by
