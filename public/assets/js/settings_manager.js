@@ -1030,11 +1030,20 @@ export function initPushNotifications(checkbox) {
       let vapidKey = window.VAPID_PUBLIC_KEY || window.VAPID_PUBLIC || '';
       if (!vapidKey) {
         try {
-          const resp = await fetch(`${window.HF_API_BASE || ''}/api/vapid-public-key`);
+          const backendOrigin = window.POCKET_BACKEND_ORIGIN || '';
+          const resp = await fetch(`${backendOrigin}/api/vapid-public-key`);
           if (resp.ok) { const data = await window._safeParseJson(resp, 'API'); vapidKey = data.public_key; window.VAPID_PUBLIC_KEY = vapidKey; }
         } catch(e) { console.error(e); }
       }
-      if (!vapidKey) { setPushUpdatesEnabled(false); alert("Push is enabled but no VAPID public key is configured on the server yet."); return; }
+      if (!vapidKey) {
+        setPushUpdatesEnabled(false);
+        if (typeof window.virtueSpeak === 'function') {
+          window.virtueSpeak("Push updates require a VAPID key configured on your backend server.", 5000);
+        } else {
+          alert("Push updates require a VAPID public key configured on your backend server.");
+        }
+        return;
+      }
       let swReg = await navigator.serviceWorker.getRegistration();
       if (!swReg) {
         const swFallbackUrl = new URL(SERVICE_WORKER_PATH, document.baseURI).href;
@@ -1274,13 +1283,12 @@ async function _refreshDeviceProfileEnhanced(grid) {
   grid.innerHTML = `<div class="device-profile-loading">Reading browser hardware signals...</div>`;
   const p = await _collectDeviceProfile();
   const rows = [
-    ['OS', p.os], ['Browser', p.browser], ['Platform', p.platform], ['CPU', p.cpu],
-    ['RAM', p.ram], ['JS heap', p.heap], ['GPU', p.gpu], ['WebGPU', p.webgpu],
+    ['OS', p.os], ['Browser', p.browser], ['CPU', p.cpu],
+    ['GPU', p.gpu], ['WebGPU', p.webgpu],
     ['SharedArrayBuffer', p.sab], ['Cross-origin isolation', p.isolation],
-    ['Isolation history', p.isolationHistory],
-    ['Screen', p.screen], ['Viewport', p.viewport], ['Input', p.touch],
-    ['Network', p.connection], ['Mode', p.mode], ['Workers', p.workers],
-    ['Accuracy', 'Browser-reported and approximate. Exact RAM, CPU, GPU, and thermal telemetry require a native wrapper.'],
+    ['Screen', p.screen], ['Viewport', p.viewport],
+    ['Mode', p.mode], ['Workers', p.workers],
+    ['Accuracy', 'Browser-reported signals. Thermal telemetry and hardware acceleration are auto-tuned.'],
   ];
   grid.innerHTML = rows.map(([k, v]) => `<span class="device-profile-key">${_escapeDeviceValue(k)}</span><span>${_escapeDeviceValue(v)}</span>`).join('');
 }

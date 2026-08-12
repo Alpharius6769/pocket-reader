@@ -379,7 +379,7 @@ export async function pullCloudProfileOnStartup() {
   const email = await window.pocketCloud.getCurrentUser();
   if (!email) return null;
   const owner = localStorage.getItem('pr_profile_owner') || '';
-  if (owner && owner !== email) {
+  if (owner && owner !== email && owner !== 'Guest Reader') {
     if (typeof window.resetLocalProfile === 'function') await window.resetLocalProfile({ preserveSetup: true });
     location.reload();
     return null;

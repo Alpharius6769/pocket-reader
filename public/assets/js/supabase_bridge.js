@@ -40,6 +40,9 @@ function storeSession(next) {
     if (next) {
       localStorage.setItem(SESSION_KEY, JSON.stringify(next));
       localStorage.setItem('pr_remember_login', 'true');
+      if (next.user && next.user.email) {
+        localStorage.setItem('pr_profile_owner', next.user.email);
+      }
     } else {
       localStorage.removeItem(SESSION_KEY);
     }

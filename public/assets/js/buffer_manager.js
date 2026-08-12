@@ -482,10 +482,6 @@ async function _resumeFastNarrationCache() {
         && Array.isArray(window.currentStory.chapters)
         && window.currentStory.chapters.length > 0;
       if (storyLoaded) {
-        await _awaitMobileNarrationGesture(resume.action || 'cache');
-        // Keep the resume intent durable while the post-reload prompt is open.
-        // iOS may suspend or terminate the page before the user taps Continue;
-        // clearing only after that gesture lets the next launch recover again.
         sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
         if (resume.action === 'playback') {
           window.togglePlayState?.();
