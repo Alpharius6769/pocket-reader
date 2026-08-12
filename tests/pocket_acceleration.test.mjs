@@ -197,12 +197,12 @@ test('narration isolation and streamed PCM assets are versioned together', async
   assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v7/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
   const shell = await read('public/index.html');
-  assert.match(shell, /sw\.js\?v=136/);
+  assert.match(shell, /sw\.js\?v=143/);
 });
 
 test('Settings recognizes the active narration service worker revision', async () => {
   const settings = await read('public/assets/js/settings_manager.js');
-  assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'136'/);
+  assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'143'/);
   assert.match(settings, /searchParams\.get\('v'\)\s*===\s*NARRATION_SERVICE_WORKER_VERSION/);
   // ui_controller performs the PRIMARY service-worker registration. Its ?v= MUST
   // match NARRATION_SERVICE_WORKER_VERSION, or narrationServiceWorkerControlsPage()
