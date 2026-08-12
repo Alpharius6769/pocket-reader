@@ -45,6 +45,7 @@ function hostAllowed(hostname, env) {
 // ALLOWED_ORIGINS Worker variable (comma-separated).
 function resolveAllowedOrigin(request, env) {
   const defaults = [
+    "https://alpharius6769.github.io",
     "https://pocket-reader-f2y.pages.dev",
     "https://phase3-preview.pocket-reader-f2y.pages.dev",
   ];
