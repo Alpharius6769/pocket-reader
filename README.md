@@ -5,7 +5,7 @@ narration and optional Supabase accounts.
 
 ## Architecture
 
-- **Cloudflare Pages:** frontend and PWA shell (`https://pocket-reader-f2y.pages.dev`).
+- **GitHub Pages:** frontend and PWA shell (`https://alpharius6769.github.io/pocket-reader/`).
 - **Supabase:** authentication, profiles, and account synchronization.
 - **Hugging Face Space:** story search, scraping, uploads, curated-library API,
   FicHub relay, masterlist data, health endpoints, and push subscriptions.
