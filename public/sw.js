@@ -265,7 +265,7 @@ self.addEventListener('fetch', function (event) {
 
     // Never intercept the service worker script itself or backend API calls
     if (
-        url.pathname === '/sw.js' ||
+        url.pathname.endsWith('/sw.js') ||
         url.origin.indexOf('hf.space') !== -1
     ) {
         return;

@@ -1320,9 +1320,11 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
+    const swUrl = new URL('sw.js?v=136', document.baseURI).href;
+    const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
-    .register('/sw.js?v=136', { scope: '/' })
-    .catch(() => navigator.serviceWorker.register('/sw.js', { scope: '/' }));
+    .register(swUrl)
+    .catch(() => navigator.serviceWorker.register(swFallbackUrl));
     window.__prServiceWorkerRegistration = registrationPromise
       .catch((err) => {
         window.__prServiceWorkerError = {

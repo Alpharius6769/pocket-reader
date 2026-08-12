@@ -154,10 +154,12 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
+      var swUrl = new URL('sw.js?v=136', document.baseURI).href;
+      var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
-        .register('/sw.js?v=136', { scope: '/' })
+        .register(swUrl)
         .catch(function() {
-          return navigator.serviceWorker.register('/sw.js', { scope: '/' });
+          return navigator.serviceWorker.register(swFallbackUrl);
         })
         .then(function(registration) {
           console.log('Service Worker registered with scope:', registration.scope);

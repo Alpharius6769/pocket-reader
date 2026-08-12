@@ -9,14 +9,14 @@ import {
 
 const NARRATION_SERVICE_WORKER_VERSION = '136';
 
-export const SERVICE_WORKER_PATH = '/sw.js';
+export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
 
 function narrationServiceWorkerControlsPage() {
   const scriptUrl = navigator.serviceWorker?.controller?.scriptURL || '';
   try {
-    const parsed = new URL(scriptUrl, window.location.origin);
-    return parsed.pathname === SERVICE_WORKER_PATH
+    const parsed = new URL(scriptUrl, document.baseURI);
+    return parsed.pathname.endsWith('/sw.js')
       && parsed.searchParams.get('v') === NARRATION_SERVICE_WORKER_VERSION;
   } catch (_) {
     return false;
@@ -27,10 +27,12 @@ async function ensureNarrationServiceWorkerControl() {
   if (!('serviceWorker' in navigator)) return false;
   if (narrationServiceWorkerControlsPage()) return true;
   setPocketBackendStatus('Updating the narration service worker...', 'progress');
+  const swUrl = new URL(NARRATION_SERVICE_WORKER_URL, document.baseURI).href;
+  const swFallbackUrl = new URL(SERVICE_WORKER_PATH, document.baseURI).href;
   try {
-    await navigator.serviceWorker.register(NARRATION_SERVICE_WORKER_URL, { scope: '/' });
+    await navigator.serviceWorker.register(swUrl);
   } catch (_) {
-    await navigator.serviceWorker.register(SERVICE_WORKER_PATH, { scope: '/' });
+    await navigator.serviceWorker.register(swFallbackUrl);
   }
   const startedAt = Date.now();
   while (Date.now() - startedAt < 30000) {
@@ -1035,8 +1037,9 @@ export function initPushNotifications(checkbox) {
       if (!vapidKey) { setPushUpdatesEnabled(false); alert("Push is enabled but no VAPID public key is configured on the server yet."); return; }
       let swReg = await navigator.serviceWorker.getRegistration();
       if (!swReg) {
-        try { swReg = await navigator.serviceWorker.register(SERVICE_WORKER_PATH, { scope: '/' }); }
-        catch(e) { swReg = await navigator.serviceWorker.register(SERVICE_WORKER_PATH, { scope: '/' }); }
+        const swFallbackUrl = new URL(SERVICE_WORKER_PATH, document.baseURI).href;
+        try { swReg = await navigator.serviceWorker.register(swFallbackUrl); }
+        catch(e) { swReg = await navigator.serviceWorker.register(swFallbackUrl); }
       }
       const existing     = await swReg.pushManager.getSubscription();
       const subscription = existing || (await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) }));
