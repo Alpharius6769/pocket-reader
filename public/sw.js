@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v142';
+var CACHE_NAME = 'pocket-reader-core-v143';
 
 function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
@@ -275,7 +275,7 @@ self.addEventListener('fetch', function (event) {
     // relationships. COEP require-corp enables SharedArrayBuffer and threaded
     // ONNX WASM; the Cloudflare model proxy explicitly permits cross-origin use.
     if (event.request.mode === 'navigate') {
-        if (url.pathname.indexOf('/debug/') === 0) {
+        if (url.pathname.indexOf('/debug/') !== -1) {
             return;
         }
         var isolateNarration = url.searchParams.get('tts_fast') === '1';
@@ -293,7 +293,7 @@ self.addEventListener('fetch', function (event) {
         return;
     }
 
-    if (url.pathname.indexOf('/assets/') === 0 && (url.pathname.slice(-3) === '.js' || url.pathname.slice(-4) === '.css')) {
+    if (url.pathname.indexOf('/assets/') !== -1 && (url.pathname.slice(-3) === '.js' || url.pathname.slice(-4) === '.css')) {
         var isPocketWorker = url.pathname.indexOf('/pocket_worker.js') !== -1;
         var fetchAndCache = function () {
             return fetch(event.request).then(function (networkResponse) {
@@ -341,7 +341,7 @@ self.addEventListener('fetch', function (event) {
     }
 
     // Cache-first strategy for large visual assets.
-    if (url.pathname.indexOf('/assets/') === 0 || event.request.destination === 'image') {
+    if (url.pathname.indexOf('/assets/') !== -1 || event.request.destination === 'image') {
         event.respondWith(
             caches.match(event.request).then(function (cachedResponse) {
                 if (cachedResponse) {

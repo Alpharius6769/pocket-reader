@@ -522,11 +522,14 @@ export function initSettingsUI() {
   }, 100);
 
   // Re-populate GPU info once async detection completes (may finish after init)
-  if (!window._gpuVendor || window._gpuVendor === 'unknown') {
-    setTimeout(() => {
+  if (!window._gpuVendor || window._gpuVendor === 'unknown' || window._gpuVendor === 'detecting...') {
+    _collectDeviceProfile().then(p => {
+      if (p.gpu && p.gpu !== 'Unknown' && (!window._gpuVendor || window._gpuVendor === 'unknown' || window._gpuVendor === 'detecting...')) {
+        window._gpuVendor = p.gpu;
+      }
       if (detectedGpuEl && window._gpuVendor) detectedGpuEl.textContent = window._gpuVendor;
       if (typeof updateGpuToggles === 'function') updateGpuToggles();
-    }, 1500);
+    }).catch(() => {});
   }
 
   // Crash recovery notice
@@ -1324,9 +1327,15 @@ export async function refreshPerfPanel() {
     <li><b>Calibration:</b> median ${pocketCfg.medianMs ? `${Math.round(pocketCfg.medianMs)}ms` : 'N/A'}, p95 ${pocketCfg.p95Ms ? `${Math.round(pocketCfg.p95Ms)}ms` : 'N/A'}</li>
     ${pocketCfg.backendRejectionReason ? `<li><b>Backend Note:</b> ${_escapeSettingsHtml(pocketCfg.backendRejectionReason)}</li>` : ''}
   ` : '';
+  if (typeof window._neuralState !== 'function' && typeof window.ensureNarrationRuntime === 'function') {
+    window.ensureNarrationRuntime().then(() => {
+      const perfEl = document.getElementById('perf-panel');
+      if (perfEl && typeof refreshPerfPanel === 'function') refreshPerfPanel();
+    }).catch(() => {});
+  }
   p.innerHTML = `<ul style="font-size:0.85rem;padding-left:20px;color:var(--text-main);line-height:1.6;">
     <li><b>Neural Engine:</b> ${isNeural ? `<span style="color:var(--accent-green);">Active (Pocket TTS)</span>` : 'Inactive'}</li>
-    <li><b>Engine State:</b> ${typeof window._neuralState === 'function' ? window._neuralState() : 'Unknown'}</li>
+    <li><b>Engine State:</b> ${typeof window._neuralState === 'function' ? window._neuralState() : 'idle (loading...)'}</li>
     ${pocketRows}
     <li><b>GPU Vendor:</b> ${gpuVendor}</li>
     <li><b>Workers:</b> ${settings.maxWorkers || detectWorkerCount()} (${settings.enableManualWorkers ? 'manual' : 'auto'})</li>

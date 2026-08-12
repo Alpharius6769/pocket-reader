@@ -794,6 +794,13 @@ async function _detectGpuVendor() {
   }
 
   window._gpuVendor = _gpuVendor;
+  const detectedGpuEl = document.getElementById('detected-gpu');
+  if (detectedGpuEl && _gpuVendor && _gpuVendor !== 'unknown') {
+    detectedGpuEl.textContent = _gpuVendor;
+  }
+  if (typeof window.refreshPerfPanel === 'function') {
+    try { window.refreshPerfPanel(); } catch(_) {}
+  }
   return _gpuVendor;
 }
 
@@ -1393,10 +1400,11 @@ async function _loadPocketEngine() {
 
         worker.onerror = (err) => {
           clearTimeout(startupTimerId);
+          const errMsg = err?.message || (err?.filename ? `${err.filename}:${err.lineno}:${err.colno}` : (typeof err === 'string' ? err : 'Worker initialization error'));
           if (!workerObj.ready && !resolved) {
             workerFailed++;
-            console.error(`${engineLabel} Worker ${i} crashed (onerror):`, err.message || err);
-            if (window.Diagnostics) window.Diagnostics.log('ERROR', `Worker ${i} crashed`, { message: err.message });
+            console.error(`${engineLabel} Worker ${i} crashed (onerror):`, errMsg, err);
+            if (window.Diagnostics) window.Diagnostics.log('ERROR', `Worker ${i} crashed`, { message: errMsg, filename: err?.filename, lineno: err?.lineno, colno: err?.colno });
             done(false);
             if ((workersReady + workerFailed) === nWorkers) {
               if (workersReady > 0) {
