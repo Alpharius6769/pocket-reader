@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/assets/img/pocket_reader_icon.webp" type="image/webp">
-<link rel="apple-touch-icon" href="/assets/img/pocket_reader_icon-logo.jpeg">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/img/pocket_reader_icon.webp" type="image/webp">
+<link rel="apple-touch-icon" href="assets/img/pocket_reader_icon-logo.jpeg">
 <title>Pocket Reader</title>
 
 <!-- ==========================================
@@ -31,7 +31,7 @@
 2. GLOBAL STYLESHEET
 ========================================== -->
 <!-- Links the optimized CSS file we just created -->
-<link rel="stylesheet" href="/assets/css/theme.css?v=midnight-v22">
+<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v22">
 
 <!-- ==========================================
 2a. FAST-NARRATION RELOAD MASK (anti-flash)
@@ -125,24 +125,24 @@ Fully self-contained so no versioned module needs to change.
 Preload render-critical modules in parallel during initial HTML parsing.
 Playback-only modules remain deferred so they do not compete with first paint.
 -->
-<link rel="modulepreload" href="/assets/js/diagnostics.js?v=diag-v4">
-<link rel="modulepreload" href="/assets/js/motion_lite.js">
-<link rel="modulepreload" href="/assets/js/storage_core.js?v=storage-v11">
-<link rel="modulepreload" href="/assets/js/sync_core.js?v=sync-v8">
-<link rel="modulepreload" href="/assets/js/engine_utils.js">
-<link rel="modulepreload" href="/assets/js/narration_runtime_loader.js?v=narration-loader-v15">
-<link rel="modulepreload" href="/assets/js/api_core.js?v=search-v18">
-<link rel="modulepreload" href="/assets/js/experience_coordinator.js?v=experience-v5">
-<link rel="modulepreload" href="/assets/js/virtue_controller.js?v=virtue-v10">
-<link rel="modulepreload" href="/assets/js/pocket_backend_policy.js?v=backend-v20">
-<link rel="modulepreload" href="/assets/js/pocket_performance_policy.js?v=performance-v2">
-<link rel="modulepreload" href="/assets/js/device_setup.js?v=device-setup-v7">
-<link rel="modulepreload" href="/assets/js/settings_manager.js?v=settings-v49">
-<link rel="modulepreload" href="/assets/js/library_manager.js?v=library-v13">
-<link rel="modulepreload" href="/assets/js/cinematic_ui.js?v=cinematic-v6">
-<link rel="modulepreload" href="/assets/js/reader_features.js?v=features-v6">
-<link rel="modulepreload" href="/assets/js/ui_controller.js?v=ui-v89">
-<link rel="modulepreload" href="/assets/js/supabase_bridge.js?v=supabase-v5">
+<link rel="modulepreload" href="assets/js/diagnostics.js?v=diag-v4">
+<link rel="modulepreload" href="assets/js/motion_lite.js">
+<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v11">
+<link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v8">
+<link rel="modulepreload" href="assets/js/engine_utils.js">
+<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v15">
+<link rel="modulepreload" href="assets/js/api_core.js?v=search-v18">
+<link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v5">
+<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v10">
+<link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v20">
+<link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
+<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v7">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v49">
+<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v13">
+<link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v6">
+<link rel="modulepreload" href="assets/js/reader_features.js?v=features-v6">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v89">
+<link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v5">
 
 <!-- ==========================================
 3. SERVICE WORKER REGISTRATION
@@ -248,7 +248,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <div class="settings-item pr-layout-005">
         <label for="setup-avatar-upload">Profile picture</label>
         <div class="pr-layout-006">
-          <img class="pr-layout-007" id="setup-avatar-preview" src="/assets/img/profile%20512.png" alt="">
+          <img class="pr-layout-007" id="setup-avatar-preview" src="assets/img/profile%20512.png" alt="">
           <button class="pr-btn-sub" onclick="document.getElementById('setup-avatar-upload').click()">Upload picture...</button>
           <input class="pr-layout-008" id="setup-avatar-upload" type="file" accept="image/*" onchange="window._setupAvatarUpload(event)">
         </div>
@@ -488,19 +488,19 @@ Playback-only modules remain deferred so they do not compete with first paint.
   </div>
   <aside class="sidebar">
     <button class="nav-btn active-view" onclick="showView('home-view')">
-      <img class="nav-icon" src="/assets/img/home%20192.png" alt="">
+      <img class="nav-icon" src="assets/img/home%20192.png" alt="">
       <span>Home</span>
     </button>
     <button class="nav-btn" onclick="showView('library-view')">
-      <img class="nav-icon" src="/assets/img/library%20192.png" alt="">
+      <img class="nav-icon" src="assets/img/library%20192.png" alt="">
       <span>Library</span>
     </button>
     <button class="nav-btn" onclick="showView('reading-view')">
-      <img class="nav-icon" src="/assets/img/reader%20192.png" alt="">
+      <img class="nav-icon" src="assets/img/reader%20192.png" alt="">
       <span>Reader</span>
     </button>
     <button class="nav-btn" onclick="showView('profile-view')">
-      <img class="nav-icon" src="/assets/img/profile%20192.png" alt="">
+      <img class="nav-icon" src="assets/img/profile%20192.png" alt="">
       <span>Profile</span>
     </button>
     <button class="nav-btn nav-more-btn" id="nav-more-btn" onclick="toggleNavMore(event)" aria-expanded="false" aria-controls="nav-more-group">
@@ -509,23 +509,23 @@ Playback-only modules remain deferred so they do not compete with first paint.
     </button>
     <div class="nav-more-group" id="nav-more-group">
       <button class="nav-btn" onclick="showView('search-view')">
-        <img class="nav-icon" src="/assets/img/search%20192.png" alt="">
+        <img class="nav-icon" src="assets/img/search%20192.png" alt="">
         <span>AO3 Search</span>
       </button>
       <button class="nav-btn" onclick="showView('hmofa-view')">
-        <img class="nav-icon" src="/assets/img/hmofa%20192.png" alt="">
+        <img class="nav-icon" src="assets/img/hmofa%20192.png" alt="">
         <span>HMOFA Masterlist</span>
       </button>
       <button class="nav-btn" onclick="showView('away-mode-view')">
-        <img class="nav-icon" src="/assets/img/away_mode_192.png" alt="">
+        <img class="nav-icon" src="assets/img/away_mode_192.png" alt="">
         <span>Away Cache</span>
       </button>
       <button class="nav-btn" onclick="showView('settings-view')">
-        <img class="nav-icon" src="/assets/img/settings%20192.png" alt="">
+        <img class="nav-icon" src="assets/img/settings%20192.png" alt="">
         <span>Settings</span>
       </button>
       <button class="nav-btn" onclick="showView('about-view')">
-        <img class="nav-icon" src="/assets/img/about%20192.png" alt="">
+        <img class="nav-icon" src="assets/img/about%20192.png" alt="">
         <span>About</span>
       </button>
     </div>
@@ -545,7 +545,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
 
       <div class="topbar-user pr-layout-035" onclick="showView('profile-view')">
         <span id="user-display-name" class="topbar-user-name">Guest Reader</span>
-        <img id="topbar-avatar-img" class="topbar-user-avatar" src="/assets/img/profile%20192.png" alt="">
+        <img id="topbar-avatar-img" class="topbar-user-avatar" src="assets/img/profile%20192.png" alt="">
       </div>
     </div>
 
@@ -553,7 +553,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <div id="home-view" class="view active-view">
         <div class="panel">
           <div class="pr-layout-036">
-            <img class="pr-layout-037" src="/assets/img/home%20512.png" alt="">
+            <img class="pr-layout-037" src="assets/img/home%20512.png" alt="">
             <div>
               <h1 class="pr-layout-038">Welcome back.</h1>
               <p class="pr-layout-039">Your personalized auto-narration hub.</p>
@@ -574,7 +574,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <div id="library-view" class="view">
         <div class="library-header">
           <h1 class="pr-layout-043">
-            <img class="pr-layout-044" src="/assets/img/library%20512.png" alt="">
+            <img class="pr-layout-044" src="assets/img/library%20512.png" alt="">
             Library
             <button id="start-precache-btn" class="away-mode-lib-btn pr-layout-045"
               onclick="window.startPrecacheQueue()"
@@ -843,7 +843,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <div id="hmofa-view" class="view">
         <div class="library-header pr-layout-092">
           <h1 class="pr-layout-093">
-            <img class="pr-layout-044" src="/assets/img/hmofa%20512.png" alt="">
+            <img class="pr-layout-044" src="assets/img/hmofa%20512.png" alt="">
             HMOFA Masterlist
           </h1>
           <div class="pr-layout-094">
@@ -878,7 +878,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <div id="profile-view" class="view">
         <div class="profile-hero">
           <div class="profile-avatar-container pr-layout-096" onclick="document.getElementById('profile-avatar-upload').click()" title="Change profile picture">
-            <img id="profile-avatar-img" class="profile-avatar pr-layout-097" src="/assets/img/profile%20512.png" alt="">
+            <img id="profile-avatar-img" class="profile-avatar pr-layout-097" src="assets/img/profile%20512.png" alt="">
             <span class="profile-avatar-edit">Edit</span>
             <input class="pr-layout-008" id="profile-avatar-upload" type="file" accept="image/*" onchange="handleAvatarUpload(event)">
           </div>
@@ -1189,7 +1189,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
           </div></details></div><div id="about-view" class="view">
             <div class="about-layout pr-layout-153">
               <div class="about-virtue pr-layout-154">
-                <img class="about-virtue-img pr-layout-155" src="/assets/img/virtue_smile.webp" alt="">
+                <img class="about-virtue-img pr-layout-155" src="assets/img/virtue_smile.webp" alt="">
                 <div class="about-virtue-bubble pr-layout-156">
                   <div class="about-app-name pr-layout-157">Alpharius' Pocket Reader</div>
                   <div class="about-app-version pr-layout-158">v0.8.0 Alpha Test - Web</div>

@@ -146,7 +146,7 @@ function workerRound(workers, iterations, round) {
 
 async function benchmarkCpuWidth(threads) {
   const workers = Array.from({ length: threads }, () => (
-    new Worker('/assets/js/device_benchmark_worker.js?v=device-bench-v1')
+    new Worker('assets/js/device_benchmark_worker.js?v=device-bench-v1')
   ));
   try {
     await workerRound(workers, 120_000, 0);

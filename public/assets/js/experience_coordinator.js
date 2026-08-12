@@ -214,7 +214,7 @@ function showAchievementUnlock({ ach_id, ach_title, tier }) {
       <section class="achievement-unlock-toast" role="status">
         <div class="achievement-unlock-radiance" aria-hidden="true"></div>
         <div class="achievement-unlock-emblem" aria-hidden="true">
-          <img src="/assets/icons/ach_${iconId}.svg" alt="">
+          <img src="assets/icons/ach_${iconId}.svg" alt="">
         </div>
         <p class="achievement-unlock-kicker">Achievement unlocked</p>
         <h2>${escapeHtml(ach_title || 'New achievement')}</h2>

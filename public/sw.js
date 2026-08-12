@@ -73,13 +73,13 @@ self.addEventListener('message', function (event) {
 // offline shell at all. Cached best-effort below and, if missed, filled in by
 // the fetch handler on first use.
 var OPTIONAL_ASSETS = [
-    '/assets/icons/lucide-sprite.svg',
-    '/assets/fonts/literata-400.woff2',
-    '/assets/fonts/literata-600.woff2',
-    '/assets/fonts/literata-700.woff2',
-    '/assets/fonts/ibm-plex-sans-400.woff2',
-    '/assets/fonts/ibm-plex-sans-500.woff2',
-    '/assets/fonts/ibm-plex-sans-600.woff2'
+    'assets/icons/lucide-sprite.svg',
+    'assets/fonts/literata-400.woff2',
+    'assets/fonts/literata-600.woff2',
+    'assets/fonts/literata-700.woff2',
+    'assets/fonts/ibm-plex-sans-400.woff2',
+    'assets/fonts/ibm-plex-sans-500.woff2',
+    'assets/fonts/ibm-plex-sans-600.woff2'
 ];
 
 // Large narration-runtime modules. They are lazy-loaded by
@@ -88,38 +88,38 @@ var OPTIONAL_ASSETS = [
 // connection these are the most likely single fetch to fail -- and losing the
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
-    '/assets/js/buffer_manager.js?v=buffer-v50',
-    '/assets/js/audio_core.js?v=audio-v61',
-    '/assets/js/pocket_worker.js?v=pocket-worker-v46',
-    '/assets/js/pocket_pcm_worklet.js?v=pcm-v1'
+    'assets/js/buffer_manager.js?v=buffer-v50',
+    'assets/js/audio_core.js?v=audio-v61',
+    'assets/js/pocket_worker.js?v=pocket-worker-v46',
+    'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
 ];
 
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
-    '/',
-    '/assets/css/theme.css?v=midnight-v22',
-    '/assets/js/tts_pronunciation_core.js?v=pron-v11',
-    '/assets/js/pocket_backend_policy.js?v=backend-v20',
-    '/assets/js/pocket_performance_policy.js?v=performance-v2',
-    '/assets/js/diagnostics.js?v=diag-v4',
-    '/assets/js/api_core.js?v=search-v18',
-    '/assets/js/experience_coordinator.js?v=experience-v5',
-    '/assets/js/virtue_controller.js?v=virtue-v10',
-    '/assets/js/engine_utils.js',
-    '/assets/js/ui_controller.js?v=ui-v89',
-    '/assets/js/supabase_bridge.js?v=supabase-v5',
-    '/assets/js/profile_merge.js?v=merge-v5',
-    '/assets/js/data_transfer.js?v=transfer-v3',
-    '/assets/js/device_setup.js?v=device-setup-v7',
-    '/assets/js/device_benchmark_worker.js?v=device-bench-v1',
-    '/assets/js/settings_manager.js?v=settings-v49',
-    '/assets/js/library_manager.js?v=library-v13',
-    '/assets/js/narration_runtime_loader.js?v=narration-loader-v15',
-    '/assets/js/storage_core.js?v=storage-v11',
-    '/assets/js/sync_core.js?v=sync-v8',
-    '/assets/js/cinematic_ui.js?v=cinematic-v6',
-    '/assets/js/reader_features.js?v=features-v6',
-    '/assets/js/motion_lite.js'
+    './',
+    'assets/css/theme.css?v=midnight-v22',
+    'assets/js/tts_pronunciation_core.js?v=pron-v11',
+    'assets/js/pocket_backend_policy.js?v=backend-v20',
+    'assets/js/pocket_performance_policy.js?v=performance-v2',
+    'assets/js/diagnostics.js?v=diag-v4',
+    'assets/js/api_core.js?v=search-v18',
+    'assets/js/experience_coordinator.js?v=experience-v5',
+    'assets/js/virtue_controller.js?v=virtue-v10',
+    'assets/js/engine_utils.js',
+    'assets/js/ui_controller.js?v=ui-v89',
+    'assets/js/supabase_bridge.js?v=supabase-v5',
+    'assets/js/profile_merge.js?v=merge-v5',
+    'assets/js/data_transfer.js?v=transfer-v3',
+    'assets/js/device_setup.js?v=device-setup-v7',
+    'assets/js/device_benchmark_worker.js?v=device-bench-v1',
+    'assets/js/settings_manager.js?v=settings-v49',
+    'assets/js/library_manager.js?v=library-v13',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v15',
+    'assets/js/storage_core.js?v=storage-v11',
+    'assets/js/sync_core.js?v=sync-v8',
+    'assets/js/cinematic_ui.js?v=cinematic-v6',
+    'assets/js/reader_features.js?v=features-v6',
+    'assets/js/motion_lite.js'
 ];
 
 // Best-effort cache fill: each entry is independent, so one failure costs only
