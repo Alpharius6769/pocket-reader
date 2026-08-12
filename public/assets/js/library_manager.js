@@ -1696,7 +1696,29 @@ export async function loadHMOFA() {
     if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
   }
 }
-window.loadHMOFA = loadHMOFA;
+export function switchHmofaViewMode(mode) {
+  const embedWrap = document.getElementById('hmofa-embed-container');
+  const tableWrap = document.getElementById('hmofa-table-view-wrap');
+  const btnEmbed = document.getElementById('hmofa-btn-embed');
+  const btnTable = document.getElementById('hmofa-btn-table');
+  if (!embedWrap || !tableWrap) return;
+
+  if (mode === 'table') {
+    embedWrap.style.display = 'none';
+    tableWrap.style.display = 'block';
+    if (btnEmbed) btnEmbed.classList.remove('active');
+    if (btnTable) btnTable.classList.add('active');
+    if (typeof window.loadHMOFA === 'function' && (!window._masterlistData || window._masterlistData.length === 0)) {
+      window.loadHMOFA();
+    }
+  } else {
+    embedWrap.style.display = 'block';
+    tableWrap.style.display = 'none';
+    if (btnEmbed) btnEmbed.classList.add('active');
+    if (btnTable) btnTable.classList.remove('active');
+  }
+}
+window.switchHmofaViewMode = switchHmofaViewMode;
 
 export function sortByColumn(col) {
   if (window._masterlistSortCol === col) {

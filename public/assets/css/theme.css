@@ -627,6 +627,50 @@ body {
 }
 
 /* Sticky horizontal scrollbar — always visible at bottom of viewport while scrolling */
+.hmofa-mode-toggle {
+  display: inline-flex;
+  background: var(--bg-mid);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.hmofa-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.hmofa-toggle-btn:hover {
+  color: var(--text-main);
+}
+.hmofa-toggle-btn.active {
+  background: var(--accent-purple, #9d4edd);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(157, 78, 221, 0.3);
+}
+.hmofa-embed-wrap {
+  width: 100%;
+  height: calc(100vh - 170px);
+  min-height: 520px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: var(--bg-dark);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  margin-top: 10px;
+}
+.hmofa-embed-wrap iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
 .hmofa-sticky-scrollbar {
   position: sticky;
   bottom: 0;
