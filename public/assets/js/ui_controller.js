@@ -75,12 +75,7 @@ export function showView(viewId) {
       }
 
       if (viewId === 'hmofa-view') {
-        if (!window._masterlistLoaded) {
-          window._masterlistLoaded = true;
-          if (typeof window.loadHMOFA === 'function') window.loadHMOFA();
-        }
-        // Initialise sticky scrollbar once the view is visible
-        setTimeout(_initMasterlistStickyScrollbar, 100);
+        ensureHmofaIframeLoaded();
       }
 
       if (viewId === 'reading-view') {
@@ -1263,10 +1258,24 @@ window.resetTips = function() {
   else if (typeof alert === 'function') alert('Tips re-enabled.');
 };
 
-// ── Sticky horizontal scrollbar for HMOFA Masterlist ─────────────────────
-// The real table container's native scrollbar is hidden (positioned at the
-// very bottom of the full table). We create a mirror div that's
-// `position: sticky; bottom: 0` so it always floats at the bottom of the
+export function reloadHmofaIframe() {
+  const iframe = document.getElementById('hmofa-iframe');
+  if (iframe) {
+    const src = 'https://alpharius6769.github.io/hmofa-story-index/';
+    iframe.src = 'about:blank';
+    setTimeout(() => { iframe.src = src; }, 50);
+  }
+}
+window.reloadHmofaIframe = reloadHmofaIframe;
+
+export function ensureHmofaIframeLoaded() {
+  const iframe = document.getElementById('hmofa-iframe');
+  if (iframe && (!iframe.src || iframe.src === 'about:blank')) {
+    iframe.src = 'https://alpharius6769.github.io/hmofa-story-index/';
+  }
+}
+window.ensureHmofaIframeLoaded = ensureHmofaIframeLoaded;
+
 function _initMasterlistStickyScrollbar() {}
 window._initMasterlistStickyScrollbar = _initMasterlistStickyScrollbar;
 

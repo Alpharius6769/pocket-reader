@@ -260,8 +260,9 @@ self.addEventListener('notificationclick', function (event) {
 self.addEventListener('fetch', function (event) {
     var url = new URL(event.request.url);
 
-    // Never intercept the service worker script itself or backend API calls
+    // Never intercept non-same-origin requests (e.g. embedded iframe https://alpharius6769.github.io/...), backend APIs, or SW script
     if (
+        url.origin !== self.location.origin ||
         url.pathname.endsWith('/sw.js') ||
         url.origin.indexOf('hf.space') !== -1
     ) {
