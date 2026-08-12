@@ -1031,10 +1031,9 @@ export function initPushNotifications(checkbox) {
     Notification.requestPermission().then(async (permission) => {
       if (permission !== 'granted') { setPushUpdatesEnabled(false); alert("Notification permission denied by browser."); return; }
       let vapidKey = window.VAPID_PUBLIC_KEY || window.VAPID_PUBLIC || '';
-      if (!vapidKey) {
+      if (!vapidKey && window.HF_API_BASE) {
         try {
-          const backendOrigin = window.POCKET_BACKEND_ORIGIN || '';
-          const resp = await fetch(`${backendOrigin}/api/vapid-public-key`);
+          const resp = await fetch(`${window.HF_API_BASE}/api/vapid-public-key`);
           if (resp.ok) { const data = await window._safeParseJson(resp, 'API'); vapidKey = data.public_key; window.VAPID_PUBLIC_KEY = vapidKey; }
         } catch(e) { console.error(e); }
       }
@@ -1355,9 +1354,16 @@ export async function refreshPerfPanel() {
 }
 window.refreshPerfPanel = refreshPerfPanel;
 
-// ── Haptics click listener ───────────────────────────────────────────────────
-document.addEventListener('click', (e) => {
-  if (e.target.closest('button') || e.target.closest('.story-card') || e.target.closest('.filter-chip') || e.target.closest('summary')) {
-    if (window.userProfile?.settings?.haptics && navigator.vibrate) navigator.vibrate(30);
-  }
-});
+// ── Global Away Workers Setting Fallback ──────────────────────────────────
+if (typeof window.saveAwayWorkersSetting !== 'function') {
+  window.saveAwayWorkersSetting = function(val) {
+    const num = parseInt(val, 10);
+    if (!isNaN(num) && num >= 1 && num <= 4) {
+      if (window.userProfile && window.userProfile.settings) {
+        window.userProfile.settings.enableManualWorkers = true;
+        window.userProfile.settings.maxWorkers = num;
+        if (typeof window.saveLocalData === 'function') window.saveLocalData();
+      }
+    }
+  };
+}

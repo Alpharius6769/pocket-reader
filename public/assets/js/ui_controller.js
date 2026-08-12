@@ -1276,6 +1276,20 @@ export function ensureHmofaIframeLoaded() {
 }
 window.ensureHmofaIframeLoaded = ensureHmofaIframeLoaded;
 
+// ── Listen for messages sent from embedded HMOFA index ───────────────────────
+window.addEventListener('message', (event) => {
+  if (!event.data) return;
+  const data = event.data;
+  const rawUrl = data.url || data.storyUrl || data.link;
+  if ((data.type === 'hmofa_story_click' || data.type === 'open_story' || data.action === 'load_story') && rawUrl) {
+    const normUrl = typeof window.normalizeStoryUrl === 'function' ? window.normalizeStoryUrl(rawUrl) : rawUrl;
+    const choice = confirm(`Do you want to load and open this story in Pocket Reader?\n\nURL: ${normUrl}`);
+    if (choice) {
+      if (typeof window.loadStory === 'function') window.loadStory(normUrl);
+    }
+  }
+});
+
 function _initMasterlistStickyScrollbar() {}
 window._initMasterlistStickyScrollbar = _initMasterlistStickyScrollbar;
 
