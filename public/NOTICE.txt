@@ -1,0 +1,78 @@
+Alpharius' Pocket Reader
+Copyright (c) 2026 Chris (Alpharius67 / Fluffarius)
+
+This distribution contains multiple categories of material with different
+rights and license terms.
+
+1. Pocket Reader Code - Proprietary, All Rights Reserved
+
+The application source code authored for Pocket Reader is proprietary and all
+rights are reserved. This includes the FastAPI backend, parser and scraper
+modules, Cloudflare Worker source, frontend JavaScript modules, CSS, HTML shell,
+service worker, database schema and migrations, Dockerfile, and related
+configuration files, except where another section of this NOTICE says otherwise.
+Maintainer-only tooling under `tools/`, including the Pocket TTS voice
+conversion utility, is distributed with the source but is not runtime app code.
+
+No license to use, copy, modify, redistribute, or self-host this code is
+granted. See LICENSE for the full terms.
+
+Versions published before 2026-07-26 were licensed under the Apache License,
+Version 2.0. That grant remains irrevocable for those specific versions; it does
+not extend to versions published on or after that date.
+
+2. Virtue Character, Artwork, Dialogue, and Branding - All Rights Reserved
+
+The Virtue character, her artwork, dialogue, lore, worldbuilding, and the Pocket
+Reader brand identity are proprietary creative works owned by Chris (Alpharius67
+/ Fluffarius), all rights reserved. They are governed by CHARACTER_LICENSE.md,
+which imposes restrictions beyond those in LICENSE.
+
+This includes, without limitation:
+
+- The Virtue character name, visual design, personality, dialogue style, lore,
+  and worldbuilding.
+- Virtue WebP sprites in `public/assets/img/`, including `virtue_waving.webp`,
+  `virtue_annoyed.webp`, `virtue_thinking.webp`,
+  `virtue_happy_no_paws.webp`, `virtue_happy_holding_bubble.webp`,
+  `virtue_kneeling.webp`, `virtue_story_loading.webp`,
+  `virtue_achievement.webp`, `virtue_smile.webp`, `virtue_wink.webp`,
+  `virtue_changed_settings.webp`, `virtue_favorite.webp`,
+  `virtue_highscore.webp`, `virtue_lowscore.webp`, `virtue_point.webp`, and
+  `virtue_talking.webp`.
+- Virtue dialogue and character data embedded in `virtue_controller.js`.
+- Pocket Reader name, logo, app icon, and brand presentation.
+
+No license is granted for these works except as stated in
+CHARACTER_LICENSE.md or by prior written permission from the creator.
+
+3. Third-Party Components
+
+This project depends on third-party libraries, models, services, and icons.
+Those works retain their own licenses and terms. See ATTRIBUTIONS.md for the
+current dependency and attribution list.
+
+Notable license-sensitive items:
+
+- `pywebpush` is MPL-2.0.
+- Achievement icons from Game-Icons.net are CC-BY-3.0.
+- Pocket TTS model assets retain their upstream model licenses.
+- The curated Pocket voice catalog is built from Voice-Zero references. The
+  selected Voice-Zero emotional pack is CC0 unless otherwise noted by
+  Voice-Zero; converted voice states should keep source metadata in the asset
+  bucket release notes.
+- The frontend Lucide icon sprite is ISC licensed.
+- Literata frontend font is licensed under the SIL Open
+  Font License 1.1; its full license text ships with the frontend assets.
+
+4. Story Content
+
+Stories fetched from third-party sites, uploaded by users, listed through the
+HMOFA masterlist, or bundled in the curated PDF library belong to their
+respective authors. Pocket Reader claims no ownership of story content.
+
+Curated bundled PDFs are included for app presentation and reader convenience;
+authors retain full rights and may request removal by contacting the
+maintainer.
+
+Last updated: 2026-07-15

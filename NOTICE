@@ -62,8 +62,8 @@ Notable license-sensitive items:
   Voice-Zero; converted voice states should keep source metadata in the asset
   bucket release notes.
 - The frontend Lucide icon sprite is ISC licensed.
-- Literata and IBM Plex Sans frontend fonts are licensed under the SIL Open
-  Font License 1.1; their full license texts ship with the frontend assets.
+- Literata frontend font is licensed under the SIL Open
+  Font License 1.1; its full license text ships with the frontend assets.
 
 4. Story Content
 

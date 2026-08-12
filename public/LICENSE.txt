@@ -1,0 +1,137 @@
+Alpharius' Pocket Reader
+Proprietary Software License
+
+Copyright (c) 2026 Chris (Alpharius67 / Fluffarius). All rights reserved.
+
+Last updated: 2026-07-26.
+
+
+1. OWNERSHIP
+
+Alpharius' Pocket Reader ("the Software"), including its source code, compiled
+and interpreted artifacts, frontend JavaScript modules, CSS, HTML, service
+worker, FastAPI backend, parser and scraper modules, Cloudflare Worker source,
+database schema and migrations, build tooling, configuration, and documentation,
+is the exclusive property of Chris (Alpharius67 / Fluffarius) ("the Author").
+
+The Software is licensed, not sold. No title or ownership is transferred.
+
+
+2. NO LICENSE GRANTED
+
+No rights to use, copy, modify, merge, publish, distribute, sublicense, sell,
+reverse engineer, or create derivative works from the Software are granted
+except by prior express written permission from the Author.
+
+Accessing, viewing, cloning, forking, downloading, or caching this repository or
+the running application does not grant any license to the Software.
+
+Serving the application publicly does not place its source in the public domain.
+Frontend code delivered to a browser for execution remains proprietary and
+subject to this license.
+
+
+3. PERMITTED USE OF THE RUNNING APPLICATION
+
+End users of a publicly hosted instance operated by the Author may, without
+additional permission:
+
+- Use the application for personal reading and listening.
+- Store their own content, profiles, and generated audio on their own devices.
+- Share personal screenshots for non-commercial discussion, review, bug
+  reporting, or documentation of the application, with attribution.
+- Refer to the application by name when identifying or reviewing it.
+
+This section grants rights to use the hosted service. It grants no rights to the
+Software itself.
+
+
+4. PROHIBITED WITHOUT PRIOR WRITTEN PERMISSION
+
+You may not:
+
+- Redistribute the Software or any portion of it, in source or binary form.
+- Host, deploy, or operate the Software or a derivative as a service.
+- Incorporate any portion of the Software into another product or project.
+- Remove, obscure, or alter this license, the NOTICE file, copyright notices,
+  or third-party attribution notices.
+- Use the Software to train, fine-tune, evaluate, condition, prompt, embed,
+  index, or otherwise feed any AI or machine-learning system, including large
+  language models, code models, image generators, multimodal models, voice
+  models, TTS systems, or retrieval datasets. This restriction applies
+  regardless of whether the use is commercial, non-commercial, academic,
+  research, or personal.
+
+
+5. RELATIONSHIP TO PRIOR APACHE-2.0 RELEASES
+
+Versions of the Software published by the Author before 2026-07-26 were licensed
+under the Apache License, Version 2.0. That grant is irrevocable with respect to
+those specific versions, and this license does not attempt to withdraw it.
+
+This license governs all versions published on or after 2026-07-26. The Author,
+as sole copyright holder, retains the right to license the Software under any
+terms, including different terms for different recipients.
+
+
+6. THIRD-PARTY COMPONENTS
+
+This license applies only to Software authored by the Author. It does not, and
+cannot, alter the terms of third-party components the Software depends on or
+distributes. Those components remain under their own licenses, and their
+obligations continue to apply in full.
+
+Third-party components are inventoried in ATTRIBUTIONS.md and summarized in
+NOTICE. Obligations that survive this license include, without limitation:
+
+- SIL Open Font License 1.1 (Literata, IBM Plex Sans) — bundled license texts
+  must ship with the frontend.
+- Creative Commons Attribution 3.0 (Game-Icons.net achievement icons) — credit
+  to Game-Icons.net and the icon authors must remain visible.
+- Mozilla Public License 2.0 (pywebpush) — file-level copyleft; modifications to
+  MPL-covered files, if distributed, must be released under MPL terms.
+- ISC, MIT, BSD-3-Clause, Apache-2.0, HPND, and CC0 components — their notices
+  and license texts must be retained where required.
+
+
+7. CHARACTER, ARTWORK, AND BRANDING
+
+The Virtue character, her artwork, dialogue, lore, and worldbuilding, together
+with the "Alpharius' Pocket Reader" name, logo, icon, and visual identity, are
+proprietary creative works governed by CHARACTER_LICENSE.md. Nothing in this
+license grants any right to those works.
+
+
+8. STORY CONTENT
+
+The Author claims no ownership of story content fetched from third-party
+platforms, uploaded by users, listed through the HMOFA masterlist, or bundled in
+the curated library. Such content belongs to its respective authors and remains
+subject to the terms of its source platform. Authors may request removal by
+contacting the maintainer.
+
+
+9. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+
+10. LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+11. LICENSING ENQUIRIES
+
+Commercial licenses, derivative-work permissions, and other special permissions
+may be granted at the Author's sole discretion. Contact the maintainer through
+the associated GitHub profile.
+
+
+This document is a license, not legal advice. Have a qualified professional
+review it before relying on it commercially.

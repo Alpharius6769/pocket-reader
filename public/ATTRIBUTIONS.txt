@@ -239,12 +239,6 @@ Pinned backend dependencies are listed in `requirements.txt`.
 - Source: https://github.com/googlefonts/literata
 - Used as: Locally bundled editorial and reader typography.
 
-### IBM Plex Sans
-
-- Author: IBM Corp. and contributors
-- License: SIL Open Font License 1.1
-- Source: https://github.com/IBM/plex
-- Used as: Locally bundled application-control typography.
 
 ### Virtue artwork and Pocket Reader branding
 
