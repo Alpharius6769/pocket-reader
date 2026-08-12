@@ -229,7 +229,7 @@ function _displayVirtue(triggerKey, variables = {}, isPriority = false) {
     const activeAsset = virtueAssets[triggerKey] || 'virtue_smile';
     virtueState.displaySequence = (virtueState.displaySequence || 0) + 1;
     const displaySequence = virtueState.displaySequence;
-    const assetUrl = `/assets/img/${encodeURIComponent(activeAsset)}.webp`;
+    const assetUrl = new URL(`assets/img/${encodeURIComponent(activeAsset)}.webp`, document.baseURI).href;
 
     // Synchronize dialogue with WebP sprite load/decode to prevent early bubble popups
     const img = new Image();
@@ -458,7 +458,7 @@ window._autoDetectVirtueBubbles = _autoDetectVirtueBubbles;
 
 async function _detectBubbleBounds(spriteKey) {
   return new Promise((resolve) => {
-    const url = `/assets/img/${spriteKey}.webp`;
+    const url = new URL(`assets/img/${spriteKey}.webp`, document.baseURI).href;
     const img = new Image();
     img.crossOrigin = 'anonymous';
 
