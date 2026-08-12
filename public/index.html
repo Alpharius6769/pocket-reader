@@ -849,10 +849,6 @@ Playback-only modules remain deferred so they do not compete with first paint.
             HMOFA Masterlist
           </h1>
           <div class="pr-layout-094" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <div class="hmofa-mode-toggle">
-              <button id="hmofa-btn-embed" class="hmofa-toggle-btn active" onclick="window.switchHmofaViewMode('embed')">Interactive Index</button>
-              <button id="hmofa-btn-table" class="hmofa-toggle-btn" onclick="window.switchHmofaViewMode('table')">Data Table</button>
-            </div>
             <a href="https://alpharius6769.github.io/hmofa-story-index/" target="_blank" rel="noopener noreferrer" class="pr-btn-outline" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:0.85rem;padding:6px 12px;" title="Open HMOFA Story Index in a new tab">
               <span>Open Live Site</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
@@ -860,39 +856,9 @@ Playback-only modules remain deferred so they do not compete with first paint.
           </div>
         </div>
 
-        <!-- Embedded Interactive Index View (Default) -->
+        <!-- Embedded Interactive Index View -->
         <div id="hmofa-embed-container" class="hmofa-embed-wrap">
-          <iframe id="hmofa-iframe" src="https://alpharius6769.github.io/hmofa-story-index/" title="HMOFA Story Index" loading="lazy" allow="clipboard-read; clipboard-write"></iframe>
-        </div>
-
-        <!-- Native Table View (Toggle Option) -->
-        <div id="hmofa-table-view-wrap" style="display:none;">
-          <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;margin-top:10px;">
-            <input id="masterlist-search" class="search-input pr-layout-095" placeholder="Search title / author / genre..." oninput="renderMasterlist()" style="flex:1;">
-            <button class="pr-btn-primary pr-layout-045" onclick="loadHMOFA()">Refresh Masterlist</button>
-          </div>
-          <div id="hmofa-sticky-scrollbar" class="hmofa-sticky-scrollbar">
-            <div id="hmofa-sticky-scrollbar-inner"></div>
-          </div>
-          <div class="table-container" id="hmofa-table-container">
-            <table class="data-table" id="hmofa-data-table">
-              <thead>
-                <tr>
-                  <th class="sortable" onclick="window.sortByColumn('title')">Title<span class="sort-ind" id="sind-title"></span></th>
-                  <th class="sortable" onclick="window.sortByColumn('author')">Author<span class="sort-ind" id="sind-author"></span></th>
-                  <th class="sortable" onclick="window.sortByColumn('genre')">Genre<span class="sort-ind" id="sind-genre"></span></th>
-                  <th class="sortable" onclick="window.sortByColumn('setting')">World Setting<span class="sort-ind" id="sind-setting"></span></th>
-                  <th class="sortable" onclick="window.sortByColumn('words')">Words<span class="sort-ind" id="sind-words"></span></th>
-                  <th class="sortable" onclick="window.sortByColumn('rating')">Rating<span class="sort-ind" id="sind-rating"></span></th>
-                  <th class="sortable" onclick="window.sortByColumn('loveInterest')">Love Interest<span class="sort-ind" id="sind-loveInterest"></span></th>
-                  <th class="sortable" onclick="window.sortByColumn('monogamous')">Monogamous?<span class="sort-ind" id="sind-monogamous"></span></th>
-                  <th class="sortable" onclick="window.sortByColumn('ocOrIp')">OC / IP<span class="sort-ind" id="sind-ocOrIp"></span></th>
-                  <th class="sortable" onclick="window.sortByColumn('status')">Status<span class="sort-ind" id="sind-status"></span></th>
-                </tr>
-              </thead>
-              <tbody id="hmofa-tbody"></tbody>
-            </table>
-          </div>
+          <iframe id="hmofa-iframe" src="https://alpharius6769.github.io/hmofa-story-index/" title="HMOFA Story Index" loading="lazy" allow="clipboard-write"></iframe>
         </div>
       </div>
 

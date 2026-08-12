@@ -43,11 +43,26 @@ export const PR_PROXY_BASE = PR_CONFIG.proxyBase;
 window.HF_API_BASE = HF_API_BASE;
 window.VAPID_PUBLIC_KEY = window.VAPID_PUBLIC_KEY || null;
 
+export function normalizeStoryUrl(inputUrl) {
+  if (!inputUrl) return '';
+  let url = String(inputUrl).trim();
+  if (url.startsWith('/api/') || url.startsWith('/local-upload/') || url.startsWith('local://')) return url;
+  if (!/^[a-z]+:\/\//i.test(url)) {
+    // If it starts with a domain name like furaffinity.net, ao3.org, sofurry.com, etc., prepend https://
+    if (/^([a-z0-9-]+\.)+[a-z]{2,}(\/.*)?$/i.test(url)) {
+      url = 'https://' + url;
+    }
+  }
+  return url;
+}
+window.normalizeStoryUrl = normalizeStoryUrl;
+
 export function isValidStoryUrl(url) {
   if (!url) return false;
-  if (url.startsWith('/api/') || url.startsWith('/local-upload/') || url.startsWith('local://')) return true;
+  const normalized = normalizeStoryUrl(url);
+  if (normalized.startsWith('/api/') || normalized.startsWith('/local-upload/') || normalized.startsWith('local://')) return true;
   try {
-    const parsed = new URL(url);
+    const parsed = new URL(normalized);
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
     const host = parsed.hostname.toLowerCase();
     if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.local') || host.endsWith('.internal')) {
@@ -1011,8 +1026,10 @@ export async function loadStory(url, options = {}) {
         console.warn("Failed to load chapters from cache, falling back to fetch", e);
       }
       // If found in library but not cached: for uploaded documents (no valid URL), notify gracefully
-      if (existingLibEntry.url && isValidStoryUrl(existingLibEntry.url)) {
-        fetchUrl = existingLibEntry.url;
+      const rawEntryUrl = existingLibEntry.url || existingLibEntry.sourceUrl || existingLibEntry.link || '';
+      const validEntryUrl = normalizeStoryUrl(rawEntryUrl);
+      if (validEntryUrl && isValidStoryUrl(validEntryUrl)) {
+        fetchUrl = validEntryUrl;
       } else {
         if (!preventNavigate) {
           alert(`Could not load stored chapters for "${existingLibEntry.title || 'Uploaded Document'}". Please re-upload the file.`);
@@ -1022,6 +1039,8 @@ export async function loadStory(url, options = {}) {
       }
     }
   }
+
+  fetchUrl = normalizeStoryUrl(fetchUrl);
 
 
 
