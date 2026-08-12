@@ -22,13 +22,16 @@ const failures = [];
 
 // backend/ is the source of truth; the Space checkout is a deploy target that
 // the GitHub Action keeps in step. Drift here means a hand edit landed in one.
-for (const name of [
-  'app.py', 'parsers_core.py', 'parsers_epub.py', 'parsers_pdf.py', 'scrapers_core.py',
-]) {
-  const source = path.join(root, 'backend', name);
-  const target = path.join(root, 'Hugging Face Space', name);
-  if (!existsSync(target) || read(source) !== read(target)) {
-    failures.push(`backend/${name} differs from Hugging Face Space/${name}`);
+const hfSpaceDir = path.join(root, 'Hugging Face Space');
+if (existsSync(hfSpaceDir)) {
+  for (const name of [
+    'app.py', 'parsers_core.py', 'parsers_epub.py', 'parsers_pdf.py', 'scrapers_core.py',
+  ]) {
+    const source = path.join(root, 'backend', name);
+    const target = path.join(hfSpaceDir, name);
+    if (!existsSync(target) || read(source) !== read(target)) {
+      failures.push(`backend/${name} differs from Hugging Face Space/${name}`);
+    }
   }
 }
 
