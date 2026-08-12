@@ -1099,21 +1099,18 @@ window.checkStoryUpdate = async function(storyRef, url, btnElement = null, optio
     }
 
     if (realFresh.length <= baselineCount) {
-      if (aoCount !== null && aoCount > baselineCount) {
-        announce("FicHub is out of date. Fetching the new chapters directly...", 4000);
+      try {
         const freshDirect = await window._silentFetchStoryChapters(url, true);
         if (freshDirect && freshDirect.length > baselineCount) {
-          realFresh = freshDirect.slice(0, aoCount);
+          realFresh = window.normalizeStoryChapters?.(freshDirect, entry) || freshDirect;
         } else {
           stage('virtue_thinking');
-          announce("Metadata updated, but couldn't download new chapters yet.", 4500);
+          announce("I double checked the source. No new chapters found yet.", 4500);
           return;
         }
-      } else {
+      } catch (_) {
         stage('virtue_thinking');
-        announce(baselineCount
-                                                   ? "I double checked the source. No new chapters found yet."
-                                                   : "No new chapters found yet.", 4500);
+        announce("I double checked the source. No new chapters found yet.", 4500);
         return;
       }
     }
@@ -1127,14 +1124,21 @@ window.checkStoryUpdate = async function(storyRef, url, btnElement = null, optio
       return;
     }
     await window._saveStoryChapters(storageRef, merged, entry);
+    if (entry.title && entry.title !== storageRef) {
+      window._saveStoryChapters(entry.title, merged, entry).catch(() => {});
+    }
+    if (entry.url && entry.url !== storageRef) {
+      window._saveStoryChapters(entry.url, merged, entry).catch(() => {});
+    }
     entry.workComplete = Number(entry.declaredChapters || 0) > 0
       && Number(entry.publishedChapters || 0) >= Number(entry.declaredChapters);
     entry.totalChapters = merged.length;
     entry.publishedChapters = Math.max(Number(entry.publishedChapters || 0), merged.length);
     _saveStoryUpdateState(entry);
     if (typeof window.renderLibrary === 'function') window.renderLibrary(true);
-    if (window.currentStory && window.currentStory.title === title) {
+    if (window.currentStory && (window.currentStory.title === title || window.currentStory.storyKey === storageRef)) {
       window.currentStory.chapters = merged;
+      window.currentStory.totalChapters = merged.length;
       if (typeof window._buildReaderProgressIndex === 'function') window._buildReaderProgressIndex(window.currentStory);
       else window._readerParaOffsets = null;
       if (typeof window.renderChaptersTab === 'function') window.renderChaptersTab();

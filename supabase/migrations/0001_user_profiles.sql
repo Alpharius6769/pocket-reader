@@ -54,7 +54,10 @@ create policy user_profiles_delete_own on public.user_profiles
 
 -- Keep updated_at honest regardless of who writes.
 create or replace function public.touch_user_profile()
-returns trigger language plpgsql as $$
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
 begin
   new.updated_at := now();
   return new;
@@ -83,6 +86,7 @@ create or replace function public.commit_user_profile(
 )
 returns table (revision bigint, updated_at timestamptz)
 language plpgsql
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();

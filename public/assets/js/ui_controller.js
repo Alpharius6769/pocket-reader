@@ -226,10 +226,13 @@ export function renderChaptersTab() {
 
   function _formatChapterTitle(idx, title) {
     if (!title || !title.trim()) return `Chapter ${idx + 1}`;
-    const t = title.trim();
+    let t = title.trim();
+    // Strip out "Chapter Summary...", "Summary:...", or appended summary text
+    t = t.replace(/\s*(?:Chapter\s+Summary|Summary:|\n).*$/is, '').trim();
+    if (!t) return `Chapter ${idx + 1}`;
     // Bare "Chapter N" (no subtitle) — always renumber to sequential position
     if (/^chapter\s+\d+\s*$/i.test(t)) return `Chapter ${idx + 1}`;
-    // Already has a "Chapter N:" prefix — keep as-is
+    // Already has a "Chapter N:" prefix — keep clean title as-is
     if (/^chapter\s+\d+\s*:/i.test(t)) return t;
     return `Chapter ${idx + 1}: ${t}`;
   }
@@ -889,7 +892,8 @@ function _isMobile() {
     || ((navigator.maxTouchPoints || 0) > 0 && Math.min(window.screen.width, window.screen.height) <= 1024);
 }
 function _isIOS() {
-  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1);
 }
 function _shouldShowPWABanner() {
   if (_isPWA())   return false;   // already installed
@@ -902,6 +906,11 @@ function _shouldShowPWABanner() {
   if (localStorage.getItem('pr_setup_complete') !== 'true') return false;
   return true;
 }
+
+window.showIOSInstallPrompt = function() {
+  localStorage.removeItem('pwaBannerDismissed');
+  _showPWABanner();
+};
 
 function _buildBannerAction() {
   const el = document.getElementById('pwa-banner-action');
@@ -1561,6 +1570,13 @@ window.completeFirstTimeSetup = () => {
   p.currentlyReading = currentlyReading;
   p.favoriteCharacter = favoriteCharacter;
   p.favoriteStories = favoriteStories;
+  p.goals = p.goals || {};
+  const setupGoalMins = parseInt(document.getElementById('setup-goal-weekly-minutes')?.value || '120', 10);
+  p.goals.weeklyMinutes = isNaN(setupGoalMins) ? 120 : setupGoalMins;
+  const setupGoalChaps = parseInt(document.getElementById('setup-goal-weekly-chapters')?.value || '0', 10);
+  p.goals.weeklyChapters = isNaN(setupGoalChaps) ? 0 : setupGoalChaps;
+  p.goals.streakEnabled = document.getElementById('setup-goal-streak-enabled')?.checked !== false;
+  p.goals.updatedAt = Date.now();
   p.settings.theme = theme;
   p.settings.companion = companion;
   if (readerFont) p.settings.readerFontFamily = readerFont;
@@ -1671,6 +1687,12 @@ window.renderProfileExtras = function() {
   setVal('profile-edit-mood', p.readingMood);
   setVal('profile-edit-currently', p.currentlyReading);
 
+  p.goals = p.goals || { weeklyMinutes: 120, weeklyChapters: 0, streakEnabled: true };
+  setVal('profile-edit-goal-minutes', p.goals.weeklyMinutes ?? 120);
+  setVal('profile-edit-goal-chapters', p.goals.weeklyChapters ?? 0);
+  const editStreak = document.getElementById('profile-edit-goal-streak');
+  if (editStreak) editStreak.checked = p.goals.streakEnabled !== false;
+
   setDisp('profile-disp-name', p.displayName);
   setDisp('profile-disp-category', p.userCategory);
   setDisp('profile-disp-genre', p.favoriteGenre);
@@ -1679,6 +1701,9 @@ window.renderProfileExtras = function() {
   setDisp('profile-disp-length', p.preferredLength);
   setDisp('profile-disp-mood', p.readingMood);
   setDisp('profile-disp-currently', p.currentlyReading);
+  setDisp('profile-disp-goal-mins', `${p.goals.weeklyMinutes ?? 120} min/week`);
+  setDisp('profile-disp-goal-chaps', p.goals.weeklyChapters ? `${p.goals.weeklyChapters} chapters/week` : 'None');
+  setDisp('profile-disp-goal-streak', p.goals.streakEnabled !== false ? 'Enabled' : 'Disabled');
 
   const favs = Array.isArray(p.favoriteStories) ? p.favoriteStories : [];
   for (let i = 0; i < 5; i++) setVal('profile-edit-fav-' + (i + 1), favs[i] || '');
@@ -1989,6 +2014,14 @@ window.saveProfileDetails = function() {
   p.readingMood = document.getElementById('profile-edit-mood')?.value || '';
   p.currentlyReading = val('profile-edit-currently');
   p.favoriteStories = _readFavInputs('profile-edit-fav-');
+  p.goals = p.goals || {};
+  const goalMins = parseInt(document.getElementById('profile-edit-goal-minutes')?.value || '', 10);
+  if (!isNaN(goalMins)) p.goals.weeklyMinutes = goalMins;
+  const goalChaps = parseInt(document.getElementById('profile-edit-goal-chapters')?.value || '', 10);
+  if (!isNaN(goalChaps)) p.goals.weeklyChapters = goalChaps;
+  const streakChk = document.getElementById('profile-edit-goal-streak');
+  if (streakChk) p.goals.streakEnabled = streakChk.checked;
+  p.goals.updatedAt = Date.now();
   ['displayName', 'userCategory', 'favoriteGenre', 'favoriteFandom', 'favoriteCharacter', 'preferredLength', 'readingMood', 'currentlyReading', 'favoriteStories'].forEach((field) => {
     if (typeof window.stampProfileField === 'function') window.stampProfileField(field);
   });

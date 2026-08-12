@@ -37,8 +37,12 @@ try {
 function storeSession(next) {
   session = next;
   try {
-    if (next) localStorage.setItem(SESSION_KEY, JSON.stringify(next));
-    else localStorage.removeItem(SESSION_KEY);
+    if (next) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(next));
+      localStorage.setItem('pr_remember_login', 'true');
+    } else {
+      localStorage.removeItem(SESSION_KEY);
+    }
   } catch (_) { /* private mode: session stays in memory only */ }
 }
 
@@ -257,7 +261,16 @@ function showLoginForm() {
         }
         close(result);
       } catch (err) {
-        status.textContent = String(err.message || err);
+        let msg = String(err.message || err);
+        if (msg.includes('Invalid login credentials')) {
+          msg = 'Incorrect email or password. Please check your details and try again.';
+        } else if (msg.includes('Email not confirmed')) {
+          msg = 'Your email address has not been confirmed yet. Check your inbox for the confirmation link.';
+        } else if (msg.includes('User already registered')) {
+          msg = 'An account with this email already exists. Click "Sign in" instead.';
+        }
+        status.style.color = '#ff9d9d';
+        status.textContent = msg;
         busy(false);
       }
     };
@@ -311,6 +324,19 @@ function showLoginForm() {
 function consumeOAuthFragment() {
   if (!window.location.hash || window.location.hash.length < 2) return;
   const params = new URLSearchParams(window.location.hash.slice(1));
+  const errDesc = params.get('error_description') || params.get('error');
+  if (errDesc) {
+    log('ERROR', 'OAuth callback error', errDesc);
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    setTimeout(() => {
+      if (window.virtueSpeak) {
+        window.virtueSpeak(`Authentication warning: ${errDesc}`, 6000);
+      } else {
+        alert(`Authentication warning: ${errDesc}`);
+      }
+    }, 500);
+    return;
+  }
   const accessTokenValue = params.get('access_token');
   if (!accessTokenValue) return;
   storeSession({

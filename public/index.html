@@ -340,6 +340,22 @@ Playback-only modules remain deferred so they do not compete with first paint.
         <input class="pr-layout-016" type="text" id="setup-fav-5" aria-label="Favorite story 5" placeholder="Favorite story #5">
       </div>
 
+      <div class="settings-item pr-layout-005">
+        <label for="setup-goal-weekly-minutes">Goals &amp; Streaks</label>
+        <div style="display:grid;gap:8px;margin-top:6px;">
+          <label style="font-size:13px;color:var(--text-muted);">Weekly listening goal (minutes)
+            <input class="pr-layout-009" type="number" id="setup-goal-weekly-minutes" min="0" max="10000" value="120" style="margin-top:4px;">
+          </label>
+          <label style="font-size:13px;color:var(--text-muted);">Weekly chapter goal
+            <input class="pr-layout-009" type="number" id="setup-goal-weekly-chapters" min="0" max="1000" value="0" style="margin-top:4px;">
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-main);cursor:pointer;margin-top:2px;">
+            <input type="checkbox" id="setup-goal-streak-enabled" checked>
+            Track daily reading streaks
+          </label>
+        </div>
+      </div>
+
       <div class="settings-item pr-layout-017">
         <label class="pr-layout-018">Cloud Account <span class="pr-layout-019">(optional)</span></label>
         <p class="pr-layout-020">Back up your library, settings, and progress. Access them on any device.</p>
@@ -421,6 +437,24 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <input id="profile-edit-fav-3" class="settings-control pr-layout-030" placeholder="Favorite story #3">
       <input id="profile-edit-fav-4" class="settings-control pr-layout-030" placeholder="Favorite story #4">
       <input id="profile-edit-fav-5" class="settings-control pr-layout-030" placeholder="Favorite story #5">
+
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-color);">
+        <h3 style="margin:0 0 10px;font-size:1rem;color:var(--text-main);">Goals &amp; Streaks</h3>
+        <div style="display:grid;gap:10px;">
+          <div>
+            <label class="settings-label" for="profile-edit-goal-minutes">Weekly listening goal (minutes)</label>
+            <input id="profile-edit-goal-minutes" class="settings-control" type="number" min="0" max="10000" placeholder="120">
+          </div>
+          <div>
+            <label class="settings-label" for="profile-edit-goal-chapters">Weekly chapter goal</label>
+            <input id="profile-edit-goal-chapters" class="settings-control" type="number" min="0" max="1000" placeholder="0">
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-main);cursor:pointer;">
+            <input type="checkbox" id="profile-edit-goal-streak" checked>
+            Track optional daily reading streaks
+          </label>
+        </div>
+      </div>
 
       <div class="pr-layout-031">
         <button class="pr-btn-outline pr-layout-032" onclick="document.getElementById('profile-edit-modal').style.display='none'; if(typeof window.renderProfileExtras === 'function') window.renderProfileExtras();">Cancel</button>
@@ -890,6 +924,9 @@ Playback-only modules remain deferred so they do not compete with first paint.
             <div><span class="settings-label">Preferred length</span><div class="pr-layout-113" id="profile-disp-length">-</div></div>
             <div><span class="settings-label">Reading vibe</span><div class="pr-layout-113" id="profile-disp-mood">-</div></div>
             <div><span class="settings-label">Currently reading</span><div class="pr-layout-113" id="profile-disp-currently">-</div></div>
+            <div><span class="settings-label">Weekly Listening Goal</span><div class="pr-layout-113" id="profile-disp-goal-mins">-</div></div>
+            <div><span class="settings-label">Weekly Chapter Goal</span><div class="pr-layout-113" id="profile-disp-goal-chaps">-</div></div>
+            <div><span class="settings-label">Streak Tracking</span><div class="pr-layout-113" id="profile-disp-goal-streak">-</div></div>
           </div>
 
           <span class="settings-label">Favorite stories</span>

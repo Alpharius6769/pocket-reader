@@ -264,12 +264,7 @@ function installSettingsSystem() {
     <p class="settings-help">Decorative motion pauses automatically during narration synthesis, low-memory mode, data saver, reduced-motion preference, and hidden-page operation.</p>`;
   grid.appendChild(experience);
 
-  const goals = document.createElement('section');
-  goals.className = 'settings-card';
-  goals.dataset.settingsSection = 'reading';
-  goals.innerHTML = `<h3>Goals & Streaks</h3><label class="field-row"><span>Weekly listening minutes</span><input id="goal-weekly-minutes" class="settings-control" type="number" min="0" max="10000"></label><label class="field-row"><span>Weekly chapters</span><input id="goal-weekly-chapters" class="settings-control" type="number" min="0" max="1000"></label><label class="switch-row"><span>Track optional streaks</span><input id="goal-streak-enabled" type="checkbox"></label><button class="pr-btn-primary" onclick="saveWeeklyGoals()">${icon('target')}<span>Save goals</span></button>`;
-  grid.appendChild(goals);
-  [personalization, experience, goals].forEach((card, index) => decorateCard(card, cards.length + index));
+  [personalization, experience].forEach((card, index) => decorateCard(card, cards.length + index));
   setTimeout(() => grid.querySelectorAll('.settings-card').forEach(decorateCard), 0);
 
   const settings = profile().settings || {};
@@ -278,10 +273,6 @@ function installSettingsSystem() {
   setControlValue('reader-spacing-control', settings.paragraphSpacing || 1.15);
   setControlValue('reader-alignment-control', settings.readerAlignment || 'left');  setControlValue('motion-preset-control', settings.motionPreset || 'standard');
   setControlValue('companion-frequency-control', settings.companionFrequency || 'contextual');
-  setControlValue('goal-weekly-minutes', profile().goals?.weeklyMinutes || 120);
-  setControlValue('goal-weekly-chapters', profile().goals?.weeklyChapters || 0);
-  const streak = document.getElementById('goal-streak-enabled');
-  if (streak) streak.checked = profile().goals?.streakEnabled !== false;
   const bindRange = (id, field, output, suffix = '') => document.getElementById(id)?.addEventListener('input', (event) => {
     const value = Number(event.target.value);
     const out = document.getElementById(output);

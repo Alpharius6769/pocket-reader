@@ -3477,21 +3477,6 @@ textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent-blue
 .row-actions { display: flex; gap: 4px; }
 .row-actions .icon-btn { width: 32px; min-height: 32px; height: 32px; }
 .goal-panel { display: grid; align-content: center; gap: 8px; }
-.goal-panel strong { font-family: 'Literata Local', serif; font-size: 1.3rem; }
-.progress-track { height: 6px; overflow: hidden; border-radius: 3px; background: #303238; }
-.progress-track > span { display: block; height: 100%; background: var(--accent-green); }
-.empty-state { display: grid; gap: 4px; min-height: 72px; place-content: center; color: var(--text-muted); text-align: center; }
-
-.profile-insights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 16px 0 24px; }
-.insight-card { display: grid; gap: 4px; padding: 16px; border-left: 2px solid var(--accent-blue); background: var(--panel-bg); box-shadow: var(--shadow-soft); }
-.insight-card strong { font-family: 'Literata Local', serif; font-size: 1.55rem; }
-.insight-card > span:last-child { color: var(--text-muted); font-size: 0.78rem; }
-
-.workflow-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; padding-block: 10px; border-block: 1px solid var(--border-color); }
-.workflow-toolbar > select { width: auto; min-width: 190px; }
-.segmented-control { display: inline-flex; margin-left: auto; padding: 3px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-mid); }
-.segmented-control button { min-height: 32px; padding: 5px 9px; border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); cursor: pointer; }
-.segmented-control button:hover { background: var(--panel-bg); color: var(--text-main); }
 
 
 .settings-section-nav { position: sticky; top: 0; z-index: 20; display: flex; gap: 4px; margin: 0 0 16px; padding: 8px; overflow-x: auto; border: 1px solid var(--border-color); background: rgba(17, 18, 20, 0.95); box-shadow: var(--shadow-soft); }
@@ -3556,7 +3541,8 @@ html[data-motion='reduced'] *::after { animation-duration: 1ms !important; anima
 @media (max-width: 1050px) {
   .home-workflow-band { grid-template-columns: 1fr 1fr; }
   .goal-panel { grid-column: 1 / -1; }
-  .settings-grid.settings-grid-masonry { grid-template-columns: 1fr; }
+  .settings-grid-masonry,
+  .settings-grid.settings-grid-masonry { column-count: 1; }
 }
 
 @media (max-width: 700px) {
