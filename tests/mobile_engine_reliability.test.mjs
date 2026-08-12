@@ -66,7 +66,7 @@ test('model asset fetches retry transient mobile network failures', async () => 
 
 test('versioned modules are served from cache without a network round trip', async () => {
   const worker = await read('public/sw.js');
-  const handler = worker.slice(worker.indexOf("url.pathname.indexOf('/assets/') === 0 && (url.pathname.slice(-3)"));
+  const handler = worker.slice(worker.indexOf("url.pathname.indexOf('/assets/') !== -1 && (url.pathname.slice(-3)"));
   const versionedBranch = handler.slice(
     handler.indexOf("if (url.searchParams.has('v'))"),
     handler.indexOf('// Unversioned assets stay network-first'),
@@ -361,7 +361,7 @@ test('no module renders into a container that does not exist', async () => {
 test('every precached module URL resolves to a real file', async () => {
   const worker = await read('public/sw.js');
   const { access } = await import('node:fs/promises');
-  const urls = [...worker.matchAll(/'(\/assets\/[^']+)'/g)].map((match) => match[1]);
+  const urls = [...worker.matchAll(/'(?:(?:\/pocket-reader)?\/)?(assets\/[^']+)'/g)].map((match) => '/' + match[1]);
   assert.ok(urls.length > 20, 'expected the precache lists to be populated');
 
   const missing = [];

@@ -1267,39 +1267,7 @@ window.resetTips = function() {
 // The real table container's native scrollbar is hidden (positioned at the
 // very bottom of the full table). We create a mirror div that's
 // `position: sticky; bottom: 0` so it always floats at the bottom of the
-// user's current viewport, and we keep the two in sync via scroll events.
-let _stickyScrollbarInit = false;
-function _initMasterlistStickyScrollbar() {
-  const container = document.getElementById('hmofa-table-container');
-  const sticky    = document.getElementById('hmofa-sticky-scrollbar');
-  const inner     = document.getElementById('hmofa-sticky-scrollbar-inner');
-  const table     = document.getElementById('hmofa-data-table');
-  if (!container || !sticky || !inner || !table) return;
-
-  // Set the inner div width to match the real table so the scrollbar thumb is proportional
-  const syncWidth = () => { inner.style.width = table.offsetWidth + 'px'; };
-  syncWidth();
-
-  if (!_stickyScrollbarInit) {
-    _stickyScrollbarInit = true;
-
-    // Mirror: dragging the sticky bar scrolls the table
-    sticky.addEventListener('scroll', () => {
-      if (container.scrollLeft !== sticky.scrollLeft) container.scrollLeft = sticky.scrollLeft;
-    });
-
-    // Mirror: scrolling the table moves the sticky bar thumb
-    container.addEventListener('scroll', () => {
-      if (sticky.scrollLeft !== container.scrollLeft) sticky.scrollLeft = container.scrollLeft;
-    });
-
-    // Keep inner width in sync when the table re-renders (new rows loaded, window resize)
-    // Debounced to avoid "ResizeObserver loop completed with undelivered notifications" warning
-    let _roTimer = null;
-    const _debouncedSync = () => { clearTimeout(_roTimer); _roTimer = setTimeout(syncWidth, 50); };
-    new ResizeObserver(_debouncedSync).observe(table);
-  }
-}
+function _initMasterlistStickyScrollbar() {}
 window._initMasterlistStickyScrollbar = _initMasterlistStickyScrollbar;
 
 // Service worker strategy:

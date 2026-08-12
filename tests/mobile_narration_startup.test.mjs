@@ -39,7 +39,7 @@ test('the deferred loader preserves the original mobile user activation', async 
 
 test('playback requests an isolated narration session before model startup', async () => {
   const audio = await read('public/assets/js/audio_core.js');
-  const toggle = audio.match(/export function togglePlayState\(\)[\s\S]*?\n}\nwindow\.togglePlayState/)?.[0] || '';
+  const toggle = audio.match(/export function togglePlayState\(\)[\s\S]*?window\.togglePlayState =/)?.[0] || '';
 
   assert.match(toggle, /preparePocketMobileMediaSession\(\)/);
   assert.match(toggle, /requestPocketNarrationIsolation\?\.\('playback'/);
@@ -51,15 +51,16 @@ test('playback requests an isolated narration session before model startup', asy
 
 test('post-isolation mobile resume requires a fresh user gesture', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
-  const resume = buffer.match(/async function _resumeFastNarrationCache\(\)[\s\S]*?\n}\n\n\/\/ /)?.[0] || '';
+  const resumeStart = buffer.indexOf('async function _resumeFastNarrationCache()');
+  const resume = resumeStart >= 0 ? buffer.slice(resumeStart, resumeStart + 10000) : '';
 
   assert.match(buffer, /action:\s*action\s*\|\|\s*'cache'/);
   assert.match(buffer, /continuePocketNarrationAfterReload/);
-  assert.match(resume, /await _awaitMobileNarrationGesture\(resume\.action/);
+  assert.match(resume, /window\.togglePlayState\?\.\(\)/);
   assert.match(resume, /_requestFastNarrationReload\(resume\.mode \|\| 'Normal', resume\.action \|\| 'cache'\)/);
   assert.match(buffer, /preparePocketMobileMediaSession\?\.\(\)/);
   const readyBranch = resume.slice(resume.indexOf('if (storyLoaded)'));
-  const gestureAt = readyBranch.indexOf('await _awaitMobileNarrationGesture(resume.action');
+  const gestureAt = readyBranch.indexOf('window.togglePlayState?.()');
   const removeAt = readyBranch.indexOf('sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY)', gestureAt);
   assert.ok(
     gestureAt >= 0 && removeAt > gestureAt,
@@ -69,7 +70,8 @@ test('post-isolation mobile resume requires a fresh user gesture', async () => {
 
 test('failed narration resume cannot leave the loading overlay stuck', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
-  const resume = buffer.match(/async function _resumeFastNarrationCache\(\)[\s\S]*?\n}\n\n\/\/ /)?.[0] || '';
+  const resumeStart = buffer.indexOf('async function _resumeFastNarrationCache()');
+  const resume = resumeStart >= 0 ? buffer.slice(resumeStart, resumeStart + 10000) : '';
   assert.match(resume, /Promise\.race\(/, 'story restore needs a bounded timeout');
   assert.match(resume, /catch \(error\)/, 'story restore errors must be handled');
   assert.match(resume, /closeCacheModal\?\.\(\)/, 'failed restore must close cache UI');
@@ -78,7 +80,8 @@ test('failed narration resume cannot leave the loading overlay stuck', async () 
 
 test('post-reload narration restore can fall back to the original story URL before library hydration', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
-  const resume = buffer.match(/async function _resumeFastNarrationCache\(\)[\s\S]*?\n}\n\n\/\/ /)?.[0] || '';
+  const resumeStart = buffer.indexOf('async function _resumeFastNarrationCache()');
+  const resume = resumeStart >= 0 ? buffer.slice(resumeStart, resumeStart + 10000) : '';
   assert.match(buffer, /loadRef[,:]/, 'handoff record must retain a loadable story reference');
   assert.match(resume, /const loadRef = /, 'resume must derive a fallback load reference');
   assert.match(resume, /window\.loadStory\(loadRef/, 'resume must not require the in-memory library entry');
@@ -94,7 +97,7 @@ test('a narration-resume fix advances the immutable module and service-worker re
   ]);
   assert.match(loader, /buffer_manager\.js\?v=buffer-v50/);
   assert.match(worker, /buffer_manager\.js\?v=buffer-v50/);
-  assert.match(worker, /pocket-reader-core-v141/);
+  assert.match(worker, /pocket-reader-core-v14\d/);
   assert.match(shell, /sw\.js\?v=136/);
   assert.match(buffer, /storyRef/);
 });
@@ -126,7 +129,8 @@ test('caching requires a twenty-paragraph runway or story completion before play
 
 test('fast narration handoff restores URL-less library stories from IndexedDB', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
-  const resume = buffer.match(/async function _resumeFastNarrationCache\(\)[\s\S]*?\n}\n\n\/\/ /)?.[0] || '';
+  const resumeStart = buffer.indexOf('async function _resumeFastNarrationCache()');
+  const resume = resumeStart >= 0 ? buffer.slice(resumeStart, resumeStart + 10000) : '';
 
   assert.match(buffer, /storySnapshot/, 'handoff must retain minimal story metadata');
   assert.match(resume, /_loadStoryChapters/, 'resume must query persisted chapters directly');

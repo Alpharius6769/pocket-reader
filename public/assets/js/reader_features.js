@@ -277,9 +277,9 @@ window.saveStoryNarrationPreset = saveStoryNarrationPreset;
 
 export function saveWeeklyGoals() {
   const data = ensureReaderFeatures();
-  data.goals.weeklyMinutes = Math.max(0, Number(document.getElementById('goal-weekly-minutes')?.value) || 0);
-  data.goals.weeklyChapters = Math.max(0, Number(document.getElementById('goal-weekly-chapters')?.value) || 0);
-  data.goals.streakEnabled = !!document.getElementById('goal-streak-enabled')?.checked;
+  data.goals.weeklyMinutes = Math.max(0, Number((document.getElementById('profile-edit-goal-minutes') || document.getElementById('setup-goal-weekly-minutes'))?.value) || 0);
+  data.goals.weeklyChapters = Math.max(0, Number((document.getElementById('profile-edit-goal-chapters') || document.getElementById('setup-goal-weekly-chapters'))?.value) || 0);
+  data.goals.streakEnabled = !!(document.getElementById('profile-edit-goal-streak') || document.getElementById('setup-goal-streak-enabled'))?.checked;
   data.goals.updatedAt = Date.now();
   save('goals');
 }

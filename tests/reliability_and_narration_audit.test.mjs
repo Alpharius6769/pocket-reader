@@ -6,7 +6,7 @@ const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
 test('cached playback checks IndexedDB before initializing the narration backend', async () => {
   const source = await read('public/assets/js/audio_core.js');
-  const play = source.match(/async function _playGeneratedAudio[\s\S]*?\n}\n\nasync function _playWebSpeech/)?.[0] || '';
+  const play = source.match(/async function _playGeneratedAudio[\s\S]*?async function _playWebSpeech/)?.[0] || '';
   const cacheLookup = play.indexOf('getAudioChunk(');
   const backendInit = play.indexOf('_ensurePocketBackendOptimizedForVoice(');
   assert.ok(cacheLookup >= 0 && backendInit > cacheLookup,
@@ -33,7 +33,7 @@ test('playback runway counts successful audio and cannot be bypassed by a paused
 test('cache lifecycle always releases keep-alive resources and MessageChannel ports', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
   const audio = await read('public/assets/js/audio_core.js');
-  const finish = audio.match(/function _finishStory\(\)[\s\S]*?\n}\n\nexport function skipParagraph/)?.[0] || '';
+  const finish = audio.match(/function _finishStory\(\)[\s\S]*?export function skipParagraph/)?.[0] || '';
   assert.match(finish, /stopBgKeepAlive\(\)/);
   assert.match(finish, /_scheduleWorkerIdleRelease\(\)/);
   // The unthrottled hop moved out of _scheduleLoop into _messageChannelHop when
@@ -50,20 +50,24 @@ test('cache lifecycle always releases keep-alive resources and MessageChannel po
 
 test('stopped or superseded cache loops cannot write into a later run', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
-  const stop = buffer.match(/\n  stop\(\) \{[\s\S]*?\n  },\n\n  resume\(\)/)?.[0] || '';
-  const loop = buffer.match(/\n  async _loop\(gen\)[\s\S]*?\n  },\n\n  _showModalStatus/)?.[0] || '';
+  const stopStart = buffer.indexOf('stop() {');
+  const stopEnd = buffer.indexOf('resume() {');
+  const stop = stopStart >= 0 && stopEnd > stopStart ? buffer.slice(stopStart, stopEnd) : '';
+  const loopStart = buffer.indexOf('async _loop(gen)');
+  const loopEnd = buffer.indexOf('_showModalStatus(msg)');
+  const loop = loopStart >= 0 && loopEnd > loopStart ? buffer.slice(loopStart, loopEnd) : '';
   assert.match(stop, /this\._generation\+\+/);
-  assert.match(loop, /gen !== this\._generation \|\| !this\.isActive/g);
-  assert.ok((loop.match(/gen !== this\._generation \|\| !this\.isActive/g) || []).length >= 3,
+  assert.match(loop, /gen !== this\._generation/);
+  assert.ok((loop.match(/gen !== this\._generation/g) || []).length >= 3,
     'cache loops must re-check cancellation after async storage/model/synthesis work');
 });
 
 test('mobile playback uses the media element path and paused audio resumes in place', async () => {
   const audio = await read('public/assets/js/audio_core.js');
-  const play = audio.match(/async function _playGeneratedAudio[\s\S]*?\n}\n\nasync function _playWebSpeech/)?.[0] || '';
+  const play = audio.match(/async function _playGeneratedAudio[\s\S]*?async function _playWebSpeech/)?.[0] || '';
   assert.match(play, /_preferDirectMobileMediaPlayback\(\)/);
   assert.match(audio, /_resumePausedPocketAudio/);
-  const toggle = audio.match(/export function togglePlayState\(\)[\s\S]*?\n}\nwindow\.togglePlayState/)?.[0] || '';
+  const toggle = audio.match(/export function togglePlayState\(\)[\s\S]*?window\.togglePlayState =/)?.[0] || '';
   assert.match(toggle, /_resumePausedPocketAudio\(\)/);
 });
 

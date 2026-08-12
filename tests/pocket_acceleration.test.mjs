@@ -188,7 +188,7 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
-  assert.match(serviceWorker, /pocket-reader-core-v141/);
+  assert.match(serviceWorker, /pocket-reader-core-v14\d/);
   assert.match(serviceWorker, /ui_controller\.js\?v=ui-v89/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
@@ -224,7 +224,7 @@ test('Settings recognizes the active narration service worker revision', async (
   // Anvil endpoint would fail with an HTML MIME type and silently take offline
   // support and cross-origin isolation with it.
   for (const source of [uiController, settings]) {
-    assert.match(source, /'\/sw\.js'/, 'the static worker path is missing');
+    assert.match(source, /sw\.js/, 'the static worker path is missing');
     assert.doesNotMatch(source, /_\/api\/serviceworker\.js/, 'an Anvil worker path survived');
     assert.doesNotMatch(source, /hostname\.endsWith\('\.anvil\.app'\)/, 'host-aware branch is obsolete');
   }

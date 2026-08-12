@@ -784,7 +784,7 @@ function cloneState(state) {
 }
 
 function disposeTensor(tensor) {
-  if (!tensor || tensor.location !== 'gpu-buffer' || typeof tensor.dispose !== 'function') return;
+  if (!tensor || typeof tensor.dispose !== 'function') return;
   try { tensor.dispose(); } catch (_) {}
 }
 
@@ -2645,7 +2645,8 @@ self.onmessage = async (e) => {
 
   try {
     if (type === "init") {
-      constrainedMemoryMode = data.constrainedMemoryMode === true;
+      const isIosDevice = /iPhone|iPad|iPod/i.test(self.navigator?.userAgent || '');
+      constrainedMemoryMode = data.constrainedMemoryMode === true || isIosDevice;
       requestedBackend = normalizePocketBackend(data.backendPreference);
       requestedWasmThreadCount = Number(data.wasmThreadCount) || 0;
       wasmReferenceRtf = Number(data.wasmReferenceRtf) || 0;

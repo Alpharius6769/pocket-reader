@@ -76,8 +76,7 @@ var OPTIONAL_ASSETS = [
     'assets/icons/lucide-sprite.svg',
     'assets/fonts/literata-400.woff2',
     'assets/fonts/literata-600.woff2',
-    'assets/fonts/literata-700.woff2',
-    'assets/fonts/lucide.woff2?v=1'
+    'assets/fonts/literata-700.woff2'
 ];
 
 // Large narration-runtime modules. They are lazy-loaded by
