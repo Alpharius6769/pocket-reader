@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v143';
+var CACHE_NAME = 'pocket-reader-core-v144';
 
 function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
@@ -94,7 +94,7 @@ var DEFERRED_ASSETS = [
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     './',
-    'assets/css/theme.css?v=midnight-v22',
+    'assets/css/theme.css?v=midnight-v23',
     'assets/js/tts_pronunciation_core.js?v=pron-v11',
     'assets/js/pocket_backend_policy.js?v=backend-v20',
     'assets/js/pocket_performance_policy.js?v=performance-v2',

@@ -41,7 +41,7 @@ test('service-worker install failures reject and smoke targets the active revisi
   const smoke = await read(path.join('tools', 'smoke_pocket_worker_runtime.mjs'));
   assert.match(worker, /pocket-reader-core-v14\d/);
   assert.match(worker, /Install failed:[\s\S]{0,100}throw err;/);
-  assert.match(smoke, /\/sw\.js\?v=143/);
+  assert.match(smoke, /\/sw\.js\?v=144/);
   assert.doesNotMatch(smoke, /serviceworker\.js|_\/theme\//);
 });
 
