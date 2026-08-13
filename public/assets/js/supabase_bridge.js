@@ -317,6 +317,10 @@ function showLoginForm() {
   });
 }
 
+function _escapeHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 /**
  * Google OAuth returns tokens in the URL fragment (or errors in fragment/query).
  * Consume it before anything reads location, and scrub the parameters so tokens
@@ -350,12 +354,15 @@ function consumeOAuthFragment() {
     }, 500);
     return;
   }
+
   const accessTokenValue = params.get('access_token');
-  if (!accessTokenValue) return;
+  const refreshTokenValue = params.get('refresh_token');
+  if (!accessTokenValue || !refreshTokenValue) return;
+
   storeSession({
     access_token: accessTokenValue,
-    refresh_token: params.get('refresh_token'),
-    expires_at: Number(params.get('expires_at') || 0),
+    refresh_token: refreshTokenValue,
+    expires_at: Number(params.get('expires_at') || (now() + parseInt(params.get('expires_in') || '3600', 10))),
     token_type: params.get('token_type'),
   });
   history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -373,7 +380,7 @@ function consumeOAuthFragment() {
       const statusEl = document.getElementById('setup-cloud-status');
       if (statusEl) {
         statusEl.style.display = 'block';
-        statusEl.innerHTML = `Signed in as <strong>${email}</strong> - your profile will be backed up when you finish setup.`;
+        statusEl.innerHTML = `Signed in as <strong>${_escapeHtml(email)}</strong> - your profile will be backed up when you finish setup.`;
       }
       if (typeof window.renderProfileExtras === 'function') window.renderProfileExtras();
       if (typeof window.renderAccountCenter === 'function') window.renderAccountCenter();

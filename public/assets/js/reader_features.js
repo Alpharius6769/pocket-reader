@@ -23,6 +23,7 @@ function save(reason = 'feature') {
 
 export function ensureReaderFeatures() {
   const data = profile();
+  data.library ||= [];
   data.collections ||= [];
   data.readingQueue ||= [];
   data.history ||= [];

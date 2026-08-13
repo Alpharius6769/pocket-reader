@@ -48,6 +48,21 @@ function _minimumPlaybackReadyCount(total) {
 }
 window.getPocketPlaybackReadyCount = _minimumPlaybackReadyCount;
 
+export function formatAudioRunway(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m`;
+  return `${s}s`;
+}
+window.formatAudioRunway = formatAudioRunway;
+
+export function estimateBankedRunwaySec(paragraphCount, avgSecPerPara = 18) {
+  return Math.max(0, Number(paragraphCount) || 0) * avgSecPerPara;
+}
+window.estimateBankedRunwaySec = estimateBankedRunwaySec;
+
 // updateUI() runs on a 1s ticker for the whole job, and it used to persist the
 // resume record on every tick — a synchronous JSON write to localStorage once a
 // second for hours. The record only has to survive a crash or a background kill,
@@ -575,6 +590,14 @@ export const BufferManager = {
     return Math.max(0, Number(this.cachedCount || 0) - Number(this.skippedCount || 0));
   },
 
+  getBankedRunwaySec() {
+    return estimateBankedRunwaySec(this.getReadyCount());
+  },
+
+  getBankedRunwayTime() {
+    return formatAudioRunway(this.getBankedRunwaySec());
+  },
+
   isPlaybackReadyForStory(story) {
     if (!story || this.mode === 'Permanent' || this.totalToCache <= 0) return true;
     const ref = story.storyKey || window.getStoryStableKey?.(story) || story.title;
@@ -644,9 +667,11 @@ export const BufferManager = {
 
     // ── Away Mode bar status ─────────────────────────────────────────
     const awayBar = document.getElementById('away-mode-bar');
+    const runway = this.getBankedRunwayTime();
+    const runwayText = this.cachedCount > 0 ? ` · ~${runway} ready` : '';
     let statusText;
     if (this.isActive && !this.paused) {
-      statusText = `Caching: ${pct}% (${this.cachedCount}/${this.totalToCache} paragraphs)`;
+      statusText = `Caching: ${pct}% (${this.cachedCount}/${this.totalToCache} paragraphs${runwayText})`;
       statusText += this._liveRenderHint();
       if (this._coolingUntil && this._coolingUntil > Date.now()) {
         statusText += ` - cooling pause (${Math.ceil((this._coolingUntil - Date.now()) / 1000)}s) to protect your device`;
@@ -667,14 +692,14 @@ export const BufferManager = {
       // and pause() paths still force an immediate write.
       _persistCacheJob(this, { force: false });
     } else if (this.paused) {
-      statusText = `Paused - ${pct}% cached`;
+      statusText = `Paused - ${pct}% cached${runwayText}`;
       if (awayBar) awayBar.classList.remove('caching');
       _releaseCacheWakeLock();
       if (!window.isPlaying) window.stopBgKeepAlive?.();
     } else if (this.cachedCount >= this.totalToCache && this.totalToCache > 0) {
       statusText = this.skippedCount > 0
-        ? `✅ Cache complete! (${this.totalToCache - this.skippedCount}/${this.totalToCache}; ${this.skippedCount} skipped)`
-        : `✅ Cache complete! (${this.totalToCache} paragraphs)`;
+        ? `✅ Cache complete! (${this.totalToCache - this.skippedCount}/${this.totalToCache}; ${this.skippedCount} skipped${runwayText})`
+        : `✅ Cache complete! (${this.totalToCache} paragraphs${runwayText})`;
       if (awayBar) awayBar.classList.remove('caching');
       _releaseCacheWakeLock();
       _clearPersistedCacheJob();
@@ -744,7 +769,10 @@ export const BufferManager = {
         const chunkHint = Number(tel.textChunks || 0) > 0
           ? `${tel.textChunks} chunk${tel.textChunks === 1 ? '' : 's'}${tel.punctuationSplitCount ? ` · ${tel.punctuationSplitCount} punct splits` : ''}${tel.realTimeFactor != null ? ` · RTF ${tel.realTimeFactor}` : ''}${Number(tel.frameBudgetStops || 0) > 0 ? ` · ${tel.frameBudgetStops} budget stop${tel.frameBudgetStops === 1 ? '' : 's'}` : ''} · `
           : '';
-        this.cachingModalStats.innerHTML = `<strong>${this.cachedCount}/${this.totalToCache}</strong> paragraphs (${pct}%)${this._liveRenderHint()}<br><div style="margin-top:6px;font-size:0.85rem">${pace}${chunkHint}${etaText}</div><div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted)">${_narrationRuntimeLabel()}</div>`;
+        const runwayHint = this.cachedCount > 0
+          ? ` · <span style="color:var(--accent-green)">~${runway} audio ready</span>`
+          : '';
+        this.cachingModalStats.innerHTML = `<strong>${this.cachedCount}/${this.totalToCache}</strong> paragraphs (${pct}%)${runwayHint}${this._liveRenderHint()}<br><div style="margin-top:6px;font-size:0.85rem">${pace}${chunkHint}${etaText}</div><div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted)">${_narrationRuntimeLabel()}</div>`;
       }
 
       // ISSUE 19 FIX: Away Mode Unique Layout and Layout Overrides

@@ -1536,6 +1536,9 @@ function _bindMediaElementSession(audio) {
   ['loadedmetadata', 'durationchange', 'timeupdate', 'ratechange', 'seeked'].forEach((eventName) => {
     audio.addEventListener(eventName, _setMediaPositionState);
   });
+  audio.addEventListener('timeupdate', () => {
+    if (typeof _onAudioClockPump === 'function') _onAudioClockPump();
+  });
 }
 
 function _bindMediaSessionActions() {
@@ -3029,8 +3032,18 @@ function _onsetFadeSecFor(voiceAsset) {
 // when the cursor reaches it — no CPU needed, which is exactly what a locked
 // iOS screen denies. Con (as flagged to the user): more eager synthesis =
 // more battery while playing uncached stretches.
-const POCKET_PLAYBACK_LOOKAHEAD = 3;
+const POCKET_PLAYBACK_LOOKAHEAD = 8;
 let _lookaheadRunning = false;
+let _lastAudioClockPumpAt = 0;
+
+export function _onAudioClockPump() {
+  if (!window.isPlaying || _resolveActiveEngine() !== 'pocket') return;
+  const now = Date.now();
+  if (now - _lastAudioClockPumpAt < 2000) return;
+  _lastAudioClockPumpAt = now;
+  _ensurePlaybackLookahead();
+}
+window._onAudioClockPump = _onAudioClockPump;
 
 function _peekNextIndices(c, p) {
   const story = window.currentStory;

@@ -329,10 +329,12 @@ window.updateReaderDrawerStatus = function updateReaderDrawerStatus(bufferState 
     const total = Number(bufferState?.totalToCache) || 0;
     const cached = Number(bufferState?.cachedCount) || 0;
     const pct = total > 0 ? Math.floor((cached / total) * 100) : 0;
-    cacheStatus.textContent = bufferState?.isActive && !bufferState?.paused ? `${pct}%`
-      : bufferState?.paused ? 'Paused'
-        : total > 0 && cached >= total ? 'Complete'
-          : total > 0 && cached > 0 ? `${pct}% cached`
+    const runway = typeof bufferState?.getBankedRunwayTime === 'function' ? bufferState.getBankedRunwayTime() : '';
+    const runwaySuffix = runway && cached > 0 ? ` · ~${runway}` : '';
+    cacheStatus.textContent = bufferState?.isActive && !bufferState?.paused ? `${pct}%${runwaySuffix}`
+      : bufferState?.paused ? `Paused${runwaySuffix}`
+        : total > 0 && cached >= total ? `Complete${runwaySuffix}`
+          : total > 0 && cached > 0 ? `${pct}% cached${runwaySuffix}`
             : 'Idle';
   }
   const narrationStatus = document.getElementById('drawer-playback-status');

@@ -1,0 +1,25 @@
+{
+  "appId": "com.pocketreader.app",
+  "appName": "Pocket Reader",
+  "webDir": "public",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  },
+  "plugins": {
+    "BackgroundRunner": {
+      "label": "com.pocketreader.background.narration",
+      "src": "assets/js/pocket_worker.js",
+      "event": "pocketBackgroundSynth",
+      "repeat": false,
+      "interval": 1,
+      "autoStart": true
+    }
+  }
+}

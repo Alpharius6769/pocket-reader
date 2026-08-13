@@ -1281,8 +1281,8 @@ function _buildStoryCardHtml(story, isList) {
     const safeId = String(storyKey).replace(/[^a-zA-Z0-9_-]/g, '');
     const storyKeyAttr = _escapeHtml(storyKey);
     const storyKeyEncoded = encodeURIComponent(storyKey).replace(/'/g, '%27');
-    const statusClass = story.isFinished ? 'finished' : story.progressChapter > 0 ? 'in-progress' : '';
-    const statusText = story.isFinished ? 'Finished' : story.progressChapter > 0 ? `Ch ${story.progressChapter + 1}` : 'New';
+    const statusClass = story.isFinished ? 'finished' : (Number(story.progressChapter) || 0) > 0 ? 'in-progress' : '';
+    const statusText = story.isFinished ? 'Finished' : (Number(story.progressChapter) || 0) > 0 ? `Ch ${(Number(story.progressChapter) || 0) + 1}` : 'New';
     const favIcon = story.favorite ? '★' : '☆';
     const urlSafe = encodeURIComponent(story.sourceUrl || story.url || '').replace(/'/g, "%27");
     const closeMenusJs = `document.querySelectorAll('.lib-options-menu.active').forEach(m => { m.classList.remove('active'); m.closest('.story-card')?.classList.remove('menu-open'); });`;
@@ -1365,7 +1365,7 @@ ${favoriteBtn}
       `</div>` : '';
 
     const wordsDisplay = story.words ? (typeof story.words === 'number' ? story.words.toLocaleString() : story.words) : '-';
-    const metadataStats = `Ch ${story.progressChapter + 1} • ${_escapeHtml(wordsDisplay)} words`;
+    const metadataStats = `Ch ${(Number(story.progressChapter) || 0) + 1} • ${_escapeHtml(wordsDisplay)} words`;
     const authorDisplay = _escapeHtml(story.author || 'Unknown');
     const cover = story.coverImage || story.coverUrl || '';
 
@@ -1557,7 +1557,7 @@ export function updateContinueReading() {
       <div class="continue-details" style="display:flex; flex-direction:column; justify-content:center;">
         <h3 style="margin:0 0 4px 0; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;">${titleSafe}</h3>
         <p style="margin:0;font-size:0.85rem;color:var(--text-muted);">by ${authorDisplay}</p>
-        <p style="margin:4px 0 0 0;font-size:0.8rem;color:var(--accent-blue-text);">Chapter ${story.progressChapter + 1}</p>
+        <p style="margin:4px 0 0 0;font-size:0.8rem;color:var(--accent-blue-text);">Chapter ${(Number(story.progressChapter) || 0) + 1}</p>
       </div>
     </div>`;
   });
