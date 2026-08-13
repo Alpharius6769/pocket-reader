@@ -1276,17 +1276,49 @@ export function ensureHmofaIframeLoaded() {
 }
 window.ensureHmofaIframeLoaded = ensureHmofaIframeLoaded;
 
+export function setupHmofaIframeBridge() {
+  const iframe = document.getElementById('hmofa-iframe');
+  if (!iframe || !iframe.contentWindow) return;
+  try {
+    iframe.contentWindow.postMessage({ type: 'pocket_reader_init' }, '*');
+  } catch (e) {}
+}
+window.setupHmofaIframeBridge = setupHmofaIframeBridge;
+
+export function handleHmofaManualFetch() {
+  const input = document.getElementById('hmofa-url-input');
+  if (!input) return;
+  const val = String(input.value || '').trim();
+  if (!val) {
+    if (window.virtueSpeak) window.virtueSpeak("Paste an AO3 story URL or Work ID first!", 4000);
+    return;
+  }
+  const normUrl = typeof window.normalizeStoryUrl === 'function' ? window.normalizeStoryUrl(val) : val;
+  input.value = '';
+  _handleHmofaStoryIntercept(normUrl, '');
+}
+window.handleHmofaManualFetch = handleHmofaManualFetch;
+
+export function _handleHmofaStoryIntercept(url, title = '') {
+  if (!url) return;
+  const displayTitle = title ? `"${title}"` : 'story';
+  if (window.virtueSpeak) {
+    window.virtueSpeak(`Loading ${displayTitle} into Pocket Reader...`, 5000);
+  }
+  if (typeof window.loadStory === 'function') {
+    window.loadStory(url);
+  }
+}
+window._handleHmofaStoryIntercept = _handleHmofaStoryIntercept;
+
 // ── Listen for messages sent from embedded HMOFA index ───────────────────────
 window.addEventListener('message', (event) => {
   if (!event.data) return;
   const data = event.data;
-  const rawUrl = data.url || data.storyUrl || data.link;
-  if ((data.type === 'hmofa_story_click' || data.type === 'open_story' || data.action === 'load_story') && rawUrl) {
+  const rawUrl = data.url || data.storyUrl || data.link || data.href;
+  if ((data.type === 'hmofa_story_click' || data.type === 'open_story' || data.action === 'load_story' || data.type === 'select_story') && rawUrl) {
     const normUrl = typeof window.normalizeStoryUrl === 'function' ? window.normalizeStoryUrl(rawUrl) : rawUrl;
-    const choice = confirm(`Do you want to load and open this story in Pocket Reader?\n\nURL: ${normUrl}`);
-    if (choice) {
-      if (typeof window.loadStory === 'function') window.loadStory(normUrl);
-    }
+    _handleHmofaStoryIntercept(normUrl, data.title || data.storyTitle || '');
   }
 });
 

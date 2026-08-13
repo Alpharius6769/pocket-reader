@@ -65,14 +65,23 @@ Notable license-sensitive items:
 - Literata frontend font is licensed under the SIL Open
   Font License 1.1; its full license text ships with the frontend assets.
 
-4. Story Content
+4. HMOFA Anthronomicon & Masterlist
+
+The HMOFA Anthronomicon (`https://alpharius6769.github.io/hmofa-story-index/`) is
+an interactive story index authored and maintained by Chris (Alpharius67 / Fluffarius).
+It is embedded within Pocket Reader with an app-specific postMessage interceptor and
+fetch wrapper for seamless in-app story loading. The standalone live HMOFA web app
+operates independently for public users. Individual stories remain the property of
+their respective authors.
+
+5. Story Content
 
 Stories fetched from third-party sites, uploaded by users, listed through the
-HMOFA masterlist, or bundled in the curated PDF library belong to their
+HMOFA masterlist / Anthronomicon, or bundled in the curated PDF library belong to their
 respective authors. Pocket Reader claims no ownership of story content.
 
 Curated bundled PDFs are included for app presentation and reader convenience;
 authors retain full rights and may request removal by contacting the
 maintainer.
 
-Last updated: 2026-07-15
+Last updated: 2026-08-13

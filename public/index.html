@@ -860,9 +860,23 @@ Playback-only modules remain deferred so they do not compete with first paint.
           </div>
         </div>
 
+        <!-- HMOFA Pocket Reader Interceptor & Fetch Bar -->
+        <div class="hmofa-interceptor-bar">
+          <div class="hmofa-interceptor-info">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple, #9d4edd)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+            <span><strong>App Interceptor Active:</strong> Tap any story in the index or paste a link to fetch into Pocket Reader.</span>
+          </div>
+          <div class="hmofa-interceptor-controls">
+            <input id="hmofa-url-input" class="hmofa-url-input" type="url" placeholder="Paste AO3 story URL or Work ID..." onkeydown="if (event.key === 'Enter') { event.preventDefault(); window.handleHmofaManualFetch(); }">
+            <button class="pr-btn-primary hmofa-fetch-btn" onclick="window.handleHmofaManualFetch()">
+              <span>Fetch &amp; Read</span>
+            </button>
+          </div>
+        </div>
+
         <!-- Embedded Interactive Index View -->
         <div id="hmofa-embed-container" class="hmofa-embed-wrap">
-          <iframe id="hmofa-iframe" src="https://alpharius6769.github.io/hmofa-story-index/" title="HMOFA Story Index" allow="clipboard-write"></iframe>
+          <iframe id="hmofa-iframe" src="https://alpharius6769.github.io/hmofa-story-index/" title="HMOFA Story Index" allow="clipboard-write" onload="window.setupHmofaIframeBridge()"></iframe>
         </div>
       </div>
 

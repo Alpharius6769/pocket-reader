@@ -654,10 +654,62 @@ body {
   color: #fff;
   box-shadow: 0 2px 8px rgba(157, 78, 221, 0.3);
 }
+.hmofa-interceptor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-top: 10px;
+  box-shadow: var(--shadow-soft);
+}
+.hmofa-interceptor-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  flex: 1 1 280px;
+}
+.hmofa-interceptor-info strong {
+  color: var(--accent-purple, #9d4edd);
+}
+.hmofa-interceptor-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 280px;
+}
+.hmofa-url-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: var(--input-bg);
+  color: var(--text-main);
+  font-size: 0.88rem;
+  outline: none;
+  box-sizing: border-box;
+}
+.hmofa-url-input:focus {
+  border-color: var(--accent-blue);
+}
+.hmofa-fetch-btn {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .hmofa-embed-wrap {
   width: 100%;
-  height: calc(100vh - 170px);
-  min-height: 520px;
+  height: calc(100vh - 220px);
+  min-height: 480px;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--border-color);

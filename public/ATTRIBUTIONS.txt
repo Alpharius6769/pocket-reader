@@ -283,11 +283,12 @@ using the app consistently with source-site terms and author permissions.
 
 ## Community Data Sources
 
-### HMOFA Masterlist
+### HMOFA Masterlist & Anthronomicon
 
-- Used as: Public CSV source displayed in the HMOFA masterlist view.
-- Rights note: Pocket Reader maintains its own catalog; individual stories
-  remain the property of their respective authors.
+- Source & Live Site: https://alpharius6769.github.io/hmofa-story-index/
+- Created by: Chris (Alpharius67 / Fluffarius)
+- Used as: Embedded interactive catalog view in Pocket Reader with an app-specific postMessage bridge & story fetch wrapper. The live standalone HMOFA website remains independent.
+- Rights note: Individual stories remain the property of their respective authors.
 
 ## Bundled Curated PDFs
 
