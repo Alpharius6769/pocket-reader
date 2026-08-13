@@ -20,22 +20,22 @@ export const virtueCoordinates = {
   // Bounds are measured from the white speech fields in each native sprite.
   // Keep the container at the sprite's natural aspect ratio before applying
   // these coordinates; otherwise CSS letterboxing moves text out of the bubble.
-  "virtue_achievement":      { top: "30.0%", left: "51.0%", width: "43.0%", height: "17.0%" },
-  "virtue_annoyed":          { top: "19.0%", left: "51.0%", width: "43.0%", height: "12.0%" },
-  "virtue_changed_settings": { top: "0%",    left: "0%",    width: "100%",  height: "100%",  noBubble: true },
-  "virtue_favorite":         { top: "25.0%", left: "49.0%", width: "40.0%", height: "32.0%" },
-  "virtue_happy_holding_bubble": { top: "4.0%", left: "17.0%", width: "70.0%", height: "18.0%" },
-  "virtue_happy_no_paws":    { top: "42.0%", left: "13.0%", width: "60.0%", height: "17.0%" },
-  "virtue_highscore":        { top: "42.0%", left: "10.0%", width: "26.0%", height: "11.0%" },
-  "virtue_kneeling":         { top: "60.0%", left: "54.0%", width: "40.0%", height: "18.0%" },
-  "virtue_lowscore":         { top: "61.0%", left: "62.0%", width: "30.0%", height: "23.0%" },
-  "virtue_point":            { top: "52.0%", left: "16.0%", width: "64.0%", height: "15.0%" },
-  "virtue_smile":            { top: "36.0%", left: "16.0%", width: "56.0%", height: "15.0%" },
-  "virtue_story_loading":    { top: "38.0%", left: "66.0%", width: "24.0%", height: "15.0%" },
-  "virtue_talking":          { top: "0%",    left: "0%",    width: "100%",  height: "100%",  noBubble: true },
-  "virtue_thinking":         { top: "0%",    left: "0%",    width: "100%",  height: "100%",  noBubble: true },
-  "virtue_waving":           { top: "56.0%", left: "47.0%", width: "48.0%", height: "14.0%" },
-  "virtue_wink":             { top: "41.0%", left: "8.0%", width: "31.0%", height: "49.0%" }
+  "virtue_achievement":          { top: "26.5%", left: "47.0%", width: "51.0%", height: "23.5%" },
+  "virtue_annoyed":              { top: "16.5%", left: "47.0%", width: "50.0%", height: "17.0%" },
+  "virtue_changed_settings":     { top: "0%",    left: "0%",    width: "100%",  height: "100%",  noBubble: true },
+  "virtue_favorite":             { top: "21.0%", left: "43.5%", width: "50.5%", height: "41.0%" },
+  "virtue_happy_holding_bubble": { top: "1.5%",  left: "13.0%", width: "79.0%", height: "23.0%" },
+  "virtue_happy_no_paws":        { top: "38.0%", left: "8.0%",  width: "69.5%", height: "24.5%" },
+  "virtue_highscore":            { top: "39.5%", left: "5.5%",  width: "34.0%", height: "16.5%" },
+  "virtue_kneeling":             { top: "56.5%", left: "49.0%", width: "47.5%", height: "25.5%" },
+  "virtue_lowscore":             { top: "57.5%", left: "57.5%", width: "38.5%", height: "30.5%" },
+  "virtue_point":                { top: "49.0%", left: "11.0%", width: "73.5%", height: "20.5%" },
+  "virtue_smile":                { top: "33.0%", left: "11.0%", width: "65.0%", height: "19.5%" },
+  "virtue_story_loading":        { top: "34.0%", left: "62.5%", width: "30.5%", height: "19.5%" },
+  "virtue_talking":              { top: "0%",    left: "0%",    width: "100%",  height: "100%",  noBubble: true },
+  "virtue_thinking":             { top: "0%",    left: "0%",    width: "100%",  height: "100%",  noBubble: true },
+  "virtue_waving":               { top: "52.5%", left: "42.0%", width: "55.5%", height: "19.5%" },
+  "virtue_wink":                 { top: "37.5%", left: "4.5%",  width: "38.0%", height: "55.0%" }
 };
 
 export const virtueAssets = {
@@ -353,35 +353,52 @@ function _waitForVirtueDismiss(duration, resolve) {
 function _fitVirtueSpeech(overlay) {
   overlay.classList.remove('short-text', 'long-text', 'compact-text');
   overlay.style.fontSize = '';
+  overlay.style.lineHeight = '';
   if (overlay.classList.contains('no-bubble')) return;
-  const length = String(overlay.textContent || '').trim().length;
-  if (length <= 42) overlay.classList.add('short-text');
-  else if (length >= 96) overlay.classList.add('long-text');
+
+  const text = String(overlay.textContent || '').trim();
+  const length = text.length;
+  if (length <= 35) overlay.classList.add('short-text');
+  else if (length >= 85) overlay.classList.add('long-text');
 
   // Fit after sprite-specific coordinates and responsive dimensions are applied.
   // Refit on resize so desktop split panes cannot retain a clipped measurement.
   const fit = () => {
-    let size = Number.parseFloat(getComputedStyle(overlay).fontSize) || 12;
-    const minimum = 7;
+    if (overlay.classList.contains('no-bubble')) return;
+    const h = overlay.clientHeight;
+    const w = overlay.clientWidth;
+    if (!h || !w) return;
+
+    // Calculate optimal starting font size based on available bubble height/width and text length
+    let targetRatio = 0.38; // Default medium text target (~38% of bubble height)
+    if (length <= 15) targetRatio = 0.52;      // Very short: "Welcome!"
+    else if (length <= 40) targetRatio = 0.44; // Short: "Hello there!"
+    else if (length >= 100) targetRatio = 0.28; // Long text
+
+    let size = Math.min(h * targetRatio, w * 0.16);
+    size = Math.max(6, Math.min(size, 32)); // Clamp initial guess between 6px and 32px
+
+    overlay.style.fontSize = `${size}px`;
+    overlay.style.lineHeight = size < 11 ? '1.05' : '1.14';
+
+    const minimum = 5.5;
     let attempts = 0;
-    while (attempts++ < 20 && size > minimum &&
-      (overlay.scrollHeight > overlay.clientHeight + 1 || overlay.scrollWidth > overlay.clientWidth + 1)) {
-      size = Math.max(minimum, size - 0.35);
+    // Shrink if overflowing
+    while (attempts++ < 35 && size > minimum &&
+      (overlay.scrollHeight > overlay.clientHeight || overlay.scrollWidth > overlay.clientWidth)) {
+      size = Math.max(minimum, size - 0.3);
       overlay.style.fontSize = `${size}px`;
+      overlay.style.lineHeight = size < 11 ? '1.03' : '1.1';
     }
-    if (overlay.scrollHeight > overlay.clientHeight + 1 || overlay.scrollWidth > overlay.clientWidth + 1) {
+
+    if (overlay.scrollHeight > overlay.clientHeight || overlay.scrollWidth > overlay.clientWidth) {
       overlay.classList.add('compact-text');
     }
   };
 
-  // Fit once synchronously so the text is already sized to the bubble on the
-  // first painted frame. Without this, the container is revealed with the text
-  // still at its base size — on a small/slow (throttled) phone a longer line
-  // overflows and is clipped by overflow:hidden, so the bubble flashes empty
-  // for a frame before the rAF pass shrinks it. The rAF call still runs to
-  // correct any measurement taken before layout settled.
   fit();
   requestAnimationFrame(fit);
+  setTimeout(fit, 60);
   if (!overlay._virtueFitObserver && typeof ResizeObserver === 'function') {
     overlay._virtueFitObserver = new ResizeObserver(() => {
       if (!overlay.classList.contains('no-bubble') && overlay.closest('.virtue-container.active')) fit();
