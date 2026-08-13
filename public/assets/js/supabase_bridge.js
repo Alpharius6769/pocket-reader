@@ -318,17 +318,29 @@ function showLoginForm() {
 }
 
 /**
- * Google OAuth returns tokens in the URL fragment. Consume it before anything
- * reads location, and scrub the fragment so tokens never linger in history or
- * get copied into a shared link.
+ * Google OAuth returns tokens in the URL fragment (or errors in fragment/query).
+ * Consume it before anything reads location, and scrub the parameters so tokens
+ * or error strings never linger in history or get copied into a shared link.
  */
 function consumeOAuthFragment() {
-  if (!window.location.hash || window.location.hash.length < 2) return;
-  const params = new URLSearchParams(window.location.hash.slice(1));
+  const hasHash = window.location.hash && window.location.hash.length >= 2;
+  const hasSearch = window.location.search && window.location.search.length >= 2;
+  if (!hasHash && !hasSearch) return;
+
+  const hashParams = hasHash ? new URLSearchParams(window.location.hash.slice(1)) : null;
+  const searchParams = hasSearch ? new URLSearchParams(window.location.search.slice(1)) : null;
+
+  const params = (hashParams && (hashParams.get('access_token') || hashParams.get('error') || hashParams.get('error_description')))
+    ? hashParams
+    : ((searchParams && (searchParams.get('error') || searchParams.get('error_description'))) ? searchParams : null);
+
+  if (!params) return;
+
   const errDesc = params.get('error_description') || params.get('error');
   if (errDesc) {
     log('ERROR', 'OAuth callback error', errDesc);
-    history.replaceState(null, '', window.location.pathname + window.location.search);
+    const cleanSearch = params === searchParams ? '' : window.location.search;
+    history.replaceState(null, '', window.location.pathname + cleanSearch);
     setTimeout(() => {
       if (window.virtueSpeak) {
         window.virtueSpeak(`Authentication warning: ${errDesc}`, 6000);

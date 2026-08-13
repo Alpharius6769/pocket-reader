@@ -51,12 +51,12 @@ body {
 .app-wrapper {
   display: flex;
   position: absolute;
-  top: 50px;
+  top: 0;
   left: 0;
   right: 0;
   bottom: 0;
   width: 100%;
-  height: calc(100% - 50px);
+  height: 100%;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -2238,9 +2238,9 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     background-color: rgba(50, 100, 150, 0.18);
   }
 
-  /* Push content above bottom tab bar, below topbar */
+  /* Push content above bottom tab bar */
   .app-wrapper {
-    top: 52px;
+    top: 0;
     bottom: 58px;
     height: auto;
   }
@@ -2287,7 +2287,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
   .reader-sidebar {
     position: fixed;
     left: 0;
-    top: 52px;
+    top: calc(52px + env(safe-area-inset-top, 0px));
     bottom: 58px;
     width: min(82vw, 290px);
     z-index: 600;
@@ -2620,7 +2620,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
   /* Topbar: no fixed height — if the row must wrap, the bar grows and the
      view container below shrinks, instead of the wrapped row being painted
      over the content ("concealed"). */
-  .app-wrapper { top: 52px; }
+  .app-wrapper { top: 0; }
   .top-bar {
     min-height: 52px;
     padding: 4px 12px;

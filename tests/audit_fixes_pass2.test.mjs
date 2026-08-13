@@ -108,6 +108,15 @@ test('the login modal detaches its Escape handler on every exit path', async () 
   assert.doesNotMatch(form, /function esc\(e\)/);
 });
 
+test('consumeOAuthFragment handles OAuth error parameters from hash or search query string', async () => {
+  const bridge = await read('public/assets/js/supabase_bridge.js');
+  const fn = bridge.slice(bridge.indexOf('function consumeOAuthFragment'), bridge.indexOf('consumeOAuthFragment();'));
+  assert.match(fn, /const hasHash = window\.location\.hash && window\.location\.hash\.length >= 2;/);
+  assert.match(fn, /const hasSearch = window\.location\.search && window\.location\.search\.length >= 2;/);
+  assert.match(fn, /params\.get\('error_description'\) \|\| params\.get\('error'\)/);
+  assert.match(fn, /history\.replaceState/);
+});
+
 test('cloud sync claims its in-flight slot before the first await', async () => {
   const sync = await read('public/assets/js/sync_core.js');
   const code = stripComments(sync);
