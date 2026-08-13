@@ -1640,6 +1640,19 @@ window.completeFirstTimeSetup = () => {
   if (typeof window.markSettingsEdited === 'function') window.markSettingsEdited();
   if (typeof window.saveLocalData === 'function') window.saveLocalData();
 
+  // Verify active authentication state so newly logged-in accounts (via Google OAuth or email)
+  // are properly attached and synchronized before completing onboarding.
+  const sessionOwner = localStorage.getItem('pr_profile_owner');
+  if ((sessionOwner && sessionOwner !== 'Guest Reader') || p.cloudEmail || p.isLoggedIn) {
+    const activeEmail = p.cloudEmail || sessionOwner;
+    if (activeEmail && activeEmail !== 'Guest Reader') {
+      localStorage.setItem('pr_profile_owner', activeEmail);
+      p.isLoggedIn = true;
+      p.cloudEmail = activeEmail;
+      window._cloudPushAllowed = true;
+    }
+  }
+
   localStorage.setItem('pr_setup_complete', 'true');
   localStorage.removeItem(DEVICE_PROFILE_HANDOFF_KEY);
   document.documentElement.classList.add('pr-setup-complete');
@@ -1649,6 +1662,8 @@ window.completeFirstTimeSetup = () => {
     window.queueCloudSync('onboarding-complete', { immediate: true });
     window.flushCloudSync?.();
   }
+  if (typeof window.renderProfileExtras === 'function') window.renderProfileExtras();
+  if (typeof window.renderAccountCenter === 'function') window.renderAccountCenter();
   const modal = document.getElementById('first-time-setup-modal');
   if (modal) {
     window.deactivatePocketModal?.(modal);
@@ -1755,6 +1770,14 @@ window.renderProfileExtras = function() {
   const nameEl = document.getElementById('profile-name');
   if (nameEl && p.displayName) nameEl.textContent = p.displayName;
   if (p.avatar) { const a = document.getElementById('profile-avatar-img'); if (a) a.src = p.avatar; }
+
+  // Auto-sync isLoggedIn flag if session owner matches
+  const owner = localStorage.getItem('pr_profile_owner');
+  if (owner && owner !== 'Guest Reader' && (!p.isLoggedIn || !p.cloudEmail)) {
+    p.isLoggedIn = true;
+    p.cloudEmail = owner;
+    window._cloudPushAllowed = true;
+  }
 
   // Update Cloud Sync centerpiece card state dynamically
   const statusTextEl = document.getElementById('cloud-sync-status-text');

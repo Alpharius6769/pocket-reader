@@ -126,6 +126,12 @@ function renderAccountCenter() {
   const center = document.getElementById('account-center');
   if (!center) return;
   const data = profile();
+  const owner = localStorage.getItem('pr_profile_owner');
+  if (owner && owner !== 'Guest Reader' && (!data.isLoggedIn || !data.cloudEmail)) {
+    data.isLoggedIn = true;
+    data.cloudEmail = owner;
+    window._cloudPushAllowed = true;
+  }
   const loggedIn = !!data.isLoggedIn;
   center.innerHTML = `
     <header class="section-heading"><div><span class="eyebrow">Private by design</span><h2>Account Center</h2></div>${icon(loggedIn ? 'cloud' : 'cloud-off', 'heading-icon')}</header>

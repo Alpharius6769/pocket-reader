@@ -360,6 +360,25 @@ function consumeOAuthFragment() {
   });
   history.replaceState(null, '', window.location.pathname + window.location.search);
   log('INFO', 'Signed in via Google OAuth redirect');
+
+  getCurrentUser().then((email) => {
+    if (email) {
+      localStorage.setItem('pr_profile_owner', email);
+      localStorage.setItem('pr_remember_login', 'true');
+      if (window.userProfile) {
+        window.userProfile.isLoggedIn = true;
+        window.userProfile.cloudEmail = email;
+      }
+      window._cloudPushAllowed = true;
+      const statusEl = document.getElementById('setup-cloud-status');
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.innerHTML = `Signed in as <strong>${email}</strong> - your profile will be backed up when you finish setup.`;
+      }
+      if (typeof window.renderProfileExtras === 'function') window.renderProfileExtras();
+      if (typeof window.renderAccountCenter === 'function') window.renderAccountCenter();
+    }
+  }).catch(() => {});
 }
 consumeOAuthFragment();
 
