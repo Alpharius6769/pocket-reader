@@ -898,6 +898,12 @@ export function initVirtueData() {
       accessibilityObserver.observe(container, { attributes: true, attributeFilter: ['class', 'style'] });
     }
     let pointerStart = null;
+    const handleTapDismiss = (event) => {
+      if (!container.classList.contains('active')) return;
+      dismissVirtue();
+    };
+    container.addEventListener('click', handleTapDismiss);
+    container.addEventListener('touchend', handleTapDismiss);
     container.addEventListener('pointerdown', (event) => {
       pointerStart = { x: event.clientX, y: event.clientY, at: Date.now() };
     });
@@ -907,7 +913,7 @@ export function initVirtueData() {
       const distance = Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y);
       const elapsed = Date.now() - pointerStart.at;
       pointerStart = null;
-      if (distance <= 10 && elapsed <= 700) dismissVirtue();
+      if (distance <= 15 && elapsed <= 800) dismissVirtue();
     });
     container.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;

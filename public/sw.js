@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v144';
+var CACHE_NAME = 'pocket-reader-core-v145';
 
 function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
@@ -94,17 +94,17 @@ var DEFERRED_ASSETS = [
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     './',
-    'assets/css/theme.css?v=midnight-v23',
+    'assets/css/theme.css?v=midnight-v24',
     'assets/js/tts_pronunciation_core.js?v=pron-v11',
     'assets/js/pocket_backend_policy.js?v=backend-v20',
     'assets/js/pocket_performance_policy.js?v=performance-v2',
     'assets/js/diagnostics.js?v=diag-v4',
     'assets/js/api_core.js?v=search-v18',
     'assets/js/experience_coordinator.js?v=experience-v5',
-    'assets/js/virtue_controller.js?v=virtue-v10',
+    'assets/js/virtue_controller.js?v=virtue-v11',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v89',
-    'assets/js/supabase_bridge.js?v=supabase-v5',
+    'assets/js/ui_controller.js?v=ui-v90',
+    'assets/js/supabase_bridge.js?v=supabase-v6',
     'assets/js/profile_merge.js?v=merge-v5',
     'assets/js/data_transfer.js?v=transfer-v3',
     'assets/js/device_setup.js?v=device-setup-v7',
@@ -114,7 +114,7 @@ var CORE_ASSETS = [
     'assets/js/narration_runtime_loader.js?v=narration-loader-v15',
     'assets/js/storage_core.js?v=storage-v11',
     'assets/js/sync_core.js?v=sync-v8',
-    'assets/js/cinematic_ui.js?v=cinematic-v6',
+    'assets/js/cinematic_ui.js?v=cinematic-v7',
     'assets/js/reader_features.js?v=features-v6',
     'assets/js/motion_lite.js'
 ];

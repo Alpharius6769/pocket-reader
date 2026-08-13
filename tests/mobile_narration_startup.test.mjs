@@ -98,7 +98,7 @@ test('a narration-resume fix advances the immutable module and service-worker re
   assert.match(loader, /buffer_manager\.js\?v=buffer-v50/);
   assert.match(worker, /buffer_manager\.js\?v=buffer-v50/);
   assert.match(worker, /pocket-reader-core-v14\d/);
-  assert.match(shell, /sw\.js\?v=144/);
+  assert.match(shell, /sw\.js\?v=145/);
   assert.match(buffer, /storyRef/);
 });
 

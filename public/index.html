@@ -31,7 +31,7 @@
 2. GLOBAL STYLESHEET
 ========================================== -->
 <!-- Links the optimized CSS file we just created -->
-<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v23">
+<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v24">
 
 <!-- ==========================================
 2a. FAST-NARRATION RELOAD MASK (anti-flash)
@@ -133,16 +133,16 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v15">
 <link rel="modulepreload" href="assets/js/api_core.js?v=search-v18">
 <link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v5">
-<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v10">
+<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v11">
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v20">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v7">
 <link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v49">
 <link rel="modulepreload" href="assets/js/library_manager.js?v=library-v13">
-<link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v6">
+<link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v7">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v6">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v89">
-<link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v5">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v90">
+<link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v6">
 
 <!-- ==========================================
 3. SERVICE WORKER REGISTRATION
@@ -154,7 +154,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=144', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=145', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -869,7 +869,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
           <div class="hmofa-interceptor-controls">
             <input id="hmofa-url-input" class="hmofa-url-input" type="url" placeholder="Paste AO3 story URL or Work ID..." onkeydown="if (event.key === 'Enter') { event.preventDefault(); window.handleHmofaManualFetch(); }">
             <button class="pr-btn-primary hmofa-fetch-btn" onclick="window.handleHmofaManualFetch()">
-              <span>Fetch &amp; Read</span>
+              <span>Fetch for Pocket Reader</span>
             </button>
           </div>
         </div>
