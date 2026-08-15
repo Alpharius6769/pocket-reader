@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pocket-reader",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/serve_public.mjs", "4173"],
+      "port": 4173
+    }
+  ]
+}

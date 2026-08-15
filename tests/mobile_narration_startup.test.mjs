@@ -10,7 +10,7 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v63'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v66'\)/);
   assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v51'\)/);
 });
 
@@ -97,7 +97,7 @@ test('a narration-resume fix advances the immutable module and service-worker re
   ]);
   assert.match(loader, /buffer_manager\.js\?v=buffer-v51/);
   assert.match(worker, /buffer_manager\.js\?v=buffer-v51/);
-  assert.match(worker, /pocket-reader-core-v14\d/);
+  assert.match(worker, /pocket-reader-core-v\d+/);
   // Derived, not pinned: the shell must register whatever revision the service
   // worker actually ships. Hardcoding the number here only forced a mechanical
   // edit on every bump without ever checking the thing that matters.

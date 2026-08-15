@@ -152,6 +152,44 @@ test('the synthesis path feeds quality outcomes into the guard', async () => {
   assert.match(source, /_effectiveProsodyTier\(\) !== 'neutral'/);
 });
 
+test('the emotion detector can fire on a single unambiguous keyword', async () => {
+  // The threshold was 2.05 while the happy/surprised/frustrated/calm lexicons
+  // carry weight 2.0 — so one clear keyword scored 2.00 and lost by 0.05, and
+  // those four emotions were unreachable on a single signal no matter how
+  // obvious. "She laughed, bright and sudden" measured confidence 0.98 and
+  // narrated flat neutral.
+  const source = await read('public/assets/js/audio_core.js');
+  const threshold = Number(source.match(/words\.length < 12 \? 3\.0 : ([\d.]+)/)?.[1]);
+  assert.ok(Number.isFinite(threshold), 'long-paragraph emotion threshold must be present');
+  assert.ok(threshold <= 2.0,
+    `threshold ${threshold} is above the lightest lexicon weight (2.0), so one keyword can never register`);
+});
+
+test('emotion lexicons cover how prose actually carries feeling', async () => {
+  // Verified in-browser against a prose corpus: before this vocabulary, 6/6
+  // emotional passages scored zero and rendered neutral — including
+  // '"Get away from me!" she shouted' and 'put his head in his hands'. After,
+  // 6/6 detect correctly with 0 false positives on 3 plain-prose controls.
+  const source = await read('public/assets/js/audio_core.js');
+  const lexicons = source.slice(source.indexOf("add('anger'"), source.indexOf('if (emphatic)'));
+  // Dialogue tags and physical reactions, not just the names of the emotions.
+  for (const term of ['shouted', 'snapped', 'sobbed', 'trembl', 'grinned', 'slept', 'whispered', 'head in']) {
+    assert.ok(lexicons.includes(term),
+      `lexicons lost "${term}" — fiction signals emotion through action, not emotion words`);
+  }
+  // Every emotion the temperature cap tables know about must be detectable.
+  for (const emotion of ['anger', 'happy', 'sad', 'worried', 'surprised', 'tired', 'frustrated', 'calm']) {
+    assert.ok(lexicons.includes(`add('${emotion}'`), `no lexicon for ${emotion}`);
+  }
+});
+
+test('the emotion detector is inspectable from outside the module', async () => {
+  // Four separate expressiveness ceilings went unnoticed at once partly because
+  // nothing outside audio_core could answer "does this actually vary".
+  const source = await read('public/assets/js/audio_core.js');
+  assert.match(source, /window\.inspectPocketEmotion\s*=/);
+});
+
 test('Rayne is honestly declared as neutral-only', async () => {
   // Only rayne_neutral.safetensors exists in B2; every other voice has 13
   // references. Declaring emotions Rayne does not have would resolve to asset

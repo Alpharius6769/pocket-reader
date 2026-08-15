@@ -39,7 +39,7 @@ test('push writes and deletes require a server-issued ownership token', async ()
 test('service-worker install failures reject and smoke targets the active revision', async () => {
   const worker = await read('public/sw.js');
   const smoke = await read(path.join('tools', 'smoke_pocket_worker_runtime.mjs'));
-  assert.match(worker, /pocket-reader-core-v14\d/);
+  assert.match(worker, /pocket-reader-core-v\d+/);
   assert.match(worker, /Install failed:[\s\S]{0,100}throw err;/);
   // The smoke harness registers this URL for real, so a stale pin here means the
   // harness 404s against a revision that no longer exists. Derive it.

@@ -48,7 +48,7 @@ test('narration stays deferred while runtime and UI modules use canonical URLs',
 
 test('service worker uses bounded navigation and lifetime-protected cache writes', async () => {
   const source = await read('public/sw.js');
-  assert.match(source, /pocket-reader-core-v14\d/);
+  assert.match(source, /pocket-reader-core-v\d+/);
   // Navigation must stay bounded, and the bound must stay short enough that a
   // stalled mobile network never shows a long blank screen before the cached
   // shell appears. The exact value may be tuned; the ceiling is the invariant.

@@ -164,6 +164,25 @@ test('every module version is consistent across sw.js, the shell, and importers'
   assert.ok(seen.size >= 20, 'expected the full module graph to be scanned');
 });
 
+test('no module changed content without bumping its own version', async () => {
+  // The drift test above checks that every *reference* agrees. It cannot see a
+  // module edited in place while its own ?v= stays put — and since assets are
+  // served immutable, that edit reaches nobody who has visited before. This
+  // shells out to the manifest checker, which compares content hashes against
+  // the recorded version for each module.
+  const { execFileSync } = await import('node:child_process');
+  try {
+    execFileSync(process.execPath, ['tools/check_module_versions.mjs'], {
+      encoding: 'utf8', stdio: 'pipe',
+    });
+  } catch (error) {
+    assert.fail(
+      `${error.stdout || ''}${error.stderr || ''}\n`
+      + 'Bump the listed modules, then run: node tools/check_module_versions.mjs --update',
+    );
+  }
+});
+
 test('the service-worker revision agrees everywhere it is written down', async () => {
   // Four files independently record this number. The invariant is agreement.
   const sw = await read('public/sw.js');

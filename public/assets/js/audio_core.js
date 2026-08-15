@@ -240,14 +240,32 @@ function _detectPocketEmotion(text) {
   };
   let evidenceCount = 0;
 
-  add('anger', /\b(angry|anger|furious|fury|rage|raging|hate|hated|snarl|growl|murder|murdered)\b/g, 3);
-  add('happy', /\b(excited|thrilled|amazing|wonderful|fantastic|delighted|laugh|laughed|laughing|grin|smile|cheer)\b/g, 2);
-  add('sad', /\b(sad|sorrow|cry|cried|crying|tears|wept|death|dead|died|dying|loss|grief|lonely|heartbroken)\b/g, 2.5);
-  add('worried', /\b(worry|worried|fear|feared|afraid|scared|terror|danger|threat|anxious|nervous|panic|panicked|dread)\b/g, 2.5);
-  add('surprised', /\b(suddenly|gasp|gasped|startled|surprise|surprised|shocked|stunned|flinch|flinched)\b/g, 2);
-  add('tired', /\b(tired|sleepy|exhausted|weary|yawn|yawned|weakly|drained)\b/g, 2.5);
-  add('frustrated', /\b(frustrated|annoyed|irritated|impossible|ugh|groan|groaned|muttered)\b/g, 2);
-  add('calm', /\b(softly|quietly|gently|calm|calmly|peaceful|whispered|murmured|soothing)\b/g, 2);
+  // Lexicons cover how prose actually carries emotion, not just the names of
+  // emotions. Fiction almost never writes "he was angry" — it writes a dialogue
+  // tag ("snapped", "spat") or a physical reaction ("jaw tight", "slammed").
+  // The original lists held only the explicit words, so ordinary narrative
+  // scored zero: `"Get away from me!" she shouted, shoving the table` matched
+  // nothing at all and rendered in flat neutral.
+  //
+  // Sensitivity here is safe because it is not the last word. _planEmotionFor()
+  // runs this same detector across a whole chapter and applies hysteresis
+  // (dwell + quiet-exit), so an emotion must be *sustained* to change the
+  // conditioning reference. Detection finds candidates; the plan decides.
+  add('anger', /\b(angry|anger|furious|fury|rage|raging|hate|hated|hatred|snarl|snarled|growl|growled|murder|murdered|seethe|seething|snapped|spat|slammed|shouted|shouting|yelled|roared|bellowed|glare|glared|fists?|teeth clenched|jaw (tight|clenched))\b/g, 3);
+  add('happy', /\b(excited|thrilled|amazing|wonderful|fantastic|delighted|delight|laugh|laughed|laughing|laughter|grin|grinned|grinning|smile|smiled|smiling|cheer|cheered|beamed|joy|joyful|glee|bright(ly)?|radiant|hugged|elated)\b/g, 2);
+  add('sad', /\b(sad|sadness|sorrow|cry|cried|crying|tears|tearful|weep|wept|sob|sobbed|sobbing|death|dead|died|dying|loss|lost her|lost him|grief|grieving|mourn|mourned|lonely|loneliness|heartbroken|ache|aching|hollow|empty|never (again|come back)|gone forever)\b/g, 2.5);
+  // Grief is very often carried entirely by gesture, with no emotional word
+  // anywhere in the paragraph — "he put his head in his hands. It was over."
+  // scored a flat zero against the vocabulary list above. These are the common
+  // fiction constructions, not a rewrite of the lexicon; a keyword detector
+  // will still miss grief that is purely implied, which is an accepted ceiling
+  // of this approach rather than something to keep patching case by case.
+  add('sad', /\b(head in (his|her|their) hands|buried (his|her|their) face|shoulders shook|voice broke|choked up|it was over|nothing (would|could) bring)\b/g, 2.5);
+  add('worried', /\b(worry|worried|worrying|fear|feared|fearful|afraid|scared|scaring|terror|terrified|danger|dangerous|threat|threatened|anxious|anxiety|nervous|panic|panicked|dread|dreaded|uneasy|tense|tensed|trembl(e|ed|ing)|shivered|held (his|her|their) breath|heart (pounding|racing|hammering))\b/g, 2.5);
+  add('surprised', /\b(suddenly|sudden|gasp|gasped|startled|startling|surprise|surprised|shock|shocked|stunned|flinch|flinched|jolted|blinked|stared|whirled|spun around|froze)\b/g, 2);
+  add('tired', /\b(tired|tiredness|sleepy|exhausted|exhaustion|weary|wearily|yawn|yawned|weakly|drained|slept|sleepless|worn out|heavy(-| )lidded|dragging|slumped|collapsed onto)\b/g, 2.5);
+  add('frustrated', /\b(frustrated|frustration|annoyed|annoying|irritated|irritation|impossible|ugh|groan|groaned|muttered|muttering|sighed|exasperated|gritted|rolled (his|her|their) eyes)\b/g, 2);
+  add('calm', /\b(softly|quietly|quiet|gently|gentle|calm|calmly|peaceful|peacefully|still(ness)?|whisper|whispered|murmur|murmured|soothing|serene|hush(ed)?|slowly|drifted)\b/g, 2);
 
   if (emphatic) {
     if (scores.anger >= 3) scores.anger += 1.5;
@@ -265,7 +283,13 @@ function _detectPocketEmotion(text) {
     }
   });
 
-  const threshold = words.length < 12 ? 3.0 : 2.05;
+  // 2.05 meant a single weight-2 match (happy, surprised, frustrated, calm)
+  // scored 2.00 and lost to the threshold by 0.05 — so those four emotions were
+  // effectively unreachable on one keyword, no matter how clear it was.
+  // "She laughed, bright and sudden" landed at confidence 0.98 and rendered
+  // neutral. 2.0 lets one unambiguous signal count; short paragraphs still need
+  // a strong (2.5-3 weight) word.
+  const threshold = words.length < 12 ? 3.0 : 2.0;
   const confidence = threshold > 0 ? bestScore / threshold : 0;
   let emotion = bestScore < threshold ? 'neutral' : best;
   return {
@@ -528,6 +552,12 @@ function _recordProsodyOutcome(clean) {
   );
 }
 window._recordPocketProsodyOutcome = _recordProsodyOutcome;
+
+// Exposed for diagnostics and browser verification: "does narration actually
+// vary by emotion" is otherwise unanswerable from outside this module, which is
+// how four separate expressiveness ceilings went unnoticed at once. Read-only —
+// calling it has no effect on playback.
+window.inspectPocketEmotion = (text) => _detectPocketEmotion(String(text || ''));
 
 // Reset per story/chapter so one rough chapter does not permanently flatten the
 // rest of the book.
