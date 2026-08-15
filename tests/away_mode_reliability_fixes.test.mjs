@@ -48,8 +48,13 @@ test('silent (preventNavigate) loads never navigate, overlay, or alert', async (
   assert.match(api, /if \(!silent && typeof window\.showView === 'function'\) window\.showView\('reading-view'\);/);
   // The FicHub handoff is awaited and propagates silent mode.
   assert.match(api, /await window\.processUploadedFile\(file, fhData\.meta, \{ silent: preventNavigate \}\);/);
-  // The invalid-URL alert is suppressed in background mode.
-  assert.match(api, /if \(!preventNavigate\) \{\s*\n\s*alert\("Invalid story URL/);
+  // The invalid-URL notice is suppressed in background mode. Asserted on the
+  // guard rather than the notice mechanism — blocking alert() was replaced with
+  // the in-app companion notice, and pinning the delivery method here would
+  // fail on a purely cosmetic change while missing the actual invariant.
+  assert.match(api, /if \(!preventNavigate\) \{\s*\r?\n\s*window\.pocketNotify\?\.\(/);
+  assert.doesNotMatch(api, /^\s*alert\("Invalid story URL/m,
+    'background loads must not raise a blocking dialog');
 });
 
 test('a silent load superseding a foreground one clears the orphaned overlay', async () => {

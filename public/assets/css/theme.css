@@ -1033,10 +1033,22 @@ body {
   }
   .virtue-container.active {
     right: 4px;
-    bottom: 64px;
+    /* Was a hardcoded 64px, which assumed the 58px tab bar sat flush against
+       the bottom of the screen. On any device with a home indicator the bar is
+       58px + the safe-area inset (~34px on iPhone), so Virtue rendered roughly
+       28px *inside* the tab bar and covered the controls it was moved up to
+       avoid. Matches the offset the reader's playback bar already uses. */
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 6px);
     pointer-events: auto;
     touch-action: pan-y;
     cursor: pointer;
+  }
+}
+
+/* Short viewports drop the tab bar to 52px; keep the companion pinned to it. */
+@media (max-height: 560px) and (max-width: 820px) {
+  .virtue-container.active {
+    bottom: calc(52px + env(safe-area-inset-bottom, 0px) + 6px);
   }
 }
 
@@ -1074,6 +1086,19 @@ body {
 .virtue-text-overlay.compact-text {
   line-height: 1;
   padding: 0.5% 1%;
+}
+
+/* Applied only when a message still overflows at the legibility floor. Ending
+   in an ellipsis is honest about being cut off; shrinking the type further just
+   produced text nobody could read. */
+.virtue-text-overlay.clamped-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  align-items: flex-start;
 }
 
 .virtue-text-overlay.short-text {

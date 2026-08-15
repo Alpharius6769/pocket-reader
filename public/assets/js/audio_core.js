@@ -2888,7 +2888,7 @@ function _signalColdStartOnce() {
 
 export function togglePlayState() {
   if (!window.currentStory || !window.currentStory.chapters) {
-    alert('No story loaded.');
+    window.pocketNotify?.('No story loaded yet — open one from your library first.', 4000);
     return;
   }
 
@@ -2914,7 +2914,7 @@ export function togglePlayState() {
     if (typeof window.virtueSpeak === 'function') {
       window.virtueSpeak(`Still securing the text! ${readyCount} of ${minReady} paragraphs are ready.`, 4500, true);
     } else {
-      alert(`Still caching! ${readyCount} of ${minReady} paragraphs are ready.`);
+      window.pocketNotify?.(`Still caching — ${readyCount} of ${minReady} paragraphs ready.`, 4000);
     }
     return;
   }
@@ -3388,7 +3388,7 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
 
 async function _playWebSpeech(text) {
   if (!('speechSynthesis' in window)) {
-    alert('Web Speech API not supported in this browser.');
+    window.pocketNotify?.('This browser has no built-in speech engine. Switch to a Pocket voice in Settings.', 6000);
     pausePlayback();
     return;
   }
@@ -3757,7 +3757,7 @@ export function applyPlaybackSpeed(rate) {
 
   if (window.isPlaying) {
     if (window.virtueSpeak) window.virtueSpeak("Please pause the story first before changing playback speed.", 4000);
-    else alert("Please pause the story first before changing playback speed.");
+    else window.pocketNotify?.("Pause the story first, then change playback speed.", 4000);
     return;
   }
 
@@ -3795,7 +3795,7 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
 
   if (window.isPlaying && !silent) {
     if (window.virtueSpeak) window.virtueSpeak("Please pause the story first before changing the voice engine.", 4000);
-    else alert("Please pause the story first before changing the voice engine.");
+    else window.pocketNotify?.("Pause the story first, then switch the voice engine.", 4000);
     const prev = window.userProfile?.settings?.voiceEngine || 'pocket';
     const globalSel = document.getElementById('voice-engine-select');
     if (globalSel) globalSel.value = prev;

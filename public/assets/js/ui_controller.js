@@ -810,6 +810,22 @@ export function showSettingsModal(title, bodyHtml) {
 }
 window.showSettingsModal = showSettingsModal;
 
+// In-app notice for short status messages. alert() blocks the whole page, looks
+// like a system-level failure inside an installed PWA, and on iOS standalone it
+// interrupts audio focus — a poor fit for "still caching, 12 of 20 ready".
+// Falls back to alert() only if the companion is unavailable, so a message is
+// never silently lost.
+export function pocketNotify(message, durationMs = 5000) {
+  const text = String(message || '').trim();
+  if (!text) return;
+  if (typeof window.virtueSpeak === 'function') {
+    window.virtueSpeak(text, durationMs);
+    return;
+  }
+  if (typeof alert === 'function') alert(text);
+}
+window.pocketNotify = pocketNotify;
+
 export function closeCacheModal() {
   const modal = document.getElementById('cache-modal-overlay');
   if (modal) modal.classList.remove('active');
@@ -1308,11 +1324,33 @@ export function setupHmofaIframeBridge() {
 }
 window.setupHmofaIframeBridge = setupHmofaIframeBridge;
 
+// Status copy tells the reader what actually works right now. The banner used
+// to read "App Interceptor Active" unconditionally — which was untrue for the
+// entire period the handshake was broken, and is still untrue against an index
+// build that does not speak the protocol.
+let _hmofaBridgeConnected = false;
+
+function _setHmofaBridgeConnected(connected) {
+  if (_hmofaBridgeConnected === connected) return;
+  _hmofaBridgeConnected = connected;
+  const status = document.getElementById('hmofa-bridge-status');
+  if (!status) return;
+  status.innerHTML = connected
+    ? '<strong>Connected:</strong> Tap any story in the index to load it straight into Pocket Reader.'
+    : '<strong>Paste a link to fetch:</strong> Drop an AO3 story URL below and it loads straight into your library.';
+}
+window._setHmofaBridgeConnected = _setHmofaBridgeConnected;
+window.isHmofaBridgeConnected = () => _hmofaBridgeConnected;
+
 function _bindHmofaIframeBridge() {
   const iframe = document.getElementById('hmofa-iframe');
   if (!iframe || iframe.dataset.pocketBridgeBound === '1') return;
   iframe.dataset.pocketBridgeBound = '1';
-  iframe.addEventListener('load', () => setupHmofaIframeBridge());
+  iframe.addEventListener('load', () => {
+    // A fresh document in the frame has not acknowledged anything yet.
+    _setHmofaBridgeConnected(false);
+    setupHmofaIframeBridge();
+  });
   // The frame may already be loaded by the time this module runs — the exact
   // case the old inline handler lost.
   if (iframe.contentWindow) setupHmofaIframeBridge();
@@ -1427,6 +1465,14 @@ window.addEventListener('message', (event) => {
     return;
   }
 
+  // Acknowledgement from an index build that speaks the protocol. Until this
+  // arrives we must not claim tap-to-fetch works, because on an index that has
+  // not implemented it, tapping a story just navigates the frame.
+  if (data.type === 'pocket_reader_ready' || data.type === 'pocket_reader_ack') {
+    _setHmofaBridgeConnected(true);
+    return;
+  }
+
   const isLoadVerb = HMOFA_LOAD_TYPES.has(data.type) || data.action === 'load_story';
   if (!isLoadVerb) return;
 
@@ -1465,7 +1511,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=151', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=152', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

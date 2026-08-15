@@ -362,6 +362,22 @@ function _fitVirtueSpeech(overlay) {
   if (length <= 35) overlay.classList.add('short-text');
   else if (length >= 85) overlay.classList.add('long-text');
 
+  // Legibility floor. The old loop shrank to 5.5px, which is unreadable on any
+  // screen and worst on the phones where Virtue's bubble is smallest — the text
+  // was technically "fitted" and practically invisible. Below this size we stop
+  // shrinking and clamp with an ellipsis instead: a readable opening line beats
+  // a complete but microscopic one, and these are short status messages.
+  const MIN_FONT_PX = _isMobileViewport() ? 9 : 8.5;
+  const MAX_FONT_PX = 32;
+
+  const overflows = () => overlay.scrollHeight > overlay.clientHeight + 0.5
+    || overlay.scrollWidth > overlay.clientWidth + 0.5;
+
+  const applySize = (size) => {
+    overlay.style.fontSize = `${size}px`;
+    overlay.style.lineHeight = size < 11 ? '1.05' : '1.14';
+  };
+
   // Fit after sprite-specific coordinates and responsive dimensions are applied.
   // Refit on resize so desktop split panes cannot retain a clipped measurement.
   const fit = () => {
@@ -370,40 +386,67 @@ function _fitVirtueSpeech(overlay) {
     const w = overlay.clientWidth;
     if (!h || !w) return;
 
-    // Calculate optimal starting font size based on available bubble height/width and text length
+    overlay.classList.remove('clamped-text');
+
     let targetRatio = 0.38; // Default medium text target (~38% of bubble height)
     if (length <= 15) targetRatio = 0.52;      // Very short: "Welcome!"
     else if (length <= 40) targetRatio = 0.44; // Short: "Hello there!"
     else if (length >= 100) targetRatio = 0.28; // Long text
 
-    let size = Math.min(h * targetRatio, w * 0.16);
-    size = Math.max(6, Math.min(size, 32)); // Clamp initial guess between 6px and 32px
+    const ceiling = Math.max(
+      MIN_FONT_PX,
+      Math.min(MAX_FONT_PX, Math.min(h * targetRatio, w * 0.16)),
+    );
 
-    overlay.style.fontSize = `${size}px`;
-    overlay.style.lineHeight = size < 11 ? '1.05' : '1.14';
+    applySize(ceiling);
+    if (!overflows()) return;
 
-    const minimum = 5.5;
-    let attempts = 0;
-    // Shrink if overflowing
-    while (attempts++ < 35 && size > minimum &&
-      (overlay.scrollHeight > overlay.clientHeight || overlay.scrollWidth > overlay.clientWidth)) {
-      size = Math.max(minimum, size - 0.3);
-      overlay.style.fontSize = `${size}px`;
-      overlay.style.lineHeight = size < 11 ? '1.03' : '1.1';
+    // Binary search instead of stepping down 0.3px at a time. The old loop ran
+    // up to 35 iterations, each one a forced synchronous reflow (style write
+    // then scrollHeight read), and fit() itself fires three times per
+    // appearance plus on every resize — well over a hundred forced layouts for
+    // one speech bubble. This converges to the same size in ~6.
+    let lo = MIN_FONT_PX;
+    let hi = ceiling;
+    let best = MIN_FONT_PX;
+    for (let i = 0; i < 7 && hi - lo > 0.25; i++) {
+      const mid = (lo + hi) / 2;
+      applySize(mid);
+      if (overflows()) hi = mid;
+      else { best = mid; lo = mid; }
     }
+    applySize(best);
 
-    if (overlay.scrollHeight > overlay.clientHeight || overlay.scrollWidth > overlay.clientWidth) {
-      overlay.classList.add('compact-text');
+    if (overflows()) {
+      // Still too long at the legibility floor — clamp rather than shrink further.
+      overlay.classList.add('compact-text', 'clamped-text');
     }
+  };
+
+  // The observer watches the very element whose font-size fit() rewrites, so an
+  // unguarded callback can re-trigger itself. Coalesce into a frame and ignore
+  // resizes we caused, and disconnect when Virtue is not on screen so a hidden
+  // companion is not holding a live layout observer for the whole session.
+  let fitScheduled = false;
+  const scheduleFit = () => {
+    if (fitScheduled) return;
+    fitScheduled = true;
+    requestAnimationFrame(() => {
+      fitScheduled = false;
+      if (overlay.classList.contains('no-bubble')) return;
+      if (!overlay.closest('.virtue-container.active')) {
+        overlay._virtueFitObserver?.disconnect();
+        overlay._virtueFitObserver = null;
+        return;
+      }
+      fit();
+    });
   };
 
   fit();
   requestAnimationFrame(fit);
-  setTimeout(fit, 60);
   if (!overlay._virtueFitObserver && typeof ResizeObserver === 'function') {
-    overlay._virtueFitObserver = new ResizeObserver(() => {
-      if (!overlay.classList.contains('no-bubble') && overlay.closest('.virtue-container.active')) fit();
-    });
+    overlay._virtueFitObserver = new ResizeObserver(scheduleFit);
     overlay._virtueFitObserver.observe(overlay);
   }
 }

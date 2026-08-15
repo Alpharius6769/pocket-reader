@@ -236,7 +236,7 @@ export async function handleFileSelect(event) {
   if (!file) return;
   const MAX_SIZE = 50 * 1024 * 1024;
   if (file.size > MAX_SIZE) {
-    alert('File too large. Maximum size is 50MB.');
+    window.pocketNotify?.('That file is over the 50 MB limit.', 5000);
     event.target.value = '';
     return;
   }
@@ -248,7 +248,7 @@ export async function handleFileSelect(event) {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ];
   if (!ALLOWED.includes(file.type) && !file.name.match(/\.(pdf|epub|html|htm|txt|docx)$/i)) {
-    alert('Unsupported file type.');
+    window.pocketNotify?.('That file type is not supported. Try EPUB, PDF, DOCX, TXT, or HTML.', 6000);
     event.target.value = '';
     return;
   }
@@ -1056,7 +1056,7 @@ export async function loadStory(url, options = {}) {
   if (!_isAppInternalRef && (_trimmedUrl.match(/\.(pdf|epub|docx|txt|html|htm)$/i) || _trimmedUrl.match(/^(file:\/\/|[a-z]:[\\\/]|\/)/i))) {
     if (!preventNavigate) {
       if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-      alert("To import a local PDF, EPUB, or document file, please click the 'Choose File' button or drop the file onto the upload area.");
+      window.pocketNotify?.("To import a file, use Choose File or drop it onto the upload area.", 6000);
     }
     return;
   }
@@ -1068,7 +1068,7 @@ export async function loadStory(url, options = {}) {
     // URL-less uploaded story whose chapters were evicted reaches here on
     // resume; alerting would be a spurious "Invalid story URL" popup.
     if (!preventNavigate) {
-      alert("Invalid story URL or address range. Please enter a valid public http(s) URL.");
+      window.pocketNotify?.("That does not look like a valid public story URL.", 5000);
       if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_network_error');
       if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
     }
