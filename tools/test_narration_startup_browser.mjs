@@ -4,12 +4,21 @@ import { webkit } from '../tests/webkit-smoke/node_modules/playwright/index.mjs'
 const root = new URL('../', import.meta.url);
 const loaderSource = await readFile(new URL('public/assets/js/narration_runtime_loader.js', root), 'utf8');
 const audioSource = await readFile(new URL('public/assets/js/audio_core.js', root), 'utf8');
+// Line endings must not decide whether this harness runs. git is configured
+// with core.autocrlf=true here, so every checked-out file is CRLF in the
+// working tree while the blob in git is LF — an \n-anchored extraction silently
+// matches nothing on Windows and the harness dies before it opens a browser.
 const toggleSource = audioSource
-  .match(/export function togglePlayState\(\) \{[\s\S]*?\n\}\nwindow\.togglePlayState/)?.[0]
+  .match(/export function togglePlayState\(\) \{[\s\S]*?\r?\n\}\r?\nwindow\.togglePlayState/)?.[0]
   ?.replace('export function', 'function')
-  ?.replace(/\nwindow\.togglePlayState$/, '') || '';
+  ?.replace(/\r?\nwindow\.togglePlayState$/, '') || '';
 
-if (!toggleSource) throw new Error('Could not extract togglePlayState for WebKit startup test.');
+if (!toggleSource) {
+  throw new Error(
+    'Could not extract togglePlayState from audio_core.js. The exported function or its '
+    + '`window.togglePlayState` assignment moved — update the extraction pattern in this harness.',
+  );
+}
 
 const requested = [];
 const browser = await webkit.launch({ headless: true });
@@ -40,7 +49,7 @@ await page.route('https://pocket.test/**', async (route) => {
           };
         </script>
         <button id="play" onclick="window.invokeNarrationTap()">Play</button>
-        <script type="module" src="/narration_runtime_loader.js?v=narration-loader-v15"></script>`,
+        <script type="module" src="/narration_runtime_loader.js?v=narration-loader-v19"></script>`,
     });
   } else if (url.pathname.endsWith('/narration_runtime_loader.js')) {
     await route.fulfill({ contentType: 'text/javascript', body: loaderSource });

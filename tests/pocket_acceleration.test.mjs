@@ -146,7 +146,7 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(audio, /wasm_rtf_sample/);
   assert.match(audio, /shouldProbeBundle/);
   assert.match(audio, /wasmReferenceRtf: _pocketBackendRuntime\.wasmReferenceRtf/);
-  assert.match(audio, /pocket-worker-v46/);
+  assert.match(audio, /pocket-worker-v47/);
   assert.match(worker, /wasmReferenceRtf/);
   assert.match(worker, /releaseAllSessions/);
   assert.match(worker, /wasm_rtf_sample/);
@@ -188,22 +188,30 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
-  assert.match(serviceWorker, /pocket-reader-core-v14\d/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v90/);
+  assert.match(serviceWorker, /pocket-reader-core-v\d+/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v96/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
-  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v46/);
-  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v20/);
-  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v7/);
+  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v47/);
+  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v22/);
+  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v8/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
   const shell = await read('public/index.html');
-  assert.match(shell, /sw\.js\?v=145/);
+  const swRevision = serviceWorker.match(/pocket-reader-core-v(\d+)/)?.[1];
+  assert.ok(swRevision, 'sw.js must declare a versioned cache name');
+  assert.match(shell, new RegExp(`sw\\.js\\?v=${swRevision}\\b`));
 });
 
 test('Settings recognizes the active narration service worker revision', async () => {
   const settings = await read('public/assets/js/settings_manager.js');
-  assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'145'/);
+  assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'\d+'/);
   assert.match(settings, /searchParams\.get\('v'\)\s*===\s*NARRATION_SERVICE_WORKER_VERSION/);
+  // sw.js is the source of truth for the revision; settings must track it.
+  const swSource = await read('public/sw.js');
+  const swRevision = swSource.match(/pocket-reader-core-v(\d+)/)?.[1];
+  const settingsRevision = settings.match(/NARRATION_SERVICE_WORKER_VERSION\s*=\s*'(\d+)'/)[1];
+  assert.equal(settingsRevision, swRevision,
+    `settings_manager pins SW ${settingsRevision} but sw.js ships ${swRevision}`);
   // ui_controller performs the PRIMARY service-worker registration. Its ?v= MUST
   // match NARRATION_SERVICE_WORKER_VERSION, or narrationServiceWorkerControlsPage()
   // never matches and the SW registration thrashes between versions on every

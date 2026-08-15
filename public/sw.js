@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v145';
+var CACHE_NAME = 'pocket-reader-core-v152';
 
 function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
@@ -85,37 +85,37 @@ var OPTIONAL_ASSETS = [
 // connection these are the most likely single fetch to fail -- and losing the
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
-    'assets/js/buffer_manager.js?v=buffer-v50',
-    'assets/js/audio_core.js?v=audio-v61',
-    'assets/js/pocket_worker.js?v=pocket-worker-v46',
+    'assets/js/buffer_manager.js?v=buffer-v51',
+    'assets/js/audio_core.js?v=audio-v67',
+    'assets/js/pocket_worker.js?v=pocket-worker-v47',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
 ];
 
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     './',
-    'assets/css/theme.css?v=midnight-v24',
+    'assets/css/theme.css?v=midnight-v25',
     'assets/js/tts_pronunciation_core.js?v=pron-v11',
-    'assets/js/pocket_backend_policy.js?v=backend-v20',
+    'assets/js/pocket_backend_policy.js?v=backend-v22',
     'assets/js/pocket_performance_policy.js?v=performance-v2',
-    'assets/js/diagnostics.js?v=diag-v4',
-    'assets/js/api_core.js?v=search-v18',
+    'assets/js/diagnostics.js?v=diag-v5',
+    'assets/js/api_core.js?v=search-v19',
     'assets/js/experience_coordinator.js?v=experience-v5',
-    'assets/js/virtue_controller.js?v=virtue-v11',
+    'assets/js/virtue_controller.js?v=virtue-v13',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v90',
+    'assets/js/ui_controller.js?v=ui-v96',
     'assets/js/supabase_bridge.js?v=supabase-v6',
     'assets/js/profile_merge.js?v=merge-v5',
     'assets/js/data_transfer.js?v=transfer-v3',
-    'assets/js/device_setup.js?v=device-setup-v7',
+    'assets/js/device_setup.js?v=device-setup-v8',
     'assets/js/device_benchmark_worker.js?v=device-bench-v1',
-    'assets/js/settings_manager.js?v=settings-v49',
-    'assets/js/library_manager.js?v=library-v13',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v15',
-    'assets/js/storage_core.js?v=storage-v11',
-    'assets/js/sync_core.js?v=sync-v8',
+    'assets/js/settings_manager.js?v=settings-v55',
+    'assets/js/library_manager.js?v=library-v15',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v19',
+    'assets/js/storage_core.js?v=storage-v12',
+    'assets/js/sync_core.js?v=sync-v9',
     'assets/js/cinematic_ui.js?v=cinematic-v7',
-    'assets/js/reader_features.js?v=features-v6',
+    'assets/js/reader_features.js?v=features-v7',
     'assets/js/motion_lite.js'
 ];
 
@@ -279,8 +279,19 @@ self.addEventListener('fetch', function (event) {
             return;
         }
         var isolateNarration = url.searchParams.get('tts_fast') === '1';
+        // Offline fails fast, but the connection mobile users actually have is
+        // weak rather than absent — and a hanging request used to burn a full
+        // 6s on a blank screen before falling back to a shell already sitting
+        // in the cache. 1.8s is past a normal mobile TTFB but short enough that
+        // a stalled network never costs a visible wait.
+        //
+        // Nothing is cached per-request here, on purpose: navigation URLs carry
+        // query strings (?tts_fast=1, ?story_update=...) and caching each one
+        // would grow the cache without bound. Freshness comes from the install
+        // step instead — a deploy ships a new sw.js with a new CACHE_NAME, and
+        // its install precaches './' again.
         event.respondWith(
-            fetchWithTimeout(event.request, 6000)
+            fetchWithTimeout(event.request, 1800)
                 .catch(function () {
                     return caches.match('/').then(function (fallbackResponse) {
                         return fallbackResponse || new Response('Offline', { status: 503 });

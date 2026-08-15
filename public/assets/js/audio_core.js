@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v11';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v12';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -19,6 +19,8 @@ import {
   recommendedPocketCacheWorkerCount,
   browserMajorVersion,
   detectMobilePlatform,
+  isMobileLikePlatform,
+  createProsodyDriftGuard,
   probePocketWebGpuEligibility,
   readPocketCalibration,
   writePocketCalibration,
@@ -38,7 +40,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v20';
+} from './pocket_backend_policy.js?v=backend-v22';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -197,7 +199,7 @@ function _emotionFromAssetVoice(voice) {
 
 function _emotionMode() {
   const mode = window.currentStory?.narrationPreset?.emotion || window.userProfile?.settings?.voiceEmotionMode || 'balanced';
-  return ['neutral', 'balanced'].includes(mode) ? mode : 'balanced';
+  return ['neutral', 'balanced', 'expressive'].includes(mode) ? mode : 'balanced';
 }
 
 function _detectPocketEmotion(text) {
@@ -238,14 +240,32 @@ function _detectPocketEmotion(text) {
   };
   let evidenceCount = 0;
 
-  add('anger', /\b(angry|anger|furious|fury|rage|raging|hate|hated|snarl|growl|murder|murdered)\b/g, 3);
-  add('happy', /\b(excited|thrilled|amazing|wonderful|fantastic|delighted|laugh|laughed|laughing|grin|smile|cheer)\b/g, 2);
-  add('sad', /\b(sad|sorrow|cry|cried|crying|tears|wept|death|dead|died|dying|loss|grief|lonely|heartbroken)\b/g, 2.5);
-  add('worried', /\b(worry|worried|fear|feared|afraid|scared|terror|danger|threat|anxious|nervous|panic|panicked|dread)\b/g, 2.5);
-  add('surprised', /\b(suddenly|gasp|gasped|startled|surprise|surprised|shocked|stunned|flinch|flinched)\b/g, 2);
-  add('tired', /\b(tired|sleepy|exhausted|weary|yawn|yawned|weakly|drained)\b/g, 2.5);
-  add('frustrated', /\b(frustrated|annoyed|irritated|impossible|ugh|groan|groaned|muttered)\b/g, 2);
-  add('calm', /\b(softly|quietly|gently|calm|calmly|peaceful|whispered|murmured|soothing)\b/g, 2);
+  // Lexicons cover how prose actually carries emotion, not just the names of
+  // emotions. Fiction almost never writes "he was angry" — it writes a dialogue
+  // tag ("snapped", "spat") or a physical reaction ("jaw tight", "slammed").
+  // The original lists held only the explicit words, so ordinary narrative
+  // scored zero: `"Get away from me!" she shouted, shoving the table` matched
+  // nothing at all and rendered in flat neutral.
+  //
+  // Sensitivity here is safe because it is not the last word. _planEmotionFor()
+  // runs this same detector across a whole chapter and applies hysteresis
+  // (dwell + quiet-exit), so an emotion must be *sustained* to change the
+  // conditioning reference. Detection finds candidates; the plan decides.
+  add('anger', /\b(angry|anger|furious|fury|rage|raging|hate|hated|hatred|snarl|snarled|growl|growled|murder|murdered|seethe|seething|snapped|spat|slammed|shouted|shouting|yelled|roared|bellowed|glare|glared|fists?|teeth clenched|jaw (tight|clenched))\b/g, 3);
+  add('happy', /\b(excited|thrilled|amazing|wonderful|fantastic|delighted|delight|laugh|laughed|laughing|laughter|grin|grinned|grinning|smile|smiled|smiling|cheer|cheered|beamed|joy|joyful|glee|bright(ly)?|radiant|hugged|elated)\b/g, 2);
+  add('sad', /\b(sad|sadness|sorrow|cry|cried|crying|tears|tearful|weep|wept|sob|sobbed|sobbing|death|dead|died|dying|loss|lost her|lost him|grief|grieving|mourn|mourned|lonely|loneliness|heartbroken|ache|aching|hollow|empty|never (again|come back)|gone forever)\b/g, 2.5);
+  // Grief is very often carried entirely by gesture, with no emotional word
+  // anywhere in the paragraph — "he put his head in his hands. It was over."
+  // scored a flat zero against the vocabulary list above. These are the common
+  // fiction constructions, not a rewrite of the lexicon; a keyword detector
+  // will still miss grief that is purely implied, which is an accepted ceiling
+  // of this approach rather than something to keep patching case by case.
+  add('sad', /\b(head in (his|her|their) hands|buried (his|her|their) face|shoulders shook|voice broke|choked up|it was over|nothing (would|could) bring)\b/g, 2.5);
+  add('worried', /\b(worry|worried|worrying|fear|feared|fearful|afraid|scared|scaring|terror|terrified|danger|dangerous|threat|threatened|anxious|anxiety|nervous|panic|panicked|dread|dreaded|uneasy|tense|tensed|trembl(e|ed|ing)|shivered|held (his|her|their) breath|heart (pounding|racing|hammering))\b/g, 2.5);
+  add('surprised', /\b(suddenly|sudden|gasp|gasped|startled|startling|surprise|surprised|shock|shocked|stunned|flinch|flinched|jolted|blinked|stared|whirled|spun around|froze)\b/g, 2);
+  add('tired', /\b(tired|tiredness|sleepy|exhausted|exhaustion|weary|wearily|yawn|yawned|weakly|drained|slept|sleepless|worn out|heavy(-| )lidded|dragging|slumped|collapsed onto)\b/g, 2.5);
+  add('frustrated', /\b(frustrated|frustration|annoyed|annoying|irritated|irritation|impossible|ugh|groan|groaned|muttered|muttering|sighed|exasperated|gritted|rolled (his|her|their) eyes)\b/g, 2);
+  add('calm', /\b(softly|quietly|quiet|gently|gentle|calm|calmly|peaceful|peacefully|still(ness)?|whisper|whispered|murmur|murmured|soothing|serene|hush(ed)?|slowly|drifted)\b/g, 2);
 
   if (emphatic) {
     if (scores.anger >= 3) scores.anger += 1.5;
@@ -263,7 +283,13 @@ function _detectPocketEmotion(text) {
     }
   });
 
-  const threshold = words.length < 12 ? 3.0 : 2.05;
+  // 2.05 meant a single weight-2 match (happy, surprised, frustrated, calm)
+  // scored 2.00 and lost to the threshold by 0.05 — so those four emotions were
+  // effectively unreachable on one keyword, no matter how clear it was.
+  // "She laughed, bright and sudden" landed at confidence 0.98 and rendered
+  // neutral. 2.0 lets one unambiguous signal count; short paragraphs still need
+  // a strong (2.5-3 weight) word.
+  const threshold = words.length < 12 ? 3.0 : 2.0;
   const confidence = threshold > 0 ? bestScore / threshold : 0;
   let emotion = bestScore < threshold ? 'neutral' : best;
   return {
@@ -493,9 +519,57 @@ function _pocketTuningConfig() {
   };
 }
 
+// ── Long-form prosody drift guard ───────────────────────────────────────────
+// Expressive narration raises sampling temperature, and higher temperature is
+// exactly what destabilizes a long listen: artifacts accumulate over dozens of
+// paragraphs rather than showing up on the first one. So expressiveness is not
+// a fixed setting here — it is a tier that automatically steps down when this
+// session starts producing quality-guard failures, and steps back up after a
+// clean run.
+//
+// Tiers, in descending order: 'full' (POCKET_FULL_TEMP_CAPS) -> 'balanced'
+// (POCKET_BALANCED_TEMP_CAPS) -> 'neutral' (emotion detection disabled
+// entirely). Stability outranks expressiveness, so the guard only ever
+// de-escalates on evidence and re-escalates on a sustained clean streak.
+const _prosodyDrift = createProsodyDriftGuard();
+
+function _effectiveProsodyTier() {
+  return _prosodyDrift.effectiveTier(_emotionMode());
+}
+window.getPocketProsodyTier = _effectiveProsodyTier;
+
+// Called once per synthesized paragraph with whether it passed the quality
+// guard cleanly. Only tier transitions are logged, not every paragraph.
+function _recordProsodyOutcome(clean) {
+  const change = _prosodyDrift.record(clean, _emotionMode());
+  if (!change) return;
+  window.Diagnostics?.log(
+    change.direction === 'down' ? 'WARN' : 'INFO',
+    change.direction === 'down'
+      ? 'Prosody drift guard stepped down a tier'
+      : 'Prosody drift guard restored a tier',
+    change,
+  );
+}
+window._recordPocketProsodyOutcome = _recordProsodyOutcome;
+
+// Exposed for diagnostics and browser verification: "does narration actually
+// vary by emotion" is otherwise unanswerable from outside this module, which is
+// how four separate expressiveness ceilings went unnoticed at once. Read-only —
+// calling it has no effect on playback.
+window.inspectPocketEmotion = (text) => _detectPocketEmotion(String(text || ''));
+
+// Reset per story/chapter so one rough chapter does not permanently flatten the
+// rest of the book.
+window.resetPocketProsodyDrift = () => _prosodyDrift.reset();
+
 function _artifactCappedTemperature(baseTemperature, emotion, retryLevel = 0) {
-  const mode = _emotionMode();
-  const caps = POCKET_BALANCED_TEMP_CAPS;
+  // POCKET_FULL_TEMP_CAPS was previously dead: this function computed the mode
+  // and then unconditionally used the balanced table, so the wider caps could
+  // never apply no matter what the user selected.
+  const caps = _effectiveProsodyTier() === 'full'
+    ? POCKET_FULL_TEMP_CAPS
+    : POCKET_BALANCED_TEMP_CAPS;
   const cap = caps[emotion] || caps.neutral || baseTemperature;
   const capped = Math.min(Number(baseTemperature) || cap, cap);
   return Number(Math.max(0.5, capped - (retryLevel ? 0.06 : 0)).toFixed(2));
@@ -507,8 +581,11 @@ function _resolvePocketRoute(engine, voice, text, ctx = null) {
   }
   const baseVoice = _baseVoiceId(voice || window.userProfile?.settings?.pocketVoice || POCKET_DEFAULT_VOICE);
   const lockedEmotion = _emotionFromAssetVoice(voice);
-  const expressive = window.isPocketExpressiveProsodyEnabled?.()
-    ?? (window.userProfile?.settings?.expressiveProsody !== false);
+  // The drift guard can force neutral even when the user has expressive on:
+  // a session that is actively producing artifacts gets stability back first.
+  const expressive = (window.isPocketExpressiveProsodyEnabled?.()
+    ?? (window.userProfile?.settings?.expressiveProsody !== false))
+    && _effectiveProsodyTier() !== 'neutral';
   // Position-aware chapter plan wins over per-chunk detection: it applies the
   // same detector with hysteresis, so every reader of this chunk (live player,
   // background cacher, re-listen) resolves the same emotion. highConfidence is
@@ -873,7 +950,7 @@ async function _preparePocketBackendPlan(force = false) {
     const deviceSetup = readPocketDeviceSetup(localStorage);
     const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     const userAgent = navigator.userAgent || '';
-    const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
+    const mobile = isMobileLikePlatform(userAgent);
     const platform = detectMobilePlatform(userAgent);
     const stickyContext = {
       browserMajor: browserMajorVersion(userAgent),
@@ -1140,7 +1217,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v46', document.baseURI).href;
+        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v47', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -1433,6 +1510,9 @@ async function _loadPocketEngine() {
           mimiProvider: _pocketBackendRuntime.mimiProvider,
           gpuSyncGroupBlocks: _pocketBackendRuntime.gpuSyncGroupBlocks,
           constrainedMemoryMode: window.isPocketDeviceMemorySafeMode?.() !== false,
+          // Resolved here because WorkerNavigator has no maxTouchPoints, so the
+          // worker cannot distinguish an iPad from a Mac on its own.
+          clientPlatform: detectMobilePlatform(navigator.userAgent || ''),
         });
       });
     };
@@ -1442,7 +1522,7 @@ async function _loadPocketEngine() {
     // ── Hard timeout on engine load ──────────────────────────────────────
     // Allow slow first-time mobile downloads while still bounding a silent
     // network or worker failure. The timer now covers worker creation too.
-    const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    const isMobileDevice = isMobileLikePlatform(navigator.userAgent || '');
     const ENGINE_LOAD_TIMEOUT_MS = (isMobileDevice ? 20 : 12) * 60 * 1000;
     const engineLoadTimeout = new Promise((_, reject) => {
       engineLoadTimerId = setTimeout(
@@ -2653,6 +2733,9 @@ window.generateChunk = async function(text, voice) {
       }
       const retry = await _generatePocketAttempt(null, text, route, 1);
       retryUsed = true;
+      // A paragraph that needed a re-render is drift evidence regardless of
+      // whether the second pass succeeded.
+      _recordProsodyOutcome(false);
       if (!retry.quality.fatal) {
         accepted = retry;
       } else {
@@ -2672,6 +2755,7 @@ window.generateChunk = async function(text, voice) {
         ? 'no retry in throughput mode'
         : 'shared engine is serving another synthesis';
       _logPocketQuality('ERROR', `Pocket synth quality guard rejected paragraph (${reason})`, first, { retryUsed: false });
+      _recordProsodyOutcome(false);
       window._lastPocketQualityFailure = {
         text,
         voice,
@@ -2680,6 +2764,9 @@ window.generateChunk = async function(text, voice) {
       return null;
     } else if (!first.quality.ok) {
       _logPocketQuality('WARN', 'Pocket synth accepted with a soft quality warning', first, { retryUsed: false });
+      _recordProsodyOutcome(false);
+    } else {
+      _recordProsodyOutcome(true);
     }
 
     const _ms = Math.round(performance.now() - _t0);
@@ -2801,7 +2888,7 @@ function _signalColdStartOnce() {
 
 export function togglePlayState() {
   if (!window.currentStory || !window.currentStory.chapters) {
-    alert('No story loaded.');
+    window.pocketNotify?.('No story loaded yet — open one from your library first.', 4000);
     return;
   }
 
@@ -2827,7 +2914,7 @@ export function togglePlayState() {
     if (typeof window.virtueSpeak === 'function') {
       window.virtueSpeak(`Still securing the text! ${readyCount} of ${minReady} paragraphs are ready.`, 4500, true);
     } else {
-      alert(`Still caching! ${readyCount} of ${minReady} paragraphs are ready.`);
+      window.pocketNotify?.(`Still caching — ${readyCount} of ${minReady} paragraphs ready.`, 4000);
     }
     return;
   }
@@ -2909,6 +2996,20 @@ let _premiumAudio = window.__pocketMobileMediaElement || null;
 let _audioCtx = window.__pocketMobileAudioContext || null;
 let _pocketWorkletModulePromise = null;
 let _activePocketStream = null;
+
+// Suspend the AudioContext once nothing is streaming through it. This is a
+// desktop-only concern by construction: _preferDirectMobileMediaPlayback()
+// routes every phone and tablet to a bare HTMLAudioElement (iOS suspends a Web
+// Audio graph on screen lock), so _audioCtx is never created there. On desktop
+// a running context keeps the audio thread alive through every pause, which is
+// real idle power for no benefit. The context object is retained rather than
+// closed — _createPocketPcmStream and the keep-alive path both resume it, and
+// a closed context cannot be revived.
+function _suspendIdleAudioContext() {
+  if (!_audioCtx || _activePocketStream || window.isPlaying) return;
+  if (_audioCtx.state !== 'running') return;
+  Promise.resolve(_audioCtx.suspend()).catch(() => {});
+}
 
 async function _createPocketPcmStream(onEnded) {
   if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -3287,7 +3388,7 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
 
 async function _playWebSpeech(text) {
   if (!('speechSynthesis' in window)) {
-    alert('Web Speech API not supported in this browser.');
+    window.pocketNotify?.('This browser has no built-in speech engine. Switch to a Pocket voice in Settings.', 6000);
     pausePlayback();
     return;
   }
@@ -3331,6 +3432,7 @@ export function pausePlayback() {
   stopBgKeepAlive(); // stop keep-alive when not actively playing
   _activePocketStream?.stop?.();
   _activePocketStream = null;
+  _suspendIdleAudioContext();
 
   if (window.currentAudio instanceof HTMLAudioElement) {
     window.currentAudio.pause();
@@ -3474,6 +3576,7 @@ function _finishStory() {
   if (typeof window._setControlsLocked === 'function') window._setControlsLocked(false);
   _activePocketStream?.stop?.();
   _activePocketStream = null;
+  _suspendIdleAudioContext();
   stopBgKeepAlive();
   _scheduleWorkerIdleRelease();
 
@@ -3654,7 +3757,7 @@ export function applyPlaybackSpeed(rate) {
 
   if (window.isPlaying) {
     if (window.virtueSpeak) window.virtueSpeak("Please pause the story first before changing playback speed.", 4000);
-    else alert("Please pause the story first before changing playback speed.");
+    else window.pocketNotify?.("Pause the story first, then change playback speed.", 4000);
     return;
   }
 
@@ -3692,7 +3795,7 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
 
   if (window.isPlaying && !silent) {
     if (window.virtueSpeak) window.virtueSpeak("Please pause the story first before changing the voice engine.", 4000);
-    else alert("Please pause the story first before changing the voice engine.");
+    else window.pocketNotify?.("Pause the story first, then switch the voice engine.", 4000);
     const prev = window.userProfile?.settings?.voiceEngine || 'pocket';
     const globalSel = document.getElementById('voice-engine-select');
     if (globalSel) globalSel.value = prev;

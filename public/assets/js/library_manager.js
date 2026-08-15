@@ -1,4 +1,5 @@
 import { animate, stagger } from './motion_lite.js';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v22';
 import {
   DEFAULT_POCKET_PLAYBACK_SPEED,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -159,7 +160,7 @@ function normalizePocketVoiceSetting(profile) {
   if (settings.expressiveProsody === undefined) {
     settings.expressiveProsody = true;
   }
-  if (!['neutral', 'balanced'].includes(settings.voiceEmotionMode)) {
+  if (!['neutral', 'balanced', 'expressive'].includes(settings.voiceEmotionMode)) {
     settings.voiceEmotionMode = 'balanced';
   }
   if (settings.pausePunctuation === undefined) settings.pausePunctuation = true;
@@ -378,7 +379,7 @@ function _defaultProfile() {
       theme: "slate",
       companion: "virtue",
       companionFrequency: "contextual",
-      motionPreset: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? "reduced" : (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') ? "standard" : "cinematic"),
+      motionPreset: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? "reduced" : (isMobileLikePlatform(navigator.userAgent || '') ? "standard" : "cinematic"),
       readerFontFamily: "'Literata Local', Georgia, serif",
       readerWidth: 78,
       readerLineHeight: 1.7,

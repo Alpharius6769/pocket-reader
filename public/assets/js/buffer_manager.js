@@ -1,10 +1,12 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v11';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v12';
 import {
   evaluateCpuThermalRest,
   POCKET_THERMAL_HISTORY_LIMIT,
   writePocketExpressiveChoice,
-} from './pocket_backend_policy.js?v=backend-v20';
+  detectMobilePlatform,
+  isMobileLikePlatform,
+} from './pocket_backend_policy.js?v=backend-v22';
 
 const HARD_CAP_WORKERS   = window.HARD_CAP_WORKERS;
 const MANUAL_CAP_WORKERS = window.MANUAL_CAP_WORKERS;
@@ -145,8 +147,8 @@ const ISOLATION_STATS_KEY = 'pr_isolation_stats_v1';
   if (!_fastNarrationRequested()) return;
   try {
     const ua = navigator.userAgent || '';
-    const platform = /iPhone|iPad|iPod/i.test(ua) ? 'ios'
-      : (/Android/i.test(ua) ? 'android' : 'other');
+    const detected = detectMobilePlatform(ua);
+    const platform = detected === 'ios' ? 'ios' : (detected === 'android' ? 'android' : 'other');
     const stats = JSON.parse(localStorage.getItem(ISOLATION_STATS_KEY) || '{}');
     const bucket = stats[platform] || { attempts: 0, isolated: 0 };
     bucket.attempts += 1;
@@ -290,7 +292,7 @@ window.requestPocketNarrationIsolation = function requestPocketNarrationIsolatio
 };
 
 function _isMobileNarrationPlatform() {
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '')
+  return isMobileLikePlatform(navigator.userAgent || '')
     || (navigator.maxTouchPoints || 0) > 0;
 }
 

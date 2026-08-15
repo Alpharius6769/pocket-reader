@@ -810,6 +810,22 @@ export function showSettingsModal(title, bodyHtml) {
 }
 window.showSettingsModal = showSettingsModal;
 
+// In-app notice for short status messages. alert() blocks the whole page, looks
+// like a system-level failure inside an installed PWA, and on iOS standalone it
+// interrupts audio focus — a poor fit for "still caching, 12 of 20 ready".
+// Falls back to alert() only if the companion is unavailable, so a message is
+// never silently lost.
+export function pocketNotify(message, durationMs = 5000) {
+  const text = String(message || '').trim();
+  if (!text) return;
+  if (typeof window.virtueSpeak === 'function') {
+    window.virtueSpeak(text, durationMs);
+    return;
+  }
+  if (typeof alert === 'function') alert(text);
+}
+window.pocketNotify = pocketNotify;
+
 export function closeCacheModal() {
   const modal = document.getElementById('cache-modal-overlay');
   if (modal) modal.classList.remove('active');
@@ -1258,12 +1274,17 @@ window.resetTips = function() {
   else if (typeof alert === 'function') alert('Tips re-enabled.');
 };
 
+// The embedded story index lives on a fixed origin. Everything below is scoped
+// to it: the handshake is posted only to this origin, and inbound story-load
+// commands are accepted only from it.
+export const HMOFA_ORIGIN = 'https://alpharius6769.github.io';
+const HMOFA_INDEX_URL = `${HMOFA_ORIGIN}/hmofa-story-index/`;
+
 export function reloadHmofaIframe() {
   const iframe = document.getElementById('hmofa-iframe');
   if (iframe) {
-    const src = 'https://alpharius6769.github.io/hmofa-story-index/';
     iframe.src = 'about:blank';
-    setTimeout(() => { iframe.src = src; }, 50);
+    setTimeout(() => { iframe.src = HMOFA_INDEX_URL; }, 50);
   }
 }
 window.reloadHmofaIframe = reloadHmofaIframe;
@@ -1271,19 +1292,75 @@ window.reloadHmofaIframe = reloadHmofaIframe;
 export function ensureHmofaIframeLoaded() {
   const iframe = document.getElementById('hmofa-iframe');
   if (iframe && (!iframe.src || iframe.src === 'about:blank')) {
-    iframe.src = 'https://alpharius6769.github.io/hmofa-story-index/';
+    iframe.src = HMOFA_INDEX_URL;
   }
 }
 window.ensureHmofaIframeLoaded = ensureHmofaIframeLoaded;
 
+// Announce Pocket Reader to the embedded index so it can switch to integrated
+// mode and hand stories back instead of sending the reader off-site.
+//
+// This used to be wired as an inline onload="" attribute on the iframe, which
+// raced: the iframe begins loading while the HTML parses, but ui_controller is
+// a deferred module, so a fast (or cached) frame fired onload before this
+// function existed — "window.setupHmofaIframeBridge is not a function", and the
+// handshake was silently never sent. Ownership of the listener now lives with
+// the code that defines it, and a frame that already loaded is handled too.
 export function setupHmofaIframeBridge() {
   const iframe = document.getElementById('hmofa-iframe');
-  if (!iframe || !iframe.contentWindow) return;
+  if (!iframe || !iframe.contentWindow) return false;
   try {
-    iframe.contentWindow.postMessage({ type: 'pocket_reader_init' }, '*');
-  } catch (e) {}
+    iframe.contentWindow.postMessage({
+      type: 'pocket_reader_init',
+      // Declared so the index can feature-detect rather than sniff versions.
+      capabilities: ['load_story', 'load_story_batch'],
+      version: 1,
+    }, HMOFA_ORIGIN);
+    return true;
+  } catch (e) {
+    window.Diagnostics?.log('WARN', 'HMOFA bridge handshake failed', { error: String(e) });
+    return false;
+  }
 }
 window.setupHmofaIframeBridge = setupHmofaIframeBridge;
+
+// Status copy tells the reader what actually works right now. The banner used
+// to read "App Interceptor Active" unconditionally — which was untrue for the
+// entire period the handshake was broken, and is still untrue against an index
+// build that does not speak the protocol.
+let _hmofaBridgeConnected = false;
+
+function _setHmofaBridgeConnected(connected) {
+  if (_hmofaBridgeConnected === connected) return;
+  _hmofaBridgeConnected = connected;
+  const status = document.getElementById('hmofa-bridge-status');
+  if (!status) return;
+  status.innerHTML = connected
+    ? '<strong>Connected:</strong> Tap any story in the index to load it straight into Pocket Reader.'
+    : '<strong>Paste a link to fetch:</strong> Drop an AO3 story URL below and it loads straight into your library.';
+}
+window._setHmofaBridgeConnected = _setHmofaBridgeConnected;
+window.isHmofaBridgeConnected = () => _hmofaBridgeConnected;
+
+function _bindHmofaIframeBridge() {
+  const iframe = document.getElementById('hmofa-iframe');
+  if (!iframe || iframe.dataset.pocketBridgeBound === '1') return;
+  iframe.dataset.pocketBridgeBound = '1';
+  iframe.addEventListener('load', () => {
+    // A fresh document in the frame has not acknowledged anything yet.
+    _setHmofaBridgeConnected(false);
+    setupHmofaIframeBridge();
+  });
+  // The frame may already be loaded by the time this module runs — the exact
+  // case the old inline handler lost.
+  if (iframe.contentWindow) setupHmofaIframeBridge();
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _bindHmofaIframeBridge, { once: true });
+} else {
+  _bindHmofaIframeBridge();
+}
 
 export function handleHmofaManualFetch() {
   const input = document.getElementById('hmofa-url-input');
@@ -1311,15 +1388,106 @@ export function _handleHmofaStoryIntercept(url, title = '') {
 }
 window._handleHmofaStoryIntercept = _handleHmofaStoryIntercept;
 
-// ── Listen for messages sent from embedded HMOFA index ───────────────────────
-window.addEventListener('message', (event) => {
-  if (!event.data) return;
-  const data = event.data;
-  const rawUrl = data.url || data.storyUrl || data.link || data.href;
-  if ((data.type === 'hmofa_story_click' || data.type === 'open_story' || data.action === 'load_story' || data.type === 'select_story') && rawUrl) {
-    const normUrl = typeof window.normalizeStoryUrl === 'function' ? window.normalizeStoryUrl(rawUrl) : rawUrl;
-    _handleHmofaStoryIntercept(normUrl, data.title || data.storyTitle || '');
+// Add a shelf of stories to the library in one gesture. Only the last one is
+// opened — importing twelve stories should not yank the reader through twelve
+// story loads — and the rest land in the library ready to read.
+const HMOFA_BATCH_LIMIT = 25;
+
+export async function _handleHmofaStoryBatch(stories) {
+  const normalize = (value) => (typeof window.normalizeStoryUrl === 'function'
+    ? window.normalizeStoryUrl(value)
+    : value);
+  const entries = stories
+    .map((story) => (typeof story === 'string' ? { url: story } : (story || {})))
+    .map((story) => ({
+      url: normalize(story.url || story.storyUrl || story.link || story.href || ''),
+      title: story.title || story.storyTitle || '',
+    }))
+    .filter((story) => story.url)
+    .slice(0, HMOFA_BATCH_LIMIT);
+
+  if (!entries.length) return { added: 0, failed: 0 };
+  if (stories.length > HMOFA_BATCH_LIMIT && window.virtueSpeak) {
+    window.virtueSpeak(`That's a lot at once — taking the first ${HMOFA_BATCH_LIMIT}.`, 5000);
   }
+
+  if (typeof window.loadStory !== 'function') return { added: 0, failed: entries.length };
+
+  let added = 0;
+  let failed = 0;
+  // Sequential on purpose. Each import hits the scrape backend, and loadStory
+  // aborts any load still in flight — concurrent calls would cancel each other
+  // and only the last would survive. preventNavigate keeps the reader where
+  // they are and suppresses the per-story overlay; only the final story opens.
+  for (const entry of entries.slice(0, -1)) {
+    try {
+      await window.loadStory(entry.url, { preventNavigate: true });
+      added += 1;
+    } catch (error) {
+      failed += 1;
+      window.Diagnostics?.log('WARN', 'HMOFA batch import skipped a story', {
+        url: entry.url, error: error?.message || String(error),
+      });
+    }
+  }
+
+  const last = entries[entries.length - 1];
+  _handleHmofaStoryIntercept(last.url, last.title);
+  added += 1;
+
+  if (window.virtueSpeak && entries.length > 1) {
+    window.virtueSpeak(
+      failed
+        ? `Added ${added} to your library — ${failed} couldn't be fetched.`
+        : `Added ${added} stories to your library.`,
+      5000,
+    );
+  }
+  return { added, failed };
+}
+window._handleHmofaStoryBatch = _handleHmofaStoryBatch;
+
+// ── Listen for messages sent from embedded HMOFA index ───────────────────────
+// Origin-checked: this handler calls loadStory() with a URL taken straight from
+// the message, so without the check any frame or opener on any origin could
+// drive the reader to fetch a URL of its choosing. Only the embedded index is
+// trusted, and only for the story-load verbs below.
+const HMOFA_LOAD_TYPES = new Set(['hmofa_story_click', 'open_story', 'select_story']);
+
+window.addEventListener('message', (event) => {
+  if (!event.data || event.origin !== HMOFA_ORIGIN) return;
+  const data = event.data;
+
+  // The index can ask Pocket Reader to identify itself at any time — it may
+  // finish initializing after our handshake, so the exchange works either way.
+  if (data.type === 'pocket_reader_ping') {
+    setupHmofaIframeBridge();
+    return;
+  }
+
+  // Acknowledgement from an index build that speaks the protocol. Until this
+  // arrives we must not claim tap-to-fetch works, because on an index that has
+  // not implemented it, tapping a story just navigates the frame.
+  if (data.type === 'pocket_reader_ready' || data.type === 'pocket_reader_ack') {
+    _setHmofaBridgeConnected(true);
+    return;
+  }
+
+  const isLoadVerb = HMOFA_LOAD_TYPES.has(data.type) || data.action === 'load_story';
+  if (!isLoadVerb) return;
+
+  // Batch: the index can hand over a whole shelf at once instead of the reader
+  // importing them one at a time.
+  const batch = Array.isArray(data.stories) ? data.stories : null;
+  if (batch) {
+    _handleHmofaStoryBatch(batch);
+    return;
+  }
+
+  const rawUrl = data.url || data.storyUrl || data.link || data.href;
+  if (!rawUrl) return;
+  const normUrl = typeof window.normalizeStoryUrl === 'function' ? window.normalizeStoryUrl(rawUrl) : rawUrl;
+  _handleHmofaStoryIntercept(normUrl, data.title || data.storyTitle || '');
 });
 
 function _initMasterlistStickyScrollbar() {}
@@ -1343,7 +1511,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=145', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=152', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)
@@ -1923,8 +2091,19 @@ async function _resumeStoryUpdateFromNotification() {
   }
 }
 
-function _scheduleSubscribedStoryChecks() {
+// Mobile foregrounds constantly — app switcher, notifications, lock screen —
+// and every visibilitychange used to fire a fresh sweep of up to three
+// sequential AO3 scrapes. Ten app switches while reading was thirty backend
+// scrapes on cellular. The floor keeps the 30-minute interval and the
+// notification path working while collapsing foreground churn.
+const SUBSCRIPTION_SWEEP_MIN_INTERVAL_MS = 15 * 60 * 1000;
+let _lastSubscriptionSweepAt = 0;
+
+function _scheduleSubscribedStoryChecks({ force = false } = {}) {
   if (document.hidden) return;
+  const now = Date.now();
+  if (!force && now - _lastSubscriptionSweepAt < SUBSCRIPTION_SWEEP_MIN_INTERVAL_MS) return;
+  _lastSubscriptionSweepAt = now;
   window.checkSubscribedStoryUpdates?.().catch((error) => {
     console.warn('[Updates] Scheduled story update check failed:', error);
   });

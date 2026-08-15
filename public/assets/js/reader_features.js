@@ -1,3 +1,5 @@
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v22';
+
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 }
@@ -29,7 +31,7 @@ export function ensureReaderFeatures() {
   data.history ||= [];
   data.goals ||= { weeklyMinutes: 120, weeklyChapters: 0, streakEnabled: true, updatedAt: Date.now() };
   data.settings ||= {};
-  data.settings.motionPreset ||= window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'reduced' : (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'standard' : 'cinematic');
+  data.settings.motionPreset ||= window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'reduced' : (isMobileLikePlatform(navigator.userAgent || '') ? 'standard' : 'cinematic');
   data.settings.companionFrequency ||= 'contextual';
   data.settings.libraryDensity ||= 'comfortable';
   // The old migration forced every profile to neutral, which made the separate

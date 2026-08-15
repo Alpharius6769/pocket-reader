@@ -1,8 +1,13 @@
 // engine_utils.js — shared engine constants loaded before audio_core, buffer_manager, settings_manager
 // Writes to window so all downstream ES modules read a single source of truth.
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v22';
 
 const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 2) : 2;
-const _isMobileDevice = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|Fennec|Windows Phone/i.test(navigator.userAgent);
+// Routed through the shared platform helper so a stock iPad — which reports a
+// desktop "Macintosh" UA — is capped at mobile worker counts. Getting this wrong
+// spawns up to 4 concurrent TTS workers instead of 1, each holding model
+// weights, on a device with iPhone-class per-tab memory limits.
+const _isMobileDevice = typeof navigator !== 'undefined' && isMobileLikePlatform(navigator.userAgent || '');
 
 window.HARD_CAP_WORKERS   = _isMobileDevice ? 1 : Math.min(4, Math.max(1, Math.floor(_prLogicalCores * 0.5)));
 window.MANUAL_CAP_WORKERS = _isMobileDevice ? 2 : Math.min(8, Math.max(1, Math.floor(_prLogicalCores * 0.75)));
