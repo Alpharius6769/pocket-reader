@@ -20,6 +20,7 @@ import {
   browserMajorVersion,
   detectMobilePlatform,
   isMobileLikePlatform,
+  createProsodyDriftGuard,
   probePocketWebGpuEligibility,
   readPocketCalibration,
   writePocketCalibration,
@@ -39,7 +40,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v21';
+} from './pocket_backend_policy.js?v=backend-v22';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -198,7 +199,7 @@ function _emotionFromAssetVoice(voice) {
 
 function _emotionMode() {
   const mode = window.currentStory?.narrationPreset?.emotion || window.userProfile?.settings?.voiceEmotionMode || 'balanced';
-  return ['neutral', 'balanced'].includes(mode) ? mode : 'balanced';
+  return ['neutral', 'balanced', 'expressive'].includes(mode) ? mode : 'balanced';
 }
 
 function _detectPocketEmotion(text) {
@@ -494,9 +495,51 @@ function _pocketTuningConfig() {
   };
 }
 
+// ── Long-form prosody drift guard ───────────────────────────────────────────
+// Expressive narration raises sampling temperature, and higher temperature is
+// exactly what destabilizes a long listen: artifacts accumulate over dozens of
+// paragraphs rather than showing up on the first one. So expressiveness is not
+// a fixed setting here — it is a tier that automatically steps down when this
+// session starts producing quality-guard failures, and steps back up after a
+// clean run.
+//
+// Tiers, in descending order: 'full' (POCKET_FULL_TEMP_CAPS) -> 'balanced'
+// (POCKET_BALANCED_TEMP_CAPS) -> 'neutral' (emotion detection disabled
+// entirely). Stability outranks expressiveness, so the guard only ever
+// de-escalates on evidence and re-escalates on a sustained clean streak.
+const _prosodyDrift = createProsodyDriftGuard();
+
+function _effectiveProsodyTier() {
+  return _prosodyDrift.effectiveTier(_emotionMode());
+}
+window.getPocketProsodyTier = _effectiveProsodyTier;
+
+// Called once per synthesized paragraph with whether it passed the quality
+// guard cleanly. Only tier transitions are logged, not every paragraph.
+function _recordProsodyOutcome(clean) {
+  const change = _prosodyDrift.record(clean, _emotionMode());
+  if (!change) return;
+  window.Diagnostics?.log(
+    change.direction === 'down' ? 'WARN' : 'INFO',
+    change.direction === 'down'
+      ? 'Prosody drift guard stepped down a tier'
+      : 'Prosody drift guard restored a tier',
+    change,
+  );
+}
+window._recordPocketProsodyOutcome = _recordProsodyOutcome;
+
+// Reset per story/chapter so one rough chapter does not permanently flatten the
+// rest of the book.
+window.resetPocketProsodyDrift = () => _prosodyDrift.reset();
+
 function _artifactCappedTemperature(baseTemperature, emotion, retryLevel = 0) {
-  const mode = _emotionMode();
-  const caps = POCKET_BALANCED_TEMP_CAPS;
+  // POCKET_FULL_TEMP_CAPS was previously dead: this function computed the mode
+  // and then unconditionally used the balanced table, so the wider caps could
+  // never apply no matter what the user selected.
+  const caps = _effectiveProsodyTier() === 'full'
+    ? POCKET_FULL_TEMP_CAPS
+    : POCKET_BALANCED_TEMP_CAPS;
   const cap = caps[emotion] || caps.neutral || baseTemperature;
   const capped = Math.min(Number(baseTemperature) || cap, cap);
   return Number(Math.max(0.5, capped - (retryLevel ? 0.06 : 0)).toFixed(2));
@@ -508,8 +551,11 @@ function _resolvePocketRoute(engine, voice, text, ctx = null) {
   }
   const baseVoice = _baseVoiceId(voice || window.userProfile?.settings?.pocketVoice || POCKET_DEFAULT_VOICE);
   const lockedEmotion = _emotionFromAssetVoice(voice);
-  const expressive = window.isPocketExpressiveProsodyEnabled?.()
-    ?? (window.userProfile?.settings?.expressiveProsody !== false);
+  // The drift guard can force neutral even when the user has expressive on:
+  // a session that is actively producing artifacts gets stability back first.
+  const expressive = (window.isPocketExpressiveProsodyEnabled?.()
+    ?? (window.userProfile?.settings?.expressiveProsody !== false))
+    && _effectiveProsodyTier() !== 'neutral';
   // Position-aware chapter plan wins over per-chunk detection: it applies the
   // same detector with hysteresis, so every reader of this chunk (live player,
   // background cacher, re-listen) resolves the same emotion. highConfidence is
@@ -2657,6 +2703,9 @@ window.generateChunk = async function(text, voice) {
       }
       const retry = await _generatePocketAttempt(null, text, route, 1);
       retryUsed = true;
+      // A paragraph that needed a re-render is drift evidence regardless of
+      // whether the second pass succeeded.
+      _recordProsodyOutcome(false);
       if (!retry.quality.fatal) {
         accepted = retry;
       } else {
@@ -2676,6 +2725,7 @@ window.generateChunk = async function(text, voice) {
         ? 'no retry in throughput mode'
         : 'shared engine is serving another synthesis';
       _logPocketQuality('ERROR', `Pocket synth quality guard rejected paragraph (${reason})`, first, { retryUsed: false });
+      _recordProsodyOutcome(false);
       window._lastPocketQualityFailure = {
         text,
         voice,
@@ -2684,6 +2734,9 @@ window.generateChunk = async function(text, voice) {
       return null;
     } else if (!first.quality.ok) {
       _logPocketQuality('WARN', 'Pocket synth accepted with a soft quality warning', first, { retryUsed: false });
+      _recordProsodyOutcome(false);
+    } else {
+      _recordProsodyOutcome(true);
     }
 
     const _ms = Math.round(performance.now() - _t0);

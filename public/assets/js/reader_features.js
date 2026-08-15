@@ -1,4 +1,4 @@
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v21';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v22';
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));

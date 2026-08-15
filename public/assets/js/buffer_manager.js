@@ -6,7 +6,7 @@ import {
   writePocketExpressiveChoice,
   detectMobilePlatform,
   isMobileLikePlatform,
-} from './pocket_backend_policy.js?v=backend-v21';
+} from './pocket_backend_policy.js?v=backend-v22';
 
 const HARD_CAP_WORKERS   = window.HARD_CAP_WORKERS;
 const MANUAL_CAP_WORKERS = window.MANUAL_CAP_WORKERS;

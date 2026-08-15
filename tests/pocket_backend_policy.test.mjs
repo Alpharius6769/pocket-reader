@@ -57,13 +57,19 @@ test('normalizes backend preferences', () => {
   assert.equal(normalizePocketBackend('invalid'), 'auto');
 });
 
-test('constrained mobile devices default expressive narration off', () => {
+test('constrained mobile devices stay memory-safe but keep expressive narration', () => {
+  // Expressiveness was decoupled from the memory classification: emotion
+  // selection swaps a conditioning reference and nudges temperature, it does
+  // not add resident model memory. Tying it to `constrained` left most phones
+  // narrating every paragraph in flat neutral for a reason that never applied.
+  // Long-form stability is handled by the drift guard instead.
   const android4 = classifyPocketDeviceCapability({
     userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 7)',
     deviceMemory: 4,
   });
   assert.equal(android4.constrained, true);
-  assert.equal(android4.defaultExpressiveProsody, false);
+  assert.equal(android4.memorySafeInference, true);
+  assert.equal(android4.defaultExpressiveProsody, true);
 
   const dataSaver = classifyPocketDeviceCapability({
     userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9)',
@@ -182,9 +188,13 @@ test('explicit expressive choice is device-local and always wins', () => {
   const constrained = classifyPocketDeviceCapability({
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
   });
+  // An iPhone now defaults expressive ON, so start from the default and prove
+  // both explicit choices override it in each direction.
+  assert.equal(resolvePocketExpressiveProsody({ capability: constrained, storage }), true);
+  assert.equal(writePocketExpressiveChoice(storage, 'disabled'), true);
+  assert.equal(readPocketExpressiveChoice(storage), 'disabled');
   assert.equal(resolvePocketExpressiveProsody({ capability: constrained, storage }), false);
   assert.equal(writePocketExpressiveChoice(storage, 'enabled'), true);
-  assert.equal(readPocketExpressiveChoice(storage), 'enabled');
   assert.equal(resolvePocketExpressiveProsody({ capability: constrained, storage }), true);
   assert.equal(writePocketExpressiveChoice(storage, 'disabled'), true);
   assert.equal(resolvePocketExpressiveProsody({ capability: constrained, storage }), false);

@@ -5,9 +5,9 @@ import {
 import {
   readPocketDeviceBackendPreference,
   writePocketDeviceBackendPreference,
-} from './pocket_backend_policy.js?v=backend-v21';
+} from './pocket_backend_policy.js?v=backend-v22';
 
-const NARRATION_SERVICE_WORKER_VERSION = '146';
+const NARRATION_SERVICE_WORKER_VERSION = '147';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -368,7 +368,7 @@ export function initSettingsUI() {
     expressiveToggle.dataset.prInitialized = '1';
     expressiveToggle.dataset.prLast = String(expressiveToggle.checked);
   }
-  if (el('voice-emotion-mode-select')) el('voice-emotion-mode-select').value = ['neutral', 'balanced'].includes(settings.voiceEmotionMode) ? settings.voiceEmotionMode : 'balanced';
+  if (el('voice-emotion-mode-select')) el('voice-emotion-mode-select').value = ['neutral', 'balanced', 'expressive'].includes(settings.voiceEmotionMode) ? settings.voiceEmotionMode : 'balanced';
   // Opt-in: comma/semicolon splitting creates many tiny synthesis chunks and is
   // the dominant cause of slow mobile caching when left on by default.
   if (el('punct-pause-toggle'))        el('punct-pause-toggle').checked        = settings.pausePunctuation === true;
@@ -601,7 +601,7 @@ export function applySettings() {
     }
     if (el('voice-emotion-mode-select')) {
       const mode = el('voice-emotion-mode-select').value;
-      settings.voiceEmotionMode = ['neutral', 'balanced'].includes(mode) ? mode : 'balanced';
+      settings.voiceEmotionMode = ['neutral', 'balanced', 'expressive'].includes(mode) ? mode : 'balanced';
     }
     if (el('punct-pause-toggle'))        settings.pausePunctuation   = el('punct-pause-toggle').checked;
     if (el('pause-tags-toggle'))         settings.pauseTags          = el('pause-tags-toggle').checked;

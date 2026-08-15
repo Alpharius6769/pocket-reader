@@ -1,5 +1,5 @@
 import { animate, stagger } from './motion_lite.js';
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v21';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v22';
 import {
   DEFAULT_POCKET_PLAYBACK_SPEED,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -160,7 +160,7 @@ function normalizePocketVoiceSetting(profile) {
   if (settings.expressiveProsody === undefined) {
     settings.expressiveProsody = true;
   }
-  if (!['neutral', 'balanced'].includes(settings.voiceEmotionMode)) {
+  if (!['neutral', 'balanced', 'expressive'].includes(settings.voiceEmotionMode)) {
     settings.voiceEmotionMode = 'balanced';
   }
   if (settings.pausePunctuation === undefined) settings.pausePunctuation = true;

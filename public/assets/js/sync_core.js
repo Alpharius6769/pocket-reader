@@ -1,4 +1,4 @@
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v21';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v22';
 
 const PROFILE_SCHEMA_VERSION = 3;
 const DEVICE_SETTING_KEYS = new Set([

@@ -193,7 +193,7 @@ test('narration isolation and streamed PCM assets are versioned together', async
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
   assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v47/);
-  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v21/);
+  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v22/);
   assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v8/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
   const shell = await read('public/index.html');

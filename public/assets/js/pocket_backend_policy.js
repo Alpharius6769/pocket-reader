@@ -146,7 +146,16 @@ export function classifyPocketDeviceCapability(options = {}) {
     // supported iPhone can keep prosody while still using the bounded iOS
     // lifecycle because WebKit exposes no reliable live-memory headroom.
     memorySafeInference: platform === 'ios' || constrained,
-    defaultExpressiveProsody: !constrained,
+    // Expressive prosody is no longer gated on the memory classification.
+    // Emotion selection swaps which conditioning reference is used and nudges
+    // sampling temperature; it does not add resident model memory, so tying it
+    // to `constrained` meant most phones narrated every paragraph in flat
+    // neutral for a reason that never applied to them. Long-form stability —
+    // the real risk — is handled where it actually occurs, by the drift guard
+    // in audio_core, which steps expressiveness down on measured artifacts and
+    // back up on a clean streak. Data-saver and explicit low-memory mode still
+    // opt out, since those users asked for the cheapest possible path.
+    defaultExpressiveProsody: !(saveData || lowMemoryMode),
     fullStoryVoicePrefetch: platform !== 'ios' && !constrained,
     reasons: [...new Set(reasons)],
   };
@@ -338,6 +347,74 @@ export function writePocketExpressiveChoice(storage = globalThis.localStorage, c
   } catch (_) {
     return false;
   }
+}
+
+// ── Long-form prosody drift guard ───────────────────────────────────────────
+// Expressive narration raises sampling temperature, and temperature is exactly
+// what destabilizes a long listen: artifacts accumulate over dozens of
+// paragraphs rather than appearing on the first one. So expressiveness is a
+// tier that steps down automatically on measured quality failures and back up
+// after a sustained clean run — stability outranks expressiveness, but a rough
+// patch should not flatten the rest of the book either.
+//
+// Kept here, pure and dependency-free, so the state machine is directly
+// testable; audio_core owns only the wiring.
+export const POCKET_PROSODY_TIERS = ['neutral', 'balanced', 'full'];
+export const POCKET_PROSODY_DRIFT_WINDOW = 12;
+export const POCKET_PROSODY_DRIFT_TRIP = 3;
+export const POCKET_PROSODY_RECOVERY_STREAK = 20;
+
+export function requestedProsodyTier(emotionMode) {
+  if (emotionMode === 'neutral') return 'neutral';
+  return emotionMode === 'expressive' ? 'full' : 'balanced';
+}
+
+export function createProsodyDriftGuard(options = {}) {
+  const windowSize = Number(options.window) || POCKET_PROSODY_DRIFT_WINDOW;
+  const trip = Number(options.trip) || POCKET_PROSODY_DRIFT_TRIP;
+  const recovery = Number(options.recovery) || POCKET_PROSODY_RECOVERY_STREAK;
+  let outcomes = [];
+  let cleanStreak = 0;
+  let demotions = 0;
+
+  const effectiveTier = (emotionMode) => {
+    const requestedIndex = POCKET_PROSODY_TIERS.indexOf(requestedProsodyTier(emotionMode));
+    return POCKET_PROSODY_TIERS[Math.max(0, requestedIndex - demotions)];
+  };
+
+  return {
+    effectiveTier,
+    get demotions() { return demotions; },
+    get cleanStreak() { return cleanStreak; },
+    reset() { outcomes = []; cleanStreak = 0; demotions = 0; },
+    // Returns a change descriptor when the tier moved, otherwise null, so the
+    // caller can log exactly the transitions and not every paragraph.
+    record(clean, emotionMode) {
+      outcomes.push(clean === true);
+      if (outcomes.length > windowSize) outcomes.shift();
+
+      if (clean) {
+        cleanStreak += 1;
+        if (demotions > 0 && cleanStreak >= recovery) {
+          demotions -= 1;
+          cleanStreak = 0;
+          outcomes = [];
+          return { direction: 'up', tier: effectiveTier(emotionMode), demotions };
+        }
+        return null;
+      }
+
+      cleanStreak = 0;
+      const failures = outcomes.filter((ok) => ok === false).length;
+      const requestedIndex = POCKET_PROSODY_TIERS.indexOf(requestedProsodyTier(emotionMode));
+      if (failures >= trip && demotions < requestedIndex) {
+        demotions += 1;
+        outcomes = [];
+        return { direction: 'down', tier: effectiveTier(emotionMode), demotions, failures };
+      }
+      return null;
+    },
+  };
 }
 
 export function resolvePocketExpressiveProsody(options = {}) {

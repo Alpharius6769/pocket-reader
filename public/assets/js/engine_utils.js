@@ -1,6 +1,6 @@
 // engine_utils.js — shared engine constants loaded before audio_core, buffer_manager, settings_manager
 // Writes to window so all downstream ES modules read a single source of truth.
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v21';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v22';
 
 const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 2) : 2;
 // Routed through the shared platform helper so a stock iPad — which reports a

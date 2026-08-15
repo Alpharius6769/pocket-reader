@@ -134,11 +134,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/api_core.js?v=search-v18">
 <link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v5">
 <link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v12">
-<link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v21">
+<link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v22">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v8">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v50">
-<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v14">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v51">
+<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v15">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v7">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v7">
 <link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v91">
@@ -154,7 +154,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=146', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=147', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -999,8 +999,9 @@ Playback-only modules remain deferred so they do not compete with first paint.
             <select id="voice-emotion-mode-select" name="voice-emotion-mode-select" class="settings-control" onchange="applySettings()">
               <option value="neutral">Neutral only</option>
               <option value="balanced" selected>Balanced emotional references (Recommended)</option>
+              <option value="expressive">Expressive — widest emotional range</option>
             </select>
-            <p class="pr-layout-123">Balanced follows sustained scene emotion while keeping voice changes stable. Neutral keeps one tone throughout.</p>
+            <p class="pr-layout-123">Balanced follows sustained scene emotion while keeping voice changes stable. Expressive widens the range further; if a long listen starts producing artifacts it steps itself back down automatically, then recovers. Neutral keeps one tone throughout.</p>
 
             <label class="settings-label pr-layout-118" for="punct-pause-toggle">Punctuation pauses (slower; off by default)</label>
             <input id="punct-pause-toggle" name="punct-pause-toggle" type="checkbox" onchange="applySettings()">
@@ -1383,9 +1384,9 @@ Playback-only modules remain deferred so they do not compete with first paint.
     <script src='assets/js/engine_utils.js' type='module'></script>
     <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v15' type='module'></script>
     <script src='assets/js/tts_pronunciation_core.js?v=pron-v11' type='module'></script>
-    <script src='assets/js/library_manager.js?v=library-v14' type='module'></script>
+    <script src='assets/js/library_manager.js?v=library-v15' type='module'></script>
     <script src='assets/js/device_setup.js?v=device-setup-v8' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v50' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v51' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v7' type='module'></script>
     <script src='assets/js/reader_features.js?v=features-v7' type='module'></script>
     <script src='assets/js/ui_controller.js?v=ui-v91' type='module'></script>
