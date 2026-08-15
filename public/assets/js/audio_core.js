@@ -3219,14 +3219,19 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
   const _playT0 = performance.now();
   let _cacheHit = true;
 
-  let audioBlob = null;
-  for (const tag of _prosodyCacheTagVariants(engine)) {
-    audioBlob = await getAudioChunk(storyRef, chapIdx, paraIdx, engine, cleanVoice + tag, text);
-    if (!audioBlob && storyRef !== title) {
-      audioBlob = await getAudioChunk(title, chapIdx, paraIdx, engine, cleanVoice + tag, text);
-      if (audioBlob) saveAudioChunk(storyRef, chapIdx, paraIdx, engine, cleanVoice + tag, audioBlob, false, text).catch(() => {});
+  // A paragraph handed over by the preloader needs no storage round-trip, which
+  // is the whole point: with the screen locked, the `ended` window is too short
+  // to reliably complete an IndexedDB read before play() must be called.
+  let audioBlob = _takePreloadedParagraph(storyRef, chapIdx, paraIdx, cleanVoice);
+  if (!audioBlob) {
+    for (const tag of _prosodyCacheTagVariants(engine)) {
+      audioBlob = await getAudioChunk(storyRef, chapIdx, paraIdx, engine, cleanVoice + tag, text);
+      if (!audioBlob && storyRef !== title) {
+        audioBlob = await getAudioChunk(title, chapIdx, paraIdx, engine, cleanVoice + tag, text);
+        if (audioBlob) saveAudioChunk(storyRef, chapIdx, paraIdx, engine, cleanVoice + tag, audioBlob, false, text).catch(() => {});
+      }
+      if (audioBlob) break;
     }
-    if (audioBlob) break;
   }
   if (!(audioBlob instanceof Blob) || audioBlob.size < 100) audioBlob = null;
   let streamedPlayback = false;
@@ -3365,6 +3370,11 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
       try { await _audioCtx.resume(); } catch (e) {}
     }
     await window.currentAudio.play();
+    // Resolve the next paragraph now, while this one is playing and the tab
+    // still has normal execution. At the boundary it is handed over
+    // synchronously, so a locked screen never has to complete a storage read
+    // inside the brief post-`ended` window.
+    _preloadNextParagraphAudio();
     // Play-start latency telemetry — flags the "stuck play button" class of
     // issues (cache miss forcing an on-the-fly synth) in diagnostic files.
     if (window.Diagnostics) {
@@ -3473,6 +3483,10 @@ async function _resumePausedPocketAudio() {
 // old clip — without this each jump leaks one ObjectURL. Also nulls WebSpeech
 // utterances so _playWebSpeech speaks the new text instead of resuming the old.
 function _releaseCurrentAudio() {
+  // Any manual jump invalidates the preloaded next paragraph. The key check in
+  // _takePreloadedParagraph would already refuse a stale entry, so this is about
+  // not holding a decoded blob for audio the reader has skipped past.
+  _discardParagraphPreload();
   _activePocketStream?.stop?.();
   _activePocketStream = null;
   const a = window.currentAudio;
@@ -3521,33 +3535,119 @@ function _checkpointPlaybackProgress(forceCloud = false) {
   }
 }
 
-function _handleParagraphEnd() {
-  if (window.currentStory?.chapters) {
-    const chap = window.currentStory.chapters[window.currentChapterIndex];
-    if (chap?.paragraphs) {
-      const text = chap.paragraphs[window.currentParagraphIndex] || '';
-      const words = text.split(/\s+/).filter(Boolean).length;
+// ── Next-paragraph preload (locked-screen playback continuity) ───────────────
+// With the screen off, the only JS a backgrounded tab reliably gets is the
+// short window after a media event. Resolving the next paragraph inside that
+// window means an IndexedDB open + read + blob decode before play() can even be
+// called, and if the window closes first, narration simply stops — which is why
+// playback died after one paragraph once the phone locked.
+//
+// So the next paragraph is resolved *while the current one is still playing*,
+// when there is plenty of time, and handed over synchronously at the boundary.
+// Only already-cached audio is preloaded; synthesis stays the lookahead's job.
+let _paragraphPreload = null;   // { key, blob }
+let _preloadInFlight = false;
 
-      if (window.userProfile?.stats) {
-        if (typeof window.incrementDeviceStat === 'function') window.incrementDeviceStat('totalWords', words);
-        else {
-          window.userProfile.stats.totalWords = (window.userProfile.stats.totalWords || 0) + words;
-          window.userProfile.stats.hoursListened = window.userProfile.stats.totalWords / 9000;
-        }
-        // Shared daily tracking (streak / distinct days / first day) + the
-        // achievement check. Listening counts as activity for the day too.
-        if (typeof window.recordDailyActivity === 'function') window.recordDailyActivity();
+const _preloadKey = (storyRef, chapIdx, paraIdx, voice) => `${storyRef}::${chapIdx}::${paraIdx}::${voice}`;
+
+function _takePreloadedParagraph(storyRef, chapIdx, paraIdx, voice) {
+  if (!_paragraphPreload) return null;
+  if (_paragraphPreload.key !== _preloadKey(storyRef, chapIdx, paraIdx, voice)) return null;
+  const blob = _paragraphPreload.blob;
+  _paragraphPreload = null;
+  return blob instanceof Blob && blob.size >= 100 ? blob : null;
+}
+
+function _discardParagraphPreload() {
+  _paragraphPreload = null;
+}
+window._discardParagraphPreload = _discardParagraphPreload;
+
+async function _preloadNextParagraphAudio() {
+  if (_preloadInFlight || !window.isPlaying) return;
+  const story = window.currentStory;
+  if (!story?.chapters) return;
+  const next = _peekNextIndices(window.currentChapterIndex, window.currentParagraphIndex);
+  if (!next) return;
+
+  const engine = _resolveActiveEngine();
+  if (engine !== 'pocket') return;
+  const text = story.chapters[next.c]?.paragraphs?.[next.p];
+  if (!text || !text.trim() || _isMetaParagraph(text)) return;
+
+  const title = story.title;
+  const storyRef = story.storyKey || window.getStoryStableKey?.(story) || title;
+  const selVoice = document.getElementById('voice-selector')?.value || POCKET_DEFAULT_VOICE;
+  const cleanVoice = resolveVoiceWithSentiment(engine, selVoice, text, {
+    storyTitle: title, chapIdx: next.c, paraIdx: next.p,
+  });
+  const key = _preloadKey(storyRef, next.c, next.p, cleanVoice);
+  if (_paragraphPreload?.key === key) return;
+
+  _preloadInFlight = true;
+  try {
+    for (const tag of _prosodyCacheTagVariants(engine)) {
+      const blob = await getAudioChunk(storyRef, next.c, next.p, engine, cleanVoice + tag, text)
+        || (storyRef !== title
+          ? await getAudioChunk(title, next.c, next.p, engine, cleanVoice + tag, text)
+          : null);
+      if (blob instanceof Blob && blob.size >= 100) {
+        // Indices may have moved while awaiting (a skip, or the paragraph ended
+        // early); a stale entry is simply never claimed, and the key check in
+        // _takePreloadedParagraph makes that safe rather than wrong.
+        _paragraphPreload = { key, blob };
+        return;
       }
     }
+  } catch (error) {
+    window.Diagnostics?.log?.('WARN', 'Next-paragraph preload skipped', { error: error?.message || String(error) });
+  } finally {
+    _preloadInFlight = false;
+  }
+}
+window._preloadNextParagraphAudio = _preloadNextParagraphAudio;
+
+// Read-only view of the preload slot. Background playback fails silently by
+// nature — the phone is in a pocket, nobody is watching a console — so being
+// able to ask "is the next paragraph actually staged?" is the difference
+// between diagnosing a stall and guessing at it.
+window.inspectPocketPreload = () => (_paragraphPreload
+  ? { staged: true, key: _paragraphPreload.key, bytes: _paragraphPreload.blob?.size ?? 0 }
+  : { staged: false });
+
+function _handleParagraphEnd() {
+  // Ordering here is load-bearing for locked-screen playback. This runs inside
+  // the `ended` media event, which is the only JS window a backgrounded iOS tab
+  // reliably gets — and play() is far more likely to be honoured early in it.
+  // Statistics, streak tracking and the achievement sweep used to run FIRST,
+  // spending that window on bookkeeping before the next paragraph was even
+  // requested. Capture what the stats need, start the audio, then account.
+  let pendingWords = 0;
+  const chap = window.currentStory?.chapters?.[window.currentChapterIndex];
+  if (chap?.paragraphs) {
+    const text = chap.paragraphs[window.currentParagraphIndex] || '';
+    pendingWords = text.split(/\s+/).filter(Boolean).length;
   }
 
   const canAdvance = _advanceIndices();
-  _checkpointPlaybackProgress(!canAdvance);
   if (canAdvance) {
     playCurrentParagraph();
-  } else {
-    _finishStory();
   }
+
+  // Everything below is bookkeeping — safe to run after playback is under way.
+  if (pendingWords && window.userProfile?.stats) {
+    if (typeof window.incrementDeviceStat === 'function') window.incrementDeviceStat('totalWords', pendingWords);
+    else {
+      window.userProfile.stats.totalWords = (window.userProfile.stats.totalWords || 0) + pendingWords;
+      window.userProfile.stats.hoursListened = window.userProfile.stats.totalWords / 9000;
+    }
+    // Shared daily tracking (streak / distinct days / first day) + the
+    // achievement check. Listening counts as activity for the day too.
+    if (typeof window.recordDailyActivity === 'function') window.recordDailyActivity();
+  }
+
+  _checkpointPlaybackProgress(!canAdvance);
+  if (!canAdvance) _finishStory();
 }
 
 function _advanceIndices() {
