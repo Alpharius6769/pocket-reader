@@ -54,12 +54,45 @@ export function normalizePocketBackend(value) {
 // on platform heuristics: iOS clamps hardwareConcurrency to 4 regardless of the
 // real core count, and Apple A-series chips always ship exactly 2 performance
 // cores.
-export function detectMobilePlatform(userAgent = globalThis.navigator?.userAgent || '') {
+// iPadOS 13+ Safari sends a desktop "Macintosh; Intel Mac OS X" user agent by
+// default, so a bare UA regex classifies a stock iPad as 'desktop'. That is not
+// cosmetic: 'desktop' unlocks WebGPU, the +84MB fifth decode-block model, full
+// story voice prefetch, and skips both the 2-thread WASM clamp and memory-safe
+// inference — the exact configuration that OOM-killed an iPhone 13 (see the
+// field-crash note in pocket_worker.js). An iPad runs the same WebKit per-tab
+// memory budget, so it must resolve to 'ios'.
+//
+// navigator.platform + maxTouchPoints is the only reliable way to separate an
+// iPad from a real Mac: desktop Safari reports maxTouchPoints 0, iPadOS reports
+// 5. Signals may be passed explicitly because WorkerNavigator exposes no
+// maxTouchPoints — the main thread resolves the platform once and hands it to
+// the worker rather than letting the worker re-sniff and get it wrong.
+export function isIpadOsDesktopUa(signals = {}) {
+  const nav = globalThis.navigator;
+  const platformId = String(signals.platform ?? nav?.platform ?? '');
+  const touchPoints = Number(signals.maxTouchPoints ?? nav?.maxTouchPoints ?? 0);
+  return /^Mac/i.test(platformId) && touchPoints > 1;
+}
+
+export function detectMobilePlatform(userAgent = globalThis.navigator?.userAgent || '', signals = {}) {
   const ua = String(userAgent);
+  if (signals.platformOverride) return signals.platformOverride;
   if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
+  // Only consider the touch heuristic for a Mac-family UA; every other UA is
+  // already classified correctly by the string itself.
+  if (/Macintosh|Mac OS X/i.test(ua) && isIpadOsDesktopUa(signals)) return 'ios';
   if (/Android/i.test(ua)) return 'android';
   if (/Mobi|Mobile|Fennec|Windows Phone/i.test(ua)) return 'mobile';
   return 'desktop';
+}
+
+// Shared predicates so callers stop hand-rolling UA regexes that miss iPad.
+export function isIosLikePlatform(userAgent = globalThis.navigator?.userAgent || '', signals = {}) {
+  return detectMobilePlatform(userAgent, signals) === 'ios';
+}
+
+export function isMobileLikePlatform(userAgent = globalThis.navigator?.userAgent || '', signals = {}) {
+  return detectMobilePlatform(userAgent, signals) !== 'desktop';
 }
 
 // Memory classification is intentionally conservative and privacy-preserving.

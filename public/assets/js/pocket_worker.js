@@ -14,13 +14,14 @@ import {
   POCKET_WEBGPU_BUNDLE,
   POCKET_GPU_RESIDENT_STATE_BYTES,
   normalizePocketBackend,
+  detectMobilePlatform,
   recommendedWasmThreadCount,
   percentile,
   selectCalibratedBackend,
   selectWebGpuVariant,
   shouldDemoteWebGpuSustained,
   POCKET_WEBGPU_WASM_PARITY_RATIO,
-} from './pocket_backend_policy.js?v=backend-v20';
+} from './pocket_backend_policy.js?v=backend-v21';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   computePocketFrameBudget,
@@ -335,6 +336,13 @@ let currentVoiceName = null;
 let voiceConditioningCache = new Map();
 const MAX_CONSTRAINED_CUSTOM_VOICES = 2;
 let constrainedMemoryMode = false;
+// Platform resolved by the main thread and delivered in the init message.
+// The worker must NOT re-sniff this: WorkerNavigator exposes no maxTouchPoints,
+// so a worker-side check cannot tell a stock iPad (desktop "Macintosh" UA) from
+// a real Mac, and would silently hand an iPad the desktop memory profile.
+let clientPlatform = '';
+const isIosClient = () => clientPlatform === 'ios';
+const isMobileClient = () => clientPlatform !== '' && clientPlatform !== 'desktop';
 
 let stTensors = [];
 let stTensorCache = new Map();
@@ -1680,7 +1688,9 @@ async function loadOrt(backend = 'wasm', { preferMinimalOrt = false } = {}) {
 function resolveWasmThreadCount() {
   if (self.crossOriginIsolated !== true || typeof SharedArrayBuffer === 'undefined') return 1;
   const userAgent = self.navigator?.userAgent || '';
-  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
+  // clientPlatform covers iPad, whose UA claims Macintosh; fall back to the UA
+  // only before init has landed.
+  const mobile = clientPlatform ? isMobileClient() : /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
   const recommended = recommendedWasmThreadCount({
     crossOriginIsolated: true,
     hardwareConcurrency: Number(self.navigator?.hardwareConcurrency || 0),
@@ -1967,7 +1977,7 @@ async function loadBundle(language, {
 
   const gpuBlockFilename = webGpuBundleMetadata?.model_files?.[WEBGPU_BLOCK_ROLE];
   const gpuMimiFilename = webGpuBundleMetadata?.model_files?.[WEBGPU_MIMI_ROLE];
-  const iosWebKit = /iPhone|iPad|iPod/i.test(self.navigator?.userAgent || '');
+  const iosWebKit = isIosClient();
   const preferUnifiedWasmCore = currentBackend === 'wasm'
     && language === DEFAULT_LANGUAGE
     && (iosWebKit || constrainedMemoryMode);
@@ -2645,8 +2655,12 @@ self.onmessage = async (e) => {
 
   try {
     if (type === "init") {
-      const isIosDevice = /iPhone|iPad|iPod/i.test(self.navigator?.userAgent || '');
-      constrainedMemoryMode = data.constrainedMemoryMode === true || isIosDevice;
+      // Trust the main thread's resolved platform; fall back to a worker-side
+      // UA sniff only if it was not supplied (older client, replayed message).
+      clientPlatform = typeof data.clientPlatform === 'string' && data.clientPlatform
+        ? data.clientPlatform
+        : detectMobilePlatform(self.navigator?.userAgent || '');
+      constrainedMemoryMode = data.constrainedMemoryMode === true || isIosClient();
       requestedBackend = normalizePocketBackend(data.backendPreference);
       requestedWasmThreadCount = Number(data.wasmThreadCount) || 0;
       wasmReferenceRtf = Number(data.wasmReferenceRtf) || 0;

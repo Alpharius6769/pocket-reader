@@ -1,4 +1,5 @@
 import { animate, stagger } from './motion_lite.js';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v21';
 import {
   DEFAULT_POCKET_PLAYBACK_SPEED,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -378,7 +379,7 @@ function _defaultProfile() {
       theme: "slate",
       companion: "virtue",
       companionFrequency: "contextual",
-      motionPreset: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? "reduced" : (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') ? "standard" : "cinematic"),
+      motionPreset: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? "reduced" : (isMobileLikePlatform(navigator.userAgent || '') ? "standard" : "cinematic"),
       readerFontFamily: "'Literata Local', Georgia, serif",
       readerWidth: 78,
       readerLineHeight: 1.7,

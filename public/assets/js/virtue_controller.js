@@ -1,4 +1,5 @@
 import { animate } from './motion_lite.js';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v21';
 
 export const virtueState = {
   virtueCooldown: false,
@@ -117,7 +118,7 @@ function _isMobileViewport() {
   try {
     return window.matchMedia('(max-width: 820px), (pointer: coarse)').matches;
   } catch (_) {
-    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    return isMobileLikePlatform(navigator.userAgent || '');
   }
 }
 

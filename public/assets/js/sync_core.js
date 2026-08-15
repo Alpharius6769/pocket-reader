@@ -1,3 +1,5 @@
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v21';
+
 const PROFILE_SCHEMA_VERSION = 3;
 const DEVICE_SETTING_KEYS = new Set([
   'maxWorkers', 'enableManualWorkers', '_engineManuallySet',
@@ -52,7 +54,9 @@ export function getDeviceId() {
 window.getPocketReaderDeviceId = getDeviceId;
 
 function defaultMotionPreset() {
-  const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  // iPad must land on 'standard', not 'cinematic': it reports a desktop UA but
+  // runs mobile-class thermals, and cinematic motion is a real heat/battery cost.
+  const mobile = isMobileLikePlatform(navigator.userAgent || '');
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   return reduced ? 'reduced' : (mobile ? 'standard' : 'cinematic');
 }

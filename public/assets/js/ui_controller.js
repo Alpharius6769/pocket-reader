@@ -1343,7 +1343,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=145', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=146', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)
@@ -1923,8 +1923,19 @@ async function _resumeStoryUpdateFromNotification() {
   }
 }
 
-function _scheduleSubscribedStoryChecks() {
+// Mobile foregrounds constantly — app switcher, notifications, lock screen —
+// and every visibilitychange used to fire a fresh sweep of up to three
+// sequential AO3 scrapes. Ten app switches while reading was thirty backend
+// scrapes on cellular. The floor keeps the 30-minute interval and the
+// notification path working while collapsing foreground churn.
+const SUBSCRIPTION_SWEEP_MIN_INTERVAL_MS = 15 * 60 * 1000;
+let _lastSubscriptionSweepAt = 0;
+
+function _scheduleSubscribedStoryChecks({ force = false } = {}) {
   if (document.hidden) return;
+  const now = Date.now();
+  if (!force && now - _lastSubscriptionSweepAt < SUBSCRIPTION_SWEEP_MIN_INTERVAL_MS) return;
+  _lastSubscriptionSweepAt = now;
   window.checkSubscribedStoryUpdates?.().catch((error) => {
     console.warn('[Updates] Scheduled story update check failed:', error);
   });

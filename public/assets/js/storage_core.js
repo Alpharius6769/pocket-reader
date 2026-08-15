@@ -1,3 +1,5 @@
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v21';
+
 const DB_NAME = 'PocketReaderDB';
 const DB_VERSION = 3;
 let dbPromise = null;
@@ -517,7 +519,7 @@ function getAudioKey(storyTitle, chapIdx, paraIdx, engine, voice) {
 // Safari quota limits on long stories. Both a count cap and a byte budget now
 // apply to non-permanent chunks, and the budget tightens when the browser
 // reports quota pressure or the user enabled Low Memory Mode.
-const _IS_MOBILE_STORAGE = typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+const _IS_MOBILE_STORAGE = typeof navigator !== 'undefined' && isMobileLikePlatform(navigator.userAgent || '');
 
 function _tempCacheBudgetBytes(aggressive = false) {
   const lowMem = !!window.userProfile?.settings?.lowMemoryMode;

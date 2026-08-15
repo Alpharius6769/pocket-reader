@@ -6,7 +6,8 @@ import {
   readPocketDeviceSetup,
   wasmThreadCandidates,
   POCKET_DEVICE_SETUP_KEY,
-} from './pocket_backend_policy.js?v=backend-v20';
+  isIosLikePlatform,
+} from './pocket_backend_policy.js?v=backend-v21';
 
 const SETTINGS_RISK_ACK_KEY = 'pr_settings_risk_ack_v1';
 const SUPPORT_NOTICE_KEY = 'pr_device_support_notice_v2';
@@ -358,7 +359,7 @@ export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
 
 window.startPocketDeviceSetup = () => runPocketDeviceDiagnostics({ onboarding: true }).catch((error) => {
   setSetupProgress(100, 'The benchmark could not finish; safe WASM settings will be used.');
-  const capability = { platform: /iPhone|iPad|iPod/i.test(navigator.userAgent || '') ? 'ios' : 'mobile', constrained: true, memorySafeInference: true };
+  const capability = { platform: isIosLikePlatform(navigator.userAgent || '') ? 'ios' : 'mobile', constrained: true, memorySafeInference: true };
   const support = { status: 'unverified', awayModeRecommended: true, reason: error?.message || String(error) };
   const record = writePocketDeviceSetup(localStorage, {
     capability, support, recommendedBackend: 'wasm', wasmThreads: 1,

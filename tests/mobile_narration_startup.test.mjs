@@ -10,8 +10,8 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v61'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v50'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v62'\)/);
+  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v51'\)/);
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
@@ -95,10 +95,15 @@ test('a narration-resume fix advances the immutable module and service-worker re
     read('public/sw.js'),
     read('public/index.html'),
   ]);
-  assert.match(loader, /buffer_manager\.js\?v=buffer-v50/);
-  assert.match(worker, /buffer_manager\.js\?v=buffer-v50/);
+  assert.match(loader, /buffer_manager\.js\?v=buffer-v51/);
+  assert.match(worker, /buffer_manager\.js\?v=buffer-v51/);
   assert.match(worker, /pocket-reader-core-v14\d/);
-  assert.match(shell, /sw\.js\?v=145/);
+  // Derived, not pinned: the shell must register whatever revision the service
+  // worker actually ships. Hardcoding the number here only forced a mechanical
+  // edit on every bump without ever checking the thing that matters.
+  const swRevision = worker.match(/pocket-reader-core-v(\d+)/)?.[1];
+  assert.ok(swRevision, 'sw.js must declare a versioned cache name');
+  assert.match(shell, new RegExp(`sw\\.js\\?v=${swRevision}\\b`));
   assert.match(buffer, /storyRef/);
 });
 

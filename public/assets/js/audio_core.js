@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v11';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v12';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -19,6 +19,7 @@ import {
   recommendedPocketCacheWorkerCount,
   browserMajorVersion,
   detectMobilePlatform,
+  isMobileLikePlatform,
   probePocketWebGpuEligibility,
   readPocketCalibration,
   writePocketCalibration,
@@ -38,7 +39,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v20';
+} from './pocket_backend_policy.js?v=backend-v21';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -873,7 +874,7 @@ async function _preparePocketBackendPlan(force = false) {
     const deviceSetup = readPocketDeviceSetup(localStorage);
     const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
     const userAgent = navigator.userAgent || '';
-    const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
+    const mobile = isMobileLikePlatform(userAgent);
     const platform = detectMobilePlatform(userAgent);
     const stickyContext = {
       browserMajor: browserMajorVersion(userAgent),
@@ -1140,7 +1141,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v46', document.baseURI).href;
+        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v47', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -1433,6 +1434,9 @@ async function _loadPocketEngine() {
           mimiProvider: _pocketBackendRuntime.mimiProvider,
           gpuSyncGroupBlocks: _pocketBackendRuntime.gpuSyncGroupBlocks,
           constrainedMemoryMode: window.isPocketDeviceMemorySafeMode?.() !== false,
+          // Resolved here because WorkerNavigator has no maxTouchPoints, so the
+          // worker cannot distinguish an iPad from a Mac on its own.
+          clientPlatform: detectMobilePlatform(navigator.userAgent || ''),
         });
       });
     };
@@ -1442,7 +1446,7 @@ async function _loadPocketEngine() {
     // ── Hard timeout on engine load ──────────────────────────────────────
     // Allow slow first-time mobile downloads while still bounding a silent
     // network or worker failure. The timer now covers worker creation too.
-    const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    const isMobileDevice = isMobileLikePlatform(navigator.userAgent || '');
     const ENGINE_LOAD_TIMEOUT_MS = (isMobileDevice ? 20 : 12) * 60 * 1000;
     const engineLoadTimeout = new Promise((_, reject) => {
       engineLoadTimerId = setTimeout(
@@ -2910,6 +2914,20 @@ let _audioCtx = window.__pocketMobileAudioContext || null;
 let _pocketWorkletModulePromise = null;
 let _activePocketStream = null;
 
+// Suspend the AudioContext once nothing is streaming through it. This is a
+// desktop-only concern by construction: _preferDirectMobileMediaPlayback()
+// routes every phone and tablet to a bare HTMLAudioElement (iOS suspends a Web
+// Audio graph on screen lock), so _audioCtx is never created there. On desktop
+// a running context keeps the audio thread alive through every pause, which is
+// real idle power for no benefit. The context object is retained rather than
+// closed — _createPocketPcmStream and the keep-alive path both resume it, and
+// a closed context cannot be revived.
+function _suspendIdleAudioContext() {
+  if (!_audioCtx || _activePocketStream || window.isPlaying) return;
+  if (_audioCtx.state !== 'running') return;
+  Promise.resolve(_audioCtx.suspend()).catch(() => {});
+}
+
 async function _createPocketPcmStream(onEnded) {
   if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (!_audioCtx.audioWorklet) throw new Error('AudioWorklet is unavailable.');
@@ -3331,6 +3349,7 @@ export function pausePlayback() {
   stopBgKeepAlive(); // stop keep-alive when not actively playing
   _activePocketStream?.stop?.();
   _activePocketStream = null;
+  _suspendIdleAudioContext();
 
   if (window.currentAudio instanceof HTMLAudioElement) {
     window.currentAudio.pause();
@@ -3474,6 +3493,7 @@ function _finishStory() {
   if (typeof window._setControlsLocked === 'function') window._setControlsLocked(false);
   _activePocketStream?.stop?.();
   _activePocketStream = null;
+  _suspendIdleAudioContext();
   stopBgKeepAlive();
   _scheduleWorkerIdleRelease();
 

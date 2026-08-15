@@ -31,6 +31,7 @@ export const Diagnostics = {
   maxSize: 500,
   _dirty: false,
   _saveTimer: null,
+  _memTimer: null,
   _memSnapshot: null,
   _appVersion: null,
 
@@ -54,11 +55,17 @@ export const Diagnostics = {
       }
     } catch (e) {}
 
-    // Flush on tab close / navigation
-    window.addEventListener('beforeunload', () => this._flush());
+    // Flush on tab close / navigation. pagehide is the one that actually fires
+    // on mobile — iOS in particular routinely tears a tab down without ever
+    // dispatching beforeunload — and a registered beforeunload listener costs
+    // bfcache eligibility in some engines, so it is deliberately not used here.
     window.addEventListener('pagehide', () => this._flush());
 
-    // Cache performance.memory every 5s to avoid reading it on every log call
+    // Cache performance.memory every 5s to avoid reading it on every log call.
+    // Paused while the tab is hidden: a backgrounded reader has nothing to log,
+    // and a 5s wake that runs for the life of the session is pure battery cost
+    // on mobile. Chromium-only either way — WebKit does not expose
+    // performance.memory, so iOS never starts this timer at all.
     if (performance && performance.memory) {
       const snapMem = () => {
         this._memSnapshot = {
@@ -68,7 +75,16 @@ export const Diagnostics = {
         };
       };
       snapMem();
-      setInterval(snapMem, 5000);
+      this._memTimer = setInterval(snapMem, 5000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          clearInterval(this._memTimer);
+          this._memTimer = null;
+        } else if (!this._memTimer) {
+          snapMem();
+          this._memTimer = setInterval(snapMem, 5000);
+        }
+      });
     }
 
     this.log('INFO', 'Diagnostics initialized');
