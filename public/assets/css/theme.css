@@ -2739,7 +2739,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     flex-direction: row;
     justify-content: space-around;
     align-items: stretch;
-    padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+    padding: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
     border-right: none;
     border-top: 2px solid var(--border-color);
     z-index: 1000;
@@ -2754,7 +2754,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     width: auto;
     min-width: 0;
     flex-direction: column;
-    padding: 4px 2px;
+    padding: 4px 2px calc(4px + env(safe-area-inset-bottom, 0px)) 2px;
     font-size: 0.58rem;
     border-left: none;
     border-bottom: none;
@@ -3200,7 +3200,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
   :root { --app-font-size: 10.5pt; }
   .nav-btn   { font-size: 0.5rem; }
   .nav-icon  { width: 18px !important; height: 18px !important; }
-  .sidebar   { height: calc(52px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; }
+  .sidebar   { height: calc(52px + env(safe-area-inset-bottom, 0px)); padding-bottom: 0; box-sizing: border-box; }
   .pwa-banner  { bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
   .view-container { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   .control-btn { font-size: 1.7rem; min-width: 32px; }
