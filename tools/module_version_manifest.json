@@ -4,12 +4,12 @@
     "sha256": "934dcfd6d93ff77d"
   },
   "audio_core.js": {
-    "version": "audio-v69",
-    "sha256": "3a68e29055140f77"
+    "version": "audio-v70",
+    "sha256": "1a6da55acc47f8f9"
   },
   "buffer_manager.js": {
-    "version": "buffer-v51",
-    "sha256": "d41b6b7a064f3842"
+    "version": "buffer-v52",
+    "sha256": "504e4c5c365baa85"
   },
   "cinematic_ui.js": {
     "version": "cinematic-v7",
@@ -28,11 +28,11 @@
     "sha256": "bed3787a3aa5dd70"
   },
   "diagnostics.js": {
-    "version": "diag-v5",
-    "sha256": "4fac365bf1335a83"
+    "version": "diag-v6",
+    "sha256": "c9f600a71a8c963d"
   },
   "engine_utils.js": {
-    "version": "sw-154",
+    "version": "sw-157",
     "sha256": "ec25d26c029737d5"
   },
   "experience_coordinator.js": {
@@ -40,16 +40,16 @@
     "sha256": "2a578cd65308c7b8"
   },
   "library_manager.js": {
-    "version": "library-v15",
-    "sha256": "a6f2bf2c06b3dcdc"
+    "version": "library-v16",
+    "sha256": "223f3215dc454e09"
   },
   "motion_lite.js": {
-    "version": "sw-154",
+    "version": "sw-157",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v21",
-    "sha256": "07c0094b57b78186"
+    "version": "narration-loader-v22",
+    "sha256": "a35654b740bacdce"
   },
   "pocket_backend_policy.js": {
     "version": "backend-v22",
@@ -76,12 +76,12 @@
     "sha256": "075025189340ee52"
   },
   "settings_manager.js": {
-    "version": "settings-v57",
-    "sha256": "9053d277ac0f79bf"
+    "version": "settings-v60",
+    "sha256": "5b47ec9659462711"
   },
   "storage_core.js": {
-    "version": "storage-v12",
-    "sha256": "1972f41b562e07a4"
+    "version": "storage-v13",
+    "sha256": "8206d15d33fd10f5"
   },
   "supabase_bridge.js": {
     "version": "supabase-v6",
@@ -96,15 +96,15 @@
     "sha256": "74819367880cf7ac"
   },
   "ui_controller.js": {
-    "version": "ui-v98",
-    "sha256": "e3bd62623c7f719d"
+    "version": "ui-v100",
+    "sha256": "6bdc3920ae3b3027"
   },
   "virtue_controller.js": {
     "version": "virtue-v13",
     "sha256": "3599e6dcb8845354"
   },
   "sw.js": {
-    "version": "sw-154",
-    "sha256": "98a0434055f89c74"
+    "version": "sw-157",
+    "sha256": "63a464ce540eabfe"
   }
 }

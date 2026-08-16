@@ -279,6 +279,17 @@ export const Diagnostics = {
       results.push({ label, status, detail });
       if (statusEl) statusEl.textContent += line + '\n';
     };
+    // A bare "Failed to fetch" reads identically whether the device is offline,
+    // the origin is being refused by CORS, or the backend is down — and this
+    // report exists to be read by someone who cannot tell those apart. Add the
+    // one distinguishing fact the browser will actually give us.
+    const describeError = (error) => {
+      const message = error?.message || String(error);
+      if (!/Failed to fetch|NetworkError|Load failed/i.test(message)) return message;
+      if (navigator.onLine === false) return `${message} - this device reports it is offline`;
+      return `${message} - device is online, so this is a blocked origin (CORS), DNS, or a backend outage rather than your connection`;
+    };
+
     const timedTest = async (label, fn) => {
       const t0 = Date.now();
       try {
@@ -286,7 +297,7 @@ export const Diagnostics = {
         log('OK', label, 'PASS', result + ` (${Date.now()-t0}ms)`);
         return true;
       } catch(e) {
-        log('FAIL', label, 'FAIL', e.message);
+        log('FAIL', label, 'FAIL', describeError(e));
         return false;
       }
     };

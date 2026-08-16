@@ -1159,6 +1159,46 @@ function _isBlockingOverlayOpen() {
   return ids.some((id) => _isElemVisible(document.getElementById(id)));
 }
 
+// The very first view is pre-marked `active-view` in the shell HTML and is
+// never routed through showView(), so none of the view-entry work above ever
+// ran for it: no first-visit tips, and no achievement check. A reader had to
+// navigate away and come back before the page they landed on would introduce
+// itself — and achievements earned before the first navigation went unnoticed.
+//
+// Re-entering the view through showView() would restart its entry animation on
+// a page that is already painted, so replay just the side effects instead.
+function _runInitialViewEntry() {
+  const active = document.querySelector('.view.active-view');
+  const viewId = active?.id;
+  if (!viewId) return;
+  window.currentActiveView = viewId;
+  try {
+    if (typeof window.checkForNewAchievements === 'function') window.checkForNewAchievements();
+    if (viewId === 'profile-view') {
+      if (typeof window.renderAchievements === 'function') window.renderAchievements();
+      if (typeof window.renderProfileExtras === 'function') window.renderProfileExtras();
+    }
+    if (viewId === 'home-view' && typeof window.updateBookmarksFolder === 'function') {
+      window.updateBookmarksFolder();
+    }
+    if (typeof window._maybeShowPageTips === 'function') window._maybeShowPageTips(viewId);
+  } catch (error) {
+    console.warn('[UI] Initial view entry failed:', error);
+  }
+}
+
+// Deferred through a task in both branches on purpose: the helpers this calls
+// (_maybeShowPageTips here, checkForNewAchievements in library_manager) are
+// assigned further down this module and in modules that execute after it, so
+// running synchronously would find them undefined and silently do nothing —
+// the exact failure being fixed.
+const _scheduleInitialViewEntry = () => setTimeout(_runInitialViewEntry, 0);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _scheduleInitialViewEntry, { once: true });
+} else {
+  _scheduleInitialViewEntry();
+}
+
 // Bumped whenever a new page's tips start, so a timer left over from a previous
 // view (e.g. one waiting on a modal to close) bails instead of popping over the
 // page the user has since navigated to.
@@ -1337,7 +1377,8 @@ function _setHmofaBridgeConnected(connected) {
   if (!status) return;
   status.innerHTML = connected
     ? '<strong>Connected:</strong> Tap any story in the index to load it straight into Pocket Reader.'
-    : '<strong>Paste a link to fetch:</strong> Drop an AO3 story URL below and it loads straight into your library.';
+    : '<strong>To load a story here:</strong> long-press or right-click its link in the index below, choose <em>Copy link</em>, and paste it in. '
+      + 'Tapping a link normally just opens the work inside the panel &mdash; use <em>Refresh Index</em> to come back.';
 }
 window._setHmofaBridgeConnected = _setHmofaBridgeConnected;
 window.isHmofaBridgeConnected = () => _hmofaBridgeConnected;
@@ -1511,7 +1552,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=154', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=157', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)
@@ -1586,6 +1627,7 @@ const DEVICE_PROFILE_HANDOFF_KEY = 'pr_device_profile_handoff_v1';
 const SETUP_DRAFT_FIELD_IDS = [
   'setup-username', 'setup-usertype', 'setup-companion', 'setup-theme',
   'setup-reader-font', 'setup-reader-size', 'setup-app-size', 'setup-genre',
+  'setup-fandom', 'setup-length', 'setup-mood',
   'setup-fav-1', 'setup-fav-2', 'setup-fav-3', 'setup-fav-4', 'setup-fav-5',
 ];
 
@@ -1762,6 +1804,12 @@ window.completeFirstTimeSetup = () => {
   p.favoriteGenre = favoriteGenre;
   p.currentlyReading = currentlyReading;
   p.favoriteCharacter = favoriteCharacter;
+  // Same canonical property names the profile editor writes, so a value entered
+  // at setup shows up pre-filled when the reader later opens Edit Profile
+  // instead of appearing to have been discarded.
+  p.favoriteFandom = (document.getElementById('setup-fandom')?.value || '').trim();
+  p.preferredLength = document.getElementById('setup-length')?.value || '';
+  p.readingMood = document.getElementById('setup-mood')?.value || '';
   p.favoriteStories = favoriteStories;
   p.goals = p.goals || {};
   const setupGoalMins = parseInt(document.getElementById('setup-goal-weekly-minutes')?.value || '120', 10);

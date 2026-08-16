@@ -125,23 +125,23 @@ Fully self-contained so no versioned module needs to change.
 Preload render-critical modules in parallel during initial HTML parsing.
 Playback-only modules remain deferred so they do not compete with first paint.
 -->
-<link rel="modulepreload" href="assets/js/diagnostics.js?v=diag-v5">
+<link rel="modulepreload" href="assets/js/diagnostics.js?v=diag-v6">
 <link rel="modulepreload" href="assets/js/motion_lite.js">
-<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v12">
+<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v13">
 <link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v9">
 <link rel="modulepreload" href="assets/js/engine_utils.js">
-<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v21">
+<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v22">
 <link rel="modulepreload" href="assets/js/api_core.js?v=search-v19">
 <link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v5">
 <link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v13">
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v22">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v8">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v57">
-<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v15">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v60">
+<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v16">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v7">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v7">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v98">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v100">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v6">
 
 <!-- ==========================================
@@ -154,7 +154,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=154', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=157', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -247,6 +247,17 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <h2 class="pr-layout-003" id="first-time-setup-title" tabindex="-1">Welcome to Pocket Reader!</h2>
       <p class="pr-layout-004">Let's set up your profile. Everything here is optional - you can change any of it later in Settings.</p>
 
+      <!-- Cloud account leads: signing in first means the rest of this form is
+           saved to the account rather than stranded on one device, and a
+           returning reader can stop here because their profile already exists. -->
+      <div class="settings-item pr-layout-017">
+        <label class="pr-layout-018">Cloud Account <span class="pr-layout-019">(optional)</span></label>
+        <p class="pr-layout-020">Back up your library, settings, and progress. Access them on any device. Signing in first also restores an existing profile, so you can skip the rest.</p>
+        <div class="pr-layout-021" id="setup-cloud-status"></div>
+        <button class="pr-btn-outline pr-layout-022" id="setup-cloud-btn" onclick="window._setupCloudLogin()">Sign In / Create Account</button>
+        <p class="pr-layout-023">Supports email &amp; password or Google. You can always do this later from Settings.</p>
+      </div>
+
       <div class="settings-item pr-layout-005">
         <label for="setup-avatar-upload">Profile picture</label>
         <div class="pr-layout-006">
@@ -329,6 +340,34 @@ Playback-only modules remain deferred so they do not compete with first paint.
       </div>
 
       <div class="settings-item pr-layout-005">
+        <label for="setup-fandom">Favorite fandom / universe</label>
+        <input class="pr-layout-009" type="text" id="setup-fandom" name="setup-fandom" placeholder="e.g. HMOFA, Original Work">
+      </div>
+
+      <div class="settings-item pr-layout-005">
+        <label for="setup-length">Preferred length</label>
+        <select class="pr-layout-009" id="setup-length" name="setup-length">
+          <option value="">No preference</option>
+          <option value="One-shots">One-shots</option>
+          <option value="Short reads">Short reads</option>
+          <option value="Novellas">Novellas</option>
+          <option value="Epic sagas">Epic sagas</option>
+        </select>
+      </div>
+
+      <div class="settings-item pr-layout-005">
+        <label for="setup-mood">Reading vibe</label>
+        <select class="pr-layout-009" id="setup-mood" name="setup-mood">
+          <option value="">Surprise me</option>
+          <option value="Cozy &amp; wholesome">Cozy &amp; wholesome</option>
+          <option value="Adventurous">Adventurous</option>
+          <option value="Slow burn romance">Slow burn romance</option>
+          <option value="Dark &amp; gritty">Dark &amp; gritty</option>
+          <option value="Funny">Funny</option>
+        </select>
+      </div>
+
+      <div class="settings-item pr-layout-005">
         <label for="setup-genre">Favorite genre (optional)</label>
         <input class="pr-layout-009" type="text" id="setup-genre" name="setup-genre" placeholder="e.g. Sci-Fi, Romance, Adventure">
       </div>
@@ -356,14 +395,6 @@ Playback-only modules remain deferred so they do not compete with first paint.
             Track daily reading streaks
           </label>
         </div>
-      </div>
-
-      <div class="settings-item pr-layout-017">
-        <label class="pr-layout-018">Cloud Account <span class="pr-layout-019">(optional)</span></label>
-        <p class="pr-layout-020">Back up your library, settings, and progress. Access them on any device.</p>
-        <div class="pr-layout-021" id="setup-cloud-status"></div>
-        <button class="pr-btn-outline pr-layout-022" id="setup-cloud-btn" onclick="window._setupCloudLogin()">Sign In / Create Account</button>
-        <p class="pr-layout-023">Supports email &amp; password or Google. You can always do this later from Settings.</p>
       </div>
 
       <div class="pr-layout-024">
@@ -590,6 +621,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
             <button class="filter-chip" data-filter="not-started" onclick="setLibraryFilter('not-started')">Not Started</button>
             <button class="filter-chip" data-filter="finished" onclick="setLibraryFilter('finished')">Finished</button>
             <button class="filter-chip" data-filter="favorites" onclick="setLibraryFilter('favorites')">Favorites</button>
+            <button class="filter-chip" data-filter="curated" onclick="setLibraryFilter('curated')">Curated</button>
           </div>
           <div class="library-view-mode">
             <button id="library-mode-grid" class="view-mode-btn active" onclick="setLibraryView('grid')" aria-label="Grid view">Grid</button>
@@ -864,7 +896,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
         <div class="hmofa-interceptor-bar">
           <div class="hmofa-interceptor-info">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple, #9d4edd)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-            <span id="hmofa-bridge-status"><strong>Paste a link to fetch:</strong> Drop an AO3 story URL below and it loads straight into your library.</span>
+            <span id="hmofa-bridge-status"><strong>To load a story here:</strong> long-press or right-click its link in the index below, choose <em>Copy link</em>, and paste it in. Tapping a link normally just opens the work inside the panel &mdash; use <em>Refresh Index</em> to come back.</span>
           </div>
           <div class="hmofa-interceptor-controls">
             <input id="hmofa-url-input" class="hmofa-url-input" type="url" placeholder="Paste AO3 story URL or Work ID..." onkeydown="if (event.key === 'Enter') { event.preventDefault(); window.handleHmofaManualFetch(); }">
@@ -1192,6 +1224,19 @@ Playback-only modules remain deferred so they do not compete with first paint.
               <div class="pr-layout-152" id="adv-crash-notice"></div>
             </div>
 
+            <div class="settings-card pr-layout-148">
+              <h3>Feedback</h3>
+              <p class="pr-layout-149">Something broken, confusing, or missing? Tell the developer directly. Running the diagnostic above first and attaching the report makes a bug much faster to fix.</p>
+              <div class="pr-layout-151">
+                <a class="pr-btn-primary pr-layout-053" data-settings-safe-action="true"
+                   href="https://docs.google.com/forms/d/e/1FAIpQLSe4-eU3OrdqrZNy3nA88xCH7tEOeSDJw6kL2_xlYH_GWiqSPQ/viewform?usp=sharing&amp;ouid=106582588469035954540"
+                   target="_blank" rel="noopener noreferrer"
+                   style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;">
+                  Leave feedback or report an issue
+                </a>
+              </div>
+            </div>
+
           </div></details></div><div id="about-view" class="view">
             <div class="about-layout pr-layout-153">
               <div class="about-virtue pr-layout-154">
@@ -1375,21 +1420,21 @@ Playback-only modules remain deferred so they do not compete with first paint.
         <button onclick="if(typeof window._stopCaching==='function') window._stopCaching()" class="pr-btn-outline pr-layout-186">Stop Caching Completely</button>
       </div>
     </div>
-    <script src='assets/js/diagnostics.js?v=diag-v5' type='module'></script>
-    <script src='assets/js/storage_core.js?v=storage-v12' type='module'></script>
+    <script src='assets/js/diagnostics.js?v=diag-v6' type='module'></script>
+    <script src='assets/js/storage_core.js?v=storage-v13' type='module'></script>
     <script src='assets/js/sync_core.js?v=sync-v9' type='module'></script>
     <script src='assets/js/api_core.js?v=search-v19' type='module'></script>
     <script src='assets/js/experience_coordinator.js?v=experience-v5' type='module'></script>
     <script src='assets/js/virtue_controller.js?v=virtue-v13' type='module'></script>
     <script src='assets/js/engine_utils.js' type='module'></script>
-    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v21' type='module'></script>
+    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v22' type='module'></script>
     <script src='assets/js/tts_pronunciation_core.js?v=pron-v11' type='module'></script>
-    <script src='assets/js/library_manager.js?v=library-v15' type='module'></script>
+    <script src='assets/js/library_manager.js?v=library-v16' type='module'></script>
     <script src='assets/js/device_setup.js?v=device-setup-v8' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v57' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v60' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v7' type='module'></script>
     <script src='assets/js/reader_features.js?v=features-v7' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v98' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v100' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v6' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v3' type='module'></script>
   </div>

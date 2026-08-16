@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v12';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v13';
 import {
   evaluateCpuThermalRest,
   POCKET_THERMAL_HISTORY_LIMIT,
@@ -1992,7 +1992,14 @@ window.renderAwayModeUI = function() {
     return !queue.includes(ref);
   });
 
-  if (notInQueue.length === 0) {
+  if (library.length === 0) {
+    // An empty library and a fully-queued library are different situations, and
+    // the old copy claimed the second while showing the first. On a cold start
+    // this view can render before the profile and curated list have hydrated,
+    // so a reader saw "All library stories are in the queue" above an empty
+    // shelf. renderLibrary() re-runs this once the library lands.
+    quickAddList.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.9rem;">Your library is still loading. Stories will appear here once it does.</div>`;
+  } else if (notInQueue.length === 0) {
     quickAddList.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.9rem;">All library stories are in the queue.</div>`;
   } else {
     quickAddList.innerHTML = notInQueue.map(s => {

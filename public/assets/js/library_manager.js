@@ -432,6 +432,14 @@ export async function seedCuratedLibrary() {
           existing.sourceUrl = item.source_url;
           added = true;
         }
+        // Backfill the curated tag too. Profiles created before this tag
+        // existed hold these stories untagged, which would keep counting them
+        // toward First Edition and Hoarder and would hide them from the
+        // Curated tab. The backend's list is the authority on what is curated.
+        if (existing.source !== 'curated') {
+          existing.source = 'curated';
+          added = true;
+        }
         return;
       }
       window.userProfile.library.push({
@@ -1452,6 +1460,10 @@ export function renderLibrary(skipAnimation = false) {
     library = library.filter((s) => !s.isFinished && s.progressChapter === 0 && s.progressParagraph === 0);
   else if (filter === 'finished') library = library.filter((s) => s.isFinished);
   else if (filter === 'favorites') library = library.filter((s) => s.favorite || s.isFavorite);
+  // The bundled stories get their own shelf. "All" stays literally all — the
+  // request was for a tab, not for hiding them — so this is a convenience
+  // filter alongside Favorites rather than a change to the other views.
+  else if (filter === 'curated') library = library.filter((s) => isCuratedStory(s));
 
   // Apply Library Search Filter
   const searchInput = document.getElementById('library-search-input');
@@ -1492,6 +1504,22 @@ export function renderLibrary(skipAnimation = false) {
   setTimeout(() => { if (typeof window.updatePlayButtons === 'function') window.updatePlayButtons(); }, 10);
 }
 window.renderLibrary = renderLibrary;
+
+// Away Mode's "add a story" list is built from the same library array. On a
+// cold start that view can render before the profile and curated stories have
+// hydrated, leaving an empty shelf that never refills because nothing told it
+// the library had arrived. Re-render it whenever the library does, but only
+// while it is the view on screen.
+const _refreshAwayModeWithLibrary = () => {
+  if (window.currentActiveView !== 'away-mode-view') return;
+  if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
+};
+const _renderLibraryWithAwayMode = (skipAnimation) => {
+  const result = renderLibrary(skipAnimation);
+  _refreshAwayModeWithLibrary();
+  return result;
+};
+window.renderLibrary = _renderLibraryWithAwayMode;
 
 export function updatePlayButtons() {
   const bm = window.BufferManager;
@@ -1649,13 +1677,29 @@ window.sortMasterlist = sortMasterlist;
 export function renderMasterlist() {}
 window.renderMasterlist = renderMasterlist;
 
+// A story that shipped with the app rather than one the reader sought out.
+// The tag is the only marker — curated entries use ordinary stable keys — and
+// loadCuratedLibrary() backfills it onto older untagged profiles from the
+// backend's list, which is the authority on what is curated.
+export function isCuratedStory(story) {
+  return Boolean(story) && story.source === 'curated';
+}
+window.isCuratedStory = isCuratedStory;
+
 export function checkForNewAchievements() {
   if (!window.userProfile || !window.userProfile.stats) return;
 
   if (window.userProfile.library) {
+    // The 20 curated stories ship in every library at launch, so counting them
+    // handed out First Edition and Hoarder Bronze/Silver before the reader had
+    // added anything — an achievement for installing the app. Both now measure
+    // only what the reader chose to add. Favourites and genres are unchanged:
+    // favouriting a curated story IS a deliberate act, and its genre is a real
+    // part of the reader's taste.
+    const ownLibrary = window.userProfile.library.filter((s) => !isCuratedStory(s));
     window.userProfile.stats.favorites = window.userProfile.library.filter(s => s.favorite || s.isFavorite).length;
-    window.userProfile.stats.firstStory = window.userProfile.library.length > 0 ? 1 : 0;
-    window.userProfile.stats.unread = window.userProfile.library.filter((s) => !s.progressChapter && !s.progressParagraph && !s.isFinished).length;
+    window.userProfile.stats.firstStory = ownLibrary.length > 0 ? 1 : 0;
+    window.userProfile.stats.unread = ownLibrary.filter((s) => !s.progressChapter && !s.progressParagraph && !s.isFinished).length;
 
     const uniqueGenres = new Set();
     window.userProfile.library.forEach((s) => {

@@ -785,12 +785,26 @@ export async function getOfflineStoryUsage() {
 }
 window.getOfflineStoryUsage = getOfflineStoryUsage;
 
+// Chunk keys are `${storyRef}_${chap}_${para}_${engine}_${voice}`, so one
+// story's chunks form a contiguous key range. Pin and delete used to walk the
+// ENTIRE store — every chunk of every story, one cursor step each — and filter
+// in JS, which is what made the cache manager crawl once a few stories were
+// fully cached. Range-scanning touches only the story in question.
+//
+// The exact storyRef check stays: a ref that is a prefix of another ("abc" vs
+// "abc_def") shares the key range, so the range is a speed narrowing and the
+// equality test is what keeps it correct.
+function _storyChunkRange(storyRef) {
+  const prefix = `${storyRef}_`;
+  return IDBKeyRange.bound(prefix, `${prefix}￿`, false, false);
+}
+
 export async function setStoryAudioPinned(storyTitle, pinned) {
   const db = await initDB();
   return new Promise((resolve) => {
     const tx = db.transaction('audio_chunks', 'readwrite');
     const store = tx.objectStore('audio_chunks');
-    const request = store.openCursor();
+    const request = store.openCursor(_storyChunkRange(storyTitle));
     request.onsuccess = (event) => {
       const cursor = event.target.result;
       if (!cursor) return;
@@ -808,7 +822,7 @@ export async function deleteStoryAudio(storyTitle) {
   return new Promise((resolve) => {
     const tx = db.transaction('audio_chunks', 'readwrite');
     const store = tx.objectStore('audio_chunks');
-    const request = store.openCursor();
+    const request = store.openCursor(_storyChunkRange(storyTitle));
     request.onsuccess = (event) => {
       const cursor = event.target.result;
       if (!cursor) return;
@@ -824,6 +838,11 @@ window.deleteStoryAudio = deleteStoryAudio;
 export async function refreshOfflineStorageDialog() {
   const target = document.getElementById('offline-story-usage-list');
   if (!target) return;
+  // Aggregating usage has to visit every chunk in the store, which on a device
+  // with several fully cached stories is thousands of cursor steps. Yield a
+  // frame first so the dialog paints its "reading storage" state before that
+  // starts — otherwise the tap looks like nothing happened until it finishes.
+  await new Promise((resolve) => requestAnimationFrame(() => resolve()));
   const rows = await getOfflineStoryUsage();
   const escape = (value) => String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
   target.innerHTML = rows.length ? rows.map((item) => {
