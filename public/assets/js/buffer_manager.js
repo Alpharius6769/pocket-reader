@@ -1726,7 +1726,6 @@ export const BufferManager = {
           this.activeWorkers = Math.max(0, this.activeWorkers - 1);
           return;
         }
-      }
       this.cachedCount++;
       this.itemsSynthesizedThisSession++;
       this._lastChunkCompletedAt = Date.now();

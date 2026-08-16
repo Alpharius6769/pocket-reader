@@ -256,9 +256,9 @@ test('the top bar and mobile navigation clear the iOS notch and status bar safe 
   assert.match(mobileBlock, /\.top-bar\s*\{[^}]*min-height:\s*calc\(52px \+ env\(safe-area-inset-top/);
   assert.match(mobileBlock, /\.top-bar\s*\{[^}]*padding:\s*calc\(4px \+ env\(safe-area-inset-top/);
 
-  // Bottom navigation tab bar and app wrapper must respect the bottom safe area
+  // Bottom navigation tab bar and view container must respect the bottom safe area
   assert.match(mobileBlock, /\.sidebar\s*\{[^}]*height:\s*calc\(58px \+ env\(safe-area-inset-bottom/);
-  assert.match(mobileBlock, /\.app-wrapper\s*\{[^}]*bottom:\s*calc\(58px \+ env\(safe-area-inset-bottom/);
+  assert.match(mobileBlock, /\.view-container\s*\{[^}]*padding-bottom:\s*calc\(68px \+ env\(safe-area-inset-bottom/);
 });
 
 test('100% cached stories display cached badges and fast reverification feedback on reopen', async () => {

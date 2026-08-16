@@ -36,6 +36,9 @@
 html {
   font-size: var(--app-font-size);
   background-color: var(--app-bg);
+  min-height: 100%;
+  height: 100%;
+  height: 100dvh;
 }
 
 body {
@@ -43,7 +46,8 @@ body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background-color: var(--app-bg);
   color: var(--text-main);
-  height: 100vh;
+  min-height: 100%;
+  height: 100%;
   height: 100dvh;
   width: 100vw;
   overflow: hidden;
@@ -64,6 +68,7 @@ input[type="radio"] {
   bottom: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -2835,11 +2840,18 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     background-color: rgba(50, 100, 150, 0.18);
   }
 
-  /* Push content above bottom tab bar */
+  /* Content stretches full viewport height; view-container pads above bottom tab bar */
   .app-wrapper {
     top: 0;
-    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
-    height: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+  }
+  .view-container {
+    padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
   }
 
   /* === TOPBAR: single compact row === */
@@ -3189,8 +3201,8 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
   .nav-btn   { font-size: 0.5rem; }
   .nav-icon  { width: 18px !important; height: 18px !important; }
   .sidebar   { height: calc(52px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; }
-  .app-wrapper { bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
   .pwa-banner  { bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
+  .view-container { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
   .control-btn { font-size: 1.7rem; min-width: 32px; }
   .playback-dropdown { font-size: 0.75rem; }
 }
