@@ -99,7 +99,7 @@ var DEFERRED_ASSETS = [
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     './',
-    'assets/css/theme.css?v=midnight-v32',
+    'assets/css/theme.css?v=midnight-v33',
     'assets/js/tts_pronunciation_core.js?v=pron-v11',
     'assets/js/pocket_backend_policy.js?v=backend-v22',
     'assets/js/pocket_performance_policy.js?v=performance-v2',

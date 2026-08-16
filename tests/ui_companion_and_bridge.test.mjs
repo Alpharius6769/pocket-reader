@@ -46,22 +46,18 @@ test('the Virtue resize observer cannot feed back or leak', async () => {
     'the observer must disconnect when the companion is off screen');
 });
 
-test('the mobile companion clears the tab bar including the safe area', async () => {
-  // A hardcoded 64px assumed the 58px tab bar sat flush to the screen bottom.
-  // With a home indicator the bar occupies 58px + inset (~34px on iPhone), so
-  // Virtue rendered inside it and covered the controls it was raised to avoid.
+test('the mobile companion clears the bottom tab bar', async () => {
+  // With the tab bar sitting flush at 58px / 52px at the bottom of the screen,
+  // Virtue companion clears the tab bar directly with standard offsets.
   const css = await read('public/assets/css/theme.css');
-  // Collect every .virtue-container.active rule body; the desktop one has no
-  // bottom offset, the mobile ones must clear the bar plus the inset.
   const rules = [...css.matchAll(/\.virtue-container\.active\s*\{([^}]*)\}/g)].map((m) => m[1]);
   assert.ok(rules.length >= 2, 'expected a desktop and at least one mobile companion rule');
   const withBottom = rules.filter((body) => /bottom:/.test(body));
   assert.ok(withBottom.length > 0, 'no mobile rule offsets the companion above the tab bar');
   for (const body of withBottom) {
-    assert.match(body, /bottom:\s*calc\(\d+px \+ env\(safe-area-inset-bottom/,
-      `companion offset ignores the home-indicator inset: ${body.trim()}`);
+    assert.match(body, /bottom:\s*(?:64px|58px);/,
+      `companion offset does not clear the tab bar: ${body.trim()}`);
   }
-  assert.doesNotMatch(css, /\.virtue-container\.active\s*\{[^}]*bottom:\s*64px/);
 });
 
 test('short status messages use the in-app notice, not a blocking dialog', async () => {
@@ -245,7 +241,7 @@ test('the native masterlist keeps catalog freshness, URLs, prefs and lists hones
   assert.match(ui, /return window\.loadStory\(url\)/);
 });
 
-test('the top bar and mobile navigation clear the iOS notch and status bar safe areas', async () => {
+test('the top bar clears the iOS notch and status bar safe areas while mobile navigation sits flush', async () => {
   const css = await read('public/assets/css/theme.css');
   // Desktop / tablet / mobile top-bar rules must all protect against top safe area encroachment
   assert.match(css, /\.top-bar\s*\{[^}]*min-height:\s*calc\(\d+px \+ env\(safe-area-inset-top/);
@@ -256,9 +252,9 @@ test('the top bar and mobile navigation clear the iOS notch and status bar safe 
   assert.match(mobileBlock, /\.top-bar\s*\{[^}]*min-height:\s*calc\(52px \+ env\(safe-area-inset-top/);
   assert.match(mobileBlock, /\.top-bar\s*\{[^}]*padding:\s*calc\(4px \+ env\(safe-area-inset-top/);
 
-  // Bottom navigation tab bar and view container must respect the bottom safe area
-  assert.match(mobileBlock, /\.sidebar\s*\{[^}]*height:\s*calc\(58px \+ env\(safe-area-inset-bottom/);
-  assert.match(mobileBlock, /\.view-container\s*\{[^}]*padding-bottom:\s*calc\(68px \+ env\(safe-area-inset-bottom/);
+  // Bottom navigation tab bar sits flush at 58px without empty dead buffer
+  assert.match(mobileBlock, /\.sidebar\s*\{[^}]*height:\s*58px;/);
+  assert.match(mobileBlock, /\.view-container\s*\{[^}]*padding-bottom:\s*68px;/);
 });
 
 test('100% cached stories display cached badges and fast reverification feedback on reopen', async () => {

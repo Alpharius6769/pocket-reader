@@ -84,7 +84,7 @@ input[type="radio"] {
   flex-direction: column;
   align-items: center;
   padding-top: calc(20px + env(safe-area-inset-top, 0px));
-  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 10px;
   padding-left: calc(0px + env(safe-area-inset-left, 0px));
   z-index: 100;
   overflow: hidden;
@@ -317,7 +317,7 @@ input[type="radio"] {
   /* Fluid padding: scales continuously with the viewport (phone -> UHD)
      instead of jumping at fixed breakpoints. */
   padding: clamp(12px, 2.5vw, 48px) clamp(10px, 3vw, 80px)
-           max(clamp(12px, 2.5vw, 48px), env(safe-area-inset-bottom, 12px))
+           clamp(12px, 2.5vw, 48px)
            clamp(10px, 3vw, 80px);
   overflow-y: auto;
   min-height: 0;
@@ -1511,12 +1511,7 @@ input[type="radio"] {
   }
   .virtue-container.active {
     right: 4px;
-    /* Was a hardcoded 64px, which assumed the 58px tab bar sat flush against
-       the bottom of the screen. On any device with a home indicator the bar is
-       58px + the safe-area inset (~34px on iPhone), so Virtue rendered roughly
-       28px *inside* the tab bar and covered the controls it was moved up to
-       avoid. Matches the offset the reader's playback bar already uses. */
-    bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 6px);
+    bottom: 64px;
     pointer-events: auto;
     touch-action: pan-y;
     cursor: pointer;
@@ -1526,7 +1521,7 @@ input[type="radio"] {
 /* Short viewports drop the tab bar to 52px; keep the companion pinned to it. */
 @media (max-height: 560px) and (max-width: 820px) {
   .virtue-container.active {
-    bottom: calc(52px + env(safe-area-inset-bottom, 0px) + 6px);
+    bottom: 58px;
   }
 }
 
@@ -2735,13 +2730,14 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     bottom bar stays 100px wide pinned to the left with the tabs crammed in. */
     min-width: 0;
     max-width: none;
-    height: calc(58px + env(safe-area-inset-bottom, 0px));
+    height: 58px;
     flex-direction: row;
     justify-content: space-around;
     align-items: stretch;
     padding: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
     border-right: none;
     border-top: 2px solid var(--border-color);
+    background-color: var(--sidebar-bg);
     z-index: 1000;
     overflow: hidden;
     box-sizing: border-box;
@@ -2754,7 +2750,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     width: auto;
     min-width: 0;
     flex-direction: column;
-    padding: 4px 2px calc(4px + env(safe-area-inset-bottom, 0px)) 2px;
+    padding: 4px 2px;
     font-size: 0.58rem;
     border-left: none;
     border-bottom: none;
@@ -2792,7 +2788,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     position: fixed;
     right: 6px;
     left: auto;
-    bottom: calc(58px + env(safe-area-inset-bottom, 0px) + 6px);
+    bottom: 64px;
     min-width: 190px;
     max-width: 76vw;
     padding: 6px;
@@ -2851,7 +2847,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     height: 100dvh;
   }
   .view-container {
-    padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: 68px;
   }
 
   /* === TOPBAR: single compact row === */
@@ -2898,7 +2894,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     position: fixed;
     left: 0;
     top: calc(52px + env(safe-area-inset-top, 0px));
-    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+    bottom: 58px;
     width: min(82vw, 290px);
     z-index: 600;
     border-radius: 0;
@@ -3063,7 +3059,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
 
   /* === PWA banner: clear the bottom tab bar === */
   .pwa-banner {
-    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+    bottom: 58px;
     margin-bottom: 0;
   }
 
@@ -3200,9 +3196,9 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
   :root { --app-font-size: 10.5pt; }
   .nav-btn   { font-size: 0.5rem; }
   .nav-icon  { width: 18px !important; height: 18px !important; }
-  .sidebar   { height: calc(52px + env(safe-area-inset-bottom, 0px)); padding-bottom: 0; box-sizing: border-box; }
-  .pwa-banner  { bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
-  .view-container { padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+  .sidebar   { height: 52px; padding-bottom: 0; box-sizing: border-box; }
+  .pwa-banner  { bottom: 52px; }
+  .view-container { padding-bottom: 60px; }
   .control-btn { font-size: 1.7rem; min-width: 32px; }
   .playback-dropdown { font-size: 0.75rem; }
 }
