@@ -31,7 +31,7 @@
 2. GLOBAL STYLESHEET
 ========================================== -->
 <!-- Links the optimized CSS file we just created -->
-<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v27">
+<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v28">
 
 <!-- ==========================================
 2a. FAST-NARRATION RELOAD MASK (anti-flash)
@@ -154,7 +154,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=165', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=166', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
