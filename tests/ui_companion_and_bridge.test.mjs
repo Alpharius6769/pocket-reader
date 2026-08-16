@@ -162,6 +162,8 @@ test('batch import is sequential and bounded', async () => {
   // loadStory aborts any in-flight load, so parallel calls would cancel each
   // other and only the last would survive.
   assert.match(ui, /for \(const entry of entries\.slice\(0, -1\)\)[\s\S]{0,200}await window\.loadStory/);
+  assert.match(ui, /await _handleHmofaStoryIntercept\(last\.url, last\.title\)/,
+    'the last story must be awaited so it is counted after it actually loads');
   assert.match(ui, /preventNavigate: true/, 'batch imports must not drag the reader through each story');
 });
 
@@ -174,6 +176,8 @@ test('Away Mode loads the narration runtime before painting the queue', async ()
   const ui = await read('public/assets/js/ui_controller.js');
   assert.match(ui, /viewId === 'away-mode-view'[\s\S]{0,500}ensureNarrationRuntime/);
   assert.match(ui, /ensureNarrationRuntime[\s\S]{0,220}renderAwayModeUI/);
+  assert.match(ui, /Away Mode narration runtime failed to load[\s\S]{0,280}pocketNotify/,
+    'a failed Away Mode load must tell the reader instead of failing silently');
 });
 
 test('the masterlist shares ratings and lists with the live Anthronomicon', async () => {
@@ -205,5 +209,38 @@ test('the masterlist shares ratings and lists with the live Anthronomicon', asyn
     'HMOFA prefs and lists must sync with the profile, so they cannot sit in DEVICE_ONLY_SETTINGS');
 
   assert.match(sw, /hmofa_community\.js\?v=hmofa-community-v1/);
-  assert.match(sw, /hmofa_preferences\.js\?v=hmofa-prefs-v1/);
+  assert.match(sw, /hmofa_preferences\.js\?v=hmofa-prefs-v2/);
+});
+
+test('the native masterlist keeps catalog freshness, URLs, prefs and lists honest', async () => {
+  const list = await read('public/assets/js/hmofa_masterlist.js');
+  const prefs = await read('public/assets/js/hmofa_preferences.js');
+  const ui = await read('public/assets/js/ui_controller.js');
+
+  assert.match(list, /crypto\.subtle\.digest\('SHA-256'/);
+  assert.match(list, /config\?\.catalogSha256/);
+  assert.match(list, /published === cached\.sha/);
+  assert.doesNotMatch(list, /payload\.sha256/,
+    'revalidation must hash the catalog bytes, not trust the payload digest');
+
+  assert.match(list, /validateHttpUrl\(source\.url, source\.platform\) \|\| validateHttpUrl\(source\.url\)/);
+  assert.match(list, /pr:profile-synced/);
+  assert.match(list, /function applySyncedPreferences/);
+  assert.match(list, /if \(state\.loaded\) \{[\s\S]{0,160}applySyncedPreferences\(\)/);
+  assert.match(list, /refreshHmofaCatalog[\s\S]{0,500}loadCommunity\(\)/);
+  assert.match(list, /communityTrending\.join\('\\0'\)[\s\S]{0,80}JSON\.stringify\(state\.communityRatings\)/);
+  const rateStory = list.slice(list.indexOf('async function rateStory'), list.indexOf('function ratingRow'));
+  assert.match(rateStory, /featuredCache = \{ key: null, ids: \[\] \}/,
+    'a new rating must invalidate the featured rotation, not just the result cache');
+  assert.match(list, /sort: state\.sort/);
+  assert.match(list, /SORT_VALUES\.includes\(filters\.sort\)[\s\S]{0,40}state\.sort = filters\.sort/);
+  assert.match(list, /if \(sort\) sort\.value = state\.sort/);
+  assert.match(list, /function normalizeCatalogRecord/);
+  assert.match(list, /communityLoading/);
+
+  assert.match(prefs, /function attachPresetSort/);
+  assert.match(prefs, /SORT_VALUES\.includes\(sort\)/);
+  assert.match(prefs, /Saved lists keep a search, its filters and its sort together/);
+
+  assert.match(ui, /return window\.loadStory\(url\)/);
 });

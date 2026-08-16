@@ -137,11 +137,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v22">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v8">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v63">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v64">
 <link rel="modulepreload" href="assets/js/library_manager.js?v=library-v16">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v7">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v7">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v103">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v104">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v6">
 
 <!-- ==========================================
@@ -154,7 +154,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=160', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=161', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -1471,12 +1471,12 @@ Playback-only modules remain deferred so they do not compete with first paint.
     <script src='assets/js/library_manager.js?v=library-v16' type='module'></script>
     <!-- Pulls in hmofa_catalog_core.js via a versioned import. The catalog
          itself is only downloaded when the masterlist view is opened. -->
-    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v2' type='module'></script>
+    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v3' type='module'></script>
     <script src='assets/js/device_setup.js?v=device-setup-v8' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v63' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v64' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v7' type='module'></script>
     <script src='assets/js/reader_features.js?v=features-v7' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v103' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v104' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v6' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v3' type='module'></script>
   </div>

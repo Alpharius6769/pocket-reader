@@ -38,6 +38,7 @@ import {
   safeJsonParse,
   sortCatalog,
   speciesFacetValues,
+  validateHttpUrl,
 } from './hmofa_catalog_core.js?v=hmofa-core-v1';
 import {
   fetchCommunitySnapshot,
@@ -50,7 +51,7 @@ import {
   openHmofaPreferencesDialog,
   readPreferences,
   reconcileWithProfile,
-} from './hmofa_preferences.js?v=hmofa-prefs-v1';
+} from './hmofa_preferences.js?v=hmofa-prefs-v2';
 
 const CATALOG_BASE = 'https://alpharius6769.github.io/hmofa-story-index';
 const CATALOG_URL = `${CATALOG_BASE}/assets/catalog.json`;
@@ -153,13 +154,6 @@ function writeStorage(key, value) {
   }
 }
 
-// Settle the shared localStorage against the synced profile copy first, so a
-// blacklist set on another device is in force before the first render.
-function loadPreferences() {
-  reconcileWithProfile();
-  return readPreferences();
-}
-
 function restoreUiPreferences() {
   const ui = safeJsonParse(readStorage(STORAGE_KEYS.ui, '{}'), {});
   state.pageSize = Number(ui.pageSize) === 50 ? 50 : 20;
@@ -194,12 +188,48 @@ async function openCatalogCache() {
   }
 }
 
+async function digestHex(buffer) {
+  if (!globalThis.crypto?.subtle) return '';
+  try {
+    const hash = await crypto.subtle.digest('SHA-256', buffer);
+    return [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return '';
+  }
+}
+
+function normalizeCatalogRecord(record) {
+  if (!record || typeof record !== 'object') return null;
+  if (typeof record.id !== 'string' || !record.id) return null;
+  if (typeof record.title !== 'string' || !record.title) return null;
+  const sources = Array.isArray(record.sources)
+    ? record.sources.filter((source) => source && typeof source === 'object')
+    : [];
+  return {
+    ...record,
+    authors: Array.isArray(record.authors) ? record.authors : [],
+    aliases: Array.isArray(record.aliases) ? record.aliases : [],
+    sources,
+    tags: Array.isArray(record.tags) ? record.tags : [],
+    worlds: Array.isArray(record.worlds) ? record.worlds : [],
+  };
+}
+
+async function parseCatalogBuffer(buffer) {
+  const sha = await digestHex(buffer);
+  try {
+    return { payload: JSON.parse(new TextDecoder().decode(buffer)), sha };
+  } catch {
+    return null;
+  }
+}
+
 async function readCachedCatalog() {
   const cache = await openCatalogCache();
   if (!cache) return null;
   try {
     const response = await cache.match(CATALOG_URL);
-    return response ? await response.json() : null;
+    return response ? await parseCatalogBuffer(await response.arrayBuffer()) : null;
   } catch {
     return null;
   }
@@ -208,15 +238,20 @@ async function readCachedCatalog() {
 async function fetchRemoteCatalog() {
   const response = await fetch(CATALOG_URL, { credentials: 'omit' });
   if (!response.ok) throw new Error(`Catalog fetch failed: ${response.status}`);
+  const buffer = await response.arrayBuffer();
+  const parsed = await parseCatalogBuffer(buffer);
+  if (!parsed) throw new Error('Catalog payload was not usable');
   const cache = await openCatalogCache();
   if (cache) {
     try {
-      await cache.put(CATALOG_URL, response.clone());
+      await cache.put(CATALOG_URL, new Response(buffer, {
+        headers: { 'Content-Type': 'application/json' },
+      }));
     } catch {
       /* a full cache must not fail the load; the parsed copy below still works */
     }
   }
-  return response.json();
+  return parsed;
 }
 
 async function remoteCatalogSha() {
@@ -230,13 +265,17 @@ async function remoteCatalogSha() {
   }
 }
 
-function adoptCatalog(payload) {
+function adoptCatalog(parsed) {
+  const payload = parsed?.payload;
   if (!payload || !Array.isArray(payload.records)) return false;
-  state.records = payload.records;
+  const records = payload.records.map(normalizeCatalogRecord).filter(Boolean);
+  if (!records.length) return false;
+  state.records = records;
   state.generatedAt = typeof payload.generatedAt === 'string' ? payload.generatedAt : '';
-  state.sha256 = typeof payload.sha256 === 'string' ? payload.sha256 : '';
+  state.contentSha = parsed.sha || '';
   state.loaded = true;
   cachedFiltered = null;
+  featuredCache = { key: null, ids: [] };
   return true;
 }
 
@@ -244,9 +283,12 @@ async function loadCatalog() {
   const cached = await readCachedCatalog();
   if (adoptCatalog(cached)) {
     renderAll();
-    // Revalidate without blocking the paint the reader already has.
-    remoteCatalogSha().then(async (sha) => {
-      if (!sha || sha === state.sha256) return;
+    // Revalidate against a hash of the cached bytes vs config.catalogSha256.
+    // The catalog also carries a sha256 field; that value is self-reported and
+    // is not used here, so a body that kept the old digest cannot skip refresh.
+    remoteCatalogSha().then(async (published) => {
+      if (!published) return;
+      if (cached.sha && published === cached.sha) return;
       try {
         if (adoptCatalog(await fetchRemoteCatalog())) renderAll();
       } catch {
@@ -259,13 +301,24 @@ async function loadCatalog() {
   renderAll();
 }
 
+function applySyncedPreferences() {
+  reconcileWithProfile();
+  state.preferences = readPreferences();
+  cachedFiltered = null;
+}
+
 export async function ensureHmofaMasterlistLoaded() {
-  if (state.loaded) return;
+  if (state.loaded) {
+    applySyncedPreferences();
+    loadCommunity();
+    renderAll();
+    return;
+  }
   if (state.loading) return state.loading;
   setStatus('Loading the Anthronomicon catalog...');
   state.loading = (async () => {
     try {
-      state.preferences = loadPreferences();
+      applySyncedPreferences();
       state.localRatings = loadLocalRatings();
       restoreUiPreferences();
       await loadCatalog();
@@ -287,8 +340,9 @@ export async function refreshHmofaCatalog() {
   try {
     const cache = await openCatalogCache();
     if (cache) await cache.delete(CATALOG_URL);
-    state.preferences = loadPreferences();
+    applySyncedPreferences();
     if (adoptCatalog(await fetchRemoteCatalog())) renderAll();
+    loadCommunity();
   } catch (error) {
     window.Diagnostics?.log('WARN', 'HMOFA catalog refresh failed', { error: String(error) });
     setStatus('Could not refresh the catalog just now.', true);
@@ -306,9 +360,11 @@ function setStatus(message, isError = false) {
 // Deliberately not awaited by the loader: 2,149 stories are fully browsable
 // without community data, so the grid must never sit behind this request. The
 // ratings and trending order fill in when they arrive.
+let communityLoading = null;
 function loadCommunity() {
+  if (communityLoading) return communityLoading;
   state.communityState = 'loading';
-  fetchCommunitySnapshot()
+  communityLoading = fetchCommunitySnapshot()
     .then(({ ratings, trending }) => {
       state.communityRatings = ratings;
       state.communityTrending = trending;
@@ -321,9 +377,19 @@ function loadCommunity() {
     .then(() => {
       cachedFiltered = null;
       featuredCache = { key: null, ids: [] };
-      renderAll();
+      if (state.loaded) renderAll();
+    })
+    .finally(() => {
+      communityLoading = null;
     });
+  return communityLoading;
 }
+
+document.addEventListener('pr:profile-synced', () => {
+  if (!state.loaded) return;
+  applySyncedPreferences();
+  renderAll();
+});
 
 // ── Filtering ───────────────────────────────────────────────────────────────
 
@@ -336,8 +402,8 @@ function monthlyFeaturedIds() {
   const key = [
     period,
     state.records.length,
-    state.communityTrending.length,
-    Object.keys(state.communityRatings).length,
+    state.communityTrending.join('\0'),
+    JSON.stringify(state.communityRatings),
   ].join(':');
   if (featuredCache.key === key) return featuredCache.ids;
   featuredCache = {
@@ -552,9 +618,10 @@ async function rateStory(record, score, row) {
   } else if (result.message) {
     setStatus(result.message, true);
   }
-  // A new score can change both the community sort and the minimum-rating
-  // filter, so the cached result set has to go.
+  // A new score can change community sort, the minimum-rating filter, and the
+  // Featured ranking, so both the result cache and the featured rotation go.
   cachedFiltered = null;
+  featuredCache = { key: null, ids: [] };
   renderResults();
 }
 
@@ -643,14 +710,18 @@ function createCard(record) {
 
   const actions = document.createElement('div');
   actions.className = 'hmofa-card-actions';
-  const primary = record.sources[0];
+  const sources = (record.sources || []).map((source) => {
+    const url = validateHttpUrl(source.url, source.platform) || validateHttpUrl(source.url);
+    return url ? { ...source, url } : null;
+  }).filter(Boolean);
+  const primary = sources[0];
 
-  record.sources.forEach((source, index) => {
+  sources.forEach((source, index) => {
     const load = document.createElement('button');
     load.type = 'button';
     load.className = index === 0 ? 'pr-btn-primary hmofa-card-load' : 'pr-btn-outline hmofa-card-load';
     load.textContent = index === 0
-      ? `Read in Pocket Reader${record.sources.length > 1 ? ` (${source.platform})` : ''}`
+      ? `Read in Pocket Reader${sources.length > 1 ? ` (${source.platform})` : ''}`
       : `Load from ${source.platform}`;
     load.addEventListener('click', () => {
       // Counts toward Weekly Trending on the shared index, the same way a click
@@ -834,6 +905,8 @@ function syncControlValues() {
   if (words) words.value = state.wordCount;
   const minRating = $('hmofa-minrating');
   if (minRating) minRating.value = state.minRating;
+  const sort = $('hmofa-sort');
+  if (sort) sort.value = state.sort;
 }
 
 function clearAllFilters() {
@@ -854,6 +927,7 @@ function filterSnapshot() {
     search: state.search,
     wordCount: state.wordCount,
     minRating: state.minRating,
+    sort: state.sort,
     ...Object.fromEntries(FILTER_SET_KEYS.map((key) => [key, [...state[key]]])),
   };
 }
@@ -871,6 +945,7 @@ function applySavedList(list) {
     state.search = filters.search || '';
     state.wordCount = filters.wordCount || 'all';
     state.minRating = filters.minRating || 'any';
+    if (SORT_VALUES.includes(filters.sort)) state.sort = filters.sort;
     for (const key of FILTER_SET_KEYS) {
       state[key] = new Set(Array.isArray(filters[key]) ? filters[key] : []);
     }
@@ -976,8 +1051,14 @@ function bindControls() {
     const chosen = state.records.filter((record) => state.selected.has(record.id));
     if (!chosen.length) return;
     const stories = chosen
-      .map((record) => ({ url: record.sources[0]?.url, title: record.title }))
-      .filter((entry) => entry.url);
+      .map((record) => {
+        const source = record.sources[0];
+        const url = source
+          ? (validateHttpUrl(source.url, source.platform) || validateHttpUrl(source.url))
+          : null;
+        return url ? { url, title: record.title } : null;
+      })
+      .filter(Boolean);
     state.selected.clear();
     renderSelectionBar();
     renderResults();

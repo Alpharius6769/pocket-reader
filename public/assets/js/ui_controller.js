@@ -50,7 +50,12 @@ export function showView(viewId) {
         // (opening a story) had pulled the runtime in. Load it first.
         Promise.resolve(window.ensureNarrationRuntime?.())
           .then(() => window.renderAwayModeUI?.())
-          .catch(() => {});
+          .catch((error) => {
+            window.Diagnostics?.log('WARN', 'Away Mode narration runtime failed to load', {
+              error: String(error?.message || error),
+            });
+            window.pocketNotify?.('Away Mode could not start. Open a story once, then try Away Mode again.');
+          });
       }
 
       if (viewId === 'home-view') {
@@ -1354,14 +1359,15 @@ export function handleHmofaManualFetch() {
 window.handleHmofaManualFetch = handleHmofaManualFetch;
 
 export function _handleHmofaStoryIntercept(url, title = '') {
-  if (!url) return;
+  if (!url) return Promise.resolve();
   const displayTitle = title ? `"${title}"` : 'story';
   if (window.virtueSpeak) {
     window.virtueSpeak(`Loading ${displayTitle} into Pocket Reader...`, 5000);
   }
   if (typeof window.loadStory === 'function') {
-    window.loadStory(url);
+    return window.loadStory(url);
   }
+  return Promise.resolve();
 }
 window._handleHmofaStoryIntercept = _handleHmofaStoryIntercept;
 
@@ -1409,8 +1415,15 @@ export async function _handleHmofaStoryBatch(stories) {
   }
 
   const last = entries[entries.length - 1];
-  _handleHmofaStoryIntercept(last.url, last.title);
-  added += 1;
+  try {
+    await _handleHmofaStoryIntercept(last.url, last.title);
+    added += 1;
+  } catch (error) {
+    failed += 1;
+    window.Diagnostics?.log('WARN', 'HMOFA batch import skipped a story', {
+      url: last.url, error: error?.message || String(error),
+    });
+  }
 
   if (window.virtueSpeak && entries.length > 1) {
     window.virtueSpeak(
@@ -1445,7 +1458,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=160', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=161', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

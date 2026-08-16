@@ -20,8 +20,8 @@
 import {
   BLACKLIST_THEMES,
   POV_VALUES,
+  SORT_VALUES,
   WORLDS,
-  deduplicateLists,
   normalizeString,
   safeJsonParse,
   validateSavedList,
@@ -102,7 +102,31 @@ export function readPreferences() {
 }
 
 export function readSavedLists() {
-  return deduplicateLists(safeJsonParse(readStorage(KEYS.lists, '[]'), []));
+  return normalizeSavedLists(safeJsonParse(readStorage(KEYS.lists, '[]'), []));
+}
+
+// The vendored validateSavedList strips unknown filter keys, including sort.
+// Pocket Reader stores sort on the preset so a named list restores the same
+// order; re-attach it after validation so a round-trip does not drop it.
+function attachPresetSort(raw, list) {
+  if (!list || list.type !== 'preset') return list;
+  const sort = raw?.filters?.sort ?? raw?.sort;
+  if (SORT_VALUES.includes(sort)) list.filters = { ...list.filters, sort };
+  return list;
+}
+
+function normalizeSavedLists(values) {
+  const lists = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(values) ? values : []) {
+    const list = attachPresetSort(raw, validateSavedList(raw));
+    if (!list) continue;
+    const fingerprint = JSON.stringify(list);
+    if (seen.has(fingerprint)) continue;
+    seen.add(fingerprint);
+    lists.push(list);
+  }
+  return lists.slice(0, 100);
 }
 
 // ── Profile sync ────────────────────────────────────────────────────────────
@@ -137,7 +161,7 @@ export function writePreferences(preferences) {
 }
 
 export function writeSavedLists(lists) {
-  persist('lists', JSON.stringify(deduplicateLists(lists)));
+  persist('lists', JSON.stringify(normalizeSavedLists(lists)));
 }
 
 /**
@@ -431,11 +455,11 @@ export function openHmofaListsDialog({ getFilters, getSelectedIds, onApply, onCh
       saveButton.className = 'pr-btn-primary';
       saveButton.textContent = 'Save current filters';
       saveButton.addEventListener('click', () => {
-        const candidate = validateSavedList({
-          type: 'preset',
-          name: nameInput.value,
-          filters: getFilters?.() ?? {},
-        });
+        const filters = getFilters?.() ?? {};
+        const candidate = attachPresetSort(
+          { type: 'preset', name: nameInput.value, filters },
+          validateSavedList({ type: 'preset', name: nameInput.value, filters }),
+        );
         if (!candidate) {
           nameInput.focus();
           return;
