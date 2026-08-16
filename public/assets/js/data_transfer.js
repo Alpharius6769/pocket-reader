@@ -50,6 +50,7 @@ const EXCLUDED_LOCAL_KEYS = new Set([
   'pr_profile_owner',        // which account owns this device's local profile
   'pr_sync_outbox',          // transient; replaying it could resurrect deleted rows
   'pocketReaderPushAuthToken', // push unsubscribe credential; not a backup
+  'pocketReaderPushUserId',    // device push identity; not a backup
   'pocketReaderCookies',       // FA/SoFurry session cookies; never leave this device
 ]);
 

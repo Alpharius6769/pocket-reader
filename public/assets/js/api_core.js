@@ -909,6 +909,22 @@ function _restoreProgressFromLibrary(existing) {
   );
 }
 
+function _adoptExistingLibraryIdentity(story, existing) {
+  if (!story || !existing) return story;
+  // Scrape/curated payloads have no storyKey. Hashing them would persist
+  // chapters under a different key than the library card (upload-origin
+  // title|author keys, or a stored URL hash that no longer matches), so the
+  // next Play misses the cache we just wrote. FicHub already copies identity
+  // inside processUploadedFile; this path must do the same.
+  story.storyKey = existing.storyKey
+    || window.getStoryStableKey?.(existing)
+    || story.storyKey;
+  if (existing.sourceUrl) story.sourceUrl = existing.sourceUrl;
+  else if (existing.source_url) story.source_url = existing.source_url;
+  if (existing.url) story.url = existing.url;
+  return story;
+}
+
 async function _persistOpenedStory() {
   const story = window.currentStory;
   if (!story || !Array.isArray(story.chapters) || !story.chapters.length) return;
@@ -1123,8 +1139,14 @@ export async function loadStory(url, options = {}) {
 
     } else if (_isAo3) {
       // ── AO3 stories: FicHub EPUB first, backend scrape fallback ──
-      const ao3Timeout = setTimeout(() => ownAbort.abort(), 120000);
+      // FicHub gets its own 120s budget. Aborting ownAbort here used to kill
+      // the scrape fallback too — scrape then saw an already-aborted signal,
+      // exited immediately, and the outer catch swallowed AbortError silently.
+      const fichubAbort = new AbortController();
+      const ao3Timeout = setTimeout(() => { try { fichubAbort.abort(); } catch (e) {} }, 120000);
       const _cancelFetch = () => { window._storyFetchCancelled = true; try { ownAbort.abort(); } catch (e) {} };
+      const _propagateOwnAbortToFichub = () => { try { fichubAbort.abort(); } catch (e) {} };
+      ownAbort.signal.addEventListener('abort', _propagateOwnAbortToFichub, { once: true });
 
       if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
         window.showLoadingOverlay('Loading Story...', 'Fetching from FicHub archive...', _cancelFetch);
@@ -1134,7 +1156,7 @@ export async function loadStory(url, options = {}) {
         // Step 1 — resolve metadata + epub_url via our backend proxy
         const resolved = await _fichubResolve(
           _fichubApiUrl(fetchUrl),
-          ownAbort.signal,
+          fichubAbort.signal,
           (pass) => { if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
             window.showLoadingOverlay(
               'Preparing this story...',
@@ -1151,7 +1173,7 @@ export async function loadStory(url, options = {}) {
         if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
           window.showLoadingOverlay('Downloading...', 'Getting EPUB from FicHub archive', _cancelFetch);
         const epubUrl = 'https://fichub.net' + epubPath;
-        const blob = await _fichubDownloadEpub(epubUrl, resolved.proxy, ownAbort.signal);
+        const blob = await _fichubDownloadEpub(epubUrl, resolved.proxy, fichubAbort.signal);
         if (!blob) throw new Error('FICHUB_DL_FAILED');
 
         clearTimeout(ao3Timeout);
@@ -1299,6 +1321,7 @@ export async function loadStory(url, options = {}) {
     if (ownAbort._superseded) return;
     if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
     window.currentStory = data;
+    _adoptExistingLibraryIdentity(window.currentStory, existingLibEntry);
     _restoreProgressFromLibrary(existingLibEntry);
     await _persistOpenedStory();
     if (typeof window.addToLibrary === 'function') window.addToLibrary(window.currentStory);

@@ -18,11 +18,18 @@ test('logout clears site cookies from both storages (H1)', async () => {
   );
   assert.match(reset, /sessionStorage\.removeItem\('pocketReaderCookies'\)/);
   assert.match(reset, /localStorage\.removeItem\('pocketReaderCookies'\)/);
+  const clearPush = library.slice(
+    library.indexOf('async function _clearLocalPushIdentity'),
+    library.indexOf('export async function loadLocalData'),
+  );
+  assert.match(clearPush, /localStorage\.removeItem\('pocketReaderPushAuthToken'\)/);
+  assert.match(clearPush, /localStorage\.removeItem\('pocketReaderPushUserId'\)/);
 });
 
 test('backups exclude the push token and site cookies (H2)', async () => {
   const transfer = await read('public/assets/js/data_transfer.js');
   assert.match(transfer, /'pocketReaderPushAuthToken'/);
+  assert.match(transfer, /'pocketReaderPushUserId'/);
   assert.match(transfer, /'pocketReaderCookies'/);
 });
 
@@ -45,11 +52,18 @@ test('loadStory registers abort before the cache path and restores progress (H4/
   assert.ok(abortAt >= 0 && cacheAt > abortAt, 'abort controller must exist before IndexedDB lookup');
   assert.match(load, /if \(ownAbort\._superseded\) return;/);
   assert.match(load, /_restoreProgressFromLibrary\(existingLibEntry\)/);
+  assert.match(load, /_adoptExistingLibraryIdentity\(window\.currentStory, existingLibEntry\)/);
   assert.match(load, /await _persistOpenedStory\(\)/);
   assert.match(load, /fetch\(`\$\{window\.HF_API_BASE\}\$\{fetchUrl\}`, \{ signal: ownAbort\.signal \}\)/);
   assert.doesNotMatch(load, /if \(!preventNavigate\) showCloudflareFallback\(\);/);
   assert.match(load, /error\?\.name === 'AbortError'/);
   assert.match(load, /pocketNotify\?/);
+  // FicHub's 120s budget must abort the nested controller, not ownAbort, or
+  // scrape fallback starts already-aborted and the open fails silently.
+  assert.match(load, /const fichubAbort = new AbortController\(\)/);
+  assert.match(load, /setTimeout\(\(\) => \{ try \{ fichubAbort\.abort\(\); \} catch \(e\) \{\} \}, 120000\)/);
+  assert.doesNotMatch(load, /setTimeout\(\(\) => ownAbort\.abort\(\), 120000\)/);
+  assert.match(load, /_fichubDownloadEpub\(epubUrl, resolved\.proxy, fichubAbort\.signal\)/);
 });
 
 test('audio ended-with-error pauses playback (H7)', async () => {
@@ -89,9 +103,11 @@ test('library bookmarks await loadStory then jump (M6)', async () => {
   assert.doesNotMatch(library, /setTimeout\(\(\) => \{ if \(typeof window\.jumpToBookmark/);
 });
 
-test('history opens by storyKey (M7)', async () => {
+test('history and queue open by storyKey (M7)', async () => {
   const features = await read('public/assets/js/reader_features.js');
   assert.match(features, /loadStory\(\$\{inlineArg\(item\.storyKey \|\| item\.title\)\}\)/);
+  assert.match(features, /loadStory\(\$\{inlineArg\(stableKey\(story\) \|\| story\.title \|\| story\.url \|\| ''\)\}\)/);
+  assert.doesNotMatch(features, /loadStory\(\$\{inlineArg\(story\.title \|\| story\.url \|\| ''\)\}\)/);
 });
 
 test('interrupted cache restore never navigates the reader (M8)', async () => {
@@ -121,15 +137,21 @@ test('expensive backend ingest routes share the scrape budget (M9)', async () =>
 test('push enablement registers the versioned service worker (M10)', async () => {
   const settings = await read('public/assets/js/settings_manager.js');
   assert.match(settings, /NARRATION_SERVICE_WORKER_URL/);
+  assert.match(settings, /function narrationRegistrationIsCurrent/);
   const push = settings.slice(settings.indexOf('let swReg = await navigator.serviceWorker.getRegistration()'));
+  assert.match(push, /!narrationRegistrationIsCurrent\(swReg\)/);
   assert.match(push, /navigator\.serviceWorker\.register\(swUrl\)/);
 });
 
-test('reader covers only accept http(s) URLs (L1)', async () => {
+test('reader and library covers only accept http(s) URLs (L1)', async () => {
   const ui = await read('public/assets/js/ui_controller.js');
   assert.match(ui, /function _safeHttpCoverUrl/);
   assert.match(ui, /parsed\.protocol === 'http:' \|\| parsed\.protocol === 'https:'/);
   assert.match(ui, /const coverSrc = _safeHttpCoverUrl\(storyObj\.coverImage\)/);
+  const library = await read('public/assets/js/library_manager.js');
+  assert.match(library, /function _safeHttpCoverUrl/);
+  assert.match(library, /const coverSrc = _safeHttpCoverUrl\(story\.coverImage \|\| story\.coverUrl \|\| ''\)/);
+  assert.doesNotMatch(library, /const cover = story\.coverImage \|\| story\.coverUrl \|\| ''/);
 });
 
 test('admin secrets compare in constant time and health omits paths (L2/L3)', async () => {

@@ -153,6 +153,7 @@ test('backups exclude the auth session and per-device identity', async () => {
     'pr_profile_owner',
     'pr_sync_outbox',
     'pocketReaderPushAuthToken',
+    'pocketReaderPushUserId',
     'pocketReaderCookies',
   ]) {
     assert.ok(transfer.includes(`'${key}'`), `${key} must be excluded from backups`);

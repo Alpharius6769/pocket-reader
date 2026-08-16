@@ -7,13 +7,24 @@ import {
   writePocketDeviceBackendPreference,
 } from './pocket_backend_policy.js?v=backend-v22';
 
-const NARRATION_SERVICE_WORKER_VERSION = '162';
+const NARRATION_SERVICE_WORKER_VERSION = '163';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
 
 function narrationServiceWorkerControlsPage() {
   const scriptUrl = navigator.serviceWorker?.controller?.scriptURL || '';
+  try {
+    const parsed = new URL(scriptUrl, document.baseURI);
+    return parsed.pathname.endsWith('/sw.js')
+      && parsed.searchParams.get('v') === NARRATION_SERVICE_WORKER_VERSION;
+  } catch (_) {
+    return false;
+  }
+}
+
+function narrationRegistrationIsCurrent(reg) {
+  const scriptUrl = reg?.active?.scriptURL || reg?.waiting?.scriptURL || reg?.installing?.scriptURL || '';
   try {
     const parsed = new URL(scriptUrl, document.baseURI);
     return parsed.pathname.endsWith('/sw.js')
@@ -1047,7 +1058,7 @@ export function initPushNotifications(checkbox) {
         return;
       }
       let swReg = await navigator.serviceWorker.getRegistration();
-      if (!swReg) {
+      if (!narrationRegistrationIsCurrent(swReg)) {
         const swUrl = new URL(NARRATION_SERVICE_WORKER_URL, document.baseURI).href;
         const swFallbackUrl = new URL(SERVICE_WORKER_PATH, document.baseURI).href;
         try { swReg = await navigator.serviceWorker.register(swUrl); }

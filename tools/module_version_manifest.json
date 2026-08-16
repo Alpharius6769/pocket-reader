@@ -1,7 +1,7 @@
 {
   "api_core.js": {
-    "version": "search-v20",
-    "sha256": "0f9925bead5db94e"
+    "version": "search-v21",
+    "sha256": "cfcc9e4ff9459a4f"
   },
   "audio_core.js": {
     "version": "audio-v71",
@@ -16,8 +16,8 @@
     "sha256": "50790fa92b70428f"
   },
   "data_transfer.js": {
-    "version": "transfer-v4",
-    "sha256": "84da142899a18e21"
+    "version": "transfer-v5",
+    "sha256": "90db342dcc2c9d0b"
   },
   "device_benchmark_worker.js": {
     "version": "device-bench-v1",
@@ -32,7 +32,7 @@
     "sha256": "c9f600a71a8c963d"
   },
   "engine_utils.js": {
-    "version": "sw-162",
+    "version": "sw-163",
     "sha256": "ec25d26c029737d5"
   },
   "experience_coordinator.js": {
@@ -56,11 +56,11 @@
     "sha256": "f4c9755b6b44b491"
   },
   "library_manager.js": {
-    "version": "library-v17",
-    "sha256": "072bb5af2ea9a284"
+    "version": "library-v18",
+    "sha256": "7cdd9d7860ec115e"
   },
   "motion_lite.js": {
-    "version": "sw-162",
+    "version": "sw-163",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
@@ -88,12 +88,12 @@
     "sha256": "fb0a17774b2cd334"
   },
   "reader_features.js": {
-    "version": "features-v8",
-    "sha256": "0bf51401397c76af"
+    "version": "features-v9",
+    "sha256": "d5f0db127c3c5272"
   },
   "settings_manager.js": {
-    "version": "settings-v65",
-    "sha256": "31fb169f60833634"
+    "version": "settings-v66",
+    "sha256": "770204695ba60d5c"
   },
   "storage_core.js": {
     "version": "storage-v13",
@@ -112,15 +112,15 @@
     "sha256": "74819367880cf7ac"
   },
   "ui_controller.js": {
-    "version": "ui-v105",
-    "sha256": "42a555aa40b0a828"
+    "version": "ui-v106",
+    "sha256": "56212c86660921f2"
   },
   "virtue_controller.js": {
     "version": "virtue-v14",
     "sha256": "69617463361408ec"
   },
   "sw.js": {
-    "version": "sw-162",
-    "sha256": "b6931ff01db49880"
+    "version": "sw-163",
+    "sha256": "4daee0970f3fbacb"
   }
 }

@@ -370,6 +370,14 @@ function _escapeHtml(s) {
 }
 window._escapeHtml = _escapeHtml;
 
+function _safeHttpCoverUrl(value) {
+  try {
+    const parsed = new URL(String(value || ''), window.location.href);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+  } catch (_) {}
+  return '';
+}
+
 // Cloud pushes stay disabled until the profile's owner has been reconciled
 // with the logged-in Supabase account (see checkCloudSyncOnStartup /
 // triggerCloudLogin). This stops boot-time saves from writing one user's
@@ -499,6 +507,7 @@ export async function resetLocalProfile({ preserveSetup = true } = {}) {
   try { localStorage.removeItem('pr_profile_owner'); } catch (e) {}
   try { sessionStorage.removeItem('pocketReaderCookies'); } catch (e) {}
   try { localStorage.removeItem('pocketReaderCookies'); } catch (e) {}
+  await _clearLocalPushIdentity();
   if (!preserveSetup) {
     try { localStorage.removeItem('pr_setup_complete'); } catch (e) {}
   }
@@ -511,6 +520,37 @@ export async function resetLocalProfile({ preserveSetup = true } = {}) {
   }
 }
 window.resetLocalProfile = resetLocalProfile;
+
+async function _clearLocalPushIdentity() {
+  let token = '';
+  let userId = '';
+  try { token = localStorage.getItem('pocketReaderPushAuthToken') || ''; } catch (_) {}
+  try { userId = localStorage.getItem('pocketReaderPushUserId') || ''; } catch (_) {}
+  try {
+    if (token && userId && window.HF_API_BASE) {
+      const ac = new AbortController();
+      const t = setTimeout(() => ac.abort(), 2000);
+      try {
+        await fetch(`${window.HF_API_BASE}/api/unsubscribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, auth_token: token }),
+          keepalive: true,
+          signal: ac.signal,
+        });
+      } finally {
+        clearTimeout(t);
+      }
+    }
+  } catch (_) { /* best-effort; tokens still drop below */ }
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration?.();
+    const sub = await reg?.pushManager?.getSubscription?.();
+    await sub?.unsubscribe?.();
+  } catch (_) {}
+  try { localStorage.removeItem('pocketReaderPushAuthToken'); } catch (_) {}
+  try { localStorage.removeItem('pocketReaderPushUserId'); } catch (_) {}
+}
 
 export async function loadLocalData() {
   try {
@@ -1393,11 +1433,11 @@ ${favoriteBtn}
     const wordsDisplay = story.words ? (typeof story.words === 'number' ? story.words.toLocaleString() : story.words) : '-';
     const metadataStats = `Ch ${(Number(story.progressChapter) || 0) + 1} • ${_escapeHtml(wordsDisplay)} words`;
     const authorDisplay = _escapeHtml(story.author || 'Unknown');
-    const cover = story.coverImage || story.coverUrl || '';
+    const coverSrc = _safeHttpCoverUrl(story.coverImage || story.coverUrl || '');
 
     if (isList) {
-      const coverHtml = cover 
-        ? `<img src="${_escapeHtml(cover)}" class="story-list-cover" style="width:50px;height:70px;object-fit:cover;border-radius:4px;">` 
+      const coverHtml = coverSrc
+        ? `<img src="${_escapeHtml(coverSrc)}" class="story-list-cover" style="width:50px;height:70px;object-fit:cover;border-radius:4px;">` 
         : `<div class="story-list-cover">${_getInitials(story.title)}</div>`;
       return `<div class="story-card list-row" data-story-key="${storyKeyAttr}" style="position:relative; display:flex; gap:12px; align-items:center; padding:12px 15px;">
         ${optionsMenu}
@@ -1417,8 +1457,8 @@ ${favoriteBtn}
         </div>
       </div>`;
     } else {
-      const coverHtml = cover 
-        ? `<img src="${_escapeHtml(cover)}" class="cover-placeholder" style="aspect-ratio:3/4;width:100%;object-fit:cover;border-radius:6px;margin-bottom:10px;">` 
+      const coverHtml = coverSrc
+        ? `<img src="${_escapeHtml(coverSrc)}" class="cover-placeholder" style="aspect-ratio:3/4;width:100%;object-fit:cover;border-radius:6px;margin-bottom:10px;">` 
         : `<div class="cover-placeholder" style="aspect-ratio:3/4;width:100%;border-radius:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;background:var(--accent-blue);color:rgba(255,255,255,0.7);">${_getInitials(story.title)}</div>`;
       return `<div class="story-card" data-story-key="${storyKeyAttr}" style="position:relative; display:flex; flex-direction:column; padding:15px; border-radius:10px; background:var(--panel-bg); border:1px solid var(--border-color); box-shadow:var(--shadow-soft);">
         ${optionsMenu}
