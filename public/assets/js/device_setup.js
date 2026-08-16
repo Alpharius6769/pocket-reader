@@ -408,7 +408,7 @@ requestAnimationFrame(() => {
 window.runPocketDeviceDiagnosticsFromSettings = (button) => {
   if (button) button.disabled = true;
   runPocketDeviceDiagnostics({ onboarding: false })
-    .catch((error) => window.showSettingsModal?.('Device diagnostics failed', `<p>${String(error?.message || error)}</p>`))
+    .catch((error) => window.showSettingsModal?.('Device diagnostics failed', `<p>${escapeHtml(String(error?.message || error))}</p>`))
     .finally(() => { if (button) button.disabled = false; });
 };
 

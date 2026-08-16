@@ -111,10 +111,12 @@ test('loadStory clears the active-abort slot only when it still owns it', async 
   const source = await read('public/assets/js/api_core.js');
   assert.match(source, /if \(_activeLoadAbort === ownAbort\) _activeLoadAbort = null;/);
   assert.doesNotMatch(source, /finally \{\s*_activeLoadAbort = null;\s*\}/);
-  // The non-AO3 scrape path must register a controller too, or it cannot be
-  // superseded and can clobber currentStory after the user moved on.
-  assert.match(source, /ownAbort = scrapeController;/);
-  assert.match(source, /scrapeController\._superseded/);
+  // Every load, including the IndexedDB cache path, must register a controller
+  // at the start so a newer open can supersede it.
+  assert.match(source, /const ownAbort = new AbortController\(\);/);
+  assert.match(source, /_activeLoadAbort = ownAbort;/);
+  assert.match(source, /ownAbort\._superseded/);
+  assert.doesNotMatch(source, /ownAbort = scrapeController;/);
 });
 
 test('the profile write strips chapters before cloning, not after', async () => {

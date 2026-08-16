@@ -147,7 +147,14 @@ test('update checks are dispatched by story key, never by title', async () => {
 test('backups exclude the auth session and per-device identity', async () => {
   const transfer = await read('public/assets/js/data_transfer.js');
   assert.match(transfer, /const EXCLUDED_LOCAL_KEYS = new Set\(/);
-  for (const key of ['pr_supabase_session_v1', 'pr_device_id', 'pr_profile_owner', 'pr_sync_outbox']) {
+  for (const key of [
+    'pr_supabase_session_v1',
+    'pr_device_id',
+    'pr_profile_owner',
+    'pr_sync_outbox',
+    'pocketReaderPushAuthToken',
+    'pocketReaderCookies',
+  ]) {
     assert.ok(transfer.includes(`'${key}'`), `${key} must be excluded from backups`);
   }
   // A .prbackup is a file users copy between machines; the session entry holds a
@@ -212,10 +219,10 @@ test('per-caller rate limits key on the forwarded client, not the proxy', async 
   assert.doesNotMatch(app, /client_ip = request\.client\.host if request\.client else "unknown"/);
   assert.match(app, /_check_subscribe_rate\(_client_ip\(request\)\)/);
   // /api/search spends Zyte credit on every cache miss and had no limiter.
-  assert.match(app, /_check_scrape_rate\(_client_ip\(http_request\)\)/);
+  assert.match(app, /_require_scrape_budget\(\s*http_request/);
   const search = app.slice(app.indexOf('@app.post("/api/search")'), app.indexOf('def _withdrawn_hash'));
   const cacheHit = search.indexOf('if cached is not None:');
-  const limiter = search.indexOf('_check_scrape_rate');
+  const limiter = search.indexOf('_require_scrape_budget');
   assert.ok(cacheHit > 0 && limiter > cacheHit, 'the limiter must run after the cache, so repeats cost no budget');
 });
 

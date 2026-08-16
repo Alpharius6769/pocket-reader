@@ -297,7 +297,7 @@ function queueMarkup(data) {
 function historyMarkup(data) {
   const recent = [...data.history].sort((a, b) => Number(b.lastAt) - Number(a.lastAt)).slice(0, 5);
   if (!recent.length) return '<div class="empty-state"><strong>No history yet.</strong><span>Stories appear here after you open them.</span></div>';
-  return recent.map((item) => `<button class="history-item" onclick="window.loadStory(${inlineArg(item.title)})"><strong>${esc(item.title)}</strong><span>Chapter ${Number(item.progressChapter) + 1} | ${new Date(item.lastAt).toLocaleDateString()}</span></button>`).join('');
+  return recent.map((item) => `<button class="history-item" onclick="window.loadStory(${inlineArg(item.storyKey || item.title)})"><strong>${esc(item.title)}</strong><span>Chapter ${Number(item.progressChapter) + 1} | ${new Date(item.lastAt).toLocaleDateString()}</span></button>`).join('');
 }
 
 function goalProgress(data) {

@@ -272,7 +272,7 @@ export function normalizeProfile(profile, deviceId = null) {
   return shrinkProfileToFit(value).value;
 }
 
-function mergeClockedMap(cloudValues, incomingValues, cloudClocks, incomingClocks) {
+export function mergeClockedMap(cloudValues, incomingValues, cloudClocks, incomingClocks) {
   const values = { ...(cloudValues || {}) };
   const clocks = { ...(cloudClocks || {}) };
   for (const [key, incomingValue] of Object.entries(incomingValues || {})) {

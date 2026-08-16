@@ -99,6 +99,7 @@ When browser push is enabled, `/api/subscribe` stores only explicitly subscribed
 Optional scraping/model routing:
 
 - `WORKER_PROXY_BASE` - Cloudflare Worker proxy base URL.
+- `WORKER_PROXY_TOKEN` or `PROXY_AUTH_TOKEN` - shared secret sent as `X-Pocket-Proxy-Key` when this backend hops through the Worker. Either name is accepted on the Space and on the Worker (`PROXY_AUTH_TOKEN` is the Wrangler secret name). Do not rename a production secret.
 - `ZYTE_API_KEY` - optional Zyte smart-proxy key for Cloudflare-heavy sources.
 - `FICHUB_TOKEN` - optional FicHub bearer token for datacenter-IP access.
 - `FICHUB_USER_AGENT` - custom FicHub user-agent/contact string.

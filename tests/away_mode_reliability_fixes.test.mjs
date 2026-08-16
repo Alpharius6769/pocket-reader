@@ -62,5 +62,5 @@ test('a silent load superseding a foreground one clears the orphaned overlay', a
   // When a background (silent) load aborts a foreground load, the new load shows
   // no overlay of its own, so the superseded load must clear the one it left up.
   assert.match(api, /_activeLoadAbort\._supersededBySilent = preventNavigate;/);
-  assert.match(api, /if \(ao3Controller\._supersededBySilent && typeof window\.hideLoadingOverlay === 'function'\) window\.hideLoadingOverlay\(\);/);
+  assert.match(api, /if \(ownAbort\._supersededBySilent && typeof window\.hideLoadingOverlay === 'function'\) window\.hideLoadingOverlay\(\);/);
 });

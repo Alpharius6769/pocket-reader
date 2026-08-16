@@ -23,10 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # curated_library PDFs are LFS objects. They are NOT synced by this
-          # workflow (see the rsync excludes below), so CI never needs to pull
-          # them and never spends metered LFS bandwidth.
-          lfs: false
+          # curated_library PDFs are Git LFS objects. Pull them so the Space
+          # shelf is not 404 after a backend deploy.
+          lfs: true
           submodules: false
 
       - name: Require HF_TOKEN
@@ -52,20 +51,19 @@ jobs:
           #   tools/, reports/ - maintainer-only, explicitly not runtime app code
           #   .wrangler/       - local Cloudflare credential cache, must never leave this machine
           #   __pycache__/     - build artefact
-          #   curated_library/ - large LFS PDFs that change rarely; synced manually
-          #                      so routine backend deploys cost no LFS bandwidth
           #   .curated_updates/- local EPUB inputs for regenerating those PDFs.
           #                      Gitignored, so CI should never see them, but the
           #                      exclude stays as defence in depth: without it a
           #                      stray commit would publish 4+ MB of story files.
           #   .git/            - never clobber the Space's own history
           #   .gitignore       - the Space keeps its own
+          # curated_library/ is included: those PDFs are the shelf. Skipping them
+          # left every curated open 404 until a manual sync.
           rsync -av --delete \
             --exclude='tools/' \
             --exclude='reports/' \
             --exclude='.wrangler/' \
             --exclude='__pycache__/' \
-            --exclude='curated_library/' \
             --exclude='.curated_updates/' \
             --exclude='.git/' \
             --exclude='.gitignore' \

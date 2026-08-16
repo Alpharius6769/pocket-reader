@@ -14,7 +14,7 @@
  * The publishable key below is designed to ship in frontend JS. Access is
  * enforced by Row Level Security, not by key secrecy.
  */
-import { mergeProfile, normalizeProfile } from './profile_merge.js?v=merge-v5';
+import { mergeProfile, normalizeProfile } from './profile_merge.js?v=merge-v6';
 
 const SUPABASE_URL = 'https://dctjxeqjtctyvvrdlcxo.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KUGiCZjxfxQb2eQwOTQO0A_MY8ihwur';
@@ -362,7 +362,7 @@ function consumeOAuthFragment() {
   storeSession({
     access_token: accessTokenValue,
     refresh_token: refreshTokenValue,
-    expires_at: Number(params.get('expires_at') || (now() + parseInt(params.get('expires_in') || '3600', 10))),
+    expires_at: Number(params.get('expires_at') || (Math.floor(Date.now() / 1000) + parseInt(params.get('expires_in') || '3600', 10))),
     token_type: params.get('token_type'),
   });
   history.replaceState(null, '', window.location.pathname + window.location.search);

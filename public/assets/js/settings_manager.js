@@ -7,7 +7,7 @@ import {
   writePocketDeviceBackendPreference,
 } from './pocket_backend_policy.js?v=backend-v22';
 
-const NARRATION_SERVICE_WORKER_VERSION = '161';
+const NARRATION_SERVICE_WORKER_VERSION = '162';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1048,8 +1048,9 @@ export function initPushNotifications(checkbox) {
       }
       let swReg = await navigator.serviceWorker.getRegistration();
       if (!swReg) {
+        const swUrl = new URL(NARRATION_SERVICE_WORKER_URL, document.baseURI).href;
         const swFallbackUrl = new URL(SERVICE_WORKER_PATH, document.baseURI).href;
-        try { swReg = await navigator.serviceWorker.register(swFallbackUrl); }
+        try { swReg = await navigator.serviceWorker.register(swUrl); }
         catch(e) { swReg = await navigator.serviceWorker.register(swFallbackUrl); }
       }
       const existing     = await swReg.pushManager.getSubscription();

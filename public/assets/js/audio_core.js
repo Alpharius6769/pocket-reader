@@ -3345,6 +3345,7 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
     if (window.currentAudio && window.currentAudio.error) {
       console.warn('Audio element ended with error:', window.currentAudio.error);
       URL.revokeObjectURL(audioUrl);
+      pausePlayback();
       return;
     }
     URL.revokeObjectURL(audioUrl);

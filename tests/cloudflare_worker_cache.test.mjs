@@ -270,3 +270,53 @@ test('scheduled sync forwards the HF bearer token to the private Space', async (
     globalThis.fetch = originalFetch;
   }
 });
+
+test('API proxy forwards the visitor IP for backend rate limits', async () => {
+  const originalFetch = globalThis.fetch;
+  let upstream;
+  globalThis.fetch = async (request) => {
+    upstream = request;
+    return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const response = await worker.fetch(
+      new Request('https://pocket-reader-proxy.example/api/scrape', {
+        method: 'POST',
+        headers: {
+          Origin: ORIGIN,
+          'CF-Connecting-IP': '203.0.113.9',
+          'X-Forwarded-For': '198.51.100.1',
+          'Content-Type': 'application/json',
+        },
+        body: '{}',
+      }),
+      { HF_TOKEN: 'hf_test_token' },
+      { waitUntil() {} },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(upstream.headers.get('CF-Connecting-IP'), '203.0.113.9');
+    assert.equal(upstream.headers.get('X-Forwarded-For'), '203.0.113.9');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('generic proxy accepts WORKER_PROXY_TOKEN as an alias for PROXY_AUTH_TOKEN', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('ok');
+  try {
+    const target = 'https://archiveofourown.org/works/123';
+    const request = new Request(
+      'https://pocket-reader-proxy.example/?url=' + encodeURIComponent(target),
+      { headers: { 'X-Pocket-Proxy-Key': 'space-secret' } },
+    );
+    const response = await worker.fetch(
+      request,
+      { WORKER_PROXY_TOKEN: 'space-secret' },
+      { waitUntil() {} },
+    );
+    assert.equal(response.status, 200);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

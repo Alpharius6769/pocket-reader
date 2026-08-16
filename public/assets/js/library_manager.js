@@ -6,6 +6,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
 } from './tts_pronunciation_core.js?v=pron-v11';
+import { profileHash, storyKeyFor, mergeClockedMap } from './profile_merge.js?v=merge-v6';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
 window._ACH_ICONS = {
@@ -60,15 +61,10 @@ const WITHDRAWN_AUTHOR_HASHES = new Set([1741912528]);
 const WITHDRAWN_FILE_HASHES = new Set([586215127, 4227966908]);
 
 function _profileHash(value) {
-  let hash = 5381;
-  const normalized = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-  for (let i = 0; i < normalized.length; i++) {
-    hash = ((hash << 5) + hash) ^ normalized.charCodeAt(i);
-    hash >>>= 0;
-  }
-  return hash;
+  return profileHash(value);
 }
-window.profileHash = _profileHash;
+window.profileHash = profileHash;
+window.storyKeyFor = storyKeyFor;
 
 function _storyFilename(value) {
   const raw = String(value || '');
@@ -84,8 +80,7 @@ function _storyFilename(value) {
 }
 
 function getStoryStableKey(story) {
-  const source = story?.sourceUrl || story?.source_url || story?.url || story?.id || `${story?.title || ''}|${story?.author || ''}`;
-  return `s_${_profileHash(source)}`;
+  return storyKeyFor(story && typeof story === 'object' ? story : {});
 }
 window.getStoryStableKey = getStoryStableKey;
 
@@ -312,12 +307,32 @@ function mergeProfileIntoCurrent(incomingProfile, options = {}) {
     // localSettingsWin forces the local side to win regardless of timestamps —
     // used when a user logs in right after local setup so their fresh wizard
     // choices aren't overwritten by an older cloud profile.
+    // When either side has per-field clocks, merge field-by-field so a newer
+    // theme on one device is not wiped by an older wholesale settings blob.
     const localTs = Number(window.userProfile.settingsUpdatedAt) || 0;
     const incomingTs = Number(incoming.settingsUpdatedAt) || 0;
-    const incomingWins = !options.localSettingsWin && incomingTs > localTs;
-    window.userProfile.settings = incomingWins
-      ? { ...window.userProfile.settings, ...incoming.settings }
-      : { ...incoming.settings, ...window.userProfile.settings };
+    const localClocks = (window.userProfile.settingsFieldUpdatedAt && typeof window.userProfile.settingsFieldUpdatedAt === 'object')
+      ? window.userProfile.settingsFieldUpdatedAt : {};
+    const incomingClocks = (incoming.settingsFieldUpdatedAt && typeof incoming.settingsFieldUpdatedAt === 'object')
+      ? incoming.settingsFieldUpdatedAt : {};
+    const hasFieldClocks = Object.keys(localClocks).length > 0 || Object.keys(incomingClocks).length > 0;
+    if (options.localSettingsWin) {
+      window.userProfile.settings = { ...incoming.settings, ...window.userProfile.settings };
+    } else if (hasFieldClocks) {
+      const [mergedSettings, mergedClocks] = mergeClockedMap(
+        window.userProfile.settings,
+        incoming.settings,
+        localClocks,
+        incomingClocks,
+      );
+      window.userProfile.settings = mergedSettings;
+      window.userProfile.settingsFieldUpdatedAt = mergedClocks;
+    } else {
+      const incomingWins = incomingTs > localTs;
+      window.userProfile.settings = incomingWins
+        ? { ...window.userProfile.settings, ...incoming.settings }
+        : { ...incoming.settings, ...window.userProfile.settings };
+    }
     window.userProfile.settingsUpdatedAt = Math.max(localTs, incomingTs);
     merged = true;
   }
@@ -482,6 +497,8 @@ window.seedCuratedLibrary = seedCuratedLibrary;
 export async function resetLocalProfile({ preserveSetup = true } = {}) {
   try { localStorage.removeItem('pocketReaderData'); } catch (e) {}
   try { localStorage.removeItem('pr_profile_owner'); } catch (e) {}
+  try { sessionStorage.removeItem('pocketReaderCookies'); } catch (e) {}
+  try { localStorage.removeItem('pocketReaderCookies'); } catch (e) {}
   if (!preserveSetup) {
     try { localStorage.removeItem('pr_setup_complete'); } catch (e) {}
   }
@@ -1623,7 +1640,7 @@ export function updateBookmarksFolder() {
       const bookmarkId = encodeURIComponent(bm.id || '').replace(/'/g, '%27');
       const storyKey = encodeURIComponent(bm.storyKey || '').replace(/'/g, '%27');
       const escapedTitle = _escapeHtml(bm.storyTitle || '');
-      html += `<div class="bookmark-item" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.loadStory(decodeURIComponent('${safeStoryRef}')); setTimeout(() => { if (typeof window.jumpToBookmark === 'function') window.jumpToBookmark(${bm.c}, ${bm.p}); }, 1000);">
+      html += `<div class="bookmark-item" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.openLibraryBookmark(decodeURIComponent('${safeStoryRef}'), ${bm.c}, ${bm.p})">
         <div>
           <div style="font-size:0.8rem;color:var(--accent-blue-text);font-weight:bold;">${escapedTitle} - Ch ${bm.c + 1} (${dateStr})</div>
           <div style="font-size:0.85rem;color:var(--text-main);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">"${bmText}"</div>
@@ -1638,6 +1655,24 @@ export function updateBookmarksFolder() {
   }
 }
 window.updateBookmarksFolder = updateBookmarksFolder;
+
+export async function openLibraryBookmark(storyRef, chapterIndex, paragraphIndex) {
+  const ref = String(storyRef || '');
+  if (!ref) return;
+  try {
+    await window.loadStory(ref);
+  } catch (_) {
+    return;
+  }
+  const loaded = window.currentStory;
+  if (!loaded) return;
+  const loadedRef = loaded.storyKey || window.getStoryStableKey?.(loaded) || loaded.title || '';
+  if (loadedRef !== ref && loaded.title !== ref && loaded.url !== ref) return;
+  if (typeof window.jumpToBookmark === 'function') {
+    window.jumpToBookmark(Number(chapterIndex) || 0, Number(paragraphIndex) || 0);
+  }
+}
+window.openLibraryBookmark = openLibraryBookmark;
 
 export function deleteBookmark(storyRef, cIdx, pIdx) {
   const lib = window.userProfile.library || [];

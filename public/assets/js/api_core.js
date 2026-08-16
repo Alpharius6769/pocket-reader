@@ -897,6 +897,29 @@ async function _fichubDownloadEpub(epubUrl, dummyPreferredProxy, sig) {
 // Controller for the in-flight story load (AO3/FicHub path) so a new load can
 // abort a previous one instead of letting two run concurrently and fight over
 // currentStory / the overlay's Cancel handler.
+function _restoreProgressFromLibrary(existing) {
+  const chapters = window.currentStory?.chapters;
+  if (!existing || !Array.isArray(chapters) || !chapters.length) return;
+  const chapterIndex = Math.max(0, Math.min(Number(existing.progressChapter) || 0, chapters.length - 1));
+  const paras = chapters[chapterIndex]?.paragraphs || [];
+  window.currentChapterIndex = chapterIndex;
+  window.currentParagraphIndex = Math.max(
+    0,
+    Math.min(Number(existing.progressParagraph) || 0, Math.max(0, paras.length - 1)),
+  );
+}
+
+async function _persistOpenedStory() {
+  const story = window.currentStory;
+  if (!story || !Array.isArray(story.chapters) || !story.chapters.length) return;
+  if (typeof window._saveStoryChapters !== 'function') return;
+  story.storyKey = story.storyKey || window.getStoryStableKey?.(story);
+  if (!story.storyKey) return;
+  try {
+    await window._saveStoryChapters(story.storyKey, story.chapters, story);
+  } catch (_) { /* quota / eviction must not fail the open */ }
+}
+
 let _activeLoadAbort = null;
 
 export async function loadStory(url, options = {}) {
@@ -955,10 +978,8 @@ export async function loadStory(url, options = {}) {
 
   let fetchUrl = url;
   let existingLibEntry = null;
-  // This call's own abort controller, once one is created. Compared against the
-  // module-level _activeLoadAbort in the finally block so a slow unwind cannot
-  // clear a newer load's registration.
-  let ownAbort = null;
+  const ownAbort = new AbortController();
+  _activeLoadAbort = ownAbort;
 
   // 1. Try to load from local IndexedDB cache first (checking both URL and Title)
   if (window.userProfile && window.userProfile.library && typeof window._loadStoryChapters === 'function') {
@@ -988,6 +1009,7 @@ export async function loadStory(url, options = {}) {
           }
         }
         if (cachedChapters && cachedChapters.length > 0) {
+          if (ownAbort._superseded) return;
           console.log("Loading story chapters from local storage:", existingLibEntry.title);
           window.currentStory = existingLibEntry;
           window.currentStory.chapters = cachedChapters;
@@ -1094,17 +1116,15 @@ export async function loadStory(url, options = {}) {
 
     if (fetchUrl.startsWith('/api/library/curated/')) {
       // ── Curated library stories — simple direct fetch ──
-      const response = await fetch(`${window.HF_API_BASE}${fetchUrl}`);
+      const response = await fetch(`${window.HF_API_BASE}${fetchUrl}`, { signal: ownAbort.signal });
       if (!response.ok) throw new Error('CURATED_FETCH_FAILED');
+      if (ownAbort._superseded) return;
       data = await _safeParseJson(response, 'General');
 
     } else if (_isAo3) {
       // ── AO3 stories: FicHub EPUB first, backend scrape fallback ──
-      const ao3Controller = new AbortController();
-      ownAbort = ao3Controller;
-      _activeLoadAbort = ao3Controller;
-      const ao3Timeout = setTimeout(() => ao3Controller.abort(), 120000);
-      const _cancelFetch = () => { window._storyFetchCancelled = true; try { ao3Controller.abort(); } catch (e) {} };
+      const ao3Timeout = setTimeout(() => ownAbort.abort(), 120000);
+      const _cancelFetch = () => { window._storyFetchCancelled = true; try { ownAbort.abort(); } catch (e) {} };
 
       if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
         window.showLoadingOverlay('Loading Story...', 'Fetching from FicHub archive...', _cancelFetch);
@@ -1114,7 +1134,7 @@ export async function loadStory(url, options = {}) {
         // Step 1 — resolve metadata + epub_url via our backend proxy
         const resolved = await _fichubResolve(
           _fichubApiUrl(fetchUrl),
-          ao3Controller.signal,
+          ownAbort.signal,
           (pass) => { if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
             window.showLoadingOverlay(
               'Preparing this story...',
@@ -1131,7 +1151,7 @@ export async function loadStory(url, options = {}) {
         if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
           window.showLoadingOverlay('Downloading...', 'Getting EPUB from FicHub archive', _cancelFetch);
         const epubUrl = 'https://fichub.net' + epubPath;
-        const blob = await _fichubDownloadEpub(epubUrl, resolved.proxy, ao3Controller.signal);
+        const blob = await _fichubDownloadEpub(epubUrl, resolved.proxy, ownAbort.signal);
         if (!blob) throw new Error('FICHUB_DL_FAILED');
 
         clearTimeout(ao3Timeout);
@@ -1146,11 +1166,16 @@ export async function loadStory(url, options = {}) {
           // so silent mode is propagated (no navigation/overlay/alert).
           await window.processUploadedFile(file, fhData.meta, { silent: preventNavigate });
           fichubSuccess = true;
+          if (ownAbort._superseded) return;
+          _restoreProgressFromLibrary(existingLibEntry);
+          if (!preventNavigate && existingLibEntry && typeof window.populateReaderUI === 'function' && window.currentStory) {
+            window.populateReaderUI(window.currentStory, window.currentStory.author || 'Unknown');
+          }
         }
       } catch(fichubErr) {
         clearTimeout(ao3Timeout);
-        if (ao3Controller._superseded) {
-          if (ao3Controller._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+        if (ownAbort._superseded) {
+          if (ownAbort._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
           return;
         }
         if (window._storyFetchCancelled) {
@@ -1172,7 +1197,7 @@ export async function loadStory(url, options = {}) {
       const body = cookies ? { url: fetchUrl, cookies } : { url: fetchUrl };
       let response = null, lastErr = null;
       for (let attempt = 1; attempt <= 2; attempt++) {
-        if (window._storyFetchCancelled || ao3Controller.signal.aborted) break;
+        if (window._storyFetchCancelled || ownAbort.signal.aborted) break;
         const controller = new AbortController();
         // The backend Zyte browser-render tier for a Cloudflare-blocked AO3 work
         // legitimately takes up to ~35s (nearer ~55s worst case across both Zyte
@@ -1182,7 +1207,7 @@ export async function loadStory(url, options = {}) {
         // (propagate the outer AO3 abort so Cancel actually stops the request).
         const timeoutId = setTimeout(() => controller.abort(), 45000);
         const _propagateAbort = () => { try { controller.abort(); } catch (_) {} };
-        ao3Controller.signal.addEventListener('abort', _propagateAbort, { once: true });
+        ownAbort.signal.addEventListener('abort', _propagateAbort, { once: true });
         try {
           response = await window._rateLimitedFetch('scrape', () =>
             fetch(`${window.HF_API_BASE}/api/scrape`, {
@@ -1193,20 +1218,20 @@ export async function loadStory(url, options = {}) {
             })
                                                    );
           clearTimeout(timeoutId);
-          ao3Controller.signal.removeEventListener('abort', _propagateAbort);
+          ownAbort.signal.removeEventListener('abort', _propagateAbort);
           if (response.ok) break;
           lastErr = new Error('SCRAPE_FAILED');
         } catch (e) {
           clearTimeout(timeoutId);
-          ao3Controller.signal.removeEventListener('abort', _propagateAbort);
+          ownAbort.signal.removeEventListener('abort', _propagateAbort);
           lastErr = e;
         }
         if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
       }
       // A superseding load or a user Cancel aborted us: exit quietly instead of
       // surfacing a spurious Cloudflare dialog for a request the user abandoned.
-      if (ao3Controller._superseded) {
-        if (ao3Controller._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+      if (ownAbort._superseded) {
+        if (ownAbort._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
         return;
       }
       if (window._storyFetchCancelled) {
@@ -1225,24 +1250,19 @@ export async function loadStory(url, options = {}) {
 
     } else {
       // ── Non-AO3 URLs: backend scrape directly ──
-      // Registered as the active load so a newer loadStory() can supersede this
-      // one. Previously only the AO3 branch published a controller, so a
-      // non-AO3 fetch ran to completion in the background and could clobber
-      // currentStory after the user had already opened something else.
-      const scrapeController = new AbortController();
-      ownAbort = scrapeController;
-      _activeLoadAbort = scrapeController;
+      // The abort controller was registered at the start of loadStory so this
+      // path can be superseded the same way as AO3 / cache.
       const cookies = window._cookiesForUrl(fetchUrl);
       const body = cookies ? { url: fetchUrl, cookies } : { url: fetchUrl };
       let response = null, lastErr = null;
       for (let attempt = 1; attempt <= 2; attempt++) {
-        if (window._storyFetchCancelled || scrapeController.signal.aborted) break;
+        if (window._storyFetchCancelled || ownAbort.signal.aborted) break;
         const controller = new AbortController();
         // Match the AO3 fallback budget: a full Zyte browser render can take
         // ~35s+, and the old 15s abort killed legitimate slow scrapes early.
         const timeoutId = setTimeout(() => controller.abort(), 45000);
         const _propagateAbort = () => { try { controller.abort(); } catch (_) {} };
-        scrapeController.signal.addEventListener('abort', _propagateAbort, { once: true });
+        ownAbort.signal.addEventListener('abort', _propagateAbort, { once: true });
         try {
           response = await window._rateLimitedFetch('scrape', () =>
             fetch(`${window.HF_API_BASE}/api/scrape`, {
@@ -1253,18 +1273,18 @@ export async function loadStory(url, options = {}) {
             })
                                                    );
           clearTimeout(timeoutId);
-          scrapeController.signal.removeEventListener('abort', _propagateAbort);
+          ownAbort.signal.removeEventListener('abort', _propagateAbort);
           if (response.ok) break;
           lastErr = new Error('SCRAPE_FAILED');
         } catch (e) {
           clearTimeout(timeoutId);
-          scrapeController.signal.removeEventListener('abort', _propagateAbort);
+          ownAbort.signal.removeEventListener('abort', _propagateAbort);
           lastErr = e;
         }
         if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
       }
-      if (scrapeController._superseded) {
-        if (scrapeController._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+      if (ownAbort._superseded) {
+        if (ownAbort._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
         return;
       }
       if (!response || !response.ok) throw (lastErr || new Error('SCRAPE_FAILED'));
@@ -1276,10 +1296,11 @@ export async function loadStory(url, options = {}) {
       }
     }
 
+    if (ownAbort._superseded) return;
     if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
     window.currentStory = data;
-    window.currentChapterIndex = 0;
-    window.currentParagraphIndex = 0;
+    _restoreProgressFromLibrary(existingLibEntry);
+    await _persistOpenedStory();
     if (typeof window.addToLibrary === 'function') window.addToLibrary(window.currentStory);
     if (!preventNavigate && typeof window.populateReaderUI === 'function')
       window.populateReaderUI(window.currentStory, window.currentStory.author || 'Unknown');
@@ -1289,7 +1310,17 @@ export async function loadStory(url, options = {}) {
     if (!preventNavigate && !suppressCache) await _ensureCacheDecisionModal();
   } catch (error) {
     if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-    if (!preventNavigate) showCloudflareFallback();
+    if (ownAbort._superseded) return;
+    const aborted = error?.name === 'AbortError' || window._storyFetchCancelled;
+    if (aborted) {
+      window._storyFetchCancelled = false;
+      return;
+    }
+    if (preventNavigate) return;
+    const message = String(error?.message || error || 'Could not load that story.');
+    window.Diagnostics?.log?.('ERROR', 'loadStory failed', { message, url: fetchUrl });
+    window.pocketNotify?.(message.slice(0, 180) || 'Could not load that story.', 6000);
+    if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_network_error');
   } finally {
     // Only clear the slot if it is still OURS. A newer loadStory() may have
     // already installed its own controller while this one was unwinding;

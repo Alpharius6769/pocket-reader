@@ -86,11 +86,16 @@ function isRedirectStatus(status) {
     || status === 307 || status === 308;
 }
 
-function buildUpstreamHeaders(request) {
+function buildUpstreamHeaders(request, extra = {}) {
   const headers = new Headers();
   for (const name of ["Accept", "Accept-Language", "Range", "User-Agent", "Content-Type", "Content-Length"]) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
+  }
+  const visitorIp = extra.visitorIp || "";
+  if (visitorIp) {
+    headers.set("CF-Connecting-IP", visitorIp);
+    headers.set("X-Forwarded-For", visitorIp);
   }
   return headers;
 }
@@ -204,10 +209,11 @@ export default {
     // shared token instead of an Origin. Resolved once here because BOTH the
     // /api/ backend proxy and the generic ?url= proxy gate on it.
     const proxyKey = request.headers.get("X-Pocket-Proxy-Key") || "";
+    const expectedProxyToken = env.PROXY_AUTH_TOKEN || env.WORKER_PROXY_TOKEN || "";
     const backendAuthorized = Boolean(
-      env.PROXY_AUTH_TOKEN
+      expectedProxyToken
       && proxyKey
-      && timingSafeEqual(proxyKey, env.PROXY_AUTH_TOKEN),
+      && timingSafeEqual(proxyKey, expectedProxyToken),
     );
 
     if (request.headers.get("Origin") && !allowedOrigin) {
@@ -229,7 +235,8 @@ export default {
         });
       }
       const targetUrl = new URL(url.pathname + url.search, "https://alpharius6769-pocket-reader.hf.space");
-      const hfHeaders = buildUpstreamHeaders(request);
+      const visitorIp = request.headers.get("CF-Connecting-IP") || "";
+      const hfHeaders = buildUpstreamHeaders(request, { visitorIp });
       if (env.HF_TOKEN) {
         hfHeaders.set("Authorization", `Bearer ${env.HF_TOKEN}`);
       }

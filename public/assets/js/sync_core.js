@@ -1,4 +1,5 @@
 import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v22';
+import { storyKeyFor } from './profile_merge.js?v=merge-v6';
 
 const PROFILE_SCHEMA_VERSION = 3;
 const DEVICE_SETTING_KEYS = new Set([
@@ -97,15 +98,7 @@ function normalizeBookmarks(items = []) {
 }
 
 function storyStableKey(story) {
-  if (story?.storyKey) return story.storyKey;
-  if (typeof window.getStoryStableKey === 'function') return window.getStoryStableKey(story);
-  const source = story?.sourceUrl || story?.source_url || story?.url || story?.id || `${story?.title || ''}|${story?.author || ''}`;
-  let hash = 2166136261;
-  for (const char of String(source).toLowerCase()) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `s_${hash >>> 0}`;
+  return storyKeyFor(story && typeof story === 'object' ? story : {});
 }
 
 export function normalizeProfileV3(input) {

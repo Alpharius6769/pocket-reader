@@ -130,7 +130,7 @@ test('the scrape route keeps its SSRF guard and admission control', () => {
   const body = app.slice(start, app.indexOf('@app.post("/api/upload")'));
 
   assert.match(body, /assert_public_url/, 'scrape must reject private/internal targets');
-  assert.match(body, /_check_scrape_rate/, 'scrape must be rate limited per caller');
+  assert.match(body, /_require_scrape_budget/, 'scrape must be rate limited per caller');
   assert.match(body, /_SCRAPE_CONCURRENCY/, 'scrape must be bounded by the concurrency semaphore');
   assert.match(body, /CloudflareBlocked/, 'scrape must surface cloudflare_blocked to the client');
 });

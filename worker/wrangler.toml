@@ -19,7 +19,10 @@ CHAPTER_SYNC_URL = "https://alpharius6769-pocket-reader.hf.space/api/sync/chapte
 # IMPORTANT: The following secrets must be set via `wrangler secret put <NAME>`:
 # - HF_TOKEN: Hugging Face read token to access the private Space backend.
 # - ADMIN_PUSH_SECRET: Token for the cron push delivery triggers.
-# - PROXY_AUTH_TOKEN: (Optional) Token for external clients to use the proxy.
+# - PROXY_AUTH_TOKEN: (Optional) Token for the backend hop and non-browser callers.
+#   The Worker also accepts WORKER_PROXY_TOKEN as an alias so the Space secret
+#   and the Worker secret can share a name. Header: X-Pocket-Proxy-Key.
+#   Do not rename a production secret that is already set.
 
 [triggers]
 crons = ["17,47 * * * *"]

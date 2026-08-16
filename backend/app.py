@@ -258,14 +258,13 @@ def _client_ip(request: Request) -> str:
     Behind the Cloudflare Worker every request arrives from a Cloudflare edge
     address, so keying on request.client.host collapses the entire user base
     onto a handful of IPs and makes a per-caller budget behave like a global
-    one (5 subscriptions per 10 minutes for EVERYONE). Prefer the forwarded
-    client address; fall back to the socket peer for direct calls and local
-    development.
+    one. The Worker stamps CF-Connecting-IP from the edge-set visitor address
+    (not a browser X-Forwarded-For). Trust that header only; fall back to the
+    socket peer for direct calls and local development.
     """
-    for header in ("cf-connecting-ip", "x-forwarded-for"):
-        value = request.headers.get(header, "")
-        if value:
-            return value.split(",")[0].strip()
+    value = request.headers.get("cf-connecting-ip", "")
+    if value:
+        return value.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -291,6 +290,25 @@ def _check_scrape_rate(ip: str) -> bool:
             if not _scrape_rate[key] or now - _scrape_rate[key][-1] >= _SCRAPE_RATE_WINDOW:
                 _scrape_rate.pop(key, None)
     return True
+
+
+def _require_scrape_budget(
+        request: Request,
+        *,
+        detail: str = "Too many story requests — wait a moment and try again.") -> None:
+    if not _check_scrape_rate(_client_ip(request)):
+        raise HTTPException(
+            status_code=429,
+            detail=detail,
+            headers={"Retry-After": str(_SCRAPE_RATE_WINDOW)})
+
+
+def _admin_authorized(provided: Optional[str]) -> bool:
+    secret = ADMIN_PUSH_SECRET or ""
+    token = provided or ""
+    if not secret or not token:
+        return False
+    return hmac.compare_digest(token, secret)
 
 
 def _push_token_hash(token: str) -> str:
@@ -772,15 +790,13 @@ async def health_check():
             "vapid_configured":       bool(VAPID_PUBLIC and VAPID_PRIVATE),
             "push_lib_available":     PYWEBPUSH_AVAILABLE,
             "database_durable":       _database_durable,
-            "database_path":          _database_actual_path or DATABASE_PATH,
-            "allowed_origins":        ALLOWED_ORIGINS[:80],
         },
     }
 
 
 @app.get("/api/diag/logs")
 def get_server_logs(x_admin_secret: str = Header(default="")):
-    if not ADMIN_PUSH_SECRET or x_admin_secret != ADMIN_PUSH_SECRET:
+    if not _admin_authorized(x_admin_secret):
         raise HTTPException(status_code=403, detail="Forbidden")
     return {"logs": list(_mem_handler.log_buffer)}
 
@@ -851,11 +867,9 @@ async def search_ao3(request: SearchRequest, http_request: Request):
     # Every cache miss spends Zyte credit against a shared egress IP, so the same
     # per-caller admission control the scrape route uses applies here too. Checked
     # AFTER the cache so a repeated query never consumes budget it does not need.
-    if not _check_scrape_rate(_client_ip(http_request)):
-        raise HTTPException(
-            status_code=429,
-            detail="Too many searches — wait a moment and try again.",
-            headers={"Retry-After": str(_SCRAPE_RATE_WINDOW)})
+    _require_scrape_budget(
+        http_request,
+        detail="Too many searches — wait a moment and try again.")
 
     def _url_for(search_payload: dict) -> str:
         return str(httpx.URL(search_url, params=search_payload))
@@ -1196,12 +1210,13 @@ def download_curated_file(filename: str):
 
 
 @app.get("/api/library/curated/{filename}")
-def fetch_curated_story(filename: str):
+def fetch_curated_story(filename: str, request: Request):
     if _curated_is_withdrawn(filename=filename):
         raise HTTPException(status_code=404)
     path = _safe_curated_pdf_path(filename)
     if not path.exists():
         raise HTTPException(status_code=404)
+    _require_scrape_budget(request)
     try:
         if path.suffix.lower() == ".json":
             with open(path, "r", encoding="utf-8") as jf:
@@ -1244,7 +1259,7 @@ def fetch_curated_story(filename: str):
 
 
 @app.get("/api/ao3/chapter_count")
-async def ao3_chapter_count(url: str):
+async def ao3_chapter_count(url: str, request: Request):
     """Authoritative published-chapter count for an AO3 work so the client can
     distinguish a real update from re-parse noise (different segmentation, an
     intro page, etc.). Routes through Zyte — the hosting datacenter IP is
@@ -1258,6 +1273,7 @@ async def ao3_chapter_count(url: str):
     m = _re.search(r"archiveofourown\.org/works/(\d+)", url or "")
     if not m:
         return {"count": None}
+    _require_scrape_budget(request)
     safe_url = f"https://archiveofourown.org/works/{m.group(1)}"
     try:
         html = await proxy_fetch(safe_url, timeout=15)  # match the search path's timeout
@@ -1632,7 +1648,7 @@ async def _probe_site(label: str, url: str, cookies: dict, domain: str) -> dict:
 
 
 @app.get("/api/ao3")
-async def fetch_ao3_story(url: str):
+async def fetch_ao3_story(url: str, request: Request):
     """Fetch and parse an AO3 story, entirely server-side.
 
     Strategy 1 (primary): Download the EPUB directly from AO3's own download button.
@@ -1668,6 +1684,8 @@ async def fetch_ao3_story(url: str):
     cached = await SCRAPE_CACHE.get(canonical_url)
     if cached is not None:
         return cached
+
+    _require_scrape_budget(request)
 
     epub_bytes: Optional[bytes] = None
     fichub_meta: Optional[dict] = None
@@ -1870,11 +1888,7 @@ async def scrape_story(req: ScrapeRequest, request: Request):
     if cached is not None:
         return cached
 
-    if not _check_scrape_rate(_client_ip(request)):
-        raise HTTPException(
-            status_code=429,
-            detail="Too many story requests — wait a moment and try again.",
-            headers={"Retry-After": str(_SCRAPE_RATE_WINDOW)})
+    _require_scrape_budget(request)
 
     cookies = req.cookies if isinstance(req.cookies, dict) else None
     try:
@@ -1910,12 +1924,13 @@ _UPLOAD_SUFFIXES = {".pdf", ".epub", ".docx", ".txt", ".html", ".htm"}
 
 
 @app.post("/api/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(request: Request, file: UploadFile = File(...)):
     """Parse an uploaded document into chapters.
 
     Also the parse step of the AO3 FicHub path: the client downloads the EPUB
     and posts it here rather than parsing a zip container in the browser.
     """
+    _require_scrape_budget(request)
     filename = os.path.basename(file.filename or "").strip() or "document"
     suffix = pathlib.Path(filename).suffix.lower()
     if suffix not in _UPLOAD_SUFFIXES:
@@ -1984,7 +1999,7 @@ async def upload_document(file: UploadFile = File(...)):
 
 
 @app.get("/api/fetch-epub")
-async def fetch_epub_relay(url: str):
+async def fetch_epub_relay(url: str, request: Request):
     """Relay endpoint: download a FicHub EPUB from the backend server.
 
     This is Layer 3 of the frontend EPUB download fallback chain.
@@ -1998,6 +2013,8 @@ async def fetch_epub_relay(url: str):
         await asyncio.to_thread(assert_public_url, url, allowed_hosts={"fichub.net"})
     except RuntimeError:
         raise HTTPException(status_code=400, detail="Only fichub.net URLs are accepted")
+
+    _require_scrape_budget(request)
 
     _has_token = bool(os.environ.get("FICHUB_TOKEN", "").strip())
     log.info("fetch-epub: downloading %s (token=%s)", url[:80], _has_token)
@@ -2029,7 +2046,7 @@ async def fetch_epub_relay(url: str):
 
 
 @app.get("/api/fichub-proxy")
-async def fichub_proxy(url: str):
+async def fichub_proxy(url: str, request: Request):
     """Unified backend proxy for all FicHub requests.
     
     The frontend calls this instead of public CORS proxies like allorigins.win.
@@ -2039,6 +2056,8 @@ async def fichub_proxy(url: str):
         await asyncio.to_thread(assert_public_url, url, allowed_hosts={"fichub.net"})
     except RuntimeError:
         raise HTTPException(status_code=400, detail="Only fichub.net URLs are accepted")
+
+    _require_scrape_budget(request)
 
     log.info("fichub-proxy: handling %s", url[:100])
     try:
@@ -2123,7 +2142,7 @@ def get_vapid_public_key():
 
 @app.post("/api/sync/chapters")
 async def sync_chapters(x_admin_secret: str = Header(default="")):
-    if not ADMIN_PUSH_SECRET or x_admin_secret != ADMIN_PUSH_SECRET:
+    if not _admin_authorized(x_admin_secret):
         raise HTTPException(status_code=403, detail="Forbidden")
     global _last_sync_ts
     async with _sync_lock:
@@ -2137,7 +2156,7 @@ async def sync_chapters(x_admin_secret: str = Header(default="")):
 
 @app.post("/api/send-push/{user_id}")
 async def send_push_to_user(user_id: str, payload: dict = Body(...), x_admin_secret: str = Header(None)):
-    if not ADMIN_PUSH_SECRET or x_admin_secret != ADMIN_PUSH_SECRET:
+    if not _admin_authorized(x_admin_secret):
         raise HTTPException(status_code=403, detail="Forbidden")
     if not PYWEBPUSH_AVAILABLE:
         raise HTTPException(status_code=501)

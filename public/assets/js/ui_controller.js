@@ -320,8 +320,9 @@ export function populateReaderUI(storyObj, authorFallback) {
   if (el('reader-words-side')) el('reader-words-side').innerText = storyObj.words || "-";
 
   if (el('reader-cover-side')) {
-    if (storyObj.coverImage) {
-      el('reader-cover-side').innerHTML = `<img src="${_escapeHtml(storyObj.coverImage)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">`;
+    const coverSrc = _safeHttpCoverUrl(storyObj.coverImage);
+    if (coverSrc) {
+      el('reader-cover-side').innerHTML = `<img src="${_escapeHtml(coverSrc)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;">`;
     } else {
       const initials = (safeTitle.match(/\b\w/g) || ['?']).slice(0, 2).join('').toUpperCase();
       el('reader-cover-side').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 140" style="width:100%;height:100%;border-radius:6px;display:block;" aria-label="${_escapeHtml(safeTitle)}"><rect width="100" height="140" rx="6" fill="#1e2a3a"/><rect x="18" y="20" width="64" height="8" rx="3" fill="#4a6fa5"/><rect x="18" y="36" width="64" height="6" rx="3" fill="#2d4a7a"/><rect x="18" y="50" width="48" height="6" rx="3" fill="#2d4a7a"/><text x="50" y="105" text-anchor="middle" dominant-baseline="middle" font-family="system-ui,sans-serif" font-size="28" font-weight="bold" fill="#4a6fa5" opacity="0.85">${initials}</text></svg>`;
@@ -632,6 +633,14 @@ function _escapeHtml(s) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function _safeHttpCoverUrl(value) {
+  try {
+    const parsed = new URL(String(value || ''), window.location.href);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+  } catch (_) {}
+  return '';
 }
 
 // ── Author-note detection ──────────────────────────────────────────────────
@@ -1458,7 +1467,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=161', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=162', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

@@ -1272,7 +1272,7 @@ export const BufferManager = {
       const jobRef = job.storyRef || job.storyTitle;
       const currentRef = window.currentStory?.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory?.title;
       if (currentRef !== jobRef) {
-        await window.loadStory(jobRef, { preventNavigate: job.mode === 'Permanent' });
+        await window.loadStory(jobRef, { preventNavigate: true });
         window.closeCacheModal?.();
       }
       const loadedRef = window.currentStory?.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory?.title;
