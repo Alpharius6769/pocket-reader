@@ -18,6 +18,15 @@ test('Virtue speech never shrinks below a legible size', async () => {
   assert.match(source, /clamped-text/);
 });
 
+test('Virtue geometry uses the sprite ratio and a Range overflow probe', async () => {
+  const source = await read('public/assets/js/virtue_controller.js');
+  const css = await read('public/assets/css/theme.css');
+  assert.match(source, /setProperty\('--virtue-ratio'/);
+  assert.match(css, /44vh \* var\(--virtue-ratio/);
+  assert.match(css, /38vh \* var\(--virtue-ratio/);
+  assert.match(source, /measureRange\.getBoundingClientRect\(\)/);
+});
+
 test('Virtue text fitting does not thrash layout', async () => {
   // fit() runs multiple times per appearance and again on every resize, and
   // each iteration is a forced synchronous reflow (style write, then a
@@ -86,35 +95,64 @@ test('below-the-fold imagery is deferred', async () => {
   assert.doesNotMatch(navBlock, /loading="lazy"/, 'visible nav icons must not be lazy');
 });
 
-test('the Anthronomicon bridge is origin-scoped in both directions', async () => {
+// The masterlist used to embed the Anthronomicon in a cross-origin iframe and
+// receive stories back over postMessage. That could never work while narrating:
+// ?tts_fast=1 is served COEP require-corp, and a require-corp document refuses
+// to nest one that does not assert the same policy. GitHub Pages sends no COEP
+// header, so the frame was always blocked. The catalog is now fetched as JSON,
+// which COEP does not constrain.
+test('the masterlist renders natively instead of embedding the index', async () => {
+  const html = await read('public/index.html');
   const ui = await read('public/assets/js/ui_controller.js');
-  assert.match(ui, /export const HMOFA_ORIGIN = 'https:\/\/alpharius6769\.github\.io'/);
-  // Inbound: the handler calls loadStory() with a URL taken from the message.
-  assert.match(ui, /event\.origin !== HMOFA_ORIGIN/);
-  // Outbound: the handshake must not be broadcast to '*'.
-  assert.match(ui, /postMessage\(\{[\s\S]{0,200}?\}, HMOFA_ORIGIN\)/);
+  assert.doesNotMatch(html, /<iframe[^>]*id="hmofa-iframe"/,
+    'the masterlist must not reintroduce the embed -- COEP blocks it during narration');
+  assert.doesNotMatch(ui, /setupHmofaIframeBridge|pocket_reader_ping|pocket_reader_ready/,
+    'the postMessage bridge is dead code once nothing is framed');
+  assert.match(html, /id="hmofa-results"/, 'the native results grid must exist');
+  assert.match(html, /id="hmofa-facets"/, 'the native facet rail must exist');
 });
 
-test('the bridge handshake survives the iframe-load race', async () => {
-  // The inline onload="" attribute fired before ui_controller (a deferred
-  // module) defined the handler, so the handshake was never sent at all.
+test('the catalog is fetched lazily and never pinned by the service worker', async () => {
+  const list = await read('public/assets/js/hmofa_masterlist.js');
   const ui = await read('public/assets/js/ui_controller.js');
-  const html = await read('public/index.html');
-  assert.doesNotMatch(html, /onload="window\.setupHmofaIframeBridge\(\)"/);
-  assert.match(ui, /iframe\.addEventListener\('load'/);
-  assert.match(ui, /if \(iframe\.contentWindow\) setupHmofaIframeBridge\(\)/,
-    'an already-loaded frame must still get the handshake');
-  assert.match(ui, /pocket_reader_ping/, 'the index must be able to request a fresh handshake');
+  const sw = await read('public/sw.js');
+
+  // The published build, not the 5 MB curator file in the repo: `npm run build`
+  // strips reviewer-only fields down to ~640 KB gzipped and emits it here.
+  assert.match(list, /hmofa-story-index'/, 'the catalog base must point at the published index');
+  assert.match(list, /\$\{CATALOG_BASE\}\/assets\/catalog\.json/,
+    'the browser catalog under assets/ is the source');
+  // ~640 KB gzipped is far too much to spend on every launch for a view most
+  // sessions never open.
+  assert.match(ui, /viewId === 'hmofa-view'[\s\S]{0,220}ensureHmofaMasterlistLoaded/,
+    'the catalog must load on view open, not at app launch');
+
+  // On the GitHub Pages build the index shares this origin, so catalog.json
+  // matches the cache-first /assets/ branch and would be frozen forever.
+  assert.match(sw, /url\.pathname\.indexOf\('\/hmofa-story-index\/'\) !== -1/,
+    'the service worker must not cache-first the catalog');
+  assert.match(sw, /cacheName === HMOFA_CATALOG_CACHE/,
+    'activate() must preserve the catalog cache like the other data caches');
 });
 
-test('the bridge banner only claims tap-to-fetch once acknowledged', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  const html = await read('public/index.html');
-  assert.match(html, /id="hmofa-bridge-status"/);
-  assert.doesNotMatch(html, /App Interceptor Active/,
-    'the banner must not assert a capability before the index acknowledges');
-  assert.match(ui, /pocket_reader_ready/);
-  assert.match(ui, /_setHmofaBridgeConnected\(false\)/, 'a reloaded frame resets to unacknowledged');
+test('the vendored catalog layer stays pure so it can be diffed against upstream', async () => {
+  const core = await read('public/assets/js/hmofa_catalog_core.js');
+  const list = await read('public/assets/js/hmofa_masterlist.js');
+
+  // Results must match the live index exactly. They only do so while this file
+  // is a straight copy of upstream, which requires it to stay portable.
+  for (const forbidden of ['document.', 'window.', 'localStorage', 'fetch(']) {
+    assert.ok(!core.includes(forbidden),
+      `hmofa_catalog_core.js must stay a pure data layer, found ${forbidden}`);
+  }
+  assert.match(core, /Upstream: Alpharius6769\/hmofa-story-index/,
+    'the vendored copy must record where it came from');
+  assert.match(core, /SHA-256:\s+[0-9a-f]{64}/,
+    'the vendored copy must record the upstream hash it was taken from');
+
+  // Reimplementing filtering here is how the two drift apart.
+  assert.match(list, /filterCatalog|sortCatalog/,
+    'the view must delegate filtering to the vendored layer');
 });
 
 test('batch import is sequential and bounded', async () => {
@@ -125,4 +163,47 @@ test('batch import is sequential and bounded', async () => {
   // other and only the last would survive.
   assert.match(ui, /for \(const entry of entries\.slice\(0, -1\)\)[\s\S]{0,200}await window\.loadStory/);
   assert.match(ui, /preventNavigate: true/, 'batch imports must not drag the reader through each story');
+});
+
+test('Virtue does not greet the reader with "There\'s my good boy."', async () => {
+  const source = await read('public/assets/js/virtue_controller.js');
+  assert.doesNotMatch(source, /There's my good boy/);
+});
+
+test('Away Mode loads the narration runtime before painting the queue', async () => {
+  const ui = await read('public/assets/js/ui_controller.js');
+  assert.match(ui, /viewId === 'away-mode-view'[\s\S]{0,500}ensureNarrationRuntime/);
+  assert.match(ui, /ensureNarrationRuntime[\s\S]{0,220}renderAwayModeUI/);
+});
+
+test('the masterlist shares ratings and lists with the live Anthronomicon', async () => {
+  const html = await read('public/index.html');
+  const list = await read('public/assets/js/hmofa_masterlist.js');
+  const community = await read('public/assets/js/hmofa_community.js');
+  const prefs = await read('public/assets/js/hmofa_preferences.js');
+  const merge = await read('public/assets/js/profile_merge.js');
+  const sw = await read('public/sw.js');
+
+  assert.match(html, /id="hmofa-open-preferences"/);
+  assert.match(html, /id="hmofa-open-lists"/);
+  assert.match(html, /id="hmofa-minrating"/);
+  assert.match(html, /id="hmofa-view-tabs"/);
+
+  assert.match(community, /catalog-api/);
+  assert.match(community, /hmofa_device_id_v2/);
+  assert.doesNotMatch(community, /cf-turnstile|turnstile\.render/,
+    'rate and click must not pull in a Turnstile widget -- it cannot load under COEP');
+
+  assert.match(prefs, /hmofa_user_prefs_v2/);
+  assert.match(prefs, /hmofa_saved_lists_v1/);
+  assert.match(prefs, /stampSyncedSetting/);
+  assert.match(prefs, /hmofaPreferences/);
+  assert.match(prefs, /hmofaSavedLists/);
+  assert.match(list, /reconcileWithProfile/);
+
+  assert.doesNotMatch(merge, /hmofaPreferences|hmofaSavedLists/,
+    'HMOFA prefs and lists must sync with the profile, so they cannot sit in DEVICE_ONLY_SETTINGS');
+
+  assert.match(sw, /hmofa_community\.js\?v=hmofa-community-v1/);
+  assert.match(sw, /hmofa_preferences\.js\?v=hmofa-prefs-v1/);
 });

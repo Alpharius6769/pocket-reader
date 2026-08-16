@@ -22,7 +22,7 @@ Pocket Reader is an offline-capable story reader with browser-side Pocket TTS na
 - **Supabase:** authentication, profiles, and account synchronization.
 - **Hugging Face Space:** story search, scraping, uploads, curated-library API, FicHub relay, masterlist data, health endpoints, and push subscriptions.
 - **Cloudflare Worker:** edge routing for Pocket TTS, ONNX Runtime Web, and Voice-Zero assets.
-- **HMOFA Anthronomicon & Masterlist:** embedded interactive story catalog (`https://alpharius6769.github.io/hmofa-story-index/`) authored by Chris (Alpharius67 / Fluffarius). Integrates with Pocket Reader via an app-specific postMessage interceptor & fetch wrapper layer without affecting the live standalone web app.
+- **HMOFA Anthronomicon & Masterlist:** interactive story catalog (`https://alpharius6769.github.io/hmofa-story-index/`) authored by Chris (Alpharius67 / Fluffarius). Pocket Reader renders it natively in the masterlist view from the index's published catalog JSON, so a tap loads the story directly. The standalone site is unaffected. See `ANTHRONOMICON_BRIDGE.md`.
 - **Backblaze B2:** origin storage for model bundles and voice assets.
 - **Zyte API:** optional protected-source fetch path used by the backend.
 

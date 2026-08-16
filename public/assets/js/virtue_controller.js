@@ -248,6 +248,10 @@ function _displayVirtue(triggerKey, variables = {}, isPriority = false) {
       container.style.backgroundImage = `url("${assetUrl}")`;
       if (img.naturalWidth && img.naturalHeight) {
         container.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+        // The stylesheet spends the height budget as a width cap, and needs the
+        // sprite's ratio to do it. Sprites range from 0.60 to 1.76, so a single
+        // hardcoded value cannot keep the box the same shape as the art.
+        container.style.setProperty('--virtue-ratio', String(img.naturalWidth / img.naturalHeight));
       }
       const coords = virtueCoordinates[activeAsset] || virtueCoordinates["virtue_smile"];
 
@@ -370,8 +374,18 @@ function _fitVirtueSpeech(overlay) {
   const MIN_FONT_PX = _isMobileViewport() ? 9 : 8.5;
   const MAX_FONT_PX = 32;
 
-  const overflows = () => overlay.scrollHeight > overlay.clientHeight + 0.5
-    || overlay.scrollWidth > overlay.clientWidth + 0.5;
+  // The overlay centres its text on both axes, so content that does not fit
+  // spills out of BOTH edges. scrollWidth/scrollHeight only grow toward the
+  // inline/block end, so the half that escapes past the start edge is invisible
+  // to them: a line wider than the bubble measured as fitting and was then
+  // clipped on the left. Measure the rendered text itself instead.
+  const measureRange = document.createRange();
+  const overflows = (innerWidth, innerHeight) => {
+    measureRange.selectNodeContents(overlay);
+    const text = measureRange.getBoundingClientRect();
+    if (!text.width && !text.height) return false;
+    return text.width > innerWidth + 0.5 || text.height > innerHeight + 0.5;
+  };
 
   const applySize = (size) => {
     overlay.style.fontSize = `${size}px`;
@@ -388,6 +402,13 @@ function _fitVirtueSpeech(overlay) {
 
     overlay.classList.remove('clamped-text');
 
+    // Resolved once per fit rather than per probe: the padding is a percentage
+    // of a box whose size does not change while only font-size is being search-
+    // ed, and the search runs seven probes.
+    const style = getComputedStyle(overlay);
+    const innerWidth = w - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+    const innerHeight = h - (parseFloat(style.paddingTop) || 0) - (parseFloat(style.paddingBottom) || 0);
+
     let targetRatio = 0.38; // Default medium text target (~38% of bubble height)
     if (length <= 15) targetRatio = 0.52;      // Very short: "Welcome!"
     else if (length <= 40) targetRatio = 0.44; // Short: "Hello there!"
@@ -399,7 +420,7 @@ function _fitVirtueSpeech(overlay) {
     );
 
     applySize(ceiling);
-    if (!overflows()) return;
+    if (!overflows(innerWidth, innerHeight)) return;
 
     // Binary search instead of stepping down 0.3px at a time. The old loop ran
     // up to 35 iterations, each one a forced synchronous reflow (style write
@@ -412,12 +433,12 @@ function _fitVirtueSpeech(overlay) {
     for (let i = 0; i < 7 && hi - lo > 0.25; i++) {
       const mid = (lo + hi) / 2;
       applySize(mid);
-      if (overflows()) hi = mid;
+      if (overflows(innerWidth, innerHeight)) hi = mid;
       else { best = mid; lo = mid; }
     }
     applySize(best);
 
-    if (overflows()) {
+    if (overflows(innerWidth, innerHeight)) {
       // Still too long at the legibility floor — clamp rather than shrink further.
       overlay.classList.add('compact-text', 'clamped-text');
     }
@@ -642,7 +663,7 @@ const _VIRTUE_DATA = {
   },
   "dialogue": {
     "greetings": [
-      "There's my good boy. Come sit close; I have missed your scent.",
+      "Come sit close; I have missed your scent.",
       "Welcome back. I grew restless waiting. Let's relax together.",
       "You're right on time. I already have our library prepared.",
       "Good to see you safely home. Come here and let me look at you."
@@ -692,7 +713,7 @@ const _VIRTUE_DATA = {
       "trigger": "User loads into the app homepage.",
       "dialogue_options": [
         "Welcome home. I was getting incredibly restless waiting for you.",
-        "There's my good boy. You're safely back where you belong.",
+        "You're safely back where you belong.",
         "Are you ready to listen to a story?",
         "Look who it is. Come, sit close to me."
       ],

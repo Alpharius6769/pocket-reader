@@ -31,7 +31,7 @@
 2. GLOBAL STYLESHEET
 ========================================== -->
 <!-- Links the optimized CSS file we just created -->
-<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v25">
+<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v27">
 
 <!-- ==========================================
 2a. FAST-NARRATION RELOAD MASK (anti-flash)
@@ -133,15 +133,15 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v22">
 <link rel="modulepreload" href="assets/js/api_core.js?v=search-v19">
 <link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v5">
-<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v13">
+<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v14">
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v22">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v8">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v61">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v63">
 <link rel="modulepreload" href="assets/js/library_manager.js?v=library-v16">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v7">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v7">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v101">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v103">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v6">
 
 <!-- ==========================================
@@ -154,7 +154,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=158', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=160', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -881,8 +881,14 @@ Playback-only modules remain deferred so they do not compete with first paint.
             HMOFA Masterlist
           </h1>
           <div class="pr-layout-094" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <button class="pr-btn-outline" onclick="window.reloadHmofaIframe()" style="font-size:0.85rem;padding:6px 14px;height:36px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1;" title="Reload the embedded HMOFA index">
-              <span>Refresh Index</span>
+            <button id="hmofa-open-preferences" class="pr-btn-outline" style="font-size:0.85rem;padding:6px 14px;height:36px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1;" title="Content preferences and blocked tags">
+              <span>Filters &amp; Content</span>
+            </button>
+            <button id="hmofa-open-lists" class="pr-btn-outline" style="font-size:0.85rem;padding:6px 14px;height:36px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1;" title="Saved filter lists">
+              <span>My Lists</span>
+            </button>
+            <button id="hmofa-refresh-catalog" class="pr-btn-outline" style="font-size:0.85rem;padding:6px 14px;height:36px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1;" title="Re-download the Anthronomicon catalog">
+              <span>Refresh Catalog</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
             </button>
             <a href="https://alpharius6769.github.io/hmofa-story-index/" target="_blank" rel="noopener noreferrer" class="pr-btn-outline" style="text-decoration:none;font-size:0.85rem;padding:6px 14px;height:36px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1;" title="Open HMOFA Story Index in a new tab">
@@ -896,7 +902,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
         <div class="hmofa-interceptor-bar">
           <div class="hmofa-interceptor-info">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple, #9d4edd)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-            <span id="hmofa-bridge-status"><strong>To load a story here:</strong> long-press or right-click its link in the index below, choose <em>Copy link</em>, and paste it in. Tapping a link normally just opens the work inside the panel &mdash; use <em>Refresh Index</em> to come back.</span>
+            <span id="hmofa-bridge-status"><strong>Tap any story below</strong> to load it straight into Pocket Reader. Something not in the catalog? Paste its link here instead.</span>
           </div>
           <div class="hmofa-interceptor-controls">
             <input id="hmofa-url-input" class="hmofa-url-input" type="url" placeholder="Paste AO3 story URL or Work ID..." onkeydown="if (event.key === 'Enter') { event.preventDefault(); window.handleHmofaManualFetch(); }">
@@ -906,16 +912,43 @@ Playback-only modules remain deferred so they do not compete with first paint.
           </div>
         </div>
 
-        <!-- Embedded Interactive Index View -->
-        <div id="hmofa-embed-container" class="hmofa-embed-wrap">
-          <!-- No src here on purpose. ensureHmofaIframeLoaded() sets it when the
-               view is opened, which (a) skips the embed entirely during an
-               isolated narration session, where COEP refuses it and the browser
-               would paint a security error, and (b) avoids loading a
-               cross-origin index on every app launch for a view most sessions
-               never visit. -->
-          <iframe id="hmofa-iframe" title="HMOFA Story Index" allow="clipboard-write" loading="lazy"></iframe>
+        <!-- Native catalog. The published Anthronomicon catalog is fetched as
+             JSON and rendered here rather than embedded in an iframe: a
+             narration session runs under COEP require-corp, which refuses to
+             nest a document that does not assert the same policy, so the old
+             embed could never work while narrating. A fetch is not subject to
+             that rule. hmofa_masterlist.js owns everything below. -->
+        <div class="hmofa-toolbar">
+          <input id="hmofa-search" class="hmofa-url-input" type="search" placeholder="Search title, author, species, or tag...">
+          <select id="hmofa-wordcount" class="hmofa-select" aria-label="Word count"></select>
+          <select id="hmofa-minrating" class="hmofa-select" aria-label="Minimum community rating"></select>
+          <select id="hmofa-sort" class="hmofa-select" aria-label="Sort stories"></select>
+          <select id="hmofa-pagesize" class="hmofa-select" aria-label="Stories per page"></select>
         </div>
+
+        <div id="hmofa-view-tabs" class="hmofa-view-tabs" role="tablist" aria-label="Catalog view"></div>
+
+        <div id="hmofa-active-filters" class="hmofa-active-filters" hidden></div>
+
+        <div id="hmofa-selection-bar" class="hmofa-selection-bar" hidden>
+          <span id="hmofa-selection-count"></span>
+          <button id="hmofa-selection-add" class="pr-btn-primary">Add selected to library</button>
+          <button id="hmofa-selection-clear" class="pr-btn-outline">Clear selection</button>
+        </div>
+
+        <div class="hmofa-layout">
+          <aside id="hmofa-facets" class="hmofa-facet-rail" aria-label="Filter the archive"></aside>
+          <div class="hmofa-results-wrap">
+            <div class="hmofa-results-head">
+              <span id="hmofa-results-count"></span>
+              <button id="hmofa-clear-filters" class="pr-btn-outline" hidden>Clear every filter</button>
+            </div>
+            <div id="hmofa-results" class="hmofa-results-grid" aria-live="polite"></div>
+            <nav id="hmofa-pagination" class="hmofa-pagination" aria-label="Catalog pages" hidden></nav>
+          </div>
+        </div>
+
+        <p id="hmofa-catalog-status" class="hmofa-catalog-status"></p>
       </div>
 
       <div id="profile-view" class="view">
@@ -1431,16 +1464,19 @@ Playback-only modules remain deferred so they do not compete with first paint.
     <script src='assets/js/sync_core.js?v=sync-v9' type='module'></script>
     <script src='assets/js/api_core.js?v=search-v19' type='module'></script>
     <script src='assets/js/experience_coordinator.js?v=experience-v5' type='module'></script>
-    <script src='assets/js/virtue_controller.js?v=virtue-v13' type='module'></script>
+    <script src='assets/js/virtue_controller.js?v=virtue-v14' type='module'></script>
     <script src='assets/js/engine_utils.js' type='module'></script>
     <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v22' type='module'></script>
     <script src='assets/js/tts_pronunciation_core.js?v=pron-v11' type='module'></script>
     <script src='assets/js/library_manager.js?v=library-v16' type='module'></script>
+    <!-- Pulls in hmofa_catalog_core.js via a versioned import. The catalog
+         itself is only downloaded when the masterlist view is opened. -->
+    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v2' type='module'></script>
     <script src='assets/js/device_setup.js?v=device-setup-v8' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v61' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v63' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v7' type='module'></script>
     <script src='assets/js/reader_features.js?v=features-v7' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v101' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v103' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v6' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v3' type='module'></script>
   </div>

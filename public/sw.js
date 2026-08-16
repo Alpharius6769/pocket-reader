@@ -3,7 +3,12 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v158';
+var CACHE_NAME = 'pocket-reader-core-v160';
+
+// The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
+// name so a schema bump of PocketReaderDB is not needed for a disposable,
+// re-downloadable blob. activate() must preserve it like the other data caches.
+var HMOFA_CATALOG_CACHE = 'hmofa-catalog-v1';
 
 function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
@@ -94,23 +99,27 @@ var DEFERRED_ASSETS = [
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     './',
-    'assets/css/theme.css?v=midnight-v25',
+    'assets/css/theme.css?v=midnight-v27',
     'assets/js/tts_pronunciation_core.js?v=pron-v11',
     'assets/js/pocket_backend_policy.js?v=backend-v22',
     'assets/js/pocket_performance_policy.js?v=performance-v2',
     'assets/js/diagnostics.js?v=diag-v6',
     'assets/js/api_core.js?v=search-v19',
     'assets/js/experience_coordinator.js?v=experience-v5',
-    'assets/js/virtue_controller.js?v=virtue-v13',
+    'assets/js/virtue_controller.js?v=virtue-v14',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v101',
+    'assets/js/ui_controller.js?v=ui-v103',
     'assets/js/supabase_bridge.js?v=supabase-v6',
     'assets/js/profile_merge.js?v=merge-v5',
     'assets/js/data_transfer.js?v=transfer-v3',
     'assets/js/device_setup.js?v=device-setup-v8',
     'assets/js/device_benchmark_worker.js?v=device-bench-v1',
-    'assets/js/settings_manager.js?v=settings-v61',
+    'assets/js/settings_manager.js?v=settings-v63',
     'assets/js/library_manager.js?v=library-v16',
+    'assets/js/hmofa_masterlist.js?v=hmofa-list-v2',
+    'assets/js/hmofa_catalog_core.js?v=hmofa-core-v1',
+    'assets/js/hmofa_community.js?v=hmofa-community-v1',
+    'assets/js/hmofa_preferences.js?v=hmofa-prefs-v1',
     'assets/js/narration_runtime_loader.js?v=narration-loader-v22',
     'assets/js/storage_core.js?v=storage-v13',
     'assets/js/sync_core.js?v=sync-v9',
@@ -160,7 +169,7 @@ self.addEventListener('activate', function (event) {
             .then(function (cacheNames) {
                 return Promise.all(
                     cacheNames.map(function (cacheName) {
-                        var keepModelCache = cacheName.indexOf('pocket-voices') !== -1 || cacheName.indexOf('onnx') !== -1 || cacheName.indexOf('pr-push-meta') !== -1;
+                        var keepModelCache = cacheName.indexOf('pocket-voices') !== -1 || cacheName.indexOf('onnx') !== -1 || cacheName.indexOf('pr-push-meta') !== -1 || cacheName === HMOFA_CATALOG_CACHE;
                         if (cacheName !== CACHE_NAME && !keepModelCache) {
                             console.log('[Service Worker] Clearing old cache:', cacheName);
                             return caches.delete(cacheName);
@@ -260,10 +269,17 @@ self.addEventListener('notificationclick', function (event) {
 self.addEventListener('fetch', function (event) {
     var url = new URL(event.request.url);
 
-    // Never intercept non-same-origin requests (e.g. embedded iframe https://alpharius6769.github.io/...), backend APIs, or SW script
+    // Never intercept cross-origin requests, backend APIs, or the SW script.
+    //
+    // /hmofa-story-index/ is excluded by path, not by origin: on the GitHub
+    // Pages build the Anthronomicon shares this origin, and its catalog.json
+    // would otherwise fall into the cache-first /assets/ branch below and be
+    // pinned forever with no revalidation. hmofa_masterlist.js caches it
+    // itself, against the published build hash.
     if (
         url.origin !== self.location.origin ||
         url.pathname.endsWith('/sw.js') ||
+        url.pathname.indexOf('/hmofa-story-index/') !== -1 ||
         url.origin.indexOf('hf.space') !== -1
     ) {
         return;

@@ -121,13 +121,17 @@ test('Settings offers a feedback link that opens safely', async () => {
     'a target=_blank link without noopener hands the opener to the other page');
 });
 
-test('the Anthronomicon panel explains what tapping a link actually does', async () => {
-  // The iframe is cross-origin, so a click that navigates it cannot be read
-  // back — promising tap-to-fetch there would be a lie until the index
-  // implements the bridge protocol.
+test('the Anthronomicon panel explains what tapping a story actually does', async () => {
+  // This used to tell readers to copy a link out of the frame and paste it
+  // back, because a cross-origin iframe swallows its own clicks. The catalog is
+  // rendered natively now, so tapping really does load the story -- but the
+  // banner may only promise that while a handler is actually wired to it.
   const html = await read('public/index.html');
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.match(html, /Copy link/i);
-  assert.match(ui, /Copy link/i);
+  const list = await read('public/assets/js/hmofa_masterlist.js');
+  assert.match(html, /Tap any story below/i);
   assert.doesNotMatch(html, /App Interceptor Active/);
+  assert.match(list, /_handleHmofaStoryIntercept/,
+    'the card action must route through the shared story-load handler');
+  // Not everything is in the catalog, so the paste box has to survive.
+  assert.match(html, /id="hmofa-url-input"/);
 });

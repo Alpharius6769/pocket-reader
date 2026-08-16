@@ -43,7 +43,14 @@ export function showView(viewId) {
       }
 
       if (viewId === 'away-mode-view') {
-        if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
+        // renderAwayModeUI lives in buffer_manager.js, which is lazy-loaded with
+        // the narration runtime. On a cold start it does not exist yet, so the
+        // old typeof guard silently rendered nothing and the queue and Quick Add
+        // lists came up empty -- they only appeared once some other action
+        // (opening a story) had pulled the runtime in. Load it first.
+        Promise.resolve(window.ensureNarrationRuntime?.())
+          .then(() => window.renderAwayModeUI?.())
+          .catch(() => {});
       }
 
       if (viewId === 'home-view') {
@@ -75,7 +82,9 @@ export function showView(viewId) {
       }
 
       if (viewId === 'hmofa-view') {
-        ensureHmofaIframeLoaded();
+        // The catalog is ~640 KB gzipped, so it is fetched on first open rather
+        // than at launch for a view most sessions never visit.
+        window.ensureHmofaMasterlistLoaded?.();
       }
 
       if (viewId === 'reading-view') {
@@ -1317,54 +1326,6 @@ window.resetTips = function() {
 // The embedded story index lives on a fixed origin. Everything below is scoped
 // to it: the handshake is posted only to this origin, and inbound story-load
 // commands are accepted only from it.
-export const HMOFA_ORIGIN = 'https://alpharius6769.github.io';
-const HMOFA_INDEX_URL = `${HMOFA_ORIGIN}/hmofa-story-index/`;
-
-export function reloadHmofaIframe() {
-  if (_isolationBlocksEmbedding()) {
-    _renderHmofaIsolationNotice();
-    return;
-  }
-  const iframe = document.getElementById('hmofa-iframe');
-  if (iframe) {
-    iframe.src = 'about:blank';
-    setTimeout(() => { iframe.src = HMOFA_INDEX_URL; }, 50);
-  }
-}
-window.reloadHmofaIframe = reloadHmofaIframe;
-
-// A narration session reloads the app with ?tts_fast=1, and the service worker
-// serves that document with COEP: require-corp so SharedArrayBuffer (and
-// threaded WASM) are available. Under require-corp a cross-origin frame must
-// opt in with its own CORP/COEP headers — GitHub Pages sends none, so the
-// embed is refused outright and the reader gets a browser security page
-// ("NS_ERROR_DOM_COEP_FAILED" in Firefox) where the index should be.
-//
-// Nothing can be done from this side: the headers must come from the framed
-// origin. So detect the isolated session and say what is happening, with the
-// two things that do work — open it in a tab, or leave narration mode.
-function _isolationBlocksEmbedding() {
-  return window.crossOriginIsolated === true;
-}
-
-function _renderHmofaIsolationNotice() {
-  const wrap = document.getElementById('hmofa-embed-container');
-  if (!wrap || wrap.dataset.pocketIsolationNotice === '1') return;
-  wrap.dataset.pocketIsolationNotice = '1';
-  wrap.innerHTML = `
-    <div class="empty-state" style="padding:32px 24px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center;">
-      <strong>The index can't be embedded during narration</strong>
-      <span style="max-width:46ch;">Narration runs this page in an isolated mode that browsers won't let it embed
-      other sites into. The index itself is fine &mdash; open it in a tab, or leave narration mode to bring it back here.</span>
-      <span style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:4px;">
-        <a class="pr-btn-primary" href="${HMOFA_INDEX_URL}" target="_blank" rel="noopener noreferrer"
-           style="text-decoration:none;display:inline-flex;align-items:center;">Open the index in a tab</a>
-        <button class="pr-btn-outline" onclick="window.exitPocketNarrationIsolation()">Leave narration mode</button>
-      </span>
-      <span style="font-size:0.85rem;opacity:0.8;max-width:46ch;">You can still paste a story link into the box above at any time.</span>
-    </div>`;
-}
-
 // Drops the ?tts_fast=1 flag and reloads unisolated. Narration can be started
 // again afterwards; it re-isolates on demand.
 export function exitPocketNarrationIsolation() {
@@ -1377,84 +1338,6 @@ export function exitPocketNarrationIsolation() {
   }
 }
 window.exitPocketNarrationIsolation = exitPocketNarrationIsolation;
-
-export function ensureHmofaIframeLoaded() {
-  if (_isolationBlocksEmbedding()) {
-    _renderHmofaIsolationNotice();
-    return;
-  }
-  const iframe = document.getElementById('hmofa-iframe');
-  if (iframe && (!iframe.src || iframe.src === 'about:blank')) {
-    iframe.src = HMOFA_INDEX_URL;
-  }
-}
-window.ensureHmofaIframeLoaded = ensureHmofaIframeLoaded;
-
-// Announce Pocket Reader to the embedded index so it can switch to integrated
-// mode and hand stories back instead of sending the reader off-site.
-//
-// This used to be wired as an inline onload="" attribute on the iframe, which
-// raced: the iframe begins loading while the HTML parses, but ui_controller is
-// a deferred module, so a fast (or cached) frame fired onload before this
-// function existed — "window.setupHmofaIframeBridge is not a function", and the
-// handshake was silently never sent. Ownership of the listener now lives with
-// the code that defines it, and a frame that already loaded is handled too.
-export function setupHmofaIframeBridge() {
-  const iframe = document.getElementById('hmofa-iframe');
-  if (!iframe || !iframe.contentWindow) return false;
-  try {
-    iframe.contentWindow.postMessage({
-      type: 'pocket_reader_init',
-      // Declared so the index can feature-detect rather than sniff versions.
-      capabilities: ['load_story', 'load_story_batch'],
-      version: 1,
-    }, HMOFA_ORIGIN);
-    return true;
-  } catch (e) {
-    window.Diagnostics?.log('WARN', 'HMOFA bridge handshake failed', { error: String(e) });
-    return false;
-  }
-}
-window.setupHmofaIframeBridge = setupHmofaIframeBridge;
-
-// Status copy tells the reader what actually works right now. The banner used
-// to read "App Interceptor Active" unconditionally — which was untrue for the
-// entire period the handshake was broken, and is still untrue against an index
-// build that does not speak the protocol.
-let _hmofaBridgeConnected = false;
-
-function _setHmofaBridgeConnected(connected) {
-  if (_hmofaBridgeConnected === connected) return;
-  _hmofaBridgeConnected = connected;
-  const status = document.getElementById('hmofa-bridge-status');
-  if (!status) return;
-  status.innerHTML = connected
-    ? '<strong>Connected:</strong> Tap any story in the index to load it straight into Pocket Reader.'
-    : '<strong>To load a story here:</strong> long-press or right-click its link in the index below, choose <em>Copy link</em>, and paste it in. '
-      + 'Tapping a link normally just opens the work inside the panel &mdash; use <em>Refresh Index</em> to come back.';
-}
-window._setHmofaBridgeConnected = _setHmofaBridgeConnected;
-window.isHmofaBridgeConnected = () => _hmofaBridgeConnected;
-
-function _bindHmofaIframeBridge() {
-  const iframe = document.getElementById('hmofa-iframe');
-  if (!iframe || iframe.dataset.pocketBridgeBound === '1') return;
-  iframe.dataset.pocketBridgeBound = '1';
-  iframe.addEventListener('load', () => {
-    // A fresh document in the frame has not acknowledged anything yet.
-    _setHmofaBridgeConnected(false);
-    setupHmofaIframeBridge();
-  });
-  // The frame may already be loaded by the time this module runs — the exact
-  // case the old inline handler lost.
-  if (iframe.contentWindow) setupHmofaIframeBridge();
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', _bindHmofaIframeBridge, { once: true });
-} else {
-  _bindHmofaIframeBridge();
-}
 
 export function handleHmofaManualFetch() {
   const input = document.getElementById('hmofa-url-input');
@@ -1541,49 +1424,6 @@ export async function _handleHmofaStoryBatch(stories) {
 }
 window._handleHmofaStoryBatch = _handleHmofaStoryBatch;
 
-// ── Listen for messages sent from embedded HMOFA index ───────────────────────
-// Origin-checked: this handler calls loadStory() with a URL taken straight from
-// the message, so without the check any frame or opener on any origin could
-// drive the reader to fetch a URL of its choosing. Only the embedded index is
-// trusted, and only for the story-load verbs below.
-const HMOFA_LOAD_TYPES = new Set(['hmofa_story_click', 'open_story', 'select_story']);
-
-window.addEventListener('message', (event) => {
-  if (!event.data || event.origin !== HMOFA_ORIGIN) return;
-  const data = event.data;
-
-  // The index can ask Pocket Reader to identify itself at any time — it may
-  // finish initializing after our handshake, so the exchange works either way.
-  if (data.type === 'pocket_reader_ping') {
-    setupHmofaIframeBridge();
-    return;
-  }
-
-  // Acknowledgement from an index build that speaks the protocol. Until this
-  // arrives we must not claim tap-to-fetch works, because on an index that has
-  // not implemented it, tapping a story just navigates the frame.
-  if (data.type === 'pocket_reader_ready' || data.type === 'pocket_reader_ack') {
-    _setHmofaBridgeConnected(true);
-    return;
-  }
-
-  const isLoadVerb = HMOFA_LOAD_TYPES.has(data.type) || data.action === 'load_story';
-  if (!isLoadVerb) return;
-
-  // Batch: the index can hand over a whole shelf at once instead of the reader
-  // importing them one at a time.
-  const batch = Array.isArray(data.stories) ? data.stories : null;
-  if (batch) {
-    _handleHmofaStoryBatch(batch);
-    return;
-  }
-
-  const rawUrl = data.url || data.storyUrl || data.link || data.href;
-  if (!rawUrl) return;
-  const normUrl = typeof window.normalizeStoryUrl === 'function' ? window.normalizeStoryUrl(rawUrl) : rawUrl;
-  _handleHmofaStoryIntercept(normUrl, data.title || data.storyTitle || '');
-});
-
 function _initMasterlistStickyScrollbar() {}
 window._initMasterlistStickyScrollbar = _initMasterlistStickyScrollbar;
 
@@ -1605,7 +1445,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=158', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=160', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

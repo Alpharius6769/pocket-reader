@@ -25,6 +25,12 @@ jobs:
         with:
           node-version: '22'
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
       # Note: `node --test tests/` chokes on the .py files and __pycache__ in
       # that directory, so the glob is deliberate.
       - name: Run test suite
@@ -32,3 +38,11 @@ jobs:
 
       - name: Check service-worker parity
         run: node --test tests/migration_parity.test.mjs
+
+      # backend_security_regressions.py imports backend/app.py, which pulls in
+      # FastAPI and aiosqlite, so the backend deps are required and not optional.
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Run backend regression suites
+        run: python -m unittest discover -s tests -p "*_regressions.py" -v
