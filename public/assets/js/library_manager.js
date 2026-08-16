@@ -371,8 +371,12 @@ function _escapeHtml(s) {
 window._escapeHtml = _escapeHtml;
 
 function _safeHttpCoverUrl(value) {
+  const raw = String(value || '').trim();
+  // new URL('', location) is the document URL, so an empty cover became
+  // <img src="https://…/pocket-reader/"> and every tile showed a broken image.
+  if (!raw) return '';
   try {
-    const parsed = new URL(String(value || ''), window.location.href);
+    const parsed = new URL(raw, window.location.href);
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
   } catch (_) {}
   return '';

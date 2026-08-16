@@ -152,6 +152,14 @@ test('reader and library covers only accept http(s) URLs (L1)', async () => {
   assert.match(library, /function _safeHttpCoverUrl/);
   assert.match(library, /const coverSrc = _safeHttpCoverUrl\(story\.coverImage \|\| story\.coverUrl \|\| ''\)/);
   assert.doesNotMatch(library, /const cover = story\.coverImage \|\| story\.coverUrl \|\| ''/);
+  for (const source of [ui, library]) {
+    const helper = source.slice(
+      source.indexOf('function _safeHttpCoverUrl'),
+      source.indexOf('function _safeHttpCoverUrl') + 450,
+    );
+    assert.match(helper, /if \(!raw\) return '';/);
+    assert.doesNotMatch(helper, /new URL\(String\(value \|\| ''\), window\.location\.href\)/);
+  }
 });
 
 test('admin secrets compare in constant time and health omits paths (L2/L3)', async () => {

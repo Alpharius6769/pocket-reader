@@ -636,8 +636,12 @@ function _escapeHtml(s) {
 }
 
 function _safeHttpCoverUrl(value) {
+  const raw = String(value || '').trim();
+  // new URL('', location) is the document URL, so an empty cover became
+  // <img src="https://…/pocket-reader/"> and showed a broken-image icon.
+  if (!raw) return '';
   try {
-    const parsed = new URL(String(value || ''), window.location.href);
+    const parsed = new URL(raw, window.location.href);
     if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
   } catch (_) {}
   return '';
@@ -1467,7 +1471,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=163', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=164', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)
