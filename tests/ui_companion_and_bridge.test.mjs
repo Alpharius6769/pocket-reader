@@ -244,3 +244,45 @@ test('the native masterlist keeps catalog freshness, URLs, prefs and lists hones
 
   assert.match(ui, /return window\.loadStory\(url\)/);
 });
+
+test('the top bar and mobile navigation clear the iOS notch and status bar safe areas', async () => {
+  const css = await read('public/assets/css/theme.css');
+  // Desktop / tablet / mobile top-bar rules must all protect against top safe area encroachment
+  assert.match(css, /\.top-bar\s*\{[^}]*min-height:\s*calc\(\d+px \+ env\(safe-area-inset-top/);
+  assert.match(css, /\.top-bar\s*\{[^}]*padding:[^;]*env\(safe-area-inset-top/);
+
+  // Mobile (<=600px) top-bar must size height and top padding with safe-area-inset-top
+  const mobileBlock = css.match(/@media\s*\(max-width:\s*600px\)\s*\{([\s\S]*?)(?=\n\/\*|\n@media|$)/)?.[1] || '';
+  assert.match(mobileBlock, /\.top-bar\s*\{[^}]*min-height:\s*calc\(52px \+ env\(safe-area-inset-top/);
+  assert.match(mobileBlock, /\.top-bar\s*\{[^}]*padding:\s*calc\(4px \+ env\(safe-area-inset-top/);
+
+  // Bottom navigation tab bar and app wrapper must respect the bottom safe area
+  assert.match(mobileBlock, /\.sidebar\s*\{[^}]*height:\s*calc\(58px \+ env\(safe-area-inset-bottom/);
+  assert.match(mobileBlock, /\.app-wrapper\s*\{[^}]*bottom:\s*calc\(58px \+ env\(safe-area-inset-bottom/);
+});
+
+test('100% cached stories display cached badges and fast reverification feedback on reopen', async () => {
+  const css = await read('public/assets/css/theme.css');
+  const lib = await read('public/assets/js/library_manager.js');
+  const buf = await read('public/assets/js/buffer_manager.js');
+  const api = await read('public/assets/js/api_core.js');
+
+  // CSS cached badge styling
+  assert.match(css, /\.story-status-badge\.cached\s*\{/);
+
+  // Library manager badge logic
+  assert.match(lib, /'100% Cached'/);
+  assert.match(lib, /isCached \? 'cached' : ''/);
+  assert.match(lib, /· Cached/);
+
+  // Api core preserves isCached flag when loaded from local cache
+  assert.match(api, /window\.currentStory\.isCached = !!\(existingLibEntry\.isCached \|\| existingLibEntry\.audioCached\)/);
+
+  // Buffer manager reverification detection and UI
+  assert.match(buf, /isReverifying: false/);
+  assert.match(buf, /100% Cached Audio Found — verifying offline cache\.\.\./);
+  assert.match(buf, /100% Cached Audio Found/);
+  assert.match(buf, /✓ Offline audio intact — quickly verifying storage/);
+  assert.match(buf, /this\._scheduleLoop\(gen, 0\)/);
+});
+

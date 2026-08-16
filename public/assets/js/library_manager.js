@@ -1351,8 +1351,9 @@ function _buildStoryCardHtml(story, isList) {
     const safeId = String(storyKey).replace(/[^a-zA-Z0-9_-]/g, '');
     const storyKeyAttr = _escapeHtml(storyKey);
     const storyKeyEncoded = encodeURIComponent(storyKey).replace(/'/g, '%27');
-    const statusClass = story.isFinished ? 'finished' : (Number(story.progressChapter) || 0) > 0 ? 'in-progress' : '';
-    const statusText = story.isFinished ? 'Finished' : (Number(story.progressChapter) || 0) > 0 ? `Ch ${(Number(story.progressChapter) || 0) + 1}` : 'New';
+    const isCached = !!(story.isCached || story.audioCached);
+    const statusClass = story.isFinished ? 'finished' : (Number(story.progressChapter) || 0) > 0 ? 'in-progress' : (isCached ? 'cached' : '');
+    const statusText = story.isFinished ? 'Finished' : (Number(story.progressChapter) || 0) > 0 ? `Ch ${(Number(story.progressChapter) || 0) + 1}${isCached ? ' · Cached' : ''}` : (isCached ? '100% Cached' : 'New');
     const favIcon = story.favorite ? '★' : '☆';
     const urlSafe = encodeURIComponent(story.sourceUrl || story.url || '').replace(/'/g, "%27");
     const closeMenusJs = `document.querySelectorAll('.lib-options-menu.active').forEach(m => { m.classList.remove('active'); m.closest('.story-card')?.classList.remove('menu-open'); });`;
@@ -1453,6 +1454,7 @@ ${favoriteBtn}
             ${fandomBadge}
             ${ratingRow}
             <span style="font-size:0.8rem; color:var(--text-muted);">${metadataStats}</span>
+            <span class="story-status-badge ${statusClass}">${statusText}</span>
           </div>
           ${tagsHtml}
         </div>
@@ -1647,7 +1649,7 @@ export function updateContinueReading() {
       <div class="continue-details" style="display:flex; flex-direction:column; justify-content:center;">
         <h3 style="margin:0 0 4px 0; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;">${titleSafe}</h3>
         <p style="margin:0;font-size:0.85rem;color:var(--text-muted);">by ${authorDisplay}</p>
-        <p style="margin:4px 0 0 0;font-size:0.8rem;color:var(--accent-blue-text);">Chapter ${(Number(story.progressChapter) || 0) + 1}</p>
+        <p style="margin:4px 0 0 0;font-size:0.8rem;color:var(--accent-blue-text);">Chapter ${(Number(story.progressChapter) || 0) + 1}${(story.isCached || story.audioCached) ? ' · Cached' : ''}</p>
       </div>
     </div>`;
   });

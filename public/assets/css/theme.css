@@ -35,6 +35,7 @@
 
 html {
   font-size: var(--app-font-size);
+  background-color: var(--app-bg);
 }
 
 body {
@@ -77,9 +78,12 @@ input[type="radio"] {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 20px;
+  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-left: calc(0px + env(safe-area-inset-left, 0px));
   z-index: 100;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .nav-btn {
@@ -162,14 +166,15 @@ input[type="radio"] {
 }
 
 .top-bar {
-  min-height: 60px;
+  min-height: calc(60px + env(safe-area-inset-top, 0px));
   background-color: var(--panel-bg);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  padding: 8px 20px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) 8px calc(20px + env(safe-area-inset-left, 0px));
   gap: 12px;
   flex-wrap: wrap;
+  box-sizing: border-box;
 }
 
 .topbar-user {
@@ -615,6 +620,12 @@ input[type="radio"] {
 
 .story-status-badge.in-progress {
   color: var(--accent-blue-text);
+}
+
+.story-status-badge.cached {
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+  background: rgba(16, 185, 129, 0.15);
 }
 
 .table-container {
@@ -2719,15 +2730,16 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     bottom bar stays 100px wide pinned to the left with the tabs crammed in. */
     min-width: 0;
     max-width: none;
-    height: 58px;
+    height: calc(58px + env(safe-area-inset-bottom, 0px));
     flex-direction: row;
     justify-content: space-around;
     align-items: stretch;
-    padding: 0;
+    padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
     border-right: none;
     border-top: 2px solid var(--border-color);
     z-index: 1000;
     overflow: hidden;
+    box-sizing: border-box;
   }
   .nav-btn {
     flex: 1 1 0;
@@ -2826,18 +2838,19 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
   /* Push content above bottom tab bar */
   .app-wrapper {
     top: 0;
-    bottom: 58px;
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
     height: auto;
   }
 
   /* === TOPBAR: single compact row === */
   .top-bar {
-    min-height: 52px;
-    height: 52px;
-    padding: 4px 8px;
+    min-height: calc(52px + env(safe-area-inset-top, 0px));
+    height: calc(52px + env(safe-area-inset-top, 0px));
+    padding: calc(4px + env(safe-area-inset-top, 0px)) calc(8px + env(safe-area-inset-right, 0px)) 4px calc(8px + env(safe-area-inset-left, 0px));
     gap: 6px;
     flex-wrap: nowrap;
     overflow: hidden;
+    box-sizing: border-box;
   }
   .topbar-title  { display: none; }
   .topbar-user-name { display: none; }
@@ -2873,7 +2886,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
     position: fixed;
     left: 0;
     top: calc(52px + env(safe-area-inset-top, 0px));
-    bottom: 58px;
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
     width: min(82vw, 290px);
     z-index: 600;
     border-radius: 0;
@@ -3038,7 +3051,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
 
   /* === PWA banner: clear the bottom tab bar === */
   .pwa-banner {
-    bottom: 58px;
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
     margin-bottom: 0;
   }
 
@@ -3175,9 +3188,9 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
   :root { --app-font-size: 10.5pt; }
   .nav-btn   { font-size: 0.5rem; }
   .nav-icon  { width: 18px !important; height: 18px !important; }
-  .sidebar   { height: 52px; }
-  .app-wrapper { bottom: 52px; }
-  .pwa-banner  { bottom: 52px; }
+  .sidebar   { height: calc(52px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; }
+  .app-wrapper { bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
+  .pwa-banner  { bottom: calc(52px + env(safe-area-inset-bottom, 0px)); }
   .control-btn { font-size: 1.7rem; min-width: 32px; }
   .playback-dropdown { font-size: 0.75rem; }
 }
@@ -3192,7 +3205,12 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
   #reading-view .reader-text-area { min-height: 42vh; }
   #reading-view #reader-content { min-height: 0; }
   #reading-view .reader-buffer-container { flex: 0 0 auto; }
-  .top-bar { min-height: 46px; }
+  .top-bar {
+    min-height: calc(46px + env(safe-area-inset-top, 0px));
+    padding-top: calc(4px + env(safe-area-inset-top, 0px));
+    padding-bottom: 4px;
+    box-sizing: border-box;
+  }
 }
 
 /* ── Mobile landscape / small tablet: 601–900 px ─────────────── */
@@ -3207,9 +3225,10 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
      over the content ("concealed"). */
   .app-wrapper { top: 0; }
   .top-bar {
-    min-height: 52px;
-    padding: 4px 12px;
+    min-height: calc(52px + env(safe-area-inset-top, 0px));
+    padding: calc(4px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) 4px calc(12px + env(safe-area-inset-left, 0px));
     gap: 6px 8px;
+    box-sizing: border-box;
   }
   .topbar-title  { display: none; }
   .topbar-user-name { max-width: 100px; }
@@ -3337,7 +3356,7 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
 /* --- Accessibility: Color Schemes & Contrast Modes --- */
 
 /* 1. Light Mode Theme */
-body.theme-light {
+html.theme-light, body.theme-light {
   --app-bg: #f5f7fa;
   --panel-bg: #ffffff;
   --sidebar-bg: #eaeff5;
@@ -3366,7 +3385,7 @@ body.theme-light .search-big-input::placeholder {
 }
 
 /* 2. State Mode Theme (Red & Gray) */
-body.theme-slate {
+html.theme-slate, body.theme-slate {
   /* Dark-red accent needs a white button label: black on #cc2929 is only
      3.9:1 (fails AA); white is ~5.4:1. */
   --btn-primary-fg: #fff;
@@ -3389,7 +3408,7 @@ body.theme-slate {
 }
 
 /* 3. High Contrast Theme (Pure B&W) */
-body.theme-high-contrast {
+html.theme-high-contrast, body.theme-high-contrast {
   --app-bg: #000000;
   --panel-bg: #000000;
   --sidebar-bg: #000000;
@@ -3421,7 +3440,7 @@ body.theme-high-contrast button:hover {
 }
 
 /* 4. Colorblind-Friendly Mode (Okabe-Ito Palette) */
-body.theme-colorblind {
+html.theme-colorblind, body.theme-colorblind {
   --app-bg: #131a26;
   --panel-bg: #1c2636;
   --sidebar-bg: #151d2b;

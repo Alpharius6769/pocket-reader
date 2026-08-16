@@ -747,6 +747,15 @@ export async function clearAudioCache(includePermanent = false, skipConfirm = fa
     }
 
     tx.oncomplete = () => {
+      if (includePermanent && window.userProfile?.library) {
+        window.userProfile.library.forEach((story) => {
+          story.isCached = false;
+          story.audioCached = false;
+        });
+        if (typeof window.saveLocalData === 'function') window.saveLocalData();
+        if (typeof window.renderLibrary === 'function') window.renderLibrary(true);
+        if (typeof window.updateContinueReading === 'function') window.updateContinueReading();
+      }
       if (typeof window.virtueSpeak === 'function') {
         window.virtueSpeak("Audio cache cleared! Your browser feels much lighter now.", 4000);
         if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_changed_settings_and_saved');
@@ -829,7 +838,19 @@ export async function deleteStoryAudio(storyTitle) {
       if (cursor.value?.storyRef === storyTitle) cursor.delete();
       cursor.continue();
     };
-    tx.oncomplete = () => resolve(true);
+    tx.oncomplete = () => {
+      if (window.userProfile?.library) {
+        const story = window.findLibraryStoryByRef?.(storyTitle);
+        if (story) {
+          story.isCached = false;
+          story.audioCached = false;
+        }
+        if (typeof window.saveLocalData === 'function') window.saveLocalData();
+        if (typeof window.renderLibrary === 'function') window.renderLibrary(true);
+        if (typeof window.updateContinueReading === 'function') window.updateContinueReading();
+      }
+      resolve(true);
+    };
     tx.onerror = () => resolve(false);
   });
 }

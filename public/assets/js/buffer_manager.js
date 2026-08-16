@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v13';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v14';
 import {
   evaluateCpuThermalRest,
   POCKET_THERMAL_HISTORY_LIMIT,
@@ -565,6 +565,7 @@ document.addEventListener('visibilitychange', () => {
 export const BufferManager = {
   isActive: false,
   paused: false,
+  isReverifying: false,
   mode: 'Normal',
   queue: [],
   totalToCache: 0,
@@ -702,6 +703,19 @@ export const BufferManager = {
       statusText = this.skippedCount > 0
         ? `✅ Cache complete! (${this.totalToCache - this.skippedCount}/${this.totalToCache}; ${this.skippedCount} skipped${runwayText})`
         : `✅ Cache complete! (${this.totalToCache} paragraphs${runwayText})`;
+      if (window.currentStory) {
+        window.currentStory.isCached = true;
+        window.currentStory.audioCached = true;
+        if (window.userProfile?.library) {
+          const ref = window.currentStory.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory.title;
+          const entry = window.findLibraryStoryByRef?.(ref);
+          if (entry) {
+            entry.isCached = true;
+            entry.audioCached = true;
+          }
+        }
+        if (typeof window.saveLocalData === 'function') window.saveLocalData();
+      }
       if (awayBar) awayBar.classList.remove('caching');
       _releaseCacheWakeLock();
       _clearPersistedCacheJob();
@@ -765,21 +779,32 @@ export const BufferManager = {
       if (this.cachingModalFill) this.cachingModalFill.style.width = `${pct}%`;
 
       if (this.cachingModalStats) {
-        const lastMs = Number(this._lastSynthMs || 0);
-        const pace = lastMs > 0 ? `${Math.round(lastMs / 1000)}s last paragraph · ` : '';
-        const tel = this._lastSynthTelemetry || {};
-        const chunkHint = Number(tel.textChunks || 0) > 0
-          ? `${tel.textChunks} chunk${tel.textChunks === 1 ? '' : 's'}${tel.punctuationSplitCount ? ` · ${tel.punctuationSplitCount} punct splits` : ''}${tel.realTimeFactor != null ? ` · RTF ${tel.realTimeFactor}` : ''}${Number(tel.frameBudgetStops || 0) > 0 ? ` · ${tel.frameBudgetStops} budget stop${tel.frameBudgetStops === 1 ? '' : 's'}` : ''} · `
-          : '';
-        const runwayHint = this.cachedCount > 0
-          ? ` · <span style="color:var(--accent-green)">~${runway} audio ready</span>`
-          : '';
-        this.cachingModalStats.innerHTML = `<strong>${this.cachedCount}/${this.totalToCache}</strong> paragraphs (${pct}%)${runwayHint}${this._liveRenderHint()}<br><div style="margin-top:6px;font-size:0.85rem">${pace}${chunkHint}${etaText}</div><div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted)">${_narrationRuntimeLabel()}</div>`;
+        if (this.isReverifying) {
+          const runwayHint = this.cachedCount > 0
+            ? ` · <span style="color:var(--accent-green)">~${runway} audio verified</span>`
+            : '';
+          this.cachingModalStats.innerHTML = `<strong>${this.cachedCount}/${this.totalToCache}</strong> paragraphs verified (${pct}%)${runwayHint}<br><div style="margin-top:6px;font-size:0.85rem;color:var(--accent-green)">✓ Offline audio intact — quickly verifying storage</div><div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted)">${_narrationRuntimeLabel()}</div>`;
+        } else {
+          const lastMs = Number(this._lastSynthMs || 0);
+          const pace = lastMs > 0 ? `${Math.round(lastMs / 1000)}s last paragraph · ` : '';
+          const tel = this._lastSynthTelemetry || {};
+          const chunkHint = Number(tel.textChunks || 0) > 0
+            ? `${tel.textChunks} chunk${tel.textChunks === 1 ? '' : 's'}${tel.punctuationSplitCount ? ` · ${tel.punctuationSplitCount} punct splits` : ''}${tel.realTimeFactor != null ? ` · RTF ${tel.realTimeFactor}` : ''}${Number(tel.frameBudgetStops || 0) > 0 ? ` · ${tel.frameBudgetStops} budget stop${tel.frameBudgetStops === 1 ? '' : 's'}` : ''} · `
+            : '';
+          const runwayHint = this.cachedCount > 0
+            ? ` · <span style="color:var(--accent-green)">~${runway} audio ready</span>`
+            : '';
+          this.cachingModalStats.innerHTML = `<strong>${this.cachedCount}/${this.totalToCache}</strong> paragraphs (${pct}%)${runwayHint}${this._liveRenderHint()}<br><div style="margin-top:6px;font-size:0.85rem">${pace}${chunkHint}${etaText}</div><div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted)">${_narrationRuntimeLabel()}</div>`;
+        }
       }
 
       // ISSUE 19 FIX: Away Mode Unique Layout and Layout Overrides
       if (this.queue.length > 0 && this.queue[0]) {
-        if (this.mode === 'Permanent') {
+        if (this.isReverifying) {
+          if (this.cachingModalText) {
+            this.cachingModalText.innerHTML = `<div style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.35); padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;"><strong style="color:var(--accent-green); font-size:1.05rem;">100% Cached Audio Found</strong><br><span style="font-size:0.85rem;color:var(--text-muted)">Verifying previous offline cache for instant playback...</span></div>Verifying: <strong style="color:var(--accent-green)">${_escapeCacheStatus(currentStory)}</strong><br><span style="font-size:0.85rem;color:var(--text-muted)">Ch ${this.queue[0].chapIdx + 1}, Para ${this.queue[0].paraIdx + 1}...</span>`;
+          }
+        } else if (this.mode === 'Permanent') {
           if (this.cachingModalText) {
             this.cachingModalText.innerHTML = `<div style="background:rgba(255,165,0,0.1); border:1px solid rgba(255,165,0,0.35); padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;"><strong style="color:var(--accent-gold); font-size:1.1rem;">Away Mode is preparing offline audio</strong><br><span style="font-size:0.85rem;color:var(--text-muted)">Hide this panel to keep Pocket Reader working. Pause or stop from Settings when needed.</span></div>Caching: <strong style="color:var(--accent-color)">${_escapeCacheStatus(currentStory)}</strong><br><span style="font-size:0.85rem;color:var(--text-muted)">Ch ${this.queue[0].chapIdx + 1}, Para ${this.queue[0].paraIdx + 1}...</span>`;
           }
@@ -787,7 +812,7 @@ export const BufferManager = {
           if (this.cachingModalText) this.cachingModalText.innerHTML = `Caching: <strong style="color:var(--accent-color)">${_escapeCacheStatus(currentStory)}</strong><br><span style="font-size:0.85rem;color:var(--text-muted)">Ch ${this.queue[0].chapIdx + 1}, Para ${this.queue[0].paraIdx + 1}...</span>`;
         }
       } else if (this.cachedCount >= this.totalToCache && this.totalToCache > 0) {
-        if (this.cachingModalText) this.cachingModalText.innerText = `Caching complete!`;
+        if (this.cachingModalText) this.cachingModalText.innerText = this.isReverifying ? `Cache verified! Playback ready.` : `Caching complete!`;
         if (this.cachingModalEl && this.cachingModalEl.style.display !== 'none') {
           setTimeout(() => {
             this.cachingModalEl.classList.remove('active');
@@ -821,6 +846,13 @@ export const BufferManager = {
                 window.togglePlayState();
               }
             };
+          } else if (this.isReverifying) {
+            this.cachingModalDismiss.disabled = true;
+            this.cachingModalDismiss.style.cursor = 'not-allowed';
+            this.cachingModalDismiss.style.borderColor = 'var(--accent-green)';
+            this.cachingModalDismiss.style.color = 'var(--accent-green)';
+            this.cachingModalDismiss.innerText = `Verifying cached audio (${this.cachedCount}/${this.totalToCache})...`;
+            this.cachingModalDismiss.onclick = null;
           } else if (!this.isActive || this.paused) {
             this.cachingModalDismiss.disabled = false;
             this.cachingModalDismiss.style.cursor = 'pointer';
@@ -851,6 +883,7 @@ export const BufferManager = {
     this.cachedCount = 0;
     this.skippedCount = 0;
     this.sessionStoryRefs = new Set();
+    this.isReverifying = !!(window.currentStory?.isCached || window.currentStory?.audioCached);
     const engine = _resolveActiveEngine();
     if (engine !== 'pocket') {
       if (this.containerEl) this.containerEl.style.display = 'none';
@@ -930,12 +963,15 @@ export const BufferManager = {
         earlyModal.style.display = 'flex';
         earlyModal.classList.add('active');
       }
+      const isCachedStory = !!(window.currentStory?.isCached || window.currentStory?.audioCached);
       const runtime = window._pocketBackendRuntime;
-      const backendHint = runtime?.selectedBackend === 'webgpu'
-        ? 'Checking cached WebGPU narration...'
-        : (_isolationReady()
-          ? 'Checking cached narration...'
-          : 'Preparing narration session...');
+      const backendHint = isCachedStory
+        ? '100% Cached Audio Found — verifying offline cache...'
+        : (runtime?.selectedBackend === 'webgpu'
+          ? 'Checking cached WebGPU narration...'
+          : (_isolationReady()
+            ? 'Checking cached narration...'
+            : 'Preparing narration session...'));
       this._showModalStatus(backendHint);
     }
 
@@ -1488,12 +1524,39 @@ export const BufferManager = {
         this.activeWorkers = Math.max(0, this.activeWorkers - 1);
         return;
       }
-      if (!existingBlob) {
-        await this._ensureCacheBackendReady(gen, routedVoice);
-        if (gen !== this._generation || !this.isActive) {
-          this.activeWorkers = Math.max(0, this.activeWorkers - 1);
-          return;
+      if (existingBlob) {
+        this.cachedCount++;
+        this.consecutiveErrors = 0;
+        this._consecutiveErrorRecoveryAttempted = false;
+        this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+        if (this.queue.length === 0 && this.cachedCount >= this.totalToCache && this.totalToCache > 0) {
+          this.isReverifying = false;
+          if (window.currentStory) {
+            window.currentStory.isCached = true;
+            window.currentStory.audioCached = true;
+            if (window.userProfile?.library) {
+              const ref = window.currentStory.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory.title;
+              const entry = window.findLibraryStoryByRef?.(ref);
+              if (entry) {
+                entry.isCached = true;
+                entry.audioCached = true;
+              }
+            }
+            if (typeof window.saveLocalData === 'function') window.saveLocalData();
+            if (typeof window.renderLibrary === 'function') window.renderLibrary(true);
+            if (typeof window.updateContinueReading === 'function') window.updateContinueReading();
+          }
         }
+        this.updateUI();
+        this._scheduleLoop(gen, 0);
+        return;
+      }
+      this.isReverifying = false;
+      await this._ensureCacheBackendReady(gen, routedVoice);
+      if (gen !== this._generation || !this.isActive) {
+        this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+        return;
+      }
         if (window._pocketLiveSynthActive) {
           this.queue.unshift(task);
           this.activeWorkers = Math.max(0, this.activeWorkers - 1);
@@ -1670,6 +1733,24 @@ export const BufferManager = {
       this.consecutiveErrors = 0;
       this._consecutiveErrorRecoveryAttempted = false;
       this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+      if (this.queue.length === 0 && this.cachedCount >= this.totalToCache && this.totalToCache > 0) {
+        this.isReverifying = false;
+        if (window.currentStory) {
+          window.currentStory.isCached = true;
+          window.currentStory.audioCached = true;
+          if (window.userProfile?.library) {
+            const ref = window.currentStory.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory.title;
+            const entry = window.findLibraryStoryByRef?.(ref);
+            if (entry) {
+              entry.isCached = true;
+              entry.audioCached = true;
+            }
+          }
+          if (typeof window.saveLocalData === 'function') window.saveLocalData();
+          if (typeof window.renderLibrary === 'function') window.renderLibrary(true);
+          if (typeof window.updateContinueReading === 'function') window.updateContinueReading();
+        }
+      }
       await this._prefetchNextVoice();
       const thermal = evaluateCpuThermalRest(this._thermalHistory || []);
       if (thermal.rest) {

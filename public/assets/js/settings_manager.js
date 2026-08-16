@@ -7,7 +7,7 @@ import {
   writePocketDeviceBackendPreference,
 } from './pocket_backend_policy.js?v=backend-v22';
 
-const NARRATION_SERVICE_WORKER_VERSION = '167';
+export const NARRATION_SERVICE_WORKER_VERSION = '169';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -411,7 +411,11 @@ export function initSettingsUI() {
   if (!settings.theme) settings.theme = _theme;
   if (el('app-theme-select')) el('app-theme-select').value = _theme;
   document.body.classList.remove('theme-light', 'theme-slate', 'theme-high-contrast', 'theme-colorblind');
-  if (_theme !== 'dark') document.body.classList.add(`theme-${_theme}`);
+  document.documentElement.classList.remove('theme-light', 'theme-slate', 'theme-high-contrast', 'theme-colorblind');
+  if (_theme !== 'dark') {
+    document.body.classList.add(`theme-${_theme}`);
+    document.documentElement.classList.add(`theme-${_theme}`);
+  }
 
   // Accessibility settings. Large controls are an opt-in accommodation: their
   // previous touch-device default made compact layouts overflow on phones.
@@ -635,8 +639,10 @@ export function applySettings() {
     if (el('app-theme-select')) {
       settings.theme = el('app-theme-select').value;
       document.body.classList.remove('theme-light', 'theme-slate', 'theme-high-contrast', 'theme-colorblind');
+      document.documentElement.classList.remove('theme-light', 'theme-slate', 'theme-high-contrast', 'theme-colorblind');
       if (settings.theme !== 'dark') {
         document.body.classList.add(`theme-${settings.theme}`);
+        document.documentElement.classList.add(`theme-${settings.theme}`);
       }
     }
 

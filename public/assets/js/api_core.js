@@ -1029,6 +1029,7 @@ export async function loadStory(url, options = {}) {
           console.log("Loading story chapters from local storage:", existingLibEntry.title);
           window.currentStory = existingLibEntry;
           window.currentStory.chapters = cachedChapters;
+          window.currentStory.isCached = !!(existingLibEntry.isCached || existingLibEntry.audioCached);
           window.currentChapterIndex = Math.max(
             0,
             Math.min(Number(existingLibEntry.progressChapter) || 0, cachedChapters.length - 1),
