@@ -147,6 +147,11 @@ test('backend deploy ships curated PDFs and accepts either proxy token name (L4/
   const workflow = await read('.github/workflows/deploy-backend.yml');
   assert.match(workflow, /lfs: true/);
   assert.doesNotMatch(workflow, /--exclude='curated_library\/'/);
+  assert.doesNotMatch(workflow, /--exclude='README.md'/);
+  const spaceReadme = await read('backend/README.md');
+  assert.match(spaceReadme, /^---\r?\n[\s\S]*^sdk: docker\r?\n[\s\S]*^---/m);
+  assert.match(spaceReadme, /app_port: 7860/);
+  assert.doesNotMatch(spaceReadme, /^sdk: gradio/m);
   const scraper = await read('backend/scrapers_core.py');
   assert.match(scraper, /os\.environ\.get\("WORKER_PROXY_TOKEN"\) or os\.environ\.get\("PROXY_AUTH_TOKEN"\)/);
   const worker = await read('worker/cloudflare_worker.js');

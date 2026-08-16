@@ -59,6 +59,10 @@ jobs:
           #   .gitignore       - the Space keeps its own
           # curated_library/ is included: those PDFs are the shelf. Skipping them
           # left every curated open 404 until a manual sync.
+          # README.md is NOT excluded: Hugging Face Spaces reads its YAML
+          # frontmatter as the Space config (sdk: docker). backend/README.md is
+          # the source of truth; omitting it lets rsync --delete wipe the Space
+          # README and the Space fails with CONFIG_ERROR.
           rsync -av --delete \
             --exclude='tools/' \
             --exclude='reports/' \
