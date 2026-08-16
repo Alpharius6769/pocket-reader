@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v166';
+var CACHE_NAME = 'pocket-reader-core-v167';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -99,7 +99,7 @@ var DEFERRED_ASSETS = [
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     './',
-    'assets/css/theme.css?v=midnight-v28',
+    'assets/css/theme.css?v=midnight-v29',
     'assets/js/tts_pronunciation_core.js?v=pron-v11',
     'assets/js/pocket_backend_policy.js?v=backend-v22',
     'assets/js/pocket_performance_policy.js?v=performance-v2',
@@ -116,7 +116,7 @@ var CORE_ASSETS = [
     'assets/js/device_benchmark_worker.js?v=device-bench-v1',
     'assets/js/settings_manager.js?v=settings-v67',
     'assets/js/library_manager.js?v=library-v19',
-    'assets/js/hmofa_masterlist.js?v=hmofa-list-v3',
+    'assets/js/hmofa_masterlist.js?v=hmofa-list-v4',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v1',
     'assets/js/hmofa_community.js?v=hmofa-community-v1',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v2',

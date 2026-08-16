@@ -118,6 +118,7 @@ const state = {
   preferences: null,
   selected: new Set(),
   speciesExpanded: false,
+  facetsOpen: false,
   view: 'all',
   communityRatings: {},
   communityTrending: [],
@@ -544,7 +545,44 @@ function renderFacets() {
   const fandomSection = facetSection('Fanfiction settings', fandoms, { collapsed: true });
   if (fandomSection) sections.push(fandomSection);
 
-  rail.replaceChildren(...sections);
+  // Wrap all facet sections inside a parent collapsible (auto-collapsed by default)
+  const parentDetails = document.createElement('details');
+  parentDetails.className = 'hmofa-facet-group-collapsible';
+  parentDetails.open = Boolean(state.facetsOpen);
+  parentDetails.addEventListener('toggle', () => {
+    state.facetsOpen = parentDetails.open;
+  });
+
+  const parentSummary = document.createElement('summary');
+  parentSummary.className = 'hmofa-facet-group-summary';
+
+  let activeCount = 0;
+  for (const key of FILTER_SET_KEYS) {
+    activeCount += state[key]?.size || 0;
+  }
+
+  const titleWrap = document.createElement('span');
+  titleWrap.className = 'hmofa-facet-group-title';
+  titleWrap.innerHTML = `
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:6px;"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+    Filter Catalog
+  `;
+
+  if (activeCount > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'hmofa-facet-group-badge';
+    badge.textContent = `${activeCount} active`;
+    titleWrap.append(badge);
+  }
+
+  parentSummary.append(titleWrap);
+
+  const innerBody = document.createElement('div');
+  innerBody.className = 'hmofa-facet-group-body';
+  innerBody.append(...sections);
+
+  parentDetails.append(parentSummary, innerBody);
+  rail.replaceChildren(parentDetails);
 }
 
 function renderActiveFilters() {

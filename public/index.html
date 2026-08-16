@@ -31,7 +31,7 @@
 2. GLOBAL STYLESHEET
 ========================================== -->
 <!-- Links the optimized CSS file we just created -->
-<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v28">
+<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v29">
 
 <!-- ==========================================
 2a. FAST-NARRATION RELOAD MASK (anti-flash)
@@ -154,7 +154,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=166', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=167', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -1471,7 +1471,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
     <script src='assets/js/library_manager.js?v=library-v19' type='module'></script>
     <!-- Pulls in hmofa_catalog_core.js via a versioned import. The catalog
          itself is only downloaded when the masterlist view is opened. -->
-    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v3' type='module'></script>
+    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v4' type='module'></script>
     <script src='assets/js/device_setup.js?v=device-setup-v9' type='module'></script>
     <script src='assets/js/settings_manager.js?v=settings-v67' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v7' type='module'></script>
