@@ -2529,28 +2529,33 @@ async function _runPocketWorkerGeneration(workerObj, text, workerVoice, opts, ha
     opts,
   });
 
-  // Foreground zombie-worker detection stays fast (60s) so an active listener
-  // is never stuck waiting on a genuinely stuck worker. A backgrounded/locked
-  // session gets a much longer allowance (10 min, the pre-60s-fix value):
-  // synthesis can legitimately run several times slower once the OS
-  // deprioritizes a backgrounded tab/PWA, and the reject path here resets the
-  // ENTIRE engine — timing out real, still-progressing work while backgrounded
-  // was killing background playback and caching mid-session. The budget is
-  // re-read live on every poll (not fixed at call start) so a session that
-  // backgrounds mid-generation still gets the patient budget for the rest of
-  // the wait, and one that returns to the foreground still fails fast if truly
-  // stuck.
+  // Foreground zombie-worker detection stays fast while still scaling
+  // adaptively for longer paragraphs on mobile WASM so long multi-sentence
+  // paragraphs (80–140s on phone CPUs) are not prematurely killed by a static ceiling.
+  // A backgrounded/locked session gets a patient budget (10 min): synthesis
+  // can legitimately run several times slower once the OS deprioritizes a
+  // backgrounded tab/PWA. The budget is re-read live on every poll so a session
+  // that backgrounds mid-generation gets the patient budget.
   const FOREGROUND_TIMEOUT_MS = 60000;
   const BACKGROUND_TIMEOUT_MS = 600000;
   const POLL_MS = 5000;
+  const _words = String(text || '').trim().split(/\s+/).filter(Boolean).length;
+  const _chars = String(text || '').trim().length;
+  const _isMobile = isMobileLikePlatform(navigator.userAgent || '');
+  const _estAudioSec = Math.max(4, Math.max(_words * 0.45, _chars / 16));
+  // Adaptive foreground ceiling: 60s base, scaling up to 240s for long paragraphs
+  const adaptiveForegroundMs = Math.max(
+    FOREGROUND_TIMEOUT_MS,
+    Math.min(240000, Math.round(_estAudioSec * (_isMobile ? 3600 : 2200)) + 30000)
+  );
   const currentTimeoutMs = () => (typeof document !== 'undefined' && document.hidden)
-    ? BACKGROUND_TIMEOUT_MS : FOREGROUND_TIMEOUT_MS;
+    ? BACKGROUND_TIMEOUT_MS : adaptiveForegroundMs;
   let timerObj = null;
   try {
     return await Promise.race([
       pending,
       new Promise((_, reject) => {
-        const start = Date.now();
+        let start = Date.now();
         let lastTick = start;
         const check = () => {
           const now = Date.now();
@@ -2558,16 +2563,20 @@ async function _runPocketWorkerGeneration(workerObj, text, workerVoice, opts, ha
           lastTick = now;
           // A tick firing much later than its poll interval means the JS event
           // loop itself was suspended (OS/tab freeze), not that the worker is
-          // slow — give it a fresh window rather than counting suspended time
-          // against the budget.
+          // slow — adjust start time so suspended time is not counted against
+          // the budget.
           if (sinceLastTick > POLL_MS + 10000) {
             console.log('[Timeout] System sleep or background suspension detected. Rescheduling worker timeout.');
+            start += (sinceLastTick - POLL_MS);
             timerObj = setTimeout(check, POLL_MS);
             return;
           }
           const elapsed = now - start;
           const timeoutMs = currentTimeoutMs();
           if (elapsed >= timeoutMs) {
+            try {
+              workerObj?.worker?.postMessage({ type: 'cancel_generation', id });
+            } catch (_) {}
             reject(new Error(`TTS worker timeout after ${Math.round(elapsed / 1000)}s`));
             return;
           }
@@ -2724,7 +2733,8 @@ window.generateChunk = async function(text, voice) {
       _logPocketQuality('WARN', throughputRetry
         ? 'Pocket synth quality guard retrying failed cache paragraph'
         : 'Pocket synth quality guard retrying with clean worker session', first, { retryUsed: false });
-      if (!throughputRetry) {
+      const isTimeoutFailure = (first.quality?.reasons || []).some((r) => /timeout/i.test(String(r || '')));
+      if (!throughputRetry || isTimeoutFailure) {
         window._pocketParagraphCount = 0;
         try {
           await _resetPocketEngineForBackend();

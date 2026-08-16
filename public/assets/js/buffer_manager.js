@@ -1450,6 +1450,9 @@ export const BufferManager = {
         console.warn('[Cache] Active workers stagnated for >60s. Auto-recovering worker pool state.');
         this.activeWorkers = 0;
         this._lastChunkCompletedAt = Date.now();
+        if (typeof window._resetPocketEngineForBackend === 'function') {
+          try { window._resetPocketEngineForBackend().catch(() => {}); } catch (_) {}
+        }
       } else {
         setTimeout(() => this._loop(gen), 200);
         return;
@@ -1635,7 +1638,16 @@ export const BufferManager = {
 
           this.queue.unshift(task);
           if (this.consecutiveErrors >= 5) {
+            if (!this._consecutiveErrorRecoveryAttempted && typeof window._resetPocketEngineForBackend === 'function') {
+              this._consecutiveErrorRecoveryAttempted = true;
+              console.warn('[BufferManager] 5 consecutive errors encountered. Attempting full engine reset before pause.');
+              try { await window._resetPocketEngineForBackend(); } catch (_) {}
+              this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+              this._scheduleLoop(gen, 3000);
+              return;
+            }
             this.isActive = false;
+            this._consecutiveErrorRecoveryAttempted = false;
             if (this.cachingModalEl) {
               this.cachingModalEl.style.display = 'flex';
               this.cachingModalEl.classList.add('active');
@@ -1656,6 +1668,7 @@ export const BufferManager = {
       this.itemsSynthesizedThisSession++;
       this._lastChunkCompletedAt = Date.now();
       this.consecutiveErrors = 0;
+      this._consecutiveErrorRecoveryAttempted = false;
       this.activeWorkers = Math.max(0, this.activeWorkers - 1);
       await this._prefetchNextVoice();
       const thermal = evaluateCpuThermalRest(this._thermalHistory || []);

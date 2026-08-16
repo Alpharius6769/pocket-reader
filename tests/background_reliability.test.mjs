@@ -64,14 +64,17 @@ test('TTS worker generation timeout is patient while backgrounded, fast while fo
   // background playback and caching mid-session. The budget must be re-read
   // live (document.hidden) on every poll, not fixed at call start, so a session
   // that backgrounds mid-generation still gets the patient budget.
+  // Foreground synthesis also adaptively scales for longer paragraphs on mobile
+  // WASM so long multi-sentence paragraphs are not prematurely killed.
   const audio = await read('public/assets/js/audio_core.js');
   assert.match(audio, /const FOREGROUND_TIMEOUT_MS = 60000;/);
   assert.match(audio, /const BACKGROUND_TIMEOUT_MS = 600000;/);
-  assert.match(audio, /const currentTimeoutMs = \(\) => \(typeof document !== 'undefined' && document\.hidden\)\s*\n\s*\? BACKGROUND_TIMEOUT_MS : FOREGROUND_TIMEOUT_MS;/);
+  assert.match(audio, /const currentTimeoutMs = \(\) => \(typeof document !== 'undefined' && document\.hidden\)\s*\n\s*\? BACKGROUND_TIMEOUT_MS : adaptiveForegroundMs;/);
   // The deadline check must call currentTimeoutMs() live inside the poll tick,
   // not capture a fixed value once before the wait begins.
   const checkFn = audio.slice(audio.indexOf('const check = () => {'), audio.indexOf('timerObj = setTimeout(check, Math.min(POLL_MS, currentTimeoutMs()));'));
   assert.match(checkFn, /const timeoutMs = currentTimeoutMs\(\);/);
+  assert.match(checkFn, /cancel_generation/);
 });
 
 test('local-file-path intercept in loadStory does not swallow the app\'s own internal reference URLs', async () => {
