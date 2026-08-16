@@ -26,12 +26,33 @@ def _ensure_ao3_full_work(url: str) -> str:
     return url
 
 
+def _find_chapters_dd(soup):
+    """Locate the 'Chapters: X/Y' stat.
+
+    The scoped selector is tried first because it is unambiguous, but it cannot
+    be the only one: the HTML that actually reaches us through the Zyte proxy is
+    a reduced render with no `dl.work.meta.group` wrapper at all — the stats list
+    sits in a bare `<dl>` whose only classed descendant is `dl.stats`. That made
+    this return None for EVERY work, so the client never got an authoritative
+    count, never took the fast "no new chapters" path, and fell through to a full
+    re-scrape of the whole story on every update check.
+
+    The value is still validated by the caller's regex and range clamp, so
+    widening the search cannot let malformed markup through.
+    """
+    return (
+        soup.select_one("dl.work.meta.group dd.chapters")
+        or soup.select_one("dl.stats dd.chapters")
+        or soup.select_one("dd.chapters")
+    )
+
+
 def parse_published_chapter_count(html: str) -> Optional[int]:
     """Parse the published chapter count from AO3 work HTML — the 'X' in the
     'Chapters: X/Y' work stat. Returns None when the stat isn't present."""
     try:
         soup = BeautifulSoup(html, "html.parser")
-        dd = soup.select_one("dl.work.meta.group dd.chapters")
+        dd = _find_chapters_dd(soup)
         if not dd:
             return None
         m = re.match(r"^\s*(\d+)\s*/", dd.get_text(strip=True))
@@ -52,7 +73,7 @@ def parse_ao3_chapter_info(html: str) -> tuple[Optional[int], Optional[int]]:
     """Return AO3's published and declared chapter counts from Chapters: X/Y."""
     try:
         soup = BeautifulSoup(html, "html.parser")
-        dd = soup.select_one("dl.work.meta.group dd.chapters")
+        dd = _find_chapters_dd(soup)
         if not dd:
             return None, None
         match = re.match(r"^\s*(\d+)\s*/\s*(\d+|\?)", dd.get_text(strip=True))

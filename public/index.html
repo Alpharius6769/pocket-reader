@@ -137,11 +137,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v22">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v8">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v60">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v61">
 <link rel="modulepreload" href="assets/js/library_manager.js?v=library-v16">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v7">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v7">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v100">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v101">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v6">
 
 <!-- ==========================================
@@ -154,7 +154,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=157', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=158', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -908,7 +908,13 @@ Playback-only modules remain deferred so they do not compete with first paint.
 
         <!-- Embedded Interactive Index View -->
         <div id="hmofa-embed-container" class="hmofa-embed-wrap">
-          <iframe id="hmofa-iframe" src="https://alpharius6769.github.io/hmofa-story-index/" title="HMOFA Story Index" allow="clipboard-write"></iframe>
+          <!-- No src here on purpose. ensureHmofaIframeLoaded() sets it when the
+               view is opened, which (a) skips the embed entirely during an
+               isolated narration session, where COEP refuses it and the browser
+               would paint a security error, and (b) avoids loading a
+               cross-origin index on every app launch for a view most sessions
+               never visit. -->
+          <iframe id="hmofa-iframe" title="HMOFA Story Index" allow="clipboard-write" loading="lazy"></iframe>
         </div>
       </div>
 
@@ -1431,10 +1437,10 @@ Playback-only modules remain deferred so they do not compete with first paint.
     <script src='assets/js/tts_pronunciation_core.js?v=pron-v11' type='module'></script>
     <script src='assets/js/library_manager.js?v=library-v16' type='module'></script>
     <script src='assets/js/device_setup.js?v=device-setup-v8' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v60' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v61' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v7' type='module'></script>
     <script src='assets/js/reader_features.js?v=features-v7' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v100' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v101' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v6' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v3' type='module'></script>
   </div>

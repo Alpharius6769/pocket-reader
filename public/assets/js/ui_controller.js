@@ -1321,6 +1321,10 @@ export const HMOFA_ORIGIN = 'https://alpharius6769.github.io';
 const HMOFA_INDEX_URL = `${HMOFA_ORIGIN}/hmofa-story-index/`;
 
 export function reloadHmofaIframe() {
+  if (_isolationBlocksEmbedding()) {
+    _renderHmofaIsolationNotice();
+    return;
+  }
   const iframe = document.getElementById('hmofa-iframe');
   if (iframe) {
     iframe.src = 'about:blank';
@@ -1329,7 +1333,56 @@ export function reloadHmofaIframe() {
 }
 window.reloadHmofaIframe = reloadHmofaIframe;
 
+// A narration session reloads the app with ?tts_fast=1, and the service worker
+// serves that document with COEP: require-corp so SharedArrayBuffer (and
+// threaded WASM) are available. Under require-corp a cross-origin frame must
+// opt in with its own CORP/COEP headers — GitHub Pages sends none, so the
+// embed is refused outright and the reader gets a browser security page
+// ("NS_ERROR_DOM_COEP_FAILED" in Firefox) where the index should be.
+//
+// Nothing can be done from this side: the headers must come from the framed
+// origin. So detect the isolated session and say what is happening, with the
+// two things that do work — open it in a tab, or leave narration mode.
+function _isolationBlocksEmbedding() {
+  return window.crossOriginIsolated === true;
+}
+
+function _renderHmofaIsolationNotice() {
+  const wrap = document.getElementById('hmofa-embed-container');
+  if (!wrap || wrap.dataset.pocketIsolationNotice === '1') return;
+  wrap.dataset.pocketIsolationNotice = '1';
+  wrap.innerHTML = `
+    <div class="empty-state" style="padding:32px 24px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center;">
+      <strong>The index can't be embedded during narration</strong>
+      <span style="max-width:46ch;">Narration runs this page in an isolated mode that browsers won't let it embed
+      other sites into. The index itself is fine &mdash; open it in a tab, or leave narration mode to bring it back here.</span>
+      <span style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:4px;">
+        <a class="pr-btn-primary" href="${HMOFA_INDEX_URL}" target="_blank" rel="noopener noreferrer"
+           style="text-decoration:none;display:inline-flex;align-items:center;">Open the index in a tab</a>
+        <button class="pr-btn-outline" onclick="window.exitPocketNarrationIsolation()">Leave narration mode</button>
+      </span>
+      <span style="font-size:0.85rem;opacity:0.8;max-width:46ch;">You can still paste a story link into the box above at any time.</span>
+    </div>`;
+}
+
+// Drops the ?tts_fast=1 flag and reloads unisolated. Narration can be started
+// again afterwards; it re-isolates on demand.
+export function exitPocketNarrationIsolation() {
+  try {
+    const target = new URL(window.location.href);
+    target.searchParams.delete('tts_fast');
+    window.location.replace(target.toString());
+  } catch (_) {
+    window.location.replace('/');
+  }
+}
+window.exitPocketNarrationIsolation = exitPocketNarrationIsolation;
+
 export function ensureHmofaIframeLoaded() {
+  if (_isolationBlocksEmbedding()) {
+    _renderHmofaIsolationNotice();
+    return;
+  }
   const iframe = document.getElementById('hmofa-iframe');
   if (iframe && (!iframe.src || iframe.src === 'about:blank')) {
     iframe.src = HMOFA_INDEX_URL;
@@ -1552,7 +1605,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=157', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=158', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

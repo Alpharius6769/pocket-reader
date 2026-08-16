@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v157';
+var CACHE_NAME = 'pocket-reader-core-v158';
 
 function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
@@ -103,13 +103,13 @@ var CORE_ASSETS = [
     'assets/js/experience_coordinator.js?v=experience-v5',
     'assets/js/virtue_controller.js?v=virtue-v13',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v100',
+    'assets/js/ui_controller.js?v=ui-v101',
     'assets/js/supabase_bridge.js?v=supabase-v6',
     'assets/js/profile_merge.js?v=merge-v5',
     'assets/js/data_transfer.js?v=transfer-v3',
     'assets/js/device_setup.js?v=device-setup-v8',
     'assets/js/device_benchmark_worker.js?v=device-bench-v1',
-    'assets/js/settings_manager.js?v=settings-v60',
+    'assets/js/settings_manager.js?v=settings-v61',
     'assets/js/library_manager.js?v=library-v16',
     'assets/js/narration_runtime_loader.js?v=narration-loader-v22',
     'assets/js/storage_core.js?v=storage-v13',
