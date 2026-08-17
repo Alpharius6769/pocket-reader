@@ -40,7 +40,7 @@ test("ambiguous 'd contractions are still left native (deliberate)", () => {
 });
 
 test("pronunciation ruleset version bumped so cached audio re-renders", () => {
-  assert.equal(PRONUNCIATION_RULESET_VERSION, 'pron-v13');
+  assert.equal(PRONUNCIATION_RULESET_VERSION, 'pron-v14');
 });
 
 // ── #3 — seed-perturb on a failed paragraph's retry (worker) ──────────────────
@@ -50,7 +50,7 @@ test("worker salts the latent seed only on a retry, preserving determinism", asy
   // The generation pipeline reads a seed salt from control...
   assert.match(worker, /const seedSalt = control && control\.seedSalt \? String\(control\.seedSalt\) : '';/);
   // ...and folds it into the per-chunk latent noise seed.
-  assert.match(worker, /const chunkNoiseSeed = voiceName \+ '\|' \+ \(meta\.emotion \|\| 'neutral'\) \+ '\|' \+ chunkText \+ seedSalt;/);
+  assert.match(worker, /const chunkNoiseSeed = voiceName \+ '\|' \+ \(meta\.emotion \|\| 'neutral'\) \+ '\|' \+ chunkText \+ seedSalt/);
   // The salt is non-empty ONLY when retryLevel > 0 (normal renders stay byte-identical).
   assert.match(worker, /seedSalt: Number\(opts\?\.retryLevel\) > 0 \? \('\|r' \+ Number\(opts\.retryLevel\)\) : ''/);
 });

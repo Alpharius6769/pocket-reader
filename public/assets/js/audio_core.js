@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v13';
+} from './tts_pronunciation_core.js?v=pron-v14';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -672,6 +672,8 @@ function _buildPocketProsodyOpts(selectedVoice, overrides = {}) {
     artifactGuardVersion: POCKET_ARTIFACT_GUARD_VERSION,
     retryLevel,
     throughputMode: throughput,
+    seed: overrides.seed != null ? overrides.seed : (overrides.voiceSeed != null ? overrides.voiceSeed : (s.pocketVoiceSeed || null)),
+    voiceSeed: overrides.voiceSeed != null ? overrides.voiceSeed : (overrides.seed != null ? overrides.seed : (s.pocketVoiceSeed || null)),
     // Avoid large paragraph-wide transient tensors on iOS/constrained
     // browsers. High-memory devices retain the 176-token cache fast path.
     tokenSoftCap: window.isPocketDeviceMemorySafeMode?.() !== false ? 120 : (throughput ? 176 : 120),
@@ -1217,7 +1219,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v49', document.baseURI).href;
+        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v50', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);

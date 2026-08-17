@@ -4,7 +4,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v13';
+} from './tts_pronunciation_core.js?v=pron-v14';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -142,18 +142,70 @@ const EMOTION_PROSODY = {
   anger:    { temp: 0.88, noiseClamp: null, eosBonus: -1 },
 };
 
+// ── PRNG & Gaussian Latent Generator (Mulberry32 + Box-Muller) ───────────────
+// Uses a 32-bit MurmurHash3 avalanche mixer for string seed initialization and
+// Mulberry32 for uniform pseudorandom generation. Paired Box-Muller generation
+// generates true uncorrelated isotropic Gaussian samples N(0, std^2) across all
+// 32 latent dimensions, eliminating 2D hyperplane lattice artifacts that cause
+// voice timbre and pitch shifts between lines.
 let currentSeed = 42;
-function seedRandom(seedStr) {
-  let h = 0xdeadbeef;
-  for(let i = 0; i < seedStr.length; i++) {
-    h = Math.imul(h ^ seedStr.charCodeAt(i), 2654435761);
+let _prngState = 42;
+let _hasSpareGaussian = false;
+let _spareGaussian = 0;
+
+function _murmurHash3(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 0x01000193);
+    h = (h ^ (h >>> 13)) >>> 0;
   }
-  currentSeed = ((h ^ h >>> 16) >>> 0);
-  if (currentSeed === 0) currentSeed = 42;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return (h ^ (h >>> 16)) >>> 0;
 }
+
+function seedRandom(seedInput) {
+  _hasSpareGaussian = false;
+  _spareGaussian = 0;
+  if (typeof seedInput === 'number' && Number.isFinite(seedInput)) {
+    let s = (seedInput | 0) >>> 0;
+    if (s === 0) s = 42;
+    _prngState = s;
+  } else {
+    const s = _murmurHash3(String(seedInput || '42'));
+    _prngState = s === 0 ? 42 : s;
+  }
+  currentSeed = _prngState;
+}
+
 function seededRandom() {
-  currentSeed = (currentSeed * 1664525 + 1013904223) >>> 0;
-  return currentSeed / 4294967296;
+  let z = (_prngState = (_prngState + 0x6d2b79f5) >>> 0);
+  z = Math.imul(z ^ (z >>> 15), z | 1);
+  z ^= z + Math.imul(z ^ (z >>> 7), z | 61);
+  currentSeed = z;
+  return ((z ^ (z >>> 14)) >>> 0) / 4294967296;
+}
+
+function seededGaussian(std = 1.0, clampAbs = null) {
+  let val;
+  if (_hasSpareGaussian) {
+    _hasSpareGaussian = false;
+    val = _spareGaussian * std;
+  } else {
+    let u = 0;
+    let v = 0;
+    while (u === 0) u = seededRandom();
+    while (v === 0) v = seededRandom();
+    const mag = Math.sqrt(-2.0 * Math.log(u));
+    const angle = 2.0 * Math.PI * v;
+    val = mag * Math.cos(angle) * std;
+    _spareGaussian = mag * Math.sin(angle);
+    _hasSpareGaussian = true;
+  }
+  if (clampAbs != null) {
+    return Math.max(-clampAbs, Math.min(clampAbs, val));
+  }
+  return val;
 }
 
 // Per-punctuation pause lengths (seconds) used when punctuation pauses are ON.
@@ -2893,6 +2945,8 @@ async function startGeneration(text, voiceName, jobId, opts) {
         streamSegments: opts?.streamSegments === true,
         throughputMode: opts?.throughputMode === true,
         punctuationSplitCount,
+        seed: opts?.seed,
+        voiceSeed: opts?.voiceSeed,
         seedSalt: Number(opts?.retryLevel) > 0 ? ('|r' + Number(opts.retryLevel)) : '',
       });
       const quality = inspectCalibrationAudio(allChunks);
@@ -2908,6 +2962,8 @@ async function startGeneration(text, voiceName, jobId, opts) {
         streamSegments: opts?.streamSegments === true,
         throughputMode: opts?.throughputMode === true,
         punctuationSplitCount,
+        seed: opts?.seed,
+        voiceSeed: opts?.voiceSeed,
         seedSalt: Number(opts?.retryLevel) > 0 ? ('|r' + Number(opts.retryLevel)) : '',
       });
     }
@@ -2994,6 +3050,8 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
   // fatal-rejected can render *differently* and recover, instead of the
   // identical seed reproducing the exact same rejected take forever.
   const seedSalt = control && control.seedSalt ? String(control.seedSalt) : '';
+  const explicitSeed = control && (control.voiceSeed != null ? control.voiceSeed : control.seed);
+  const voiceSeedSuffix = explicitSeed != null ? ('|s' + explicitSeed) : '';
   if (
     currentBackend === 'wasm'
     && chunkMeta.some((meta) => Number(meta?.lsdSteps || DEFAULT_LSD_STEPS) > 1)
@@ -3123,7 +3181,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
     // differences, and re-renders / cache rebuilds match exactly. All three
     // generation paths (WebGPU block, WASM block, per-frame streaming) seed from
     // this, so behaviour is uniform across devices and quality modes.
-    const chunkNoiseSeed = voiceName + '|' + (meta.emotion || 'neutral') + '|' + chunkText + seedSalt;
+    const chunkNoiseSeed = voiceName + '|' + (meta.emotion || 'neutral') + '|' + chunkText + seedSalt + voiceSeedSuffix;
     let isFirstAudioChunkOfTextChunk = true;
     const tokenizationStart = performance.now();
     const tokenIds = tokenizerProcessor.encodeIds(chunkText);
@@ -3208,13 +3266,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
             const clampAbs = chunkNoiseClamp != null ? chunkNoiseClamp * std : null;
             const randomLatents = webGpuRandomTensor.data;
             for (let index = 0; index < randomLatents.length; index++) {
-              let u = 0;
-              let v = 0;
-              while (u === 0) u = seededRandom();
-              while (v === 0) v = seededRandom();
-              let sample = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v) * std;
-              if (clampAbs != null) sample = Math.max(-clampAbs, Math.min(clampAbs, sample));
-              randomLatents[index] = sample;
+              randomLatents[index] = seededGaussian(std, clampAbs);
             }
 
             const coreStart = performance.now();
@@ -3356,13 +3408,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
         while (blockCursor < frameLimit && !chunkEnded && generationShouldContinue()) {
           const randomLatents = wasmRandomTensor.data;
           for (let index = 0; index < randomLatents.length; index++) {
-            let u = 0;
-            let v = 0;
-            while (u === 0) u = seededRandom();
-            while (v === 0) v = seededRandom();
-            let sample = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v) * std;
-            if (clampAbs != null) sample = Math.max(-clampAbs, Math.min(clampAbs, sample));
-            randomLatents[index] = sample;
+            randomLatents[index] = seededGaussian(std, clampAbs);
           }
           const stepStart = performance.now();
           const blockFeeds = {
@@ -3504,13 +3550,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
       const std = Math.sqrt(chunkTemp);
       const clampAbs = chunkNoiseClamp != null ? chunkNoiseClamp * std : null;
       for (let i = 0; i < currentLatentDim; i++) {
-        let u = 0;
-        let v = 0;
-        while (u === 0) u = seededRandom();
-        while (v === 0) v = seededRandom();
-        let sample = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v) * std;
-        if (clampAbs != null) sample = Math.max(-clampAbs, Math.min(clampAbs, sample));
-        currentLatentData[i] = sample;
+        currentLatentData[i] = seededGaussian(std, clampAbs);
       }
 
       const dt = 1.0 / chunkLsdSteps;

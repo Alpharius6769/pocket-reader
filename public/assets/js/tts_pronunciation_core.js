@@ -1,7 +1,7 @@
 // Browser-safe Pocket TTS pronunciation and tuning helpers.
 // Keep this module free of Node-only APIs; it is imported by the app and worker.
 
-export const PRONUNCIATION_RULESET_VERSION = 'pron-v13'; // v13: calibrated balanced 0.70 baseline & 0.8-0.9 strong emotion range
+export const PRONUNCIATION_RULESET_VERSION = 'pron-v14'; // v14: Mulberry32 PRNG & voice seed consistency
 export const DEFAULT_POCKET_PLAYBACK_SPEED = 1.0;
 export const DEFAULT_POCKET_TEMPERATURE_PRESET = 'balanced';
 export const DEFAULT_POCKET_QUALITY_MODE = 'mobile';

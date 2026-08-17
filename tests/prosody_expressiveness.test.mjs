@@ -215,3 +215,21 @@ test('getPocketTuningPreset allows expressive temperature tuning without forced 
   const ttsCore = await read('public/assets/js/tts_pronunciation_core.js');
   assert.doesNotMatch(ttsCore, /if \(key === 'expressive'\) key = DEFAULT_POCKET_TEMPERATURE_PRESET;/);
 });
+
+test('pocket worker implements Mulberry32 PRNG with paired Box-Muller Gaussian sampling', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  assert.match(worker, /function seededGaussian/);
+  assert.match(worker, /Math\.imul\(z \^ \(z >>> 15\), z \| 1\)/, 'worker must use Mulberry32 PRNG');
+  assert.match(worker, /_spareGaussian = mag \* Math\.sin\(angle\)/, 'worker must use paired Box-Muller generation');
+  assert.match(worker, /_murmurHash3/, 'worker must use 32-bit avalanche hash for seeds');
+});
+
+test('pocket worker and audio core support structured voice seed anchoring', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  assert.match(worker, /const explicitSeed = control && \(control\.voiceSeed != null \? control\.voiceSeed : control\.seed\);/);
+  assert.match(worker, /const voiceSeedSuffix = explicitSeed != null \? \('\|s' \+ explicitSeed\) : '';/);
+
+  const audio = await read('public/assets/js/audio_core.js');
+  assert.match(audio, /seed:\s*overrides\.seed/);
+  assert.match(audio, /voiceSeed:\s*overrides\.voiceSeed/);
+});

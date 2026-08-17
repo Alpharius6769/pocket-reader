@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v172';
+var CACHE_NAME = 'pocket-reader-core-v173';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -91,8 +91,8 @@ var OPTIONAL_ASSETS = [
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
     'assets/js/buffer_manager.js?v=buffer-v57',
-    'assets/js/audio_core.js?v=audio-v75',
-    'assets/js/pocket_worker.js?v=pocket-worker-v49',
+    'assets/js/audio_core.js?v=audio-v76',
+    'assets/js/pocket_worker.js?v=pocket-worker-v50',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
 ];
 
@@ -100,7 +100,7 @@ var DEFERRED_ASSETS = [
 var CORE_ASSETS = [
     './',
     'assets/css/theme.css?v=midnight-v33',
-    'assets/js/tts_pronunciation_core.js?v=pron-v13',
+    'assets/js/tts_pronunciation_core.js?v=pron-v14',
     'assets/js/pocket_backend_policy.js?v=backend-v22',
     'assets/js/pocket_performance_policy.js?v=performance-v2',
     'assets/js/diagnostics.js?v=diag-v6',
@@ -108,19 +108,19 @@ var CORE_ASSETS = [
     'assets/js/experience_coordinator.js?v=experience-v5',
     'assets/js/virtue_controller.js?v=virtue-v14',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v112',
+    'assets/js/ui_controller.js?v=ui-v113',
     'assets/js/supabase_bridge.js?v=supabase-v7',
     'assets/js/profile_merge.js?v=merge-v6',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v9',
     'assets/js/device_benchmark_worker.js?v=device-bench-v1',
-    'assets/js/settings_manager.js?v=settings-v72',
-    'assets/js/library_manager.js?v=library-v22',
+    'assets/js/settings_manager.js?v=settings-v73',
+    'assets/js/library_manager.js?v=library-v23',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v4',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v1',
     'assets/js/hmofa_community.js?v=hmofa-community-v1',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v2',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v28',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v29',
     'assets/js/storage_core.js?v=storage-v14',
     'assets/js/sync_core.js?v=sync-v10',
     'assets/js/cinematic_ui.js?v=cinematic-v7',
