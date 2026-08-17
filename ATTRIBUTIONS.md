@@ -58,7 +58,7 @@ Last reviewed: 2026-07-15.
 - Source: https://github.com/OwenTyme/voice-zero
 - Used as: Source voice references for the Pocket Reader Pocket TTS emotional
   voice catalog.
-- Selected voices: Donald Malone, Bill Boerst, Jason Mayoff, Kristin Hughes,
+- Selected voices: Donald Malone (default voice), Bill Boerst, Jason Mayoff, Kristin Hughes,
   Jodi Krangle Expressive, and Karen Savage.
 - Runtime asset names: `donald_malone`, `bill_boerst`, `jason_mayoff`,
   `kristin_hughes`, `jodi_krangle_expressive`, and `karen_savage`, each with
@@ -67,14 +67,13 @@ Last reviewed: 2026-07-15.
   files are not stored in this source tree. The maintainer tool records source
   URLs and writes a runtime manifest for the uploaded B2/Cloudflare assets.
 
-### Rayne (default voice)
+### Rayne (Personal Clone)
 
 - Author: Chris (Alpharius67 / Fluffarius)
 - Origin: AI-generated voice created by the maintainer.
 - License: Project-owned. No third-party rights apply; free for the project to
   use, including commercially.
-- Used as: The application's default Pocket TTS voice for all new profiles and
-  the global voice fallback.
+- Used as: Optional custom user-cloned Pocket TTS voice.
 - Runtime asset names: `rayne`, with emotion suffixes such as `_neutral`.
 - Distribution note: source `.wav` reference and converted `.safetensors` files
   are not stored in this source tree; they live with the other runtime voice

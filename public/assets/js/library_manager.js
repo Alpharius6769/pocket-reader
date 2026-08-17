@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v11';
+} from './tts_pronunciation_core.js?v=pron-v13';
 import { profileHash, storyKeyFor, mergeClockedMap } from './profile_merge.js?v=merge-v6';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
@@ -129,21 +129,18 @@ function normalizeCompanionSetting(profile) {
 function normalizePocketVoiceSetting(profile) {
   const settings = profile?.settings;
   if (!settings || typeof settings !== 'object') return;
-  const defaultVoice = window.POCKET_DEFAULT_VOICE || 'rayne';
+  const defaultVoice = window.POCKET_DEFAULT_VOICE || 'donald_malone';
   const voices = window.POCKET_VOICES || [];
-  // One-time migration to the new default voice (rayne). The previous default
-  // was 'donald_malone', and normalizePocketVoiceSetting always writes the
-  // resolved default back into settings.pocketVoice, so pre-0.8.0 profiles have
-  // 'donald_malone' persisted. Only migrate profiles that are still on that old
-  // default (never a voice the user deliberately picked). A NEW flag name is
-  // used because the original migration compared against 'rayne' (the new
-  // default) and so silently migrated nobody while burning 'pr_voice_migrated_
-  // to_rayne_v1' on first run.
-  if ((settings.pocketVoice === 'donald_malone' || !settings.pocketVoice)
+  // One-time migration to the default voice (donald_malone). The previous default
+  // was 'rayne', and normalizePocketVoiceSetting always writes the
+  // resolved default back into settings.pocketVoice. Only migrate profiles that are still on that old
+  // default (never a voice the user deliberately picked). Gated by
+  // 'pr_voice_migrated_to_donald_malone_v3' on first run.
+  if ((settings.pocketVoice === 'rayne' || !settings.pocketVoice)
       && typeof localStorage !== 'undefined'
-      && !localStorage.getItem('pr_voice_migrated_to_rayne_v2')) {
-    settings.pocketVoice = 'rayne';
-    localStorage.setItem('pr_voice_migrated_to_rayne_v2', 'true');
+      && !localStorage.getItem('pr_voice_migrated_to_donald_malone_v3')) {
+    settings.pocketVoice = 'donald_malone';
+    localStorage.setItem('pr_voice_migrated_to_donald_malone_v3', 'true');
   }
   const canonical = typeof window.canonicalPocketVoice === 'function'
     ? window.canonicalPocketVoice(settings.pocketVoice || defaultVoice)
@@ -393,7 +390,7 @@ function _defaultProfile() {
     displayName: "Guest Reader",
     settings: {
       voiceEngine: "pocket",
-      pocketVoice: window.POCKET_DEFAULT_VOICE || "rayne",
+      pocketVoice: window.POCKET_DEFAULT_VOICE || "donald_malone",
       speed: DEFAULT_POCKET_PLAYBACK_SPEED,
       expressiveProsody: true,
       pausePunctuation: true,

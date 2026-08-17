@@ -199,3 +199,19 @@ test('Rayne is honestly declared as neutral-only', async () => {
   assert.match(rayne, /availableEmotions: \['neutral'\]/,
     'Rayne must not claim emotions it has no reference audio for');
 });
+
+test('Donald Malone is the configured default voice across the engine', async () => {
+  const engineUtils = await read('public/assets/js/engine_utils.js');
+  assert.match(engineUtils, /window\.POCKET_DEFAULT_VOICE = 'donald_malone'/);
+
+  const audioCore = await read('public/assets/js/audio_core.js');
+  assert.match(audioCore, /const POCKET_DEFAULT_VOICE = window\.POCKET_DEFAULT_VOICE \|\| 'donald_malone'/);
+
+  const library = await read('public/assets/js/library_manager.js');
+  assert.match(library, /const defaultVoice = window\.POCKET_DEFAULT_VOICE \|\| 'donald_malone'/);
+});
+
+test('getPocketTuningPreset allows expressive temperature tuning without forced fallback', async () => {
+  const ttsCore = await read('public/assets/js/tts_pronunciation_core.js');
+  assert.doesNotMatch(ttsCore, /if \(key === 'expressive'\) key = DEFAULT_POCKET_TEMPERATURE_PRESET;/);
+});

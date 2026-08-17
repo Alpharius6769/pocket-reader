@@ -1,14 +1,14 @@
 // Browser-safe Pocket TTS pronunciation and tuning helpers.
 // Keep this module free of Node-only APIs; it is imported by the app and worker.
 
-export const PRONUNCIATION_RULESET_VERSION = 'pron-v11'; // v11: current narration/parser release; v10 set natural 1.0x voice default
+export const PRONUNCIATION_RULESET_VERSION = 'pron-v13'; // v13: calibrated balanced 0.70 baseline & 0.8-0.9 strong emotion range
 export const DEFAULT_POCKET_PLAYBACK_SPEED = 1.0;
 export const DEFAULT_POCKET_TEMPERATURE_PRESET = 'balanced';
 export const DEFAULT_POCKET_QUALITY_MODE = 'mobile';
 
 export const POCKET_TTS_TUNING_PRESETS = Object.freeze({
-  stable: { temperature: 0.68, lsdSteps: 1, label: 'Stable audiobook' },
-  balanced: { temperature: 0.80, lsdSteps: 1, label: 'Balanced audiobook' },
+  stable: { temperature: 0.65, lsdSteps: 1, label: 'Stable audiobook' },
+  balanced: { temperature: 0.70, lsdSteps: 1, label: 'Balanced audiobook' },
   expressive: { temperature: 0.88, lsdSteps: 1, label: 'Full expression' },
   quality: { temperature: 0.70, lsdSteps: 4, label: 'Benchmark quality' },
 });
@@ -254,7 +254,6 @@ function applyWildcardHeteronyms(text) {
 export function getPocketTuningPreset(name, emotionMode = 'neutral') {
   let key = String(name || DEFAULT_POCKET_TEMPERATURE_PRESET).toLowerCase();
   if (!Object.prototype.hasOwnProperty.call(POCKET_TTS_TUNING_PRESETS, key)) key = DEFAULT_POCKET_TEMPERATURE_PRESET;
-  if (key === 'expressive') key = DEFAULT_POCKET_TEMPERATURE_PRESET;
   return { name: key, ...POCKET_TTS_TUNING_PRESETS[key] };
 }
 

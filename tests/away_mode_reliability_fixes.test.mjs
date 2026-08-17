@@ -31,13 +31,11 @@ test('fast-narration reload saves the real active view, once', async () => {
 
 test('voice migration targets the real old default and uses a fresh flag', async () => {
   const library = await read('public/assets/js/library_manager.js');
-  // The previous default was donald_malone; the original migration compared
-  // against 'rayne' (the new default) and migrated nobody while burning the v1
-  // flag. Migrate the old default, gated by a NEW flag so already-run clients
-  // still migrate.
-  assert.match(library, /settings\.pocketVoice === 'donald_malone'/);
-  assert.match(library, /pr_voice_migrated_to_rayne_v2/);
-  assert.doesNotMatch(library, /settings\.pocketVoice === 'rayne'.*migrated/s);
+  // The previous default was rayne; migrate to donald_malone (the default
+  // voice), gated by a NEW flag so already-run clients migrate cleanly.
+  assert.match(library, /settings\.pocketVoice === 'rayne'/);
+  assert.match(library, /pr_voice_migrated_to_donald_malone_v3/);
+  assert.match(library, /settings\.pocketVoice = 'donald_malone'/);
 });
 
 test('silent (preventNavigate) loads never navigate, overlay, or alert', async () => {

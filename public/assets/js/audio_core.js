@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v11';
+} from './tts_pronunciation_core.js?v=pron-v13';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -111,16 +111,16 @@ function _setNeuralState(nextState) {
 
 // ── Voice lists and normalization layer ──────────────────────────────────────
 const POCKET_VOICES = window.POCKET_VOICES || [];
-const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'rayne';
+const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'donald_malone';
 const POCKET_SAFE_EMOTIONS = ['neutral', 'calm', 'happy', 'sad', 'worried', 'surprised', 'tired', 'frustrated'];
 const POCKET_GATED_EMOTIONS = ['anger', 'excited', 'enthused', 'shout'];
 const POCKET_ALL_EMOTIONS = [...POCKET_SAFE_EMOTIONS, ...POCKET_GATED_EMOTIONS, 'confused'];
 const POCKET_BALANCED_EMOTIONS = ['neutral', 'calm', 'happy', 'sad', 'worried', 'surprised', 'tired', 'frustrated'];
 const POCKET_BALANCED_EMOTION_MAP = {
-  anger: 'worried',
+  anger: 'frustrated',
   excited: 'happy',
   enthused: 'happy',
-  shout: 'happy',
+  shout: 'surprised',
   confused: 'worried',
 };
 const POCKET_EMOTION_PATTERN = new RegExp(`_(${POCKET_ALL_EMOTIONS.join('|')})$`);
@@ -147,29 +147,29 @@ const POCKET_PAUSE_PROFILE_VERSION = 'pausev2';
 const POCKET_PARAGRAPH_PAUSE_SEC = 0.5;
 
 const POCKET_BALANCED_TEMP_CAPS = {
-  neutral: 0.82,
-  calm: 0.82,
-  sad: 0.82,
-  happy: 0.80,
-  worried: 0.80,
-  tired: 0.80,
-  surprised: 0.78,
-  frustrated: 0.78,
+  neutral: 0.70,
+  calm: 0.70,
+  sad: 0.72,
+  tired: 0.70,
+  worried: 0.74,
+  happy: 0.74,
+  surprised: 0.76,
+  frustrated: 0.76,
 };
 const POCKET_FULL_TEMP_CAPS = {
-  neutral: 0.88,
-  calm: 0.88,
-  sad: 0.88,
-  happy: 0.84,
-  worried: 0.84,
-  tired: 0.84,
-  surprised: 0.80,
-  frustrated: 0.80,
-  anger: 0.80,
-  excited: 0.80,
-  enthused: 0.80,
-  shout: 0.80,
+  neutral: 0.72,
+  calm: 0.70,
+  sad: 0.74,
+  tired: 0.72,
   confused: 0.80,
+  worried: 0.82,
+  happy: 0.84,
+  enthused: 0.85,
+  surprised: 0.86,
+  frustrated: 0.86,
+  excited: 0.88,
+  anger: 0.88,
+  shout: 0.90,
 };
 function _normalizeVoice(engine, voice) {
   if (engine !== 'pocket') return voice || '';
@@ -251,9 +251,9 @@ function _detectPocketEmotion(text) {
   // runs this same detector across a whole chapter and applies hysteresis
   // (dwell + quiet-exit), so an emotion must be *sustained* to change the
   // conditioning reference. Detection finds candidates; the plan decides.
-  add('anger', /\b(angry|anger|furious|fury|rage|raging|hate|hated|hatred|snarl|snarled|growl|growled|murder|murdered|seethe|seething|snapped|spat|slammed|shouted|shouting|yelled|roared|bellowed|glare|glared|fists?|teeth clenched|jaw (tight|clenched))\b/g, 3);
-  add('happy', /\b(excited|thrilled|amazing|wonderful|fantastic|delighted|delight|laugh|laughed|laughing|laughter|grin|grinned|grinning|smile|smiled|smiling|cheer|cheered|beamed|joy|joyful|glee|bright(ly)?|radiant|hugged|elated)\b/g, 2);
-  add('sad', /\b(sad|sadness|sorrow|cry|cried|crying|tears|tearful|weep|wept|sob|sobbed|sobbing|death|dead|died|dying|loss|lost her|lost him|grief|grieving|mourn|mourned|lonely|loneliness|heartbroken|ache|aching|hollow|empty|never (again|come back)|gone forever)\b/g, 2.5);
+  add('anger', /\b(angry|anger|furious|fury|rage|raging|hate|hated|hatred|snarl|snarled|snarling|growl|growled|growling|murder|murdered|seethe|seething|snapped|spat|slammed|shouted|shouting|yelled|yelling|roared|roaring|bellowed|glare|glared|glaring|fists?|teeth clenched|jaw (tight|clenched))\b/g, 3);
+  add('happy', /\b(excited|thrilled|amazing|wonderful|fantastic|delighted|delight|laugh|laughed|laughing|laughter|grin|grinned|grinning|smile|smiled|smiling|cheer|cheered|cheering|beamed|beaming|joy|joyful|glee|bright(ly)?|radiant|hugged|elated)\b/g, 2);
+  add('sad', /\b(sad|sadness|sorrow|cry|cried|crying|tears|tearful|weep|wept|weeping|sob|sobbed|sobbing|death|dead|died|dying|loss|lost her|lost him|grief|grieving|mourn|mourned|mourning|lonely|loneliness|heartbroken|ache|aching|hollow|empty|never (again|come back)|gone forever)\b/g, 2.5);
   // Grief is very often carried entirely by gesture, with no emotional word
   // anywhere in the paragraph — "he put his head in his hands. It was over."
   // scored a flat zero against the vocabulary list above. These are the common
@@ -261,11 +261,11 @@ function _detectPocketEmotion(text) {
   // will still miss grief that is purely implied, which is an accepted ceiling
   // of this approach rather than something to keep patching case by case.
   add('sad', /\b(head in (his|her|their) hands|buried (his|her|their) face|shoulders shook|voice broke|choked up|it was over|nothing (would|could) bring)\b/g, 2.5);
-  add('worried', /\b(worry|worried|worrying|fear|feared|fearful|afraid|scared|scaring|terror|terrified|danger|dangerous|threat|threatened|anxious|anxiety|nervous|panic|panicked|dread|dreaded|uneasy|tense|tensed|trembl(e|ed|ing)|shivered|held (his|her|their) breath|heart (pounding|racing|hammering))\b/g, 2.5);
-  add('surprised', /\b(suddenly|sudden|gasp|gasped|startled|startling|surprise|surprised|shock|shocked|stunned|flinch|flinched|jolted|blinked|stared|whirled|spun around|froze)\b/g, 2);
-  add('tired', /\b(tired|tiredness|sleepy|exhausted|exhaustion|weary|wearily|yawn|yawned|weakly|drained|slept|sleepless|worn out|heavy(-| )lidded|dragging|slumped|collapsed onto)\b/g, 2.5);
-  add('frustrated', /\b(frustrated|frustration|annoyed|annoying|irritated|irritation|impossible|ugh|groan|groaned|muttered|muttering|sighed|exasperated|gritted|rolled (his|her|their) eyes)\b/g, 2);
-  add('calm', /\b(softly|quietly|quiet|gently|gentle|calm|calmly|peaceful|peacefully|still(ness)?|whisper|whispered|murmur|murmured|soothing|serene|hush(ed)?|slowly|drifted)\b/g, 2);
+  add('worried', /\b(worry|worried|worrying|fear|feared|fearful|afraid|scared|scaring|terror|terrified|danger|dangerous|threat|threatened|anxious|anxiety|nervous|panic|panicked|dread|dreaded|uneasy|tense|tensed|trembl(e|ed|ing)|shivered|shivering|held (his|her|their) breath|heart (pounding|racing|hammering))\b/g, 2.5);
+  add('surprised', /\b(suddenly|sudden|gasp|gasped|gasping|startled|startling|surprise|surprised|shock|shocked|stunned|flinch|flinched|jolted|blinked|stared|whirled|spun around|froze)\b/g, 2);
+  add('tired', /\b(tired|tiredness|sleepy|exhausted|exhaustion|weary|wearily|yawn|yawned|yawning|weakly|drained|slept|sleepless|worn out|heavy(-| )lidded|dragging|slumped|collapsed onto)\b/g, 2.5);
+  add('frustrated', /\b(frustrated|frustration|annoyed|annoying|irritated|irritation|impossible|ugh|groan|groaned|groaning|muttered|muttering|sighed|sighing|exasperated|gritted|rolled (his|her|their) eyes)\b/g, 2);
+  add('calm', /\b(softly|quietly|quiet|gently|gentle|calm|calmly|peaceful|peacefully|still(ness)?|whisper|whispered|whispering|murmur|murmured|murmuring|soothing|serene|hush(ed)?|slowly|drifted)\b/g, 2);
 
   if (emphatic) {
     if (scores.anger >= 3) scores.anger += 1.5;
@@ -299,7 +299,7 @@ function _detectPocketEmotion(text) {
     threshold,
     confidence: Number(confidence.toFixed(2)),
     evidenceCount,
-    highConfidence: confidence >= 1.35 && evidenceCount >= 2,
+    highConfidence: (confidence >= 1.25 && evidenceCount >= 1) || (confidence >= 1.0 && evidenceCount >= 2),
     scores,
   };
 }
@@ -357,13 +357,13 @@ function _buildEmotionPlan(paragraphs) {
     if (detected === current) {
       quietRun = 0;
     } else if (detected !== 'neutral') {
-      // Switch only on strong single-paragraph evidence or a sustained two-
-      // paragraph vote, and never inside the post-switch dwell window.
+      // Switch on high single-paragraph confidence, clear detection (confidence >= 1.0),
+      // or a sustained two-paragraph vote, and never inside the post-switch dwell window.
       // 0.75 (was 0.9): lets moderately-voiced scenes reach their emotion state
       // instead of staying neutral — the pitch-matched pack keeps timbre stable
       // enough that the extra switches no longer read as speaker changes.
       const sustained = pendingRun >= 2 && info.confidence >= 0.75;
-      if (dwell === 0 && (info.highConfidence || sustained)) {
+      if (dwell === 0 && (info.highConfidence || sustained || (info.confidence >= 1.0 && detected !== 'neutral'))) {
         current = detected;
         dwell = EMOTION_PLAN_DWELL;
         quietRun = 0;
@@ -434,7 +434,7 @@ function _resolveEmotionForVoice(baseVoice, requestedEmotion, emotionInfo = null
   if (mode === 'balanced' && !POCKET_BALANCED_EMOTIONS.includes(resolved)) {
     resolved = POCKET_BALANCED_EMOTION_MAP[resolved] || fallbacks[resolved] || 'neutral';
   }
-  if (POCKET_GATED_EMOTIONS.includes(resolved)) {
+  if (mode !== 'expressive' && POCKET_GATED_EMOTIONS.includes(resolved)) {
     resolved = fallbacks[resolved] || 'neutral';
   }
   if (!available.includes(resolved)) {
@@ -1217,7 +1217,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v47', document.baseURI).href;
+        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v49', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);

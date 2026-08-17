@@ -4,7 +4,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v11';
+} from './tts_pronunciation_core.js?v=pron-v13';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -134,12 +134,12 @@ const BASE_TEMP = getPocketTuningPreset(DEFAULT_POCKET_TEMPERATURE_PRESET).tempe
 // expressive mode is on. Negative = snap off sooner (high-energy emotions);
 // positive = let it settle (quiet/fearful emotions). Applied in pushChunk.
 const EMOTION_PROSODY = {
-  neutral:  { temp: 0.60, noiseClamp: null, eosBonus:  0 },
-  joy:      { temp: 0.62, noiseClamp: null, eosBonus: -1 },
-  anger:    { temp: 0.63, noiseClamp: null, eosBonus: -1 },
-  sadness:  { temp: 0.58, noiseClamp: null, eosBonus:  1 },
-  fear:     { temp: 0.61, noiseClamp: null, eosBonus:  1 },
-  surprise: { temp: 0.62, noiseClamp: null, eosBonus: -1 },
+  neutral:  { temp: 0.70, noiseClamp: null, eosBonus:  0 },
+  sadness:  { temp: 0.72, noiseClamp: null, eosBonus:  1 },
+  fear:     { temp: 0.80, noiseClamp: null, eosBonus:  1 },
+  joy:      { temp: 0.84, noiseClamp: null, eosBonus: -1 },
+  surprise: { temp: 0.86, noiseClamp: null, eosBonus: -1 },
+  anger:    { temp: 0.88, noiseClamp: null, eosBonus: -1 },
 };
 
 let currentSeed = 42;

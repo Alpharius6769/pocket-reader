@@ -37,7 +37,7 @@ const baseFallbacks = {
   shout: 'surprised'
 };
 
-window.POCKET_DEFAULT_VOICE = 'rayne';
+window.POCKET_DEFAULT_VOICE = 'donald_malone';
 window.POCKET_DEFAULT_EMOTION = 'neutral';
 window.POCKET_VOICE_PACK = {
   id: 'voice-zero-emotional-v1',

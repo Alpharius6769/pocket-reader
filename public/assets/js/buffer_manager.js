@@ -12,7 +12,7 @@ const HARD_CAP_WORKERS   = window.HARD_CAP_WORKERS;
 const MANUAL_CAP_WORKERS = window.MANUAL_CAP_WORKERS;
 const DEFAULT_MAX_WORKERS = window.DEFAULT_MAX_WORKERS;
 const POCKET_VOICES = window.POCKET_VOICES || [];
-const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'rayne';
+const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'donald_malone';
 const _resolveActiveEngine = window._resolveActiveEngine;
 
 const FAST_NARRATION_PARAM = 'tts_fast';
