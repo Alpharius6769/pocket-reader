@@ -875,23 +875,43 @@ input[type="radio"] {
   grid-template-columns: minmax(210px, 250px) 1fr;
   gap: 18px;
   align-items: start;
+  min-height: 0;
 }
 .hmofa-facet-rail {
   position: sticky;
   top: 12px;
-  max-height: calc(100vh - 140px);
+  max-height: min(calc(100vh - 80px), calc(100dvh - 80px));
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-right: 4px;
+  padding-right: 6px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(157, 78, 221, 0.45) transparent;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+.hmofa-facet-rail::-webkit-scrollbar {
+  width: 6px;
+}
+.hmofa-facet-rail::-webkit-scrollbar-track {
+  background: transparent;
+}
+.hmofa-facet-rail::-webkit-scrollbar-thumb {
+  background: rgba(157, 78, 221, 0.35);
+  border-radius: 6px;
+}
+.hmofa-facet-rail::-webkit-scrollbar-thumb:hover {
+  background: rgba(157, 78, 221, 0.65);
 }
 .hmofa-facet-group-collapsible {
   width: 100%;
   border: 1px solid var(--border-color);
   border-radius: 10px;
   background: var(--panel-bg, var(--bg-mid));
-  overflow: hidden;
   box-sizing: border-box;
 }
 .hmofa-facet-group-summary {
@@ -948,12 +968,14 @@ input[type="radio"] {
   gap: 8px;
   padding: 10px;
   box-sizing: border-box;
+  min-height: 0;
 }
 .hmofa-facet {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--bg-surface, var(--bg-mid));
   overflow: hidden;
+  box-sizing: border-box;
 }
 .hmofa-facet > summary {
   padding: 10px 14px;
@@ -979,8 +1001,35 @@ input[type="radio"] {
   flex-direction: column;
   gap: 2px;
   padding: 4px 10px 10px;
-  max-height: 280px;
+  max-height: 240px;
   overflow-y: auto;
+  overscroll-behavior: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+.hmofa-facet-body::-webkit-scrollbar {
+  width: 5px;
+}
+.hmofa-facet-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+.hmofa-facet-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+#hmofa-refresh-catalog.loading svg {
+  animation: hmofa-spin 0.85s linear infinite;
+}
+#hmofa-refresh-catalog:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+@keyframes hmofa-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .hmofa-facet-option {
   display: flex;

@@ -236,8 +236,12 @@ async function readCachedCatalog() {
   }
 }
 
-async function fetchRemoteCatalog() {
-  const response = await fetch(CATALOG_URL, { credentials: 'omit' });
+async function fetchRemoteCatalog({ bypassHttpCache = false } = {}) {
+  const url = bypassHttpCache ? `${CATALOG_URL}?t=${Date.now()}` : CATALOG_URL;
+  const response = await fetch(url, {
+    credentials: 'omit',
+    cache: bypassHttpCache ? 'reload' : 'default',
+  });
   if (!response.ok) throw new Error(`Catalog fetch failed: ${response.status}`);
   const buffer = await response.arrayBuffer();
   const parsed = await parseCatalogBuffer(buffer);
@@ -257,7 +261,7 @@ async function fetchRemoteCatalog() {
 
 async function remoteCatalogSha() {
   try {
-    const response = await fetch(CONFIG_URL, { cache: 'no-store', credentials: 'omit' });
+    const response = await fetch(`${CONFIG_URL}?t=${Date.now()}`, { cache: 'no-store', credentials: 'omit' });
     if (!response.ok) return '';
     const config = await response.json();
     return typeof config?.catalogSha256 === 'string' ? config.catalogSha256 : '';
@@ -337,16 +341,39 @@ export async function ensureHmofaMasterlistLoaded() {
 window.ensureHmofaMasterlistLoaded = ensureHmofaMasterlistLoaded;
 
 export async function refreshHmofaCatalog() {
+  const button = $('hmofa-refresh-catalog');
+  const span = button?.querySelector('span');
+  const originalText = span?.textContent || 'Refresh Catalog';
+  if (button) {
+    button.disabled = true;
+    button.classList.add('loading');
+    if (span) span.textContent = 'Refreshing...';
+  }
   setStatus('Refreshing the catalog...');
   try {
     const cache = await openCatalogCache();
     if (cache) await cache.delete(CATALOG_URL);
     applySyncedPreferences();
-    if (adoptCatalog(await fetchRemoteCatalog())) renderAll();
-    loadCommunity();
+    const fresh = await fetchRemoteCatalog({ bypassHttpCache: true });
+    if (adoptCatalog(fresh)) renderAll();
+    loadCommunity(true);
+    const count = state.records.length.toLocaleString('en-US');
+    setStatus(`Catalog updated (${count} stories).`);
+    if (window.showNotice) {
+      window.showNotice(`Catalog refreshed (${count} stories).`, 'info');
+    }
   } catch (error) {
     window.Diagnostics?.log('WARN', 'HMOFA catalog refresh failed', { error: String(error) });
     setStatus('Could not refresh the catalog just now.', true);
+    if (window.showNotice) {
+      window.showNotice('Could not refresh the catalog. Check your connection.', 'error');
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove('loading');
+      if (span) span.textContent = originalText;
+    }
   }
 }
 window.refreshHmofaCatalog = refreshHmofaCatalog;
@@ -362,7 +389,8 @@ function setStatus(message, isError = false) {
 // without community data, so the grid must never sit behind this request. The
 // ratings and trending order fill in when they arrive.
 let communityLoading = null;
-function loadCommunity() {
+function loadCommunity(force = false) {
+  if (force) communityLoading = null;
   if (communityLoading) return communityLoading;
   state.communityState = 'loading';
   communityLoading = fetchCommunitySnapshot()
@@ -378,6 +406,7 @@ function loadCommunity() {
     .then(() => {
       cachedFiltered = null;
       featuredCache = { key: null, ids: [] };
+      trendingCache = { key: null, ids: [] };
       if (state.loaded) renderAll();
     })
     .finally(() => {
@@ -395,6 +424,7 @@ document.addEventListener('pr:profile-synced', () => {
 // ── Filtering ───────────────────────────────────────────────────────────────
 
 let featuredCache = { key: null, ids: [] };
+let trendingCache = { key: null, ids: [] };
 
 // Featured is a monthly rotation seeded by community activity, so it only needs
 // recomputing when the month or those numbers move -- not on every keystroke.
@@ -417,13 +447,85 @@ function monthlyFeaturedIds() {
   return featuredCache.ids;
 }
 
+// Weekly Trending ranks true community click-trending stories first (#1, #2, etc.),
+// and backfills with active, recently updated, and highly rated stories so readers
+// always get a full, lively catalog view of at least 20 stories.
+function weeklyTrendingIds() {
+  const trending = Array.isArray(state.communityTrending) ? state.communityTrending : [];
+  const key = [
+    state.records.length,
+    trending.join('\0'),
+    JSON.stringify(state.communityRatings),
+    state.pageSize,
+  ].join(':');
+  if (trendingCache.key === key) return trendingCache.ids;
+
+  const targetCount = Math.max(20, state.pageSize || 20);
+  const result = [];
+  const seen = new Set();
+
+  // 1. Put actual community click-trending IDs at the top
+  for (const id of trending) {
+    if (id && !seen.has(id)) {
+      if (state.records.some((r) => r.id === id)) {
+        seen.add(id);
+        result.push(id);
+      }
+    }
+  }
+
+  if (result.length >= targetCount) {
+    trendingCache = { key, ids: result };
+    return result;
+  }
+
+  // 2. Backfill with active, recently updated, and highly rated stories
+  const candidates = state.records.filter((r) => !seen.has(r.id));
+  const now = Date.now();
+  const DAY_MS = 86400000;
+
+  candidates.sort((a, b) => {
+    const ratingA = state.communityRatings[a.id] ?? {};
+    const ratingB = state.communityRatings[b.id] ?? {};
+    const avgA = Number(ratingA.average) || 0;
+    const countA = Number(ratingA.total) || 0;
+    const avgB = Number(ratingB.average) || 0;
+    const countB = Number(ratingB.total) || 0;
+
+    const dateA = a.updated ? new Date(a.updated).getTime() : 0;
+    const dateB = b.updated ? new Date(b.updated).getTime() : 0;
+    const daysAgoA = Math.max(0, (now - dateA) / DAY_MS);
+    const daysAgoB = Math.max(0, (now - dateB) / DAY_MS);
+
+    // Boost stories updated within the last 30 days
+    const recencyScoreA = Math.max(0, 10 - Math.min(daysAgoA / 3, 10));
+    const recencyScoreB = Math.max(0, 10 - Math.min(daysAgoB / 3, 10));
+
+    const scoreA = (avgA * 2.5) + Math.min(countA, 15) + recencyScoreA + Math.min((a.wordCount || 0) / 40000, 3);
+    const scoreB = (avgB * 2.5) + Math.min(countB, 15) + recencyScoreB + Math.min((b.wordCount || 0) / 40000, 3);
+
+    return scoreB - scoreA || (dateB - dateA) || a.title.localeCompare(b.title);
+  });
+
+  for (const candidate of candidates) {
+    if (!seen.has(candidate.id)) {
+      seen.add(candidate.id);
+      result.push(candidate.id);
+      if (result.length >= targetCount) break;
+    }
+  }
+
+  trendingCache = { key, ids: result };
+  return result;
+}
+
 function filteredRecords() {
   if (cachedFiltered) return cachedFiltered;
   const matched = filterCatalog(state.records, state, state.preferences, state.communityRatings);
   if (state.view === 'trending' || state.view === 'featured') {
     // Both tabs are ranked orderings rather than filters, so the catalog sort
     // does not apply: narrow to the ranked ids and keep that order.
-    const ordered = state.view === 'trending' ? state.communityTrending : monthlyFeaturedIds();
+    const ordered = state.view === 'trending' ? weeklyTrendingIds() : monthlyFeaturedIds();
     const ranks = new Map(ordered.map((id, index) => [id, index]));
     cachedFiltered = matched
       .filter((record) => ranks.has(record.id))

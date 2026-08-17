@@ -223,7 +223,7 @@ test('the native masterlist keeps catalog freshness, URLs, prefs and lists hones
   assert.match(list, /pr:profile-synced/);
   assert.match(list, /function applySyncedPreferences/);
   assert.match(list, /if \(state\.loaded\) \{[\s\S]{0,160}applySyncedPreferences\(\)/);
-  assert.match(list, /refreshHmofaCatalog[\s\S]{0,500}loadCommunity\(\)/);
+  assert.match(list, /refreshHmofaCatalog[\s\S]{0,600}loadCommunity/);
   assert.match(list, /communityTrending\.join\('\\0'\)[\s\S]{0,80}JSON\.stringify\(state\.communityRatings\)/);
   const rateStory = list.slice(list.indexOf('async function rateStory'), list.indexOf('function ratingRow'));
   assert.match(rateStory, /featuredCache = \{ key: null, ids: \[\] \}/,
@@ -239,6 +239,28 @@ test('the native masterlist keeps catalog freshness, URLs, prefs and lists hones
   assert.match(prefs, /Saved lists keep a search, its filters and its sort together/);
 
   assert.match(ui, /return window\.loadStory\(url\)/);
+});
+
+test('HMOFA masterlist supports cache-bypass refresh, full weekly trending backfill, and scrollable filters', async () => {
+  const list = await read('public/assets/js/hmofa_masterlist.js');
+  const css = await read('public/assets/css/theme.css');
+
+  // Refresh Catalogue bypasses HTTP cache and shows active UX
+  assert.match(list, /fetchRemoteCatalog\(\{\s*bypassHttpCache:\s*true\s*\}\)/);
+  assert.match(list, /button\.classList\.add\('loading'\)/);
+  assert.match(list, /window\.showNotice/);
+  assert.match(css, /#hmofa-refresh-catalog\.loading svg/);
+
+  // Weekly Trending implements intelligent backfill to guarantee at least 20 stories
+  assert.match(list, /function weeklyTrendingIds/);
+  assert.match(list, /state\.view === 'trending' \? weeklyTrendingIds\(\) : monthlyFeaturedIds\(\)/);
+  assert.match(list, /trendingCache = \{ key: null, ids: \[\] \}/);
+
+  // Filter sidebar has scroll chaining and custom scrollbars
+  assert.match(css, /\.hmofa-facet-rail\s*\{[^}]*max-height:\s*min\(calc\(100vh - 80px\),\s*calc\(100dvh - 80px\)\);/);
+  assert.match(css, /\.hmofa-facet-rail\s*\{[^}]*overscroll-behavior:\s*contain;/);
+  assert.match(css, /\.hmofa-facet-rail\s*\{[^}]*touch-action:\s*pan-y;/);
+  assert.match(css, /\.hmofa-facet-body\s*\{[^}]*overscroll-behavior:\s*auto;/);
 });
 
 test('the top bar clears the iOS notch and status bar safe areas while mobile navigation sits flush', async () => {
