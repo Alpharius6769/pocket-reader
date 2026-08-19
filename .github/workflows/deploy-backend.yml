@@ -123,7 +123,17 @@ jobs:
         run: |
           API="https://huggingface.co/api/spaces/${HF_SPACE}"
           for i in $(seq 1 40); do
-            body=$(curl -sf "$API" || true)
+            # The Space is PRIVATE, so this metadata call needs the token exactly
+            # like the health check below does. Without it the API 401s, -sf
+            # swallows it, body is empty, and jq on empty input yields "" rather
+            # than the // fallback -- so the loop logged "stage= sha=" forty times
+            # and timed out after 13 minutes on deploys that had actually landed.
+            body=$(curl -sf -H "Authorization: Bearer ${HF_TOKEN}" "$API" || true)
+            if [ -z "$body" ]; then
+              echo "attempt ${i}: no metadata from ${API} (token rejected, or the Space is gone)"
+              sleep 20
+              continue
+            fi
             stage=$(echo "$body" | jq -r '.runtime.stage // "UNKNOWN"')
             sha=$(echo   "$body" | jq -r '.sha // ""')
 
