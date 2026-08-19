@@ -3,12 +3,21 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v174';
+var CACHE_NAME = 'pocket-reader-core-v175';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
 // re-downloadable blob. activate() must preserve it like the other data caches.
 var HMOFA_CATALOG_CACHE = 'hmofa-catalog-v1';
+
+// Production is served from a SUBPATH (alpharius6769.github.io/pocket-reader/),
+// so a root-absolute '/' is a different URL from the shell this worker actually
+// precaches. CORE_ASSETS stores './', which resolves against this script's own
+// location; anything that later wants to look that entry up, open it, or hang a
+// query off it has to resolve the same way or it silently addresses the account
+// root instead. Every one of these used to be a literal '/'.
+var SHELL_URL = new URL('./', self.location.href).href;
+var NOTIFICATION_ICON = new URL('assets/img/reader%20192.png', self.location.href).href;
 
 function fetchWithTimeout(request, timeoutMs) {
     if (typeof AbortController === 'undefined') return fetch(request);
@@ -91,8 +100,8 @@ var OPTIONAL_ASSETS = [
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
     'assets/js/buffer_manager.js?v=buffer-v57',
-    'assets/js/audio_core.js?v=audio-v76',
-    'assets/js/pocket_worker.js?v=pocket-worker-v50',
+    'assets/js/audio_core.js?v=audio-v77',
+    'assets/js/pocket_worker.js?v=pocket-worker-v51',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
 ];
 
@@ -108,19 +117,19 @@ var CORE_ASSETS = [
     'assets/js/experience_coordinator.js?v=experience-v5',
     'assets/js/virtue_controller.js?v=virtue-v14',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v114',
+    'assets/js/ui_controller.js?v=ui-v115',
     'assets/js/supabase_bridge.js?v=supabase-v7',
     'assets/js/profile_merge.js?v=merge-v6',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v9',
     'assets/js/device_benchmark_worker.js?v=device-bench-v1',
-    'assets/js/settings_manager.js?v=settings-v74',
+    'assets/js/settings_manager.js?v=settings-v75',
     'assets/js/library_manager.js?v=library-v23',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v5',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v1',
     'assets/js/hmofa_community.js?v=hmofa-community-v1',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v2',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v29',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v30',
     'assets/js/storage_core.js?v=storage-v14',
     'assets/js/sync_core.js?v=sync-v10',
     'assets/js/cinematic_ui.js?v=cinematic-v7',
@@ -193,8 +202,8 @@ self.addEventListener('push', function (event) {
     var title = payload.title || 'Pocket Reader';
     var options = {
         body: payload.body || 'A subscribed story has an update.',
-        icon: '/assets/img/reader%20192.png',
-        badge: '/assets/img/reader%20192.png',
+        icon: NOTIFICATION_ICON,
+        badge: NOTIFICATION_ICON,
         data: {
             storyUrl: payload.storyUrl || payload.url || '',
             type: payload.type || ''
@@ -250,7 +259,7 @@ self.addEventListener('pushsubscriptionchange', function (event) {
 self.addEventListener('notificationclick', function (event) {
     event.notification.close();
     var storyUrl = event.notification.data && event.notification.data.storyUrl || '';
-    var target = '/';
+    var target = SHELL_URL;
     if (storyUrl) target += '?story_update=' + encodeURIComponent(storyUrl);
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
@@ -309,7 +318,7 @@ self.addEventListener('fetch', function (event) {
         event.respondWith(
             fetchWithTimeout(event.request, 1800)
                 .catch(function () {
-                    return caches.match('/').then(function (fallbackResponse) {
+                    return caches.match(SHELL_URL).then(function (fallbackResponse) {
                         return fallbackResponse || new Response('Offline', { status: 503 });
                     });
                 })

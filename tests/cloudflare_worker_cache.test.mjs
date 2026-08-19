@@ -77,6 +77,128 @@ test('range requests bypass whole-object edge caching', async () => {
   }
 });
 
+function asRequest(input, init) {
+  return input instanceof Request ? input : new Request(input, init);
+}
+
+test('catalog-api proxy re-origins community-snapshot and blocks curator routes', async () => {
+  const originalFetch = globalThis.fetch;
+  let upstream;
+  globalThis.fetch = async (input, init) => {
+    upstream = asRequest(input, init);
+    return new Response(JSON.stringify({ ratings: {}, trending: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  try {
+    const response = await worker.fetch(
+      new Request('https://pocket-reader-proxy.example/catalog-api/community-snapshot', {
+        headers: { Origin: ORIGIN },
+      }),
+      {},
+      { waitUntil() {} },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(upstream.url, 'https://gupifxfvktfejqhfenml.supabase.co/functions/v1/catalog-api/community-snapshot');
+    assert.equal(upstream.headers.get('Origin'), 'https://alpharius6769.github.io');
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+
+    const denied = await worker.fetch(
+      new Request('https://pocket-reader-proxy.example/catalog-api/recommendations', {
+        method: 'POST',
+        headers: { Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: '{}',
+      }),
+      {},
+      { waitUntil() {} },
+    );
+    assert.equal(denied.status, 404);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+// The route attaches a trusted Origin on the caller's behalf, so leaving it
+// ungated would let anyone move the shared rating and trending aggregates while
+// hiding behind a Cloudflare address. It has to refuse the same callers /api/
+// and the ?url= proxy refuse.
+test('catalog-api proxy refuses callers with no Origin and no proxy key', async () => {
+  const originalFetch = globalThis.fetch;
+  let reachedUpstream = false;
+  globalThis.fetch = async () => {
+    reachedUpstream = true;
+    return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    for (const request of [
+      new Request('https://pocket-reader-proxy.example/catalog-api/community-snapshot'),
+      new Request('https://pocket-reader-proxy.example/catalog-api/rate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storyId: 'abc', score: 5, clientToken: 'forged' }),
+      }),
+    ]) {
+      const response = await worker.fetch(request, {}, { waitUntil() {} });
+      assert.equal(response.status, 403, `${request.method} ${request.url} must be refused`);
+    }
+    assert.equal(reachedUpstream, false, 'an unauthenticated caller must never reach Supabase');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('catalog-api proxy accepts a non-browser caller holding the proxy key', async () => {
+  const originalFetch = globalThis.fetch;
+  let upstream;
+  globalThis.fetch = async (input, init) => {
+    upstream = asRequest(input, init);
+    return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const response = await worker.fetch(
+      new Request('https://pocket-reader-proxy.example/catalog-api/community-snapshot', {
+        headers: { 'X-Pocket-Proxy-Key': 'shared-token' },
+      }),
+      { PROXY_AUTH_TOKEN: 'shared-token' },
+      { waitUntil() {} },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(upstream.headers.get('Origin'), 'https://alpharius6769.github.io');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('catalog-api proxy forwards rate posts with storyId bodies', async () => {
+  const originalFetch = globalThis.fetch;
+  let upstream;
+  globalThis.fetch = async (input, init) => {
+    upstream = asRequest(input, init);
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  try {
+    const response = await worker.fetch(
+      new Request('https://pocket-reader-proxy.example/catalog-api/rate', {
+        method: 'POST',
+        headers: { Origin: ORIGIN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storyId: 'abc123', score: 5, clientToken: 'dev-token-1' }),
+      }),
+      {},
+      { waitUntil() {} },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(upstream.method, 'POST');
+    assert.equal(upstream.headers.get('Origin'), 'https://alpharius6769.github.io');
+    assert.match(upstream.url, /\/catalog-api\/rate$/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('generic proxy rejects unauthenticated non-browser callers', async () => {
   const request = new Request(
     'https://pocket-reader-proxy.example/?url='

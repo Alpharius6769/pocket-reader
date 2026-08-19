@@ -14,6 +14,10 @@ ALLOWED_ORIGINS = "https://alpharius6769.github.io,https://pocket-reader-f2y.pag
 # arbitrary localhost origins.
 ALLOW_LOCALHOST_ORIGINS = "0"
 ALLOWED_PROXY_HOSTS = "archiveofourown.org,fichub.net"
+# /catalog-api/* re-origins Anthronomicon community-snapshot, rate, click, and
+# story-metadata to the Pages origin. Curator/Turnstile routes are not proxied.
+# It is gated on an allowed browser Origin or X-Pocket-Proxy-Key, so it does not
+# widen the origin allowlist above; the native build cannot use it yet.
 CHAPTER_SYNC_URL = "https://alpharius6769-pocket-reader.hf.space/api/sync/chapters"
 
 # IMPORTANT: The following secrets must be set via `wrangler secret put <NAME>`:

@@ -29,9 +29,12 @@ test('the Cloudflare Worker /api proxy refuses callers with neither an origin no
   assert.ok(tokenIndex > gateIndex,
     'the auth gate must run before the HF token is attached to the upstream request');
 
-  // backendAuthorized is resolved once and shared with the generic ?url= proxy.
+  // backendAuthorized is resolved once and shared by every gated route: the
+  // /api/ backend proxy, the generic ?url= proxy, and the /catalog-api/ relay.
+  // All three either attach a credential or borrow a trusted identity upstream,
+  // so all three must consult the same gate.
   assert.equal(source.match(/const backendAuthorized = Boolean\(/g)?.length, 1);
-  assert.equal(source.match(/!allowedOrigin && !backendAuthorized/g)?.length, 2);
+  assert.equal(source.match(/!allowedOrigin && !backendAuthorized/g)?.length, 3);
 });
 
 test('inline onclick handlers never interpolate an unescaped single quote', async () => {

@@ -143,23 +143,23 @@ const EMOTION_PROSODY = {
 };
 
 // ── PRNG & Gaussian Latent Generator (Mulberry32 + Box-Muller) ───────────────
-// Uses a 32-bit MurmurHash3 avalanche mixer for string seed initialization and
-// Mulberry32 for uniform pseudorandom generation. Paired Box-Muller generation
-// generates true uncorrelated isotropic Gaussian samples N(0, std^2) across all
-// 32 latent dimensions, eliminating 2D hyperplane lattice artifacts that cause
-// voice timbre and pitch shifts between lines.
-let currentSeed = 42;
+// Hashes the string seed with FNV-1a plus a MurmurHash3 finalizer (the avalanche
+// step is murmur's; the accumulation loop is not), then runs Mulberry32 for
+// uniform pseudorandom generation. Paired Box-Muller generation generates true
+// uncorrelated isotropic Gaussian samples N(0, std^2) across all 32 latent
+// dimensions, eliminating 2D hyperplane lattice artifacts that cause voice
+// timbre and pitch shifts between lines.
 let _prngState = 42;
 let _hasSpareGaussian = false;
 let _spareGaussian = 0;
 
-function _murmurHash3(str) {
-  let h = 0x811c9dc5;
+function _hashSeedString(str) {
+  let h = 0x811c9dc5;                                  // FNV-1a offset basis
   for (let i = 0; i < str.length; i++) {
-    h = Math.imul(h ^ str.charCodeAt(i), 0x01000193);
+    h = Math.imul(h ^ str.charCodeAt(i), 0x01000193);  // FNV-1a prime
     h = (h ^ (h >>> 13)) >>> 0;
   }
-  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);           // MurmurHash3 finalizer
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
   return (h ^ (h >>> 16)) >>> 0;
 }
@@ -172,17 +172,15 @@ function seedRandom(seedInput) {
     if (s === 0) s = 42;
     _prngState = s;
   } else {
-    const s = _murmurHash3(String(seedInput || '42'));
+    const s = _hashSeedString(String(seedInput || '42'));
     _prngState = s === 0 ? 42 : s;
   }
-  currentSeed = _prngState;
 }
 
 function seededRandom() {
   let z = (_prngState = (_prngState + 0x6d2b79f5) >>> 0);
   z = Math.imul(z ^ (z >>> 15), z | 1);
   z ^= z + Math.imul(z ^ (z >>> 7), z | 61);
-  currentSeed = z;
   return ((z ^ (z >>> 14)) >>> 0) / 4294967296;
 }
 

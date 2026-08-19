@@ -268,6 +268,22 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _evict_idle_rate_keys(table: dict, window_seconds: int, now: float) -> None:
+    """Drop callers whose window has fully expired.
+
+    These tables are keyed by client IP and are never otherwise cleaned up, so
+    on a long-lived Space they grow one entry per distinct visitor for the life
+    of the process. Only worth walking once the table is large enough that the
+    scan cost is justified.
+    """
+    if len(table) <= 10_000:
+        return
+    for key in list(table):
+        stamps = table[key]
+        if not stamps or now - stamps[-1] >= window_seconds:
+            table.pop(key, None)
+
+
 def _check_subscribe_rate(ip: str) -> bool:
     now = _time.time()
     window = _subscribe_rate.setdefault(ip, [])
@@ -275,6 +291,7 @@ def _check_subscribe_rate(ip: str) -> bool:
     if len(window) >= _SUBSCRIBE_RATE_MAX:
         return False
     window.append(now)
+    _evict_idle_rate_keys(_subscribe_rate, _SUBSCRIBE_RATE_WINDOW, now)
     return True
 
 
@@ -285,10 +302,7 @@ def _check_scrape_rate(ip: str) -> bool:
     if len(window) >= _SCRAPE_RATE_MAX:
         return False
     window.append(now)
-    if len(_scrape_rate) > 10_000:
-        for key in list(_scrape_rate):
-            if not _scrape_rate[key] or now - _scrape_rate[key][-1] >= _SCRAPE_RATE_WINDOW:
-                _scrape_rate.pop(key, None)
+    _evict_idle_rate_keys(_scrape_rate, _SCRAPE_RATE_WINDOW, now)
     return True
 
 
@@ -1199,12 +1213,16 @@ def list_curated_library():
 
 
 @app.get("/api/library/curated/{filename}/download")
-def download_curated_file(filename: str):
+def download_curated_file(filename: str, request: Request):
     if _curated_is_withdrawn(filename=filename):
         raise HTTPException(status_code=404)
     path = _safe_curated_pdf_path(filename)
     if not path.exists():
         raise HTTPException(status_code=404)
+    # Metered like its sibling fetch_curated_story: these are local files rather
+    # than upstream fetches, but serving whole PDFs unthrottled is the one
+    # curated route that can burn bandwidth without limit.
+    _require_scrape_budget(request)
     return FileResponse(path)
 
 

@@ -269,6 +269,106 @@ export default {
       }
     }
 
+    // Anthronomicon catalog-api is origin-locked to GitHub Pages. Pocket Reader
+    // Android (and any non-Pages origin) cannot satisfy that check, so this
+    // Worker re-originates the four community routes with the published Pages
+    // origin. Curator/Turnstile routes are not proxied.
+    if (url.pathname === "/catalog-api" || url.pathname.startsWith("/catalog-api/")) {
+      const route = url.pathname.replace(/^\/catalog-api\/?/, "");
+      const allowedGet = new Set(["community-snapshot", "story-metadata"]);
+      const allowedPost = new Set(["rate", "click"]);
+      const corsHeaders = {
+        "Access-Control-Allow-Origin": corsOrigin,
+        "Cross-Origin-Resource-Policy": "cross-origin",
+        "Vary": "Origin",
+        "Content-Type": "application/json; charset=utf-8",
+      };
+      // Gated exactly like /api/ and the ?url= proxy. This route's whole job is
+      // to ATTACH a trusted Origin, so an ungated version is strictly worse than
+      // forging the header against Supabase directly: every request would also
+      // arrive from a Cloudflare address, collapsing the caller identity any
+      // upstream per-IP limit depends on. rate and click move a shared aggregate,
+      // and clientToken is caller-supplied, so per-device dedupe upstream is not
+      // a substitute for authenticating the caller here.
+      //
+      // TODO(android): the Capacitor build sends Origin: https://localhost and
+      // holds no key, so it cannot use this route yet — allowlisting that origin
+      // would not help, since anything that is not a browser can send it. Giving
+      // the app a real credential needs a build-time secret injection step that
+      // public/ does not have today (public/ ships verbatim to GitHub Pages, so
+      // a key committed there would be published). Until then the web build
+      // talks to Supabase directly, which its origin already satisfies.
+      if (!allowedOrigin && !backendAuthorized) {
+        return new Response(
+          JSON.stringify({ error: "Proxy authentication is required." }),
+          { status: 403, headers: corsHeaders },
+        );
+      }
+      if (request.method === "GET" || request.method === "HEAD") {
+        if (!allowedGet.has(route)) {
+          return new Response(JSON.stringify({ error: "Route not found." }), {
+            status: 404,
+            headers: corsHeaders,
+          });
+        }
+      } else if (request.method === "POST") {
+        if (!allowedPost.has(route)) {
+          return new Response(JSON.stringify({ error: "Route not found." }), {
+            status: 404,
+            headers: corsHeaders,
+          });
+        }
+      } else {
+        return new Response(JSON.stringify({ error: "Method not allowed." }), {
+          status: 405,
+          headers: { ...corsHeaders, Allow: "GET, HEAD, POST, OPTIONS" },
+        });
+      }
+      const catalogBase = "https://gupifxfvktfejqhfenml.supabase.co/functions/v1/catalog-api";
+      const target = new URL(`${catalogBase}/${route}${url.search}`);
+      const upstreamHeaders = new Headers();
+      upstreamHeaders.set("Accept", "application/json");
+      upstreamHeaders.set("Origin", "https://alpharius6769.github.io");
+      upstreamHeaders.set("Referer", "https://alpharius6769.github.io/hmofa-story-index/");
+      upstreamHeaders.set(
+        "User-Agent",
+        request.headers.get("User-Agent") || "PocketReader-Proxy/1.0",
+      );
+      if (request.method === "POST") {
+        upstreamHeaders.set(
+          "Content-Type",
+          request.headers.get("Content-Type") || "application/json",
+        );
+      }
+      try {
+        const upstream = await fetch(target, {
+          method: request.method,
+          headers: upstreamHeaders,
+          body: request.method === "POST" ? request.body : undefined,
+          redirect: "manual",
+          duplex: request.method === "POST" ? "half" : undefined,
+          signal: AbortSignal.timeout(15000),
+        });
+        if (isRedirectStatus(upstream.status)) {
+          await upstream.body?.cancel?.();
+          return new Response(JSON.stringify({ error: "Catalog proxy redirect rejected." }), {
+            status: 502,
+            headers: corsHeaders,
+          });
+        }
+        const proxied = new Response(upstream.body, upstream);
+        proxied.headers.set("Access-Control-Allow-Origin", corsOrigin);
+        proxied.headers.set("Vary", "Origin");
+        proxied.headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+        return proxied;
+      } catch (err) {
+        return new Response(JSON.stringify({ error: `Catalog proxy error: ${err.message}` }), {
+          status: 502,
+          headers: corsHeaders,
+        });
+      }
+    }
+
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Only GET and HEAD are supported for this route.", {
         status: 405,

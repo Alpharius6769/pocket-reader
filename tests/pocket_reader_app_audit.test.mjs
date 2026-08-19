@@ -125,6 +125,7 @@ test('expensive backend ingest routes share the scrape budget (M9)', async () =>
     '@app.get("/api/fetch-epub")',
     '@app.get("/api/fichub-proxy")',
     '@app.get("/api/library/curated/{filename}")',
+    '@app.get("/api/library/curated/{filename}/download")',
   ]) {
     const start = app.indexOf(marker);
     assert.ok(start > 0, `${marker} missing`);
@@ -141,6 +142,25 @@ test('push enablement registers the versioned service worker (M10)', async () =>
   const push = settings.slice(settings.indexOf('let swReg = await navigator.serviceWorker.getRegistration()'));
   assert.match(push, /!narrationRegistrationIsCurrent\(swReg\)/);
   assert.match(push, /navigator\.serviceWorker\.register\(swUrl\)/);
+});
+
+// Production is a SUBPATH (alpharius6769.github.io/pocket-reader/), so a
+// root-absolute '/' addresses the account root, not the app. The precached shell
+// is './'; looking it up as '/' missed every time and the offline launch fell
+// through to the 503 instead of the cached shell — silently, because the miss is
+// swallowed by a `||` fallback.
+test('service worker addresses the shell relative to its own scope', async () => {
+  const sw = await read('public/sw.js');
+  assert.match(sw, /var SHELL_URL = new URL\('\.\/', self\.location\.href\)\.href;/);
+  assert.match(sw, /caches\.match\(SHELL_URL\)/, 'offline fallback must look up the precached shell');
+  assert.match(sw, /var target = SHELL_URL;/, 'notification clicks must open the app, not the origin root');
+  assert.match(
+    sw,
+    /var NOTIFICATION_ICON = new URL\('assets\/img\/reader%20192\.png', self\.location\.href\)\.href;/,
+  );
+  assert.doesNotMatch(sw, /caches\.match\('\/'\)/);
+  assert.doesNotMatch(sw, /icon: '\/assets\//);
+  assert.doesNotMatch(sw, /badge: '\/assets\//);
 });
 
 test('reader and library covers only accept http(s) URLs (L1)', async () => {

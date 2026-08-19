@@ -221,7 +221,8 @@ test('pocket worker implements Mulberry32 PRNG with paired Box-Muller Gaussian s
   assert.match(worker, /function seededGaussian/);
   assert.match(worker, /Math\.imul\(z \^ \(z >>> 15\), z \| 1\)/, 'worker must use Mulberry32 PRNG');
   assert.match(worker, /_spareGaussian = mag \* Math\.sin\(angle\)/, 'worker must use paired Box-Muller generation');
-  assert.match(worker, /_murmurHash3/, 'worker must use 32-bit avalanche hash for seeds');
+  assert.match(worker, /_hashSeedString/, 'worker must use 32-bit avalanche hash for seeds');
+  assert.match(worker, /0x85ebca6b/, 'seed hash must keep the MurmurHash3 finalizer avalanche');
 });
 
 test('pocket worker and audio core support structured voice seed anchoring', async () => {
