@@ -3,8 +3,19 @@
 --
 -- Design notes:
 --  * profile_data is jsonb, mirroring the schema-v3 object the client already
---    sends. The merge itself runs in the sync-profile Edge Function, which is a
---    direct port of Server_code.py's per-field-clock merge.
+--    sends.
+--
+--    CORRECTION (verified 2026-08-19): the sync-profile Edge Function this file
+--    originally credited with the merge was never built --
+--    /functions/v1/sync-profile returns 404 NOT_FOUND, and no client module
+--    calls it. The per-field-clock merge ported from Server_code.py runs
+--    CLIENT-SIDE in public/assets/js/profile_merge.js; supabase_bridge.js then
+--    writes through PostgREST and the commit_user_profile CAS below. That CAS
+--    is therefore the only thing standing between two devices and a lost
+--    update -- it is not a second line of defence behind a server-side merge.
+--    The table comment further down still names the Edge Function; it is
+--    applied schema metadata, so it is left alone rather than re-run for a
+--    doc fix.
 --  * revision is the concurrency token. Writes go through commit_user_profile(),
 --    a compare-and-swap, so two devices syncing at once cannot silently clobber
 --    one another -- the loser retries against fresh data. This replaces Anvil's
