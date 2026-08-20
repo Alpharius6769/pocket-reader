@@ -140,7 +140,7 @@ try {
   }
   const result = await page.evaluate(async () => {
     const messages = [];
-    const worker = new Worker('/assets/js/pocket_worker.js?v=pocket-worker-v52', { type: 'module' });
+    const worker = new Worker('/assets/js/pocket_worker.js?v=pocket-worker-v51', { type: 'module' });
     const terminal = await new Promise((resolveTerminal, rejectTerminal) => {
       const timeout = setTimeout(() => rejectTerminal(new Error('Worker initialization timed out.')), 10 * 60 * 1000);
       worker.onmessage = (event) => {
