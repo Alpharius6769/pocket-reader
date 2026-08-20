@@ -1,11 +1,11 @@
 {
   "api_core.js": {
-    "version": "search-v22",
-    "sha256": "310e8a91223072e8"
+    "version": "search-v23",
+    "sha256": "638c9490837a36d0"
   },
   "audio_core.js": {
-    "version": "audio-v77",
-    "sha256": "9cd6352b14dd562a"
+    "version": "audio-v78",
+    "sha256": "47302893955b6931"
   },
   "buffer_manager.js": {
     "version": "buffer-v57",
@@ -28,8 +28,8 @@
     "sha256": "ef4ce28354a30b62"
   },
   "diagnostics.js": {
-    "version": "diag-v6",
-    "sha256": "c9f600a71a8c963d"
+    "version": "diag-v7",
+    "sha256": "452702fde47e0eab"
   },
   "engine_utils.js": {
     "version": "sw-175",
@@ -65,7 +65,7 @@
   },
   "narration_runtime_loader.js": {
     "version": "narration-loader-v30",
-    "sha256": "3c535e700da6d493"
+    "sha256": "324f834745131f5e"
   },
   "pocket_backend_policy.js": {
     "version": "backend-v22",
@@ -80,8 +80,8 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v51",
-    "sha256": "6092b8d1f4bfe7f7"
+    "version": "pocket-worker-v52",
+    "sha256": "d295f90b3d38cb44"
   },
   "profile_merge.js": {
     "version": "merge-v6",
@@ -121,6 +121,6 @@
   },
   "sw.js": {
     "version": "sw-175",
-    "sha256": "c32e78bc849df41a"
+    "sha256": "3aa192b3b678be39"
   }
 }

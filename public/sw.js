@@ -100,8 +100,8 @@ var OPTIONAL_ASSETS = [
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
     'assets/js/buffer_manager.js?v=buffer-v57',
-    'assets/js/audio_core.js?v=audio-v77',
-    'assets/js/pocket_worker.js?v=pocket-worker-v51',
+    'assets/js/audio_core.js?v=audio-v78',
+    'assets/js/pocket_worker.js?v=pocket-worker-v52',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
 ];
 
@@ -112,8 +112,8 @@ var CORE_ASSETS = [
     'assets/js/tts_pronunciation_core.js?v=pron-v14',
     'assets/js/pocket_backend_policy.js?v=backend-v22',
     'assets/js/pocket_performance_policy.js?v=performance-v2',
-    'assets/js/diagnostics.js?v=diag-v6',
-    'assets/js/api_core.js?v=search-v22',
+    'assets/js/diagnostics.js?v=diag-v7',
+    'assets/js/api_core.js?v=search-v23',
     'assets/js/experience_coordinator.js?v=experience-v5',
     'assets/js/virtue_controller.js?v=virtue-v14',
     'assets/js/engine_utils.js',

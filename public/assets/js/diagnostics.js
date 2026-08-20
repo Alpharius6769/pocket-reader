@@ -390,7 +390,7 @@ export const Diagnostics = {
     if (statusEl) statusEl.textContent += '\n-- Network Connectivity --\n';
 
     const baseUrl = window.HF_API_BASE || window.POCKET_READER_CONFIG?.apiBase || 'https://alpharius6769-pocket-reader.hf.space';
-    const proxyBase = window.PR_PROXY_BASE || window.POCKET_READER_CONFIG?.proxyBase || 'https://pocket-reader-proxy.christopher-gotham67.workers.dev';
+    const proxyBase = window.PR_PROXY_BASE || window.POCKET_READER_CONFIG?.proxyBase || 'https://pocket-reader-proxy.alpharius67.workers.dev';
     const timeout = (ms, p) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error(`timeout after ${ms}ms`)), ms))]);
 
     // 11. HuggingFace backend API

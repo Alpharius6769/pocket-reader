@@ -993,7 +993,7 @@ async function _preparePocketBackendPlan(force = false) {
     // cleanly before any download starts.
     const shouldProbeBundle = eligibility.eligible && preference !== 'wasm';
     if (shouldProbeBundle) {
-      const proxyBase = window.PR_PROXY_BASE || window.POCKET_READER_CONFIG?.proxyBase || 'https://pocket-reader-proxy.christopher-gotham67.workers.dev';
+      const proxyBase = window.PR_PROXY_BASE || window.POCKET_READER_CONFIG?.proxyBase || 'https://pocket-reader-proxy.alpharius67.workers.dev';
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8000);
       try {
@@ -1219,7 +1219,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v51', document.baseURI).href;
+        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v52', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -1899,7 +1899,7 @@ async function ensurePocketVoiceLoaded(voiceName) {
       : targetVoice;
     console.log(`[PocketTTS] Loading custom voice: ${targetVoice}`);
 
-    const proxyBase = window.PR_PROXY_BASE || window.POCKET_READER_CONFIG?.proxyBase || 'https://pocket-reader-proxy.christopher-gotham67.workers.dev';
+    const proxyBase = window.PR_PROXY_BASE || window.POCKET_READER_CONFIG?.proxyBase || 'https://pocket-reader-proxy.alpharius67.workers.dev';
     const directB2Base = 'https://f005.backblazeb2.com/file/pocket-reader-assets';
     let url = `${proxyBase}/models/voices/${POCKET_VOICE_PACK_PATH}${targetVoice}.${fileExt}?rev=${POCKET_VOICE_PACK_REV}`;
     // The key this request started at. `url` is reassigned when a fallback
@@ -2080,7 +2080,7 @@ async function prefetchPocketVoiceAssets(voiceIds = []) {
   if (!unique.length) return 0;
   let cache = null;
   try { cache = await caches.open('pocket-voices'); } catch (_) { return 0; }
-  const proxyBase = window.PR_PROXY_BASE || window.POCKET_READER_CONFIG?.proxyBase || 'https://pocket-reader-proxy.christopher-gotham67.workers.dev';
+  const proxyBase = window.PR_PROXY_BASE || window.POCKET_READER_CONFIG?.proxyBase || 'https://pocket-reader-proxy.alpharius67.workers.dev';
   let fetched = 0;
   for (const voiceId of unique) {
     if (_encodedPocketVoices.has(voiceId)) continue;

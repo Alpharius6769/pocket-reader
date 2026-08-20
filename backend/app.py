@@ -499,7 +499,7 @@ FICHUB_USER_AGENT = os.environ.get(
     "pocket-reader/1.0 (+https://huggingface.co/spaces/alpharius6769/pocket-reader)")
 WORKER_PROXY_BASE = os.environ.get(
     "WORKER_PROXY_BASE",
-    "https://pocket-reader-proxy.christopher-gotham67.workers.dev").rstrip("/")
+    "https://pocket-reader-proxy.alpharius67.workers.dev").rstrip("/")
 
 
 def _fichub_headers() -> dict:
