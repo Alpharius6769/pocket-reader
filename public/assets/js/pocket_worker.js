@@ -259,7 +259,7 @@ const EMOTION_LEXICON = {
   surprise: ['suddenly', 'gasp', 'startl', 'shock', 'surprise', 'wide-eyed', 'whirl', 'stunned', 'abrupt', 'jolt', 'flinch'],
 };
 
-const PROXY_BASE_URL = self.PR_PROXY_BASE || 'https://pocket-reader-proxy.alpharius67.workers.dev';
+const PROXY_BASE_URL = self.PR_PROXY_BASE || 'https://pocket-reader-proxy.christopher-gotham67.workers.dev';
 const MODEL_BASE_URL = `${PROXY_BASE_URL}/models/`;
 const B2_DIRECT_BASE_URL = 'https://f005.backblazeb2.com/file/pocket-reader-assets';
 const SENTENCEPIECE_MODULE_VERSION = "sp-1371cb5e";

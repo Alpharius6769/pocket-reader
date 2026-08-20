@@ -18,7 +18,7 @@ voice file:
 `pocket_worker.js` requests model files through the Cloudflare Worker:
 
 ```text
-https://pocket-reader-proxy.alpharius67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/<file>
+https://pocket-reader-proxy.christopher-gotham67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/<file>
 ```
 
 The Worker maps `/models/...` to the Backblaze B2 bucket
@@ -213,12 +213,12 @@ Upload `sentencepiece.js` to the B2 bucket root.
 After upload and Worker deploy, these must return `200`:
 
 ```text
-https://pocket-reader-proxy.alpharius67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/bundle.json
-https://pocket-reader-proxy.alpharius67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/flow_lm_main_int8.onnx
-https://pocket-reader-proxy.alpharius67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/flow_lm_flow_int8.onnx
-https://pocket-reader-proxy.alpharius67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/mimi_decoder_int8.onnx
-https://pocket-reader-proxy.alpharius67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/text_conditioner_int8.onnx
-https://pocket-reader-proxy.alpharius67.workers.dev/models/sentencepiece.js
+https://pocket-reader-proxy.christopher-gotham67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/bundle.json
+https://pocket-reader-proxy.christopher-gotham67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/flow_lm_main_int8.onnx
+https://pocket-reader-proxy.christopher-gotham67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/flow_lm_flow_int8.onnx
+https://pocket-reader-proxy.christopher-gotham67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/mimi_decoder_int8.onnx
+https://pocket-reader-proxy.christopher-gotham67.workers.dev/models/Pocket%20TTS%20Onnx/english_2026-04/text_conditioner_int8.onnx
+https://pocket-reader-proxy.christopher-gotham67.workers.dev/models/sentencepiece.js
 ```
 
 The direct B2 preferred-layout checks are:

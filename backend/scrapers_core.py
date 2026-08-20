@@ -89,7 +89,7 @@ DEFAULT_TIMEOUT = int(os.environ.get("SCRAPER_TIMEOUT", 20))
 MAX_REDIRECTS = int(os.environ.get("MAX_REDIRECTS", 5))
 WORKER_PROXY_BASE = os.environ.get(
     "WORKER_PROXY_BASE",
-    "https://pocket-reader-proxy.alpharius67.workers.dev").rstrip("/")
+    "https://pocket-reader-proxy.christopher-gotham67.workers.dev").rstrip("/")
 WORKER_PROXY_TOKEN = (
     os.environ.get("WORKER_PROXY_TOKEN") or os.environ.get("PROXY_AUTH_TOKEN") or ""
 ).strip()

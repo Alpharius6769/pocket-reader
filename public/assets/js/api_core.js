@@ -1,6 +1,6 @@
 
-const DEFAULT_API_BASE = 'https://pocket-reader-proxy.alpharius67.workers.dev';
-const DEFAULT_PROXY_BASE = 'https://pocket-reader-proxy.alpharius67.workers.dev';
+const DEFAULT_API_BASE = 'https://pocket-reader-proxy.christopher-gotham67.workers.dev';
+const DEFAULT_PROXY_BASE = 'https://pocket-reader-proxy.christopher-gotham67.workers.dev';
 const AO3_SEARCH_TIMEOUT_MS = 120000;
 
 const PR_CONFIG = {
