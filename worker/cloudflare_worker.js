@@ -330,6 +330,17 @@ export default {
       upstreamHeaders.set("Accept", "application/json");
       upstreamHeaders.set("Origin", "https://alpharius6769.github.io");
       upstreamHeaders.set("Referer", "https://alpharius6769.github.io/hmofa-story-index/");
+      // Prove to catalog-api that this really is the proxy. Anyone can forge
+      // the Origin above; only the Worker holds this key, so the function can
+      // require it (or a Turnstile token) before accepting a write.
+      if (env && env.CATALOG_PROXY_KEY) {
+        upstreamHeaders.set("X-Catalog-Key", env.CATALOG_PROXY_KEY);
+      }
+      // Without this every proxied request reaches Supabase from a Cloudflare
+      // address, so the upstream per-IP rate limit sees one caller and real
+      // users throttle each other. Only trusted when X-Catalog-Key checks out.
+      const clientIp = request.headers.get("CF-Connecting-IP");
+      if (clientIp) upstreamHeaders.set("X-Client-IP", clientIp);
       upstreamHeaders.set(
         "User-Agent",
         request.headers.get("User-Agent") || "PocketReader-Proxy/1.0",

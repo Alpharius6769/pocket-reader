@@ -45,7 +45,7 @@ import {
   loadLocalRatings,
   submitRating,
   trackStoryOpen,
-} from './hmofa_community.js?v=hmofa-community-v1';
+} from './hmofa_community.js?v=hmofa-community-v2';
 import {
   openHmofaListsDialog,
   openHmofaPreferencesDialog,

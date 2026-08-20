@@ -44,12 +44,12 @@
     "sha256": "4ff2ba379e85b7eb"
   },
   "hmofa_community.js": {
-    "version": "hmofa-community-v1",
-    "sha256": "12891576f64ccf76"
+    "version": "hmofa-community-v2",
+    "sha256": "b792219fc5307417"
   },
   "hmofa_masterlist.js": {
     "version": "hmofa-list-v5",
-    "sha256": "9dc472f850952093"
+    "sha256": "a82decc90c5af277"
   },
   "hmofa_preferences.js": {
     "version": "hmofa-prefs-v2",
@@ -121,6 +121,6 @@
   },
   "sw.js": {
     "version": "sw-175",
-    "sha256": "3aa192b3b678be39"
+    "sha256": "a694524d5db96970"
   }
 }

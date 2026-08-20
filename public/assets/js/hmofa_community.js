@@ -18,7 +18,10 @@
 // nothing here needs a challenge widget -- which matters, because
 // challenges.cloudflare.com cannot load inside a ?tts_fast=1 narration session.
 
-const API_BASE = 'https://gupifxfvktfejqhfenml.supabase.co/functions/v1/catalog-api';
+// Routed through the Worker rather than straight at Supabase: the Worker
+// attaches the shared key that catalog-api now requires for writes, and
+// forwards the real client IP so per-user rate limits still apply.
+const API_BASE = 'https://pocket-reader-proxy.alpharius67.workers.dev/catalog-api';
 
 const STORAGE_KEYS = Object.freeze({
   device: 'hmofa_device_id_v2',
