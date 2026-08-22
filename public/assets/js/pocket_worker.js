@@ -2073,6 +2073,16 @@ async function loadBundle(language, {
     let modelBuffer = await fetchModelWithProgress(modelUrls, asset, completedBytes);
     const modelBytes = modelBuffer.byteLength;
     postMessage({ type: "status", status: `Preparing ${asset}...`, state: "loading" });
+    if (constrainedMemoryMode) {
+      // fetchModelWithProgress has just written this asset to the durable cache,
+      // and cache.put() has to serialise the body -- a second full-size copy of
+      // a model that can be 87 MB. That copy is unreachable by now but WebKit
+      // has had no chance to collect it, and the very next statement allocates
+      // another full copy inside the WASM heap. Yielding a macrotask puts a
+      // collection opportunity between the two largest allocations in startup
+      // rather than letting them stack.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
     const sessionStart = performance.now();
     let session;
     try {
@@ -2108,7 +2118,24 @@ async function loadBundle(language, {
       await new Promise((resolve) => setTimeout(resolve, 24));
     }
   };
-  for (const descriptor of modelDescriptors) {
+  // Constrained WebKit: create the LARGEST session first.
+  //
+  // Peak allocation is not the sum of the weights, it is the worst single
+  // moment: the JS ArrayBuffer for the model being created, plus ORT's copy of
+  // it in the WASM heap, plus every session already resident. The unified core
+  // is 87 MB against 16 MB for the text conditioner and 23 MB for Mimi, so its
+  // creation IS the peak. Doing it first means nothing else is resident yet and
+  // the two small sessions land afterwards in a heap that has already grown.
+  // Loading order has no effect on results -- each descriptor just assigns a
+  // different global -- so this is free on every other platform too, but it is
+  // gated to keep desktop behaviour byte-identical.
+  const orderedDescriptors = constrainedMemoryMode
+    ? [...modelDescriptors].sort((a, b) => {
+        const sizeOf = (d) => Number(currentModelAssetBytes[d.asset] || 0);
+        return sizeOf(b) - sizeOf(a);
+      })
+    : modelDescriptors;
+  for (const descriptor of orderedDescriptors) {
     try {
       await loadModelDescriptor(descriptor);
     } catch (error) {

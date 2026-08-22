@@ -1,11 +1,49 @@
 import { animate } from './motion_lite.js';
 
+// Heavy containers that are fully rebuilt every time their view is entered.
+// showView() calls the rebuilder below for each of these, so emptying them on
+// the way OUT costs a re-render the view was going to do anyway.
+//
+// Views stay in the DOM permanently -- showView only toggles a class -- so a
+// reader who has opened Library, Profile and Away Mode is holding three fully
+// populated node trees plus every settings panel for the rest of the session.
+// That is invisible on desktop and expensive inside WebKit's per-tab budget on
+// a 4 GB iPhone, where it competes with ~126 MB of narration weights.
+//
+// Deliberately NOT listed: the Anthronomicon masterlist. It has no entry hook
+// in showView, so clearing it would leave the view blank until the user
+// re-filtered. Only containers with a guaranteed rebuilder are safe here.
+const _OFFSCREEN_RELEASABLE = Object.freeze({
+  'library-view': ['library-grid'],
+  'profile-view': ['achievements-grid-container'],
+  'away-mode-view': ['away-queue-list', 'away-quick-add-list'],
+});
+
+function _releaseOffscreenViewDom(leavingViewId) {
+  // Constrained devices only. Everywhere else the memory is free and the
+  // re-render is pure cost.
+  if (window.isPocketDeviceMemorySafeMode?.() === false) return;
+  const containers = _OFFSCREEN_RELEASABLE[leavingViewId];
+  if (!containers) return;
+  for (const id of containers) {
+    const el = document.getElementById(id);
+    // innerHTML = '' drops the subtree and every listener attached inside it.
+    // These trees are built with inline handlers and rebuilt wholesale, so
+    // nothing outside holds a reference to what is being discarded.
+    if (el && el.childElementCount > 0) el.innerHTML = '';
+  }
+}
+
 export function showView(viewId) {
   try {
     const doSwitch = () => {
+      const previousViewId = window.currentActiveView;
       document.querySelectorAll('.view').forEach((v) => {
         if (v) v.classList.remove('active-view');
       });
+      if (previousViewId && previousViewId !== viewId) {
+        try { _releaseOffscreenViewDom(previousViewId); } catch (_) { /* never block navigation */ }
+      }
 
       const activeEl = document.getElementById(viewId);
       if (activeEl) {
@@ -1471,7 +1509,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=177', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=178', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

@@ -4,8 +4,8 @@
     "sha256": "638c9490837a36d0"
   },
   "audio_core.js": {
-    "version": "audio-v79",
-    "sha256": "f73efac4bca1aab0"
+    "version": "audio-v80",
+    "sha256": "a67252555d6c0b67"
   },
   "buffer_manager.js": {
     "version": "buffer-v57",
@@ -32,7 +32,7 @@
     "sha256": "452702fde47e0eab"
   },
   "engine_utils.js": {
-    "version": "sw-177",
+    "version": "sw-178",
     "sha256": "3af4b2a7b26bd03f"
   },
   "experience_coordinator.js": {
@@ -60,12 +60,12 @@
     "sha256": "00b1fc4b638ed657"
   },
   "motion_lite.js": {
-    "version": "sw-177",
+    "version": "sw-178",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v31",
-    "sha256": "3fd1c6504913828a"
+    "version": "narration-loader-v32",
+    "sha256": "dfd3bea80fdf1f94"
   },
   "pocket_backend_policy.js": {
     "version": "backend-v22",
@@ -80,8 +80,8 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v52",
-    "sha256": "d295f90b3d38cb44"
+    "version": "pocket-worker-v53",
+    "sha256": "695f55165fbd356c"
   },
   "profile_merge.js": {
     "version": "merge-v6",
@@ -92,8 +92,8 @@
     "sha256": "d5f0db127c3c5272"
   },
   "settings_manager.js": {
-    "version": "settings-v77",
-    "sha256": "5511492e8baa54a4"
+    "version": "settings-v78",
+    "sha256": "69b76d8a12300089"
   },
   "storage_core.js": {
     "version": "storage-v14",
@@ -112,15 +112,15 @@
     "sha256": "5ab5126a76df718f"
   },
   "ui_controller.js": {
-    "version": "ui-v117",
-    "sha256": "d5b344dee03edd83"
+    "version": "ui-v118",
+    "sha256": "63b414f05d31f0c2"
   },
   "virtue_controller.js": {
     "version": "virtue-v14",
     "sha256": "69617463361408ec"
   },
   "sw.js": {
-    "version": "sw-177",
-    "sha256": "23d7fc0a7495524a"
+    "version": "sw-178",
+    "sha256": "a805a7fbe4a999a9"
   }
 }

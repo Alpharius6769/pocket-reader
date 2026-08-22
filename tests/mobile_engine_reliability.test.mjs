@@ -417,3 +417,55 @@ test('worker startup watchdog rearms on activity instead of clearing on first me
   const worker = await read('public/assets/js/pocket_worker.js');
   assert.match(worker.slice(0, 2000), /postMessage\(\{ type: "status", status: "Worker Thread Started"/);
 });
+
+// iPhone 13 (4 GB) is inside IPHONE_WEBGPU_BLOCK_IDS -- below this project's own
+// 6 GB floor -- and still OOM-killed after the silent-worker fix landed. These
+// pin the peak-memory reductions, which are all shape, not behaviour.
+test('constrained startup creates the largest ONNX session first', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  assert.match(worker, /const orderedDescriptors = constrainedMemoryMode/);
+  assert.match(worker, /for \(const descriptor of orderedDescriptors\)/,
+    'the load loop must consume the size-ordered list, not the raw one');
+  // Sorted descending by declared asset bytes.
+  assert.match(worker, /sizeOf\(b\) - sizeOf\(a\)/);
+});
+
+test('constrained startup yields between the cache copy and session creation', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  const loader = worker.slice(
+    worker.indexOf('const loadModelDescriptor = async'),
+    worker.indexOf('const orderedDescriptors'),
+  );
+  const yieldIdx = loader.indexOf('await new Promise((resolve) => setTimeout(resolve, 0));');
+  const createIdx = loader.indexOf('ort.InferenceSession.create');
+  assert.ok(yieldIdx > 0, 'constrained path must yield before session creation');
+  assert.ok(yieldIdx < createIdx,
+    'the collection point must sit BEFORE session creation, not after');
+  // The existing post-session yield must survive too.
+  assert.match(loader, /setTimeout\(resolve, 24\)/);
+});
+
+test('offscreen view DOM is released only for views that rebuild on entry', async () => {
+  const ui = await read('public/assets/js/ui_controller.js');
+  assert.match(ui, /const _OFFSCREEN_RELEASABLE = Object\.freeze\(\{/);
+  assert.match(ui, /function _releaseOffscreenViewDom/);
+  assert.match(ui, /if \(window\.isPocketDeviceMemorySafeMode\?\.\(\) === false\) return;/,
+    'releasing must be limited to constrained devices');
+
+  const map = ui.slice(ui.indexOf('const _OFFSCREEN_RELEASABLE'),
+                       ui.indexOf('function _releaseOffscreenViewDom'));
+  // Every listed view must have a rebuild hook inside showView, or the view
+  // comes back blank.
+  const showView = ui.slice(ui.indexOf('export function showView'));
+  for (const [viewId, rebuilder] of [
+    ['library-view', /renderLibrary/],
+    ['profile-view', /renderAchievements/],
+    ['away-mode-view', /renderAwayModeUI/],
+  ]) {
+    assert.match(map, new RegExp(`'${viewId}'`), `${viewId} should be releasable`);
+    assert.match(showView, rebuilder, `${viewId} must rebuild on entry`);
+  }
+  // The masterlist has no entry hook, so it must never be cleared.
+  assert.doesNotMatch(map, /hmofa-view/,
+    'the masterlist has no rebuild hook and would come back blank');
+});
