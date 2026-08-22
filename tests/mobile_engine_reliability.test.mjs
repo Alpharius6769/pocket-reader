@@ -375,3 +375,45 @@ test('every precached module URL resolves to a real file', async () => {
   }
   assert.deepEqual(missing, [], `precached assets do not exist on disk: ${missing.join(', ')}`);
 });
+
+// iOS Safari terminates a worker that exceeds the tab memory ceiling WITHOUT
+// firing onerror, so a silent death during init used to be caught by nothing:
+// the 45s startup guard was a one-shot cleared by the FIRST message, and
+// pocket_worker.js posts "Worker Thread Started" as its first executable line.
+// Init then died at 90% ("Preparing voice (...)", peak session residency) and
+// the load hung until ENGINE_LOAD_TIMEOUT_MS -- 20 minutes on mobile.
+test('worker startup watchdog rearms on activity instead of clearing on first message', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+
+  // The disarm-on-any-message shape must not come back.
+  assert.doesNotMatch(
+    audio,
+    /worker\.onmessage = \(e\) => \{\s*clearTimeout\(startupTimerId\);/,
+    'onmessage must not clear the startup watchdog unconditionally',
+  );
+
+  assert.match(audio, /const WORKER_SILENCE_TIMEOUT_MS = 45000;/);
+  assert.match(audio, /const armStartupWatchdog = \(\) => \{/);
+  assert.match(audio, /const clearStartupWatchdog = \(\) => \{/);
+
+  // Only a terminal outcome disarms it; anything else is proof of life.
+  const handler = audio.slice(
+    audio.indexOf('worker.onmessage = (e) => {'),
+    audio.indexOf("if (data.type === 'progress' && i === 0)"),
+  );
+  assert.match(handler, /init_done/, 'terminal init_done must disarm the watchdog');
+  assert.match(handler, /init_error/, 'terminal init_error must disarm the watchdog');
+  assert.match(handler, /\} else \{\s*armStartupWatchdog\(\);/,
+    'every non-terminal message must rearm the watchdog');
+
+  // Settling the spawn by any route must stop the timer, or a worker that just
+  // went ready would be terminated by a stale deadline.
+  const doneFn = audio.slice(audio.indexOf('const done = (success) => {'),
+                             audio.indexOf('// Silence watchdog for worker startup.'));
+  assert.match(doneFn, /clearStartupWatchdog\(\);/);
+
+  // The worker's first line is what made the old guard useless; keep the
+  // assumption pinned so a future reorder does not quietly re-break this.
+  const worker = await read('public/assets/js/pocket_worker.js');
+  assert.match(worker.slice(0, 2000), /postMessage\(\{ type: "status", status: "Worker Thread Started"/);
+});

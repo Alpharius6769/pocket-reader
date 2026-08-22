@@ -1228,27 +1228,88 @@ async function _loadPocketEngine() {
         const done = (success) => {
           if (!resolved) {
             resolved = true;
+            // Whatever settled this spawn, the startup watchdog is finished --
+            // leaving it armed would terminate a worker that just went ready.
+            clearStartupWatchdog();
             resolveSpawn(success);
           }
         };
 
-        let startupTimerId = setTimeout(() => {
+        // Silence watchdog for worker startup.
+        //
+        // This used to be a one-shot 45s timer cleared by the first message of
+        // ANY kind -- and pocket_worker.js posts "Worker Thread Started" as its
+        // very first executable line, so the guard was disarmed milliseconds in,
+        // before init had loaded a single model. It could only ever catch a
+        // worker that failed to run line 1, which onerror already reports.
+        //
+        // That mattered most on iOS. Safari terminates a worker that exceeds the
+        // tab memory ceiling WITHOUT firing onerror or any other event -- the
+        // worker simply stops. Peak residency is the moment every ONNX session is
+        // live, which is exactly where init posts "Preparing voice (...)" at 90%.
+        // So the kill landed there, that status was the last message the UI ever
+        // received, and with the startup guard already cleared and onerror never
+        // firing, nothing failed the load until ENGINE_LOAD_TIMEOUT_MS -- twenty
+        // minutes on mobile. Indistinguishable from a permanent hang.
+        //
+        // Rearming on each message instead measures what actually matters: not
+        // "did the worker ever speak" but "has it gone quiet mid-init". Init
+        // reports progress continuously (2/10/30/70/90 plus per-asset status), so
+        // a healthy worker keeps this alive; a dead one trips it in one interval.
+        const WORKER_SILENCE_TIMEOUT_MS = 45000;
+        let startupTimerId = null;
+        const failWorkerStartup = (message) => {
           if (workerObj.ready || resolved) return;
-          const message = 'Pocket TTS worker did not start within 45 seconds';
           workerFailed++;
           console.error(`${engineLabel} Worker ${i}: ${message}`);
-          if (window.Diagnostics) window.Diagnostics.log('ERROR', message, { worker: i, workerScript });
+          if (window.Diagnostics) {
+            window.Diagnostics.log('ERROR', message, {
+              worker: i,
+              workerScript,
+              lastStatus: workerObj._lastStatus || null,
+              lastProgress: workerObj._lastProgress ?? null,
+            });
+          }
           worker.terminate();
           done(false);
           if ((workersReady + workerFailed) === nWorkers) {
             _setNeuralState(workersReady > 0 ? 'ready' : 'failed');
             if (_engineReadyResolve) { _engineReadyResolve(); _engineReadyResolve = null; }
           }
-        }, 45000);
+        };
+        const clearStartupWatchdog = () => {
+          if (startupTimerId !== null) {
+            clearTimeout(startupTimerId);
+            startupTimerId = null;
+          }
+        };
+        const armStartupWatchdog = () => {
+          clearStartupWatchdog();
+          if (workerObj.ready || resolved) return;
+          startupTimerId = setTimeout(() => {
+            const stalledAt = workerObj._lastStatus
+              ? ` (last status: ${workerObj._lastStatus})`
+              : '';
+            failWorkerStartup(
+              `Pocket TTS worker went silent for ${WORKER_SILENCE_TIMEOUT_MS / 1000}s during startup${stalledAt}`
+              + ' — treating it as terminated (on iOS this is normally the tab memory ceiling).',
+            );
+          }, WORKER_SILENCE_TIMEOUT_MS);
+        };
+        armStartupWatchdog();
 
         worker.onmessage = (e) => {
-          clearTimeout(startupTimerId);
           const data = e.data;
+          // Only a terminal outcome disarms the watchdog; everything else is
+          // proof of life and pushes the deadline out.
+          if (data?.type === 'init_done' || data?.type === 'ready' || data?.type === 'loaded'
+              || data?.type === 'bundle_loaded' || data?.type === 'init_error' || data?.type === 'error') {
+            clearStartupWatchdog();
+          } else {
+            armStartupWatchdog();
+          }
+          if (typeof data?.status === 'string') workerObj._lastStatus = data.status;
+          if (data?.info?.progress !== undefined) workerObj._lastProgress = data.info.progress;
 
           if (data.type === 'progress' && i === 0) {
             const info = data.info;
@@ -1478,7 +1539,7 @@ async function _loadPocketEngine() {
         };
 
         worker.onerror = (err) => {
-          clearTimeout(startupTimerId);
+          clearStartupWatchdog();
           const errMsg = err?.message || (err?.filename ? `${err.filename}:${err.lineno}:${err.colno}` : (typeof err === 'string' ? err : 'Worker initialization error'));
           if (!workerObj.ready && !resolved) {
             workerFailed++;
