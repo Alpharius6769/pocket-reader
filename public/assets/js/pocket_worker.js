@@ -273,6 +273,15 @@ const PINNED_MODULE_SHA256 = Object.freeze({
   ortStandard: 'a4c72a154c44d09c71996c7c5a3c4bd6fe3dfe27095dc766cdb6726775161931',
   ortWebGpu: '46988a5a025f49449850f39f95eb0d21e40e67b3beb13a0b54efd3ab5d83f60e',
 });
+// Plain fixed-width SIMD build, for devices whose browser validates SIMD but
+// NOT relaxed SIMD -- which is every iPhone tested so far, and the reason they
+// were falling all the way through to stock ORT reading .onnx protobuf.
+const POCKET_ORT_SIMD_RUNTIME_VERSION = '1.27.0-simd-minimal';
+// (module (func (result v128) i32.const 1  i32x4.splat))
+const FIXED_SIMD_PROBE = new Uint8Array([
+  0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0,
+  10, 10, 1, 8, 0, 65, 1, 253, 15, 11,
+]);
 const RELAXED_SIMD_PROBE = new Uint8Array([
   0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0,
   10, 19, 1, 17, 0, 65, 1, 253, 15, 65, 2, 253, 15, 65, 3, 253, 15,
@@ -577,13 +586,43 @@ function openModelCache() {
   return modelCachePromise;
 }
 
-async function readCachedModelBuffer(url) {
+// Field-confirmed on an iPhone 13 (4 GB), 2026-08-22: caching survived
+// noticeably longer with the model cache EMPTY than with it populated, on
+// identical code. An empty cache streams each model from the network into one
+// preallocated buffer -- the allocation shape a previous pass deliberately
+// engineered to avoid a double copy. A populated cache went through
+// Response.arrayBuffer(), which asks WebKit to materialise an 87 MB blob off
+// disk in one step and gives it no size to work with, so the cheap path was
+// only ever taken on first run and every later launch paid more.
+//
+// Reading the stored body through the same preallocate-and-fill loop as the
+// network path puts both on equal footing. Falls back to arrayBuffer() only
+// when the size is genuinely unknown, which is no worse than before.
+async function readCachedModelBuffer(url, expectedBytes = 0) {
   try {
     const cache = await openModelCache();
     if (!cache) return null;
     const hit = await cache.match(url);
     if (!hit?.ok) return null;
-    return await hit.arrayBuffer();
+    const declared = Number(hit.headers.get('Content-Length')) || Number(expectedBytes) || 0;
+    if (!declared || !hit.body?.getReader) return await hit.arrayBuffer();
+    const output = new Uint8Array(declared);
+    const reader = hit.body.getReader();
+    let filled = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (filled + value.byteLength > output.byteLength) {
+        // Stored entry disagrees with its own length header: treat as a miss
+        // rather than returning a truncated model.
+        await reader.cancel().catch(() => {});
+        return null;
+      }
+      output.set(value, filled);
+      filled += value.byteLength;
+    }
+    if (filled !== output.byteLength) return null;
+    return output.buffer;
   } catch (error) {
     postMessage({
       type: 'diagnostic',
@@ -600,7 +639,13 @@ async function writeCachedModelBuffer(url, buffer, contentType = 'application/oc
   try {
     const cache = await openModelCache();
     if (!cache) return false;
-    await cache.put(url, new Response(buffer, { headers: { 'Content-Type': contentType } }));
+    // Content-Length is what lets readCachedModelBuffer preallocate instead of
+    // falling back to arrayBuffer(); a Response built from an ArrayBuffer does
+    // not reliably carry one on its own.
+    const byteLength = buffer?.byteLength ?? buffer?.length ?? 0;
+    await cache.put(url, new Response(buffer, {
+      headers: { 'Content-Type': contentType, 'Content-Length': String(byteLength) },
+    }));
     return true;
   } catch (error) {
     postMessage({
@@ -747,7 +792,10 @@ async function fetchSingleModelWithProgress(url, asset, completedBytes) {
 async function fetchModelWithProgress(urls, asset, completedBytes) {
   // Read once per asset, not once per host: both candidate URLs collapse to the
   // same canonical key, so a second lookup could only repeat the same answer.
-  const cached = urls.length ? await readCachedModelBuffer(canonicalModelCacheKey(urls[0])) : null;
+  const expectedBytes = Number(currentModelAssetBytes?.[asset] || MODEL_ASSET_BYTES[asset] || 0);
+  const cached = urls.length
+    ? await readCachedModelBuffer(canonicalModelCacheKey(urls[0]), expectedBytes)
+    : null;
   if (cached) {
     const loadedBytes = completedBytes + cached.byteLength;
     // Advance the bar exactly as a completed download would, so a cache hit is
@@ -1540,6 +1588,22 @@ function supportsRelaxedSimd() {
   }
 }
 
+function supportsFixedSimd() {
+  try {
+    return typeof WebAssembly?.validate === 'function' && WebAssembly.validate(FIXED_SIMD_PROBE);
+  } catch (_) {
+    return false;
+  }
+}
+
+// A custom runtime is what makes the .ort model format usable. Note the builds
+// are NOT ORT "minimal builds" -- the name refers to pairing the WASM-only
+// public API module with a purpose-built binary -- so .ort is not gated on
+// anything except having one of these runtimes actually resolve.
+function isMinimalOrtFlavor(flavor) {
+  return flavor === 'relaxed-simd-minimal-ort' || flavor === 'simd-minimal-ort';
+}
+
 async function probeOrtRuntimeFiles(base, files) {
   for (const filename of files) {
     const response = await fetchWithTimeout(`${base}${filename}`, { method: 'HEAD' }, 10000);
@@ -1586,6 +1650,22 @@ async function loadWasmOrtRuntime(preferMinimalOrt = false) {
       },
     });
   }
+  // Between the relaxed candidates and stock: same custom-build advantages
+  // (WASM-only API, .ort models, no protobuf parse at session creation) without
+  // requiring relaxed SIMD. If it has not been built and uploaded yet the HEAD
+  // probe fails and this falls through to stock exactly as before.
+  if (preferMinimalOrt && supportsFixedSimd()) {
+    candidates.push({
+      name: 'simd-minimal-ort',
+      base: `${PROXY_BASE_URL}/models/onnxruntime/${POCKET_ORT_SIMD_RUNTIME_VERSION}/`,
+      requiredFiles: [
+        'ort.min.mjs',
+        'ort-wasm-simd-threaded.mjs',
+        'ort-wasm-simd-threaded.wasm',
+      ],
+    });
+  }
+
   candidates.push(
     {
       name: 'stock-wasm-only',
@@ -1971,10 +2051,25 @@ async function loadBundle(language, {
   // records remain available and are reconditioned after the new sessions load.
   await releaseAllSessions();
   if (currentBackend === 'webgpu' && selectedBackend !== 'webgpu') releaseGpuDevice();
+  // Ask for .ort whenever a custom runtime could plausibly serve it. Fixed SIMD
+  // is the wider gate: relaxed SIMD implies it, and a device with only fixed
+  // SIMD previously lost .ort for no reason other than the probe it failed.
   useOrtFormatWasm = selectedBackend === 'wasm'
     && language === DEFAULT_LANGUAGE
-    && supportsRelaxedSimd();
+    && (supportsRelaxedSimd() || supportsFixedSimd());
   await loadOrt(selectedBackend, { preferMinimalOrt: useOrtFormatWasm });
+  // Which runtime actually won is only known now. Stock ORT is not published
+  // with the .ort loader, so asking it for .ort models would turn a memory
+  // optimisation into a total load failure. Model filenames are resolved below
+  // this line, so correcting the flag here is enough to stay consistent.
+  if (selectedBackend === 'wasm' && useOrtFormatWasm && !isMinimalOrtFlavor(ortWasmRuntimeFlavor)) {
+    useOrtFormatWasm = false;
+    postMessage({
+      type: 'diagnostic',
+      level: 'INFO',
+      message: `Runtime resolved to ${ortWasmRuntimeFlavor}; using .onnx models (no .ort loader in that build).`,
+    });
+  }
 
   if (selectedBackend === 'webgpu') await configureWebGpuDevice();
   currentBackend = selectedBackend;

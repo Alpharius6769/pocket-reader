@@ -164,7 +164,9 @@ test('the durable model cache is wired into the download path', async () => {
     worker.indexOf('async function fetchModelWithProgress('),
     worker.indexOf('function makeFilledArray('),
   );
-  assert.match(fetchModel, /readCachedModelBuffer\(canonicalModelCacheKey\(urls\[0\]\)\)/,
+  // Now carries the expected size so a pre-existing entry written without a
+  // Content-Length can still take the preallocating path.
+  assert.match(fetchModel, /readCachedModelBuffer\(canonicalModelCacheKey\(urls\[0\]\), expectedBytes\)/,
     'a cache read must precede the host loop');
   assert.match(fetchModel, /fromCache: true/,
     'a cache hit must still advance the progress bar like a completed download');
@@ -659,4 +661,70 @@ test('the relaxed SIMD probe and model format are reported', async () => {
   assert.match(worker, /ortFormatModels: useOrtFormatWasm,/);
   assert.match(audio, /relaxedSimdSupported: _pocketBackendRuntime\.relaxedSimdSupported \?\? null,/);
   assert.match(settings, /<b>Relaxed SIMD \/ \.ort:<\/b>/);
+});
+
+// Field-confirmed 2026-08-22: on an iPhone 13 (4 GB), caching survived
+// noticeably longer with the model cache EMPTY than populated, on identical
+// code. The empty case streams from the network into one preallocated buffer;
+// the populated case went through Response.arrayBuffer(), asking WebKit to
+// materialise an 87 MB blob in one step with no size hint. The cheap allocation
+// shape was only ever used on first run.
+test('cached model reads preallocate instead of calling arrayBuffer blindly', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  const fn = worker.slice(
+    worker.indexOf('async function readCachedModelBuffer('),
+    worker.indexOf('async function writeCachedModelBuffer('),
+  );
+  assert.ok(fn.length > 0, 'read function not found');
+  assert.match(fn, /const output = new Uint8Array\(declared\);/,
+    'the cached read must preallocate from a declared length');
+  assert.match(fn, /hit\.body\.getReader\(\)/, 'it must stream the stored body');
+  // arrayBuffer() survives only as the unknown-size fallback.
+  assert.match(fn, /if \(!declared \|\| !hit\.body\?\.getReader\) return await hit\.arrayBuffer\(\);/);
+
+  // A truncated or oversized stored entry must be a miss, never a short model.
+  assert.match(fn, /return null;[\s\S]{0,80}\}\s*\n\s*output\.set\(value, filled\);/);
+  assert.match(fn, /if \(filled !== output\.byteLength\) return null;/);
+
+  // Writes must record the length the read depends on.
+  const writeFn = worker.slice(
+    worker.indexOf('async function writeCachedModelBuffer('),
+    worker.indexOf('// The same asset is reachable through two hosts'),
+  );
+  assert.match(writeFn, /'Content-Length': String\(byteLength\)/);
+
+  // Pre-existing entries carry no Content-Length, so the caller supplies a size.
+  assert.match(worker, /readCachedModelBuffer\(canonicalModelCacheKey\(urls\[0\]\), expectedBytes\)/);
+});
+
+// iPhone 13 reported "unsupported / .onnx protobuf": the browser validates
+// fixed-width SIMD but not relaxed, and .ort was gated on the relaxed probe
+// alone, so the device lost the custom runtime AND the model format that skips
+// protobuf parsing at session creation.
+test('a fixed-SIMD device can reach the custom runtime and .ort models', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  assert.match(worker, /const FIXED_SIMD_PROBE = new Uint8Array\(\[/);
+  assert.match(worker, /function supportsFixedSimd\(\)/);
+  assert.match(worker, /name: 'simd-minimal-ort',/);
+  assert.match(worker, /if \(preferMinimalOrt && supportsFixedSimd\(\)\) \{/);
+
+  // The .ort gate is the wider probe now.
+  assert.match(worker, /&& \(supportsRelaxedSimd\(\) \|\| supportsFixedSimd\(\)\);/);
+
+  // Fail-safe: stock ORT has no .ort loader, so if the runtime resolves to
+  // anything but a custom build the format must revert to .onnx BEFORE model
+  // filenames are chosen, or the load fails outright instead of just costing more.
+  assert.match(worker, /if \(selectedBackend === 'wasm' && useOrtFormatWasm && !isMinimalOrtFlavor\(ortWasmRuntimeFlavor\)\) \{/);
+  const correctIdx = worker.indexOf('useOrtFormatWasm = false;');
+  const descriptorIdx = worker.indexOf('const modelDescriptors = currentBackend');
+  assert.ok(correctIdx > 0 && correctIdx < descriptorIdx,
+    'the format correction must run before model filenames are resolved');
+
+  // The plain-SIMD candidate sits between relaxed and stock.
+  const list = worker.slice(worker.indexOf('async function loadWasmOrtRuntime('),
+                            worker.indexOf("name: 'legacy-jsep'"));
+  assert.ok(list.indexOf("'relaxed-simd-minimal-ort'") < list.indexOf("'simd-minimal-ort'"),
+    'relaxed must still be preferred when available');
+  assert.ok(list.indexOf("'simd-minimal-ort'") < list.indexOf("'stock-wasm-only'"),
+    'the custom SIMD build must be tried before falling back to stock');
 });
