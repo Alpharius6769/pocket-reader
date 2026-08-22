@@ -49,7 +49,7 @@ await page.route('https://pocket.test/**', async (route) => {
           };
         </script>
         <button id="play" onclick="window.invokeNarrationTap()">Play</button>
-        <script type="module" src="/narration_runtime_loader.js?v=narration-loader-v38"></script>`,
+        <script type="module" src="/narration_runtime_loader.js?v=narration-loader-v39"></script>`,
     });
   } else if (url.pathname.endsWith('/narration_runtime_loader.js')) {
     await route.fulfill({ contentType: 'text/javascript', body: loaderSource });

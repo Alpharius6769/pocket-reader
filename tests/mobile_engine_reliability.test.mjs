@@ -714,7 +714,7 @@ test('a fixed-SIMD device can reach the custom runtime and .ort models', async (
   // Fail-safe: stock ORT has no .ort loader, so if the runtime resolves to
   // anything but a custom build the format must revert to .onnx BEFORE model
   // filenames are chosen, or the load fails outright instead of just costing more.
-  assert.match(worker, /if \(selectedBackend === 'wasm' && useOrtFormatWasm && !isMinimalOrtFlavor\(ortWasmRuntimeFlavor\)\) \{/);
+  assert.match(worker, /if \(selectedBackend === 'wasm' && useOrtFormatWasm && !flavorSupportsOrtFormat\(ortWasmRuntimeFlavor\)\) \{/);
   const correctIdx = worker.indexOf('useOrtFormatWasm = false;');
   const descriptorIdx = worker.indexOf('const modelDescriptors = currentBackend');
   assert.ok(correctIdx > 0 && correctIdx < descriptorIdx,
@@ -727,4 +727,23 @@ test('a fixed-SIMD device can reach the custom runtime and .ort models', async (
     'relaxed must still be preferred when available');
   assert.ok(list.indexOf("'simd-minimal-ort'") < list.indexOf("'stock-wasm-only'"),
     'the custom SIMD build must be tried before falling back to stock');
+});
+
+// Verified by binary inspection 2026-08-22: stock ort-wasm-simd-threaded.wasm
+// carries the ORTM identifier, "ORT format model", the "Invalid ORT format
+// model" parser error and fbs:: symbols -- the same ORT-format markers as the
+// custom build. Gating .ort on a custom runtime stranded the iPhone 13 on
+// .onnx protobuf for no reason, since it fails the relaxed probe.
+test('stock ORT is allowed to read .ort, unverified jsep builds are not', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  const fn = worker.slice(worker.indexOf('function flavorSupportsOrtFormat(flavor)'),
+                          worker.indexOf('async function probeOrtRuntimeFiles'));
+  assert.ok(fn.length > 0, 'gate function not found');
+  for (const allowed of ['relaxed-simd-minimal-ort', 'simd-minimal-ort', 'stock-wasm-only']) {
+    assert.ok(fn.includes(`'${allowed}'`), `${allowed} must be allowed to use .ort`);
+  }
+  // An unverified build must keep the safe path: guessing wrong costs a total
+  // load failure, not just extra memory.
+  assert.ok(!fn.includes('legacy-jsep') && !fn.includes('cdn-jsep'),
+    'jsep fallbacks must stay on .onnx until their binaries are checked');
 });

@@ -1596,12 +1596,25 @@ function supportsFixedSimd() {
   }
 }
 
-// A custom runtime is what makes the .ort model format usable. Note the builds
-// are NOT ORT "minimal builds" -- the name refers to pairing the WASM-only
-// public API module with a purpose-built binary -- so .ort is not gated on
-// anything except having one of these runtimes actually resolve.
-function isMinimalOrtFlavor(flavor) {
-  return flavor === 'relaxed-simd-minimal-ort' || flavor === 'simd-minimal-ort';
+// Which resolved runtimes can actually read .ort models.
+//
+// Verified 2026-08-22 by inspecting the shipped binaries rather than assuming:
+// the stock ort-wasm-simd-threaded.wasm contains every ORT-format marker the
+// custom build does -- the ORTM file identifier, "ORT format model", the
+// "Invalid ORT format model" parser error and fbs:: symbols. Stock
+// onnxruntime-web therefore loads .ort fine, and gating the format on a custom
+// runtime was leaving devices on .onnx protobuf for no reason. That is exactly
+// what stranded the iPhone 13, which fails the relaxed-SIMD probe and so fell
+// through to stock.
+//
+// The jsep fallbacks are deliberately NOT listed. They are separate
+// distributions and no one has checked their binaries; an unverified guess here
+// costs a total load failure rather than a little extra memory, so they keep
+// the safe .onnx path until someone confirms them the same way.
+function flavorSupportsOrtFormat(flavor) {
+  return flavor === 'relaxed-simd-minimal-ort'
+    || flavor === 'simd-minimal-ort'
+    || flavor === 'stock-wasm-only';
 }
 
 async function probeOrtRuntimeFiles(base, files) {
@@ -2062,12 +2075,12 @@ async function loadBundle(language, {
   // with the .ort loader, so asking it for .ort models would turn a memory
   // optimisation into a total load failure. Model filenames are resolved below
   // this line, so correcting the flag here is enough to stay consistent.
-  if (selectedBackend === 'wasm' && useOrtFormatWasm && !isMinimalOrtFlavor(ortWasmRuntimeFlavor)) {
+  if (selectedBackend === 'wasm' && useOrtFormatWasm && !flavorSupportsOrtFormat(ortWasmRuntimeFlavor)) {
     useOrtFormatWasm = false;
     postMessage({
       type: 'diagnostic',
       level: 'INFO',
-      message: `Runtime resolved to ${ortWasmRuntimeFlavor}; using .onnx models (no .ort loader in that build).`,
+      message: `Runtime resolved to ${ortWasmRuntimeFlavor}; using .onnx models (.ort loader unverified in that build).`,
     });
   }
 
