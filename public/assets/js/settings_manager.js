@@ -7,7 +7,7 @@ import {
   writePocketDeviceBackendPreference,
 } from './pocket_backend_policy.js?v=backend-v22';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '179';
+export const NARRATION_SERVICE_WORKER_VERSION = '180';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1321,6 +1321,26 @@ export function refreshDeviceProfile() {
 window.refreshDeviceProfile = refreshDeviceProfile;
 
 // ── refreshPerfPanel ─────────────────────────────────────────────────────────
+// Startup memory and speed both hinge on which WASM runtime the worker resolved,
+// and until now nothing showed it. The lean path is the minimal relaxed-SIMD
+// build reading .ort models, which skips protobuf parsing at session creation;
+// the fallback is stock ORT reading .onnx, which costs materially more peak
+// memory on a constrained iPhone. Purely descriptive -- no behaviour depends on
+// this, it only turns an invisible difference into a readable one.
+function _describeWasmRuntimeFlavor(cfg) {
+  const flavor = String(cfg?.ortWasmRuntimeFlavor || 'unreported');
+  if (cfg?.selectedBackend === 'webgpu') {
+    return `${_escapeSettingsHtml(flavor)} <span style="color:var(--text-muted)">(WebGPU active)</span>`;
+  }
+  const lean = flavor === 'relaxed-simd-minimal-ort';
+  const colour = lean ? 'var(--accent-green)' : (flavor === 'unreported' ? 'var(--text-muted)' : 'var(--accent-yellow)');
+  const note = lean
+    ? 'lean path — .ort, no protobuf parse'
+    : (flavor === 'unreported' ? 'not reported yet — start narration once' : 'fallback path — larger startup memory');
+  return `<span style="color:${colour};">${_escapeSettingsHtml(flavor)}</span>`
+    + ` <span style="color:var(--text-muted);font-size:0.9em;">${_escapeSettingsHtml(note)}</span>`;
+}
+
 export async function refreshPerfPanel() {
   const p = document.getElementById('perf-panel');
   if (!p) return;
@@ -1339,6 +1359,10 @@ export async function refreshPerfPanel() {
     <li><b>Pocket Cache:</b> ${_escapeSettingsHtml(pocketCfg.cacheVersion)} / ${_escapeSettingsHtml(pocketCfg.chunkingVersion)}</li>
     <li><b>Narration Backend:</b> ${_escapeSettingsHtml(pocketCfg.selectedBackend)} (${_escapeSettingsHtml(pocketCfg.modelPrecision)})</li>
     <li><b>Runtime / Model:</b> ORT ${_escapeSettingsHtml(pocketCfg.ortVersion)} / ${_escapeSettingsHtml(pocketCfg.modelRevision)}</li>
+    <li><b>WASM Runtime:</b> ${_describeWasmRuntimeFlavor(pocketCfg)}</li>
+    <li><b>Isolation:</b> ${pocketCfg.crossOriginIsolated
+      ? `<span style="color:var(--accent-green);">on</span> — threaded (×${pocketCfg.wasmThreadCount})`
+      : `<span style="color:var(--accent-yellow);">off</span> — single-thread fallback`}</li>
     <li><b>GPU-resident State:</b> ${pocketCfg.gpuResidentStateBytes ? `${(pocketCfg.gpuResidentStateBytes / 1048576).toFixed(1)} MiB` : 'N/A'}</li>
     <li><b>Operator Fallbacks:</b> ${Number.isFinite(pocketCfg.operatorFallbackCount) ? pocketCfg.operatorFallbackCount : 'Not reported by ORT Web'}</li>
     <li><b>Calibration:</b> median ${pocketCfg.medianMs ? `${Math.round(pocketCfg.medianMs)}ms` : 'N/A'}, p95 ${pocketCfg.p95Ms ? `${Math.round(pocketCfg.p95Ms)}ms` : 'N/A'}</li>

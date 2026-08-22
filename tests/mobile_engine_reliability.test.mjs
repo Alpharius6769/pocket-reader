@@ -511,3 +511,40 @@ test('the cache handoff keeps a visible surface from tap through to outcome', as
   assert.match(helper, /caching-progress-dismiss-btn/);
   assert.match(helper, /_escapeCacheStatus\(headline\)/, 'handoff text must be escaped');
 });
+
+// The runtime flavor and isolation state were both already measured and neither
+// was visible, so a device on the heavy fallback (stock ORT reading .onnx
+// protobuf) looked identical to one on the lean path (minimal relaxed-SIMD
+// reading .ort) -- a large slice of peak startup memory on a constrained
+// iPhone. Reporting must stay strictly passive.
+test('narration runtime diagnostics are reported without changing behaviour', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const settings = await read('public/assets/js/settings_manager.js');
+
+  // Exposed on the existing runtime-config surface.
+  assert.match(audio, /ortWasmRuntimeFlavor: _pocketBackendRuntime\.ortWasmRuntimeFlavor \|\| 'unreported'/);
+  assert.match(audio, /crossOriginIsolated: window\.crossOriginIsolated === true,/);
+
+  // Rendered in the settings perf panel, which only builds when that panel is
+  // on screen -- no popup, no notification, no startup cost.
+  assert.match(settings, /function _describeWasmRuntimeFlavor\(cfg\)/);
+  assert.match(settings, /<b>WASM Runtime:<\/b>/);
+  assert.match(settings, /<b>Isolation:<\/b>/);
+  const panel = settings.slice(settings.indexOf('export async function refreshPerfPanel'));
+  assert.match(panel.slice(0, 200), /const p = document\.getElementById\('perf-panel'\);\s*\n\s*if \(!p\) return;/,
+    'the panel must still bail out when it is not rendered');
+
+  // Passive: nothing may branch on the flavor outside the describe helper.
+  const helper = settings.slice(
+    settings.indexOf('function _describeWasmRuntimeFlavor(cfg)'),
+    settings.indexOf('export async function refreshPerfPanel'),
+  );
+  const flavorUses = (settings.match(/ortWasmRuntimeFlavor/g) || []).length;
+  const helperUses = (helper.match(/ortWasmRuntimeFlavor/g) || []).length;
+  assert.equal(flavorUses, helperUses,
+    'the runtime flavor must only be read for display, never to drive behaviour');
+
+  // Values reaching innerHTML are escaped like every other settings string.
+  assert.match(helper, /_escapeSettingsHtml\(flavor\)/);
+  assert.match(helper, /_escapeSettingsHtml\(note\)/);
+});

@@ -773,6 +773,16 @@ window.getPocketTtsRuntimeConfig = function getPocketTtsRuntimeConfig() {
     calibrationVersion: POCKET_CALIBRATION_VERSION,
     accelerationVersion: POCKET_ACCELERATION_VERSION,
     wasmThreadCount: _pocketBackendRuntime.threadCount || 1,
+    // Which WASM runtime the worker actually resolved, and whether cross-origin
+    // isolation really took. Both were already measured and neither was visible
+    // anywhere, so a device on the heavy fallback path looked identical to one
+    // on the lean path -- and the difference (stock ORT reading .onnx protobuf
+    // vs the minimal relaxed-SIMD build reading .ort) is a large slice of peak
+    // startup memory on a constrained iPhone. Read-only: nothing branches on
+    // these, they are reported.
+    ortWasmRuntimeFlavor: _pocketBackendRuntime.ortWasmRuntimeFlavor || 'unreported',
+    crossOriginIsolated: window.crossOriginIsolated === true,
+    sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
     gpuResidentStateBytes: _pocketBackendRuntime.gpuResidentStateBytes,
     operatorFallbackCount: _pocketBackendRuntime.operatorFallbackCount ?? null,
     graphCapture: _pocketBackendRuntime.graphCapture === true,
