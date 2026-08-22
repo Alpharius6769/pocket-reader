@@ -39,6 +39,17 @@ jobs:
       - name: Check service-worker parity
         run: node --test tests/migration_parity.test.mjs
 
+      # These two guards existed but nothing ran them, so they only fired when
+      # someone remembered to. That is how tools/test_caching_playback_browser.mjs
+      # sat on buffer-v54 and storage-v13 for weeks while production shipped v58
+      # and v14 -- a harness importing modules that no longer existed. Both are
+      # fast and deterministic; run them on every push.
+      - name: Check module version alignment
+        run: node tools/check_module_versions.mjs
+
+      - name: Verify release parity
+        run: node tools/verify_release_parity.mjs
+
       # backend_security_regressions.py imports backend/app.py, which pulls in
       # FastAPI and aiosqlite, so the backend deps are required and not optional.
       - name: Install backend dependencies

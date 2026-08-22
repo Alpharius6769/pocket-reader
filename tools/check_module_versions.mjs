@@ -89,6 +89,46 @@ if (update) {
   process.exit(0);
 }
 
+// Second failure mode, invisible to the check above: a reference OUTSIDE
+// public/ that names a version which no longer exists. The drift check only
+// reads sw.js, index.html and the modules themselves, so the browser harnesses
+// in tools/ silently rotted -- test_caching_playback_browser.mjs was still
+// importing buffer-v54 and storage-v13 while production shipped v58/v14, so it
+// was exercising modules that had not existed for weeks and would 404 against a
+// real deploy. Anything anywhere that pins a module version has to agree with
+// the module's own declared version.
+const EXTRA_ROOTS = ['tools', 'tests', '.github'];
+const mismatched = [];
+async function walk(dir) {
+  let entries = [];
+  try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (['node_modules', '__pycache__', '.wrangler', 'webkit-smoke'].includes(entry.name)) continue;
+      await walk(full);
+      continue;
+    }
+    if (!/\.(mjs|js|html|md|yml|json)$/.test(entry.name)) continue;
+    if (entry.name === 'module_version_manifest.json') continue;
+    const text = await readFile(full, 'utf8');
+    for (const m of text.matchAll(/([a-z_0-9]+\.js)\?v=([A-Za-z0-9._-]+)/g)) {
+      const declared = versionOf.get(m[1]);
+      if (declared && m[2] !== declared) {
+        mismatched.push(`  ${full}  pins ${m[1]}?v=${m[2]}  (current: ${declared})`);
+      }
+    }
+    for (const m of text.matchAll(/sw\.js\?v=(\d+)/g)) {
+      if (m[1] !== swRevision) {
+        mismatched.push(`  ${full}  pins sw.js?v=${m[1]}  (current: ${swRevision})`);
+      }
+    }
+  }
+}
+if (!update) {
+  for (const root of EXTRA_ROOTS) await walk(root);
+}
+
 if (stale.length) {
   console.error('Module content changed without a version bump.\n');
   console.error('These edits would NOT reach a returning browser — the old copy is cached immutable:\n');
@@ -97,6 +137,14 @@ if (stale.length) {
   }
   console.error('\nBump each module\'s own ?v= everywhere it is referenced (sw.js, index.html,');
   console.error('and every importer), then re-run with --update.');
+  process.exit(1);
+}
+
+if (mismatched.length) {
+  console.error('Stale module version references outside public/.');
+  console.error('These pin a version that no longer exists, so they exercise or');
+  console.error('advertise a module that is not what production ships:');
+  console.error([...new Set(mismatched)].join(String.fromCharCode(10)));
   process.exit(1);
 }
 
