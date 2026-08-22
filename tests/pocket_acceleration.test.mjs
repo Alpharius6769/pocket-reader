@@ -78,11 +78,21 @@ test('the per-frame flow graph is lazy when the WASM block core is available', a
   assert.doesNotMatch(wasmDescriptors, /asset: 'flow_lm_flow'/);
 });
 
-test('iOS and constrained devices use the weight-shared unified WASM core', async () => {
+// Superseded 2026-08-21: iOS now takes the SPLIT core. The unified block4 graph
+// is a single 87 MB model and that allocation is what OOM-kills a 4 GB iPhone at
+// session creation; flow_lm_main is 76 MB and flow_lm_flow's 10 MB lands after
+// the peak, for the same resident total. Constrained non-iOS keeps unified,
+// because only iOS is barred from the optional decode block and sending Android
+// down the split path would load both (202 MB). See the scoping guard in
+// mobile_engine_reliability.test.mjs.
+test('constrained non-iOS keeps the weight-shared unified WASM core', async () => {
   const worker = await read('public/assets/js/pocket_worker.js');
   assert.match(worker, /flow_lm_unified_block4_int8\.onnx/);
   assert.match(worker, /preferUnifiedWasmCore/);
-  assert.match(worker, /iosWebKit \|\| constrainedMemoryMode/);
+  assert.ok(worker.includes('&& constrainedMemoryMode') && worker.includes('&& !iosWebKit;'),
+    'unified must be gated on constrained AND not-iOS');
+  assert.doesNotMatch(worker, /&& \(iosWebKit \|\| constrainedMemoryMode\);/,
+    'iOS must no longer be routed to the unified core');
   assert.match(worker, /flowLmUnifiedSession\.run/);
   assert.match(worker, /decode_mode/);
   assert.match(worker, /wasm-unified-block4/);
@@ -146,7 +156,7 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(audio, /wasm_rtf_sample/);
   assert.match(audio, /shouldProbeBundle/);
   assert.match(audio, /wasmReferenceRtf: _pocketBackendRuntime\.wasmReferenceRtf/);
-  assert.match(audio, /pocket-worker-v53/);
+  assert.match(audio, /pocket-worker-v54/);
   assert.match(worker, /wasmReferenceRtf/);
   assert.match(worker, /releaseAllSessions/);
   assert.match(worker, /wasm_rtf_sample/);
@@ -189,10 +199,10 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
   assert.match(serviceWorker, /pocket-reader-core-v\d+/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v120/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v121/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
-  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v53/);
+  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v54/);
   assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v22/);
   assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v9/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);

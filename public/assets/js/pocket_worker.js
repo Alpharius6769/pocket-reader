@@ -2028,9 +2028,41 @@ async function loadBundle(language, {
   const gpuBlockFilename = webGpuBundleMetadata?.model_files?.[WEBGPU_BLOCK_ROLE];
   const gpuMimiFilename = webGpuBundleMetadata?.model_files?.[WEBGPU_MIMI_ROLE];
   const iosWebKit = isIosClient();
+  // Memory-first core selection on constrained devices.
+  //
+  // The unified block4 graph folds the AR core, the one-step flow network and
+  // four-frame batching into a single 87 MB model -- and 87 MB is exactly the
+  // allocation that OOM-kills a 4 GB iPhone at session creation, because the
+  // worst instant holds the JS buffer AND ORT's copy of it in the WASM heap
+  // (~174 MB). The split core's largest single model is flow_lm_main at 76 MB
+  // (~152 MB at that same instant), and flow_lm_flow's 10 MB is created after
+  // the peak has passed. Total resident memory is effectively unchanged:
+  // 16+76+10+23 = 125 MB split against 16+87+23 = 126 MB unified. The whole
+  // gain is ~22 MB off the single worst moment in startup.
+  //
+  // The cost is real and worth naming rather than burying: without the unified
+  // graph there is no four-frame batching, so the ~47 MB fp32 flow-LM state
+  // crosses the JS/WASM boundary once per frame instead of once per four.
+  // Generation gets slower. It does not get hungrier -- the transient cost of
+  // one crossing is identical, it simply happens more often -- so this trades
+  // throughput for startup headroom and nothing else. On a device that cannot
+  // currently finish startup at all, a slower render that completes beats a
+  // faster one that is killed.
+  //
+  // iOS is always classified constrained (memorySafeInference), so in practice
+  // this retires the unified core on iPhone. It stays wired for any device that
+  // reaches the WASM path without the constrained flag.
+  // Scoped to iOS deliberately. A constrained ANDROID device must keep the
+  // unified core: it is not excluded from the optional decode-block below, so
+  // sending it down the split path would load flow_lm_main (76) AND
+  // flow_lm_decode_block4 (87) AND mimi (23) AND the conditioner (16) -- 202 MB
+  // resident, far worse than the 126 MB it has today. iOS is the only platform
+  // barred from that extra block, which is what makes the split path a genuine
+  // reduction there and a regression anywhere else.
   const preferUnifiedWasmCore = currentBackend === 'wasm'
     && language === DEFAULT_LANGUAGE
-    && (iosWebKit || constrainedMemoryMode);
+    && constrainedMemoryMode
+    && !iosWebKit;
   if (currentBackend === 'webgpu' && !gpuMimiFilename) {
     throw new Error('The WebGPU bundle is missing its benchmark Mimi candidate.');
   }

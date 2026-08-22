@@ -548,3 +548,45 @@ test('narration runtime diagnostics are reported without changing behaviour', as
   assert.match(helper, /_escapeSettingsHtml\(flavor\)/);
   assert.match(helper, /_escapeSettingsHtml\(note\)/);
 });
+
+// Split core on iOS: the unified block4 graph is one 87 MB model, and 87 MB is
+// the allocation that OOM-kills a 4 GB iPhone at session creation (JS buffer
+// plus ORT's WASM-heap copy at the same instant). flow_lm_main is 76 MB and
+// flow_lm_flow's 10 MB lands after the peak. Resident is a wash (125 vs 126);
+// the gain is entirely at the worst moment.
+test('the split WASM core is scoped to iOS and cannot regress other platforms', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+
+  // iOS takes the split path; constrained non-iOS keeps unified.
+  assert.match(
+    worker,
+    /const preferUnifiedWasmCore = currentBackend === 'wasm'\s*\n\s*&& language === DEFAULT_LANGUAGE\s*\n\s*&& constrainedMemoryMode\s*\n\s*&& !iosWebKit;/,
+  );
+
+  // The regression this scoping prevents: a constrained Android on the split
+  // path would ALSO pick up the optional decode block, because only iOS is
+  // barred from it. That guard has to stay exactly as it is.
+  assert.match(
+    worker,
+    /\} else if \(currentBackend === 'wasm' && !iosWebKit && resolveWasmThreadCount\(\) >= 2\) \{/,
+    'the optional decode block must remain excluded on iOS only',
+  );
+
+  // With no unified and no decode block, the 10 MB per-frame flow session must
+  // still load or the split path has no flow network at all.
+  assert.match(
+    worker,
+    /if \(currentBackend === 'wasm' && !flowLmWasmBlockSession && !flowLmUnifiedSession\) \{/,
+  );
+
+  // Resident totals, so a future edit that reintroduces a fourth big model on
+  // iOS trips here rather than on a phone.
+  const sizes = worker.slice(worker.indexOf('const MODEL_ASSET_BYTES'),
+                             worker.indexOf('const ORT_FORMAT_MODEL_ASSET_BYTES'));
+  const grab = (k) => Number(sizes.match(new RegExp(k + ': ([0-9]+)'))[1]);
+  const ios = grab('text_conditioner') + grab('flow_lm_main') + grab('flow_lm_flow') + grab('mimi_decoder');
+  const unified = grab('text_conditioner') + grab('flow_lm_unified_block4') + grab('mimi_decoder');
+  assert.ok(ios < unified, 'the split set must not be heavier resident than unified');
+  assert.ok(grab('flow_lm_main') < grab('flow_lm_unified_block4'),
+    'the point of the swap is a smaller largest-single-model');
+});
