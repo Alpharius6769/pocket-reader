@@ -170,6 +170,45 @@ function _fastNarrationRequested() {
   return new URL(window.location.href).searchParams.get(FAST_NARRATION_PARAM) === '1';
 }
 
+// Symptom: "the caching modal never appears -- sometimes it does".
+//
+// Tapping Cache does not start caching when the page is not yet cross-origin
+// isolated. _continueCaching() hands off to a ?tts_fast=1 reload and returns,
+// so BufferManager.start() -- the only thing that creates the progress modal --
+// never runs in that page's life. The modal appears only on the far side of the
+// reload, and ONLY if the resume chain fully succeeds. That is the "sometimes":
+// a second cache attempt in an already-isolated session skips the reload
+// entirely and the modal shows immediately.
+//
+// Every resume failure exit used to leave nothing on screen. One of them --
+// storyLoaded === false -- returned in total silence, no modal and no message,
+// which is indistinguishable from the tap having done nothing at all.
+//
+// This keeps one surface visible from tap to outcome: the same progress modal
+// the job will use, primed the moment the reloaded page starts restoring, and
+// carrying the reason if the handoff dies instead of vanishing.
+function _surfaceCacheHandoffState(headline, detail, { terminal = false } = {}) {
+  const modal = document.getElementById('caching-progress-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  modal.classList.add('active');
+  const text = document.getElementById('caching-progress-text');
+  if (text) {
+    text.innerHTML = `<strong>${_escapeCacheStatus(headline)}</strong>`
+      + `<br><span style="font-size:0.85rem;color:var(--text-muted)">${_escapeCacheStatus(detail)}</span>`;
+  }
+  const stats = document.getElementById('caching-progress-stats');
+  if (stats && terminal) stats.innerHTML = '';
+  // A terminal state must always be dismissible, or the reader is stuck behind
+  // a modal describing a job that is never going to start.
+  const dismiss = document.getElementById('caching-progress-dismiss-btn');
+  if (dismiss && terminal) {
+    dismiss.style.display = 'block';
+    dismiss.disabled = false;
+    dismiss.style.cursor = 'pointer';
+  }
+}
+
 function _snapshotNarrationStory(story, storyRef) {
   if (!story) return null;
   return {
@@ -361,6 +400,9 @@ async function _resumeFastNarrationCache() {
   // restored. Keep an overlay up across that gap so it does not look like the
   // app is jumping around. (Issue: forced to homescreen when caching starts.)
   window.showLoadingOverlay?.('Preparing narration', 'Opening your story in fast multi-threaded mode…');
+  if (resume.action !== 'playback') {
+    _surfaceCacheHandoffState('Preparing offline audio', 'Restoring your story after the fast-narration reload…');
+  }
 
   const targetRef = resume.storyRef || resume.title;
   const startedAt = Date.now();
@@ -456,6 +498,11 @@ async function _resumeFastNarrationCache() {
         window._pocketSuppressCacheDecision = false;
         window.closeCacheModal?.();
         window.hideLoadingOverlay?.();
+        _surfaceCacheHandoffState(
+          'Caching could not start',
+          'Your story could not be reopened after the reload. Open it again and retry caching.',
+          { terminal: true },
+        );
         window.virtueSpeak?.('Narration could not resume. Please start playback or caching again.', 6000);
         return;
       } finally {
@@ -508,7 +555,14 @@ async function _resumeFastNarrationCache() {
           BufferManager.start(resume.mode || 'Normal');
         }
       } else {
+        // Previously a bare return: no modal, no message, nothing on screen.
         sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
+        _surfaceCacheHandoffState(
+          'Caching could not start',
+          'The story text did not finish loading, so there was nothing to cache. Open the story and try again.',
+          { terminal: true },
+        );
+        window.hideLoadingOverlay?.();
       }
       return;
     }
@@ -518,6 +572,11 @@ async function _resumeFastNarrationCache() {
   window.hideLoadingOverlay?.();
   sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
   sessionStorage.removeItem(FAST_NARRATION_RETRY_KEY);
+  _surfaceCacheHandoffState(
+    'Caching could not start',
+    'Preparing the story timed out. Open it again and retry caching.',
+    { terminal: true },
+  );
   window.virtueSpeak?.('Story preparation timed out. Open the story and try caching again.', 6000);
 }
 
@@ -1903,6 +1962,10 @@ async function _continueCaching(mode) {
   if ((chaptersPersisted || _isLoadableHandoffRef(loadRef))
       && _requestFastNarrationReload(mode, 'cache')) {
     if (typeof window.closeCacheModal === 'function') window.closeCacheModal();
+    // The reload is not instant, and on a slow device the tap otherwise looks
+    // ignored right up until the page blanks. Same modal the job will use, so
+    // the far side continues it rather than opening a second surface.
+    _surfaceCacheHandoffState('Preparing offline audio', 'Reloading into fast narration mode…');
     return;
   }
   if (typeof window.closeCacheModal === 'function') window.closeCacheModal();

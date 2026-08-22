@@ -469,3 +469,45 @@ test('offscreen view DOM is released only for views that rebuild on entry', asyn
   assert.doesNotMatch(map, /hmofa-view/,
     'the masterlist has no rebuild hook and would come back blank');
 });
+
+// Symptom 1: "the caching modal never appears -- sometimes it does". Tapping
+// Cache on a not-yet-isolated page hands off to a ?tts_fast=1 reload and
+// returns, so BufferManager.start() -- the only creator of the progress modal --
+// never runs in that page. The modal then depended entirely on the resume chain
+// succeeding, and every failure exit left a blank screen; one returned in total
+// silence. "Sometimes" was an already-isolated session skipping the reload.
+test('the cache handoff keeps a visible surface from tap through to outcome', async () => {
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  assert.match(buffer, /function _surfaceCacheHandoffState\(/);
+
+  // Feedback before the reload, so the tap is never silently swallowed.
+  const continueFn = buffer.slice(
+    buffer.indexOf('async function _continueCaching(mode)'),
+    buffer.indexOf('async function _ensureCachingStory'),
+  );
+  assert.match(continueFn, /_surfaceCacheHandoffState\('Preparing offline audio'/,
+    'the pre-reload branch must show the modal before handing off');
+
+  // And primed again immediately on the far side of the reload.
+  assert.match(buffer, /if \(resume\.action !== 'playback'\) \{\s*_surfaceCacheHandoffState\(/);
+
+  // Every terminal exit reports a reason instead of leaving a blank screen.
+  const terminals = buffer.match(/_surfaceCacheHandoffState\(\s*'Caching could not start'/g) || [];
+  assert.equal(terminals.length, 3,
+    'restore-threw, story-never-loaded and handoff-timeout must each surface a reason');
+
+  // The formerly silent branch must no longer be a bare return.
+  assert.doesNotMatch(
+    buffer,
+    /\} else \{\s*sessionStorage\.removeItem\(FAST_NARRATION_RESUME_KEY\);\s*\}\s*return;/,
+    'storyLoaded === false must not return silently',
+  );
+
+  // A terminal state has to be dismissible or the reader is trapped behind it.
+  const helper = buffer.slice(
+    buffer.indexOf('function _surfaceCacheHandoffState('),
+    buffer.indexOf('function _snapshotNarrationStory'),
+  );
+  assert.match(helper, /caching-progress-dismiss-btn/);
+  assert.match(helper, /_escapeCacheStatus\(headline\)/, 'handoff text must be escaped');
+});
