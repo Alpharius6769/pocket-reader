@@ -619,3 +619,44 @@ test('the silence watchdog cannot fire inside a legitimate blocking phase', asyn
   assert.match(audio, /: WORKER_SILENCE_TIMEOUT_MS;/,
     'a non-blocking message must reset the budget to the base');
 });
+
+// Field crash, iPhone 13 (4 GB), 2026-08-22: caching died at paragraph 20 and
+// again at 41 -- exactly the every-20-paragraph WASM worker recycle.
+// _resetPocketEngineForBackend was declared async but held no await, so
+// terminate() (a request, not a wait) was followed immediately by
+// _loadPocketEngine() allocating a second full ~126 MB model set. Both sets
+// coexisted for a moment: ~250 MB, which is the kill on that device.
+test('the worker recycle waits for teardown before reallocating', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const reset = audio.slice(
+    audio.indexOf('async function _resetPocketEngineForBackend()'),
+    audio.indexOf('window._resetPocketEngineForBackend = _resetPocketEngineForBackend;'),
+  );
+  assert.ok(reset.length > 0, 'reset function not found');
+  assert.match(reset, /await new Promise\(\(resolve\) => setTimeout\(resolve, 0\)\)/,
+    'terminate() must be followed by a real yield, not a synchronous return');
+  assert.match(reset, /isPocketDeviceMemorySafeMode\?\.\(\) !== false \? 250 : 0/,
+    'constrained devices need a longer settle than a bare macrotask');
+
+  // The recycle must still call reset BEFORE load, and both must be awaited.
+  const recycle = audio.slice(
+    audio.indexOf('async function _maybeRecyclePocketEngine()'),
+    audio.indexOf('// Live generator with one quality-guard retry'),
+  );
+  const resetIdx = recycle.indexOf('await _resetPocketEngineForBackend();');
+  const loadIdx = recycle.indexOf('await _loadPocketEngine();');
+  assert.ok(resetIdx > 0 && loadIdx > resetIdx,
+    'teardown must be awaited before the replacement engine is loaded');
+});
+
+// stock-wasm-only on iOS 26.6 was unexpected and the flavor name alone cannot
+// say whether the probe failed or the relaxed candidates were rejected.
+test('the relaxed SIMD probe and model format are reported', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  const audio = await read('public/assets/js/audio_core.js');
+  const settings = await read('public/assets/js/settings_manager.js');
+  assert.match(worker, /relaxedSimdSupported: supportsRelaxedSimd\(\),/);
+  assert.match(worker, /ortFormatModels: useOrtFormatWasm,/);
+  assert.match(audio, /relaxedSimdSupported: _pocketBackendRuntime\.relaxedSimdSupported \?\? null,/);
+  assert.match(settings, /<b>Relaxed SIMD \/ \.ort:<\/b>/);
+});

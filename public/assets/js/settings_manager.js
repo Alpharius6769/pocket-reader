@@ -7,7 +7,7 @@ import {
   writePocketDeviceBackendPreference,
 } from './pocket_backend_policy.js?v=backend-v22';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '182';
+export const NARRATION_SERVICE_WORKER_VERSION = '183';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1360,6 +1360,13 @@ export async function refreshPerfPanel() {
     <li><b>Narration Backend:</b> ${_escapeSettingsHtml(pocketCfg.selectedBackend)} (${_escapeSettingsHtml(pocketCfg.modelPrecision)})</li>
     <li><b>Runtime / Model:</b> ORT ${_escapeSettingsHtml(pocketCfg.ortVersion)} / ${_escapeSettingsHtml(pocketCfg.modelRevision)}</li>
     <li><b>WASM Runtime:</b> ${_describeWasmRuntimeFlavor(pocketCfg)}</li>
+    <li><b>Relaxed SIMD / .ort:</b> ${pocketCfg.relaxedSimdSupported === null
+      ? '<span style="color:var(--text-muted)">not reported yet</span>'
+      : `${pocketCfg.relaxedSimdSupported
+          ? '<span style="color:var(--accent-green);">supported</span>'
+          : '<span style="color:var(--accent-yellow);">unsupported</span>'} / ${pocketCfg.ortFormatModels
+          ? '<span style="color:var(--accent-green);">.ort</span>'
+          : '<span style="color:var(--accent-yellow);">.onnx protobuf</span>'}`}</li>
     <li><b>Isolation:</b> ${pocketCfg.crossOriginIsolated
       ? `<span style="color:var(--accent-green);">on</span> — threaded (×${pocketCfg.wasmThreadCount})`
       : `<span style="color:var(--accent-yellow);">off</span> — single-thread fallback`}</li>

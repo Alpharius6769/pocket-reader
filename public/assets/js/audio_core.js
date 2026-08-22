@@ -781,6 +781,8 @@ window.getPocketTtsRuntimeConfig = function getPocketTtsRuntimeConfig() {
     // startup memory on a constrained iPhone. Read-only: nothing branches on
     // these, they are reported.
     ortWasmRuntimeFlavor: _pocketBackendRuntime.ortWasmRuntimeFlavor || 'unreported',
+    relaxedSimdSupported: _pocketBackendRuntime.relaxedSimdSupported ?? null,
+    ortFormatModels: _pocketBackendRuntime.ortFormatModels ?? null,
     crossOriginIsolated: window.crossOriginIsolated === true,
     sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined',
     gpuResidentStateBytes: _pocketBackendRuntime.gpuResidentStateBytes,
@@ -1229,7 +1231,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v55', document.baseURI).href;
+        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v56', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -2244,7 +2246,23 @@ async function _ensurePocketBackendOptimizedForVoice(voiceName) {
 
 window.ensurePocketBackendOptimized = _ensurePocketBackendOptimizedForVoice;
 
+// Field crash, iPhone 13 (4 GB), 2026-08-22: caching died at paragraph 20 and
+// again at 41 — exactly the every-20-paragraph worker recycle.
+//
+// This function was declared async but contained no await, so it returned
+// synchronously. worker.terminate() only REQUESTS teardown; it does not wait
+// for WebKit to reclaim the worker's WASM heap, and that heap is holding the
+// full ~126 MB model set. _maybeRecyclePocketEngine then called
+// _loadPocketEngine() on the very next line, which downloads and creates a
+// second full set. For a moment the device is asked to hold both — roughly
+// 250 MB — and on a 4 GB iPhone that is the kill.
+//
+// Yielding lets the terminated worker actually go away first. Two macrotasks
+// plus a short settle on constrained devices costs a fraction of a second
+// against a recycle that only happens every twenty paragraphs, and it is the
+// difference between a reload and a crash.
 async function _resetPocketEngineForBackend() {
+  const hadWorkers = ttsWorkers.length > 0;
   ttsWorkers.forEach((worker) => worker?.worker?.terminate());
   ttsWorkers = [];
   Object.values(ttsQueue).forEach((entry) => {
@@ -2256,6 +2274,14 @@ async function _resetPocketEngineForBackend() {
   _pocketBackendOptimizationPromise = null;
   _setNeuralState('idle');
   loadedVoiceEngine = null;
+  if (hadWorkers) {
+    // Drop the references above out of scope for the collector, then give the
+    // terminated worker's heap a real chance to be reclaimed before anything
+    // allocates again.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const settleMs = window.isPocketDeviceMemorySafeMode?.() !== false ? 250 : 0;
+    if (settleMs) await new Promise((resolve) => setTimeout(resolve, settleMs));
+  }
 }
 // The buffer_manager.js caching circuit breaker recovers from repeated
 // consecutive failures by calling this — it must be reachable from window

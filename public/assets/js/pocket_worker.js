@@ -2391,6 +2391,13 @@ async function loadBundle(language, {
     modelRevision: currentModelRevision,
     ortVersion: POCKET_ORT_VERSION,
     ortWasmRuntimeFlavor: currentBackend === 'wasm' ? ortWasmRuntimeFlavor : null,
+    // The device reported stock-wasm-only on iOS 26.6, which should have had
+    // relaxed SIMD. Landing on stock means EITHER the probe failed OR both
+    // relaxed candidates were reachable-but-rejected, and the flavor name alone
+    // cannot tell those apart. Report the probe itself so the next diagnostic
+    // answers it outright instead of costing another round trip.
+    relaxedSimdSupported: supportsRelaxedSimd(),
+    ortFormatModels: useOrtFormatWasm,
     threads: runtimeThreadCount,
     gpuResidentStateBytes: currentBackend === 'webgpu' ? POCKET_GPU_RESIDENT_STATE_BYTES : 0,
     operatorFallbackCount: null,
