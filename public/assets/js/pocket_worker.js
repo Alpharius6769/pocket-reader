@@ -1667,7 +1667,8 @@ async function loadOrt(backend = 'wasm', { preferMinimalOrt = false } = {}) {
   }
 
   if (desiredFlavor === 'wasm') {
-    postMessage({ type: "status", status: "Loading optimized ONNX Runtime...", state: "loading" });
+    postMessage({ type: "status", status: "Loading optimized ONNX Runtime...", state: "loading",
+      phase: "blocking", budgetMs: MODULE_TIMEOUT_MS });
     const runtime = await loadWasmOrtRuntime(preferMinimalOrt);
     ort = runtime.module;
     ortWasmModelFormat = desiredWasmFormat;
@@ -1681,7 +1682,8 @@ async function loadOrt(backend = 'wasm', { preferMinimalOrt = false } = {}) {
     return;
   }
 
-  postMessage({ type: "status", status: "Loading ONNX Runtime...", state: "loading" });
+  postMessage({ type: "status", status: "Loading ONNX Runtime...", state: "loading",
+    phase: "blocking", budgetMs: MODULE_TIMEOUT_MS });
   const version = POCKET_ORT_VERSION;
   // Self-hosted copy (B2 via the Cloudflare proxy) is primary so a jsDelivr
   // outage cannot take narration down; the CDN stays as fallback so the app
@@ -1904,7 +1906,8 @@ async function ensureFlowLmFlowSession() {
   if (currentBackend !== 'wasm') {
     throw new Error('The per-frame flow graph is only available on WASM.');
   }
-  postMessage({ type: 'status', status: 'Preparing high-quality flow...', state: 'loading' });
+  postMessage({ type: 'status', status: 'Preparing high-quality flow...', state: 'loading',
+    phase: 'blocking', budgetMs: SESSION_CREATE_TIMEOUT_MS });
   const response = await fetchFirstAvailable(
     wasmModelPaths(currentLanguage, wasmModelFilename('flow_lm_flow')),
   );
@@ -2104,7 +2107,13 @@ async function loadBundle(language, {
         ];
     let modelBuffer = await fetchModelWithProgress(modelUrls, asset, completedBytes);
     const modelBytes = modelBuffer.byteLength;
-    postMessage({ type: "status", status: `Preparing ${asset}...`, state: "loading" });
+    // ort.InferenceSession.create() below is a single blocking call that posts
+    // nothing for its whole duration -- minutes for an 87 MB graph on a phone,
+    // which is why SESSION_CREATE_TIMEOUT_MS allows five. The main-thread
+    // silence watchdog would otherwise treat that as a dead worker and
+    // terminate a perfectly healthy one, so declare the budget with the status.
+    postMessage({ type: "status", status: `Preparing ${asset}...`, state: "loading",
+      phase: "blocking", budgetMs: SESSION_CREATE_TIMEOUT_MS });
     if (constrainedMemoryMode) {
       // fetchModelWithProgress has just written this asset to the durable cache,
       // and cache.put() has to serialise the body -- a second full-size copy of

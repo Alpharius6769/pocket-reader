@@ -392,7 +392,7 @@ test('worker startup watchdog rearms on activity instead of clearing on first me
     'onmessage must not clear the startup watchdog unconditionally',
   );
 
-  assert.match(audio, /const WORKER_SILENCE_TIMEOUT_MS = 45000;/);
+  assert.match(audio, /const WORKER_SILENCE_TIMEOUT_MS = \d+;/);
   assert.match(audio, /const armStartupWatchdog = \(\) => \{/);
   assert.match(audio, /const clearStartupWatchdog = \(\) => \{/);
 
@@ -403,7 +403,8 @@ test('worker startup watchdog rearms on activity instead of clearing on first me
   );
   assert.match(handler, /init_done/, 'terminal init_done must disarm the watchdog');
   assert.match(handler, /init_error/, 'terminal init_error must disarm the watchdog');
-  assert.match(handler, /\} else \{\s*armStartupWatchdog\(\);/,
+  const elseBranch = handler.slice(handler.indexOf('} else {'));
+  assert.ok(elseBranch.includes('armStartupWatchdog();'),
     'every non-terminal message must rearm the watchdog');
 
   // Settling the spawn by any route must stop the timer, or a worker that just
@@ -437,7 +438,7 @@ test('constrained startup yields between the cache copy and session creation', a
     worker.indexOf('const orderedDescriptors'),
   );
   const yieldIdx = loader.indexOf('await new Promise((resolve) => setTimeout(resolve, 0));');
-  const createIdx = loader.indexOf('ort.InferenceSession.create');
+  const createIdx = loader.indexOf('ort.InferenceSession.create(modelBuffer');
   assert.ok(yieldIdx > 0, 'constrained path must yield before session creation');
   assert.ok(yieldIdx < createIdx,
     'the collection point must sit BEFORE session creation, not after');
@@ -589,4 +590,32 @@ test('the split WASM core is scoped to iOS and cannot regress other platforms', 
   assert.ok(ios < unified, 'the split set must not be heavier resident than unified');
   assert.ok(grab('flow_lm_main') < grab('flow_lm_unified_block4'),
     'the point of the swap is a smaller largest-single-model');
+});
+
+// The first version of this watchdog used a flat 45s budget, which was SHORTER
+// than three legitimate silent operations: ORT module import (45s),
+// a stalled model read (60s) and above all session creation, which the worker
+// allows five minutes for because ort.InferenceSession.create() is one blocking
+// call posting nothing throughout. On a slow phone that would have terminated a
+// perfectly healthy worker -- turning the fix into a worse bug than the hang.
+test('the silence watchdog cannot fire inside a legitimate blocking phase', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const worker = await read('public/assets/js/pocket_worker.js');
+
+  const base = Number(audio.match(/const WORKER_SILENCE_TIMEOUT_MS = (\d+);/)[1]);
+  const stall = Number(worker.match(/const MODEL_STALL_TIMEOUT_MS = (\d+);/)[1]);
+  const moduleTimeout = Number(worker.match(/const MODULE_TIMEOUT_MS = (\d+);/)[1]);
+  assert.ok(base > stall, `base budget ${base} must exceed the stall timeout ${stall}`);
+  assert.ok(base > moduleTimeout, `base budget ${base} must exceed the module timeout ${moduleTimeout}`);
+
+  // Session creation is covered by a worker-declared budget, not the base.
+  assert.match(worker, /phase: "blocking", budgetMs: SESSION_CREATE_TIMEOUT_MS/);
+  assert.match(worker, /phase: 'blocking', budgetMs: SESSION_CREATE_TIMEOUT_MS/);
+  assert.match(worker, /phase: "blocking", budgetMs: MODULE_TIMEOUT_MS/);
+  assert.match(audio, /data\?\.phase === 'blocking'/);
+  assert.match(audio, /declared \+ WORKER_PHASE_GRACE_MS/);
+
+  // And the relaxed budget must not persist past the phase that asked for it.
+  assert.match(audio, /: WORKER_SILENCE_TIMEOUT_MS;/,
+    'a non-blocking message must reset the budget to the base');
 });

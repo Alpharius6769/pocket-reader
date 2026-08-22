@@ -1229,7 +1229,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v54', document.baseURI).href;
+        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v55', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -1266,7 +1266,23 @@ async function _loadPocketEngine() {
         // "did the worker ever speak" but "has it gone quiet mid-init". Init
         // reports progress continuously (2/10/30/70/90 plus per-asset status), so
         // a healthy worker keeps this alive; a dead one trips it in one interval.
-        const WORKER_SILENCE_TIMEOUT_MS = 45000;
+        // Base budget must clear every BOUNDED silent operation the worker can
+        // legitimately be inside, or the watchdog kills healthy workers. The
+        // longest of those is MODEL_STALL_TIMEOUT_MS (60s) on a stalled read;
+        // ORT module import allows 45s. 75s clears both with margin.
+        //
+        // Session creation is the exception and cannot be covered by any base
+        // value: ort.InferenceSession.create() is one blocking call posting
+        // nothing for minutes on a phone, which is why the worker allows five
+        // for it. Rather than duplicate that constant here and let the two
+        // drift, the worker declares its own budget on the status that precedes
+        // the blocking call and this honours it.
+        const WORKER_SILENCE_TIMEOUT_MS = 75000;
+        // Margin so the worker's own timeout rejects first and reports a real
+        // error whenever it still can; this only fires when the worker is gone
+        // and no rejection is possible.
+        const WORKER_PHASE_GRACE_MS = 30000;
+        let workerSilenceBudgetMs = WORKER_SILENCE_TIMEOUT_MS;
         let startupTimerId = null;
         const failWorkerStartup = (message) => {
           if (workerObj.ready || resolved) return;
@@ -1296,15 +1312,16 @@ async function _loadPocketEngine() {
         const armStartupWatchdog = () => {
           clearStartupWatchdog();
           if (workerObj.ready || resolved) return;
+          const budget = workerSilenceBudgetMs;
           startupTimerId = setTimeout(() => {
             const stalledAt = workerObj._lastStatus
               ? ` (last status: ${workerObj._lastStatus})`
               : '';
             failWorkerStartup(
-              `Pocket TTS worker went silent for ${WORKER_SILENCE_TIMEOUT_MS / 1000}s during startup${stalledAt}`
+              `Pocket TTS worker went silent for ${Math.round(budget / 1000)}s during startup${stalledAt}`
               + ' — treating it as terminated (on iOS this is normally the tab memory ceiling).',
             );
-          }, WORKER_SILENCE_TIMEOUT_MS);
+          }, budget);
         };
         armStartupWatchdog();
 
@@ -1316,6 +1333,13 @@ async function _loadPocketEngine() {
               || data?.type === 'bundle_loaded' || data?.type === 'init_error' || data?.type === 'error') {
             clearStartupWatchdog();
           } else {
+            // A declared blocking phase buys its own budget for the NEXT silent
+            // stretch only; anything else returns to the base budget, so a long
+            // session creation cannot leave the watchdog permanently relaxed.
+            const declared = Number(data?.budgetMs);
+            workerSilenceBudgetMs = (data?.phase === 'blocking' && Number.isFinite(declared) && declared > 0)
+              ? declared + WORKER_PHASE_GRACE_MS
+              : WORKER_SILENCE_TIMEOUT_MS;
             armStartupWatchdog();
           }
           if (typeof data?.status === 'string') workerObj._lastStatus = data.status;
