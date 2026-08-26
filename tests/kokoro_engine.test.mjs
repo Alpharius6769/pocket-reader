@@ -226,3 +226,40 @@ test('first-run detection resolves the narration engine, not just the backend', 
   // And it has to be visible in the summary the reader is shown.
   assert.match(setup, /record\.narrationEngine === 'kokoro' \? 'Kokoro-82M' : 'Pocket TTS'/);
 });
+
+// Reported from a live build: the reader page's own engine dropdown still
+// offered only "Pocket TTS" and "Device", so a reader routed to Kokoro could see
+// it in Settings but neither switch it nor pick its voices from the page they
+// actually narrate on.
+test('the reader playbar offers the same engines as Settings', async () => {
+  const html = await read('public/index.html');
+  const select = html.slice(html.indexOf('id="reader-engine-select"'),
+                            html.indexOf('id="voice-selector"'));
+  for (const value of ['"auto"', '"pocket"', '"kokoro"', '"webspeech"']) {
+    assert.ok(select.includes(`value=${value}`), `the reader select needs ${value}`);
+  }
+});
+
+test('the reader voice list follows the engine that will actually run', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  // 'pocket' is the collapsed UI value; the running model may be Kokoro.
+  assert.match(audio, /const neuralEngine = engineVal === 'pocket' \? _resolveActiveEngine\(\) : engineVal;/);
+  assert.match(audio, /if \(neuralEngine === 'kokoro'\) \{/);
+  // Grouped by gender like the Pocket list, with grades shown.
+  assert.match(audio, /<optgroup label="Female voices">/);
+  assert.match(audio, /byGender\('male'\)/);
+  // The playbar select must show the real choice, not the collapsed value.
+  assert.match(audio, /if \(playbarSel\) playbarSel\.value = controlValue;/);
+});
+
+test('a Kokoro voice id is never canonicalised against the Pocket voice list', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const handler = audio.slice(audio.indexOf('window.onVoiceSelectionChange = function'),
+                              audio.indexOf('window.switchReaderVoiceEngine = switchReaderVoiceEngine'));
+  const kokoroIdx = handler.indexOf('if (isKokoroVoice(newVoice))');
+  const canonIdx = handler.indexOf('canonicalPocketVoice');
+  assert.ok(kokoroIdx >= 0, 'Kokoro ids need their own branch');
+  assert.ok(canonIdx < 0 || kokoroIdx < canonIdx,
+    'the Kokoro branch must return before canonicalPocketVoice rewrites the id');
+  assert.match(handler, /window\.userProfile\.settings\.kokoroVoice = newVoice;/);
+});

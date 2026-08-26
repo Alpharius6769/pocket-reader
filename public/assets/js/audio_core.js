@@ -4135,14 +4135,26 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   const globalSel = document.getElementById('voice-engine-select');
   if (globalSel) globalSel.value = controlValue;
   const playbarSel = document.getElementById('reader-engine-select');
-  if (playbarSel) playbarSel.value = engineVal;
+  if (playbarSel) playbarSel.value = controlValue;
   if (typeof window.renderNarrationEngineControls === 'function') {
     try { window.renderNarrationEngineControls(); } catch (_) {}
   }
 
   const voiceSelector = document.getElementById('voice-selector');
+  const neuralEngine = engineVal === 'pocket' ? _resolveActiveEngine() : engineVal;
   if (voiceSelector) {
-    if (engineVal === 'pocket') {
+    if (neuralEngine === 'kokoro') {
+      const saved = window.userProfile?.settings?.kokoroVoice;
+      const chosen = isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
+      const byGender = (gender) => KOKORO_VOICES.filter((voice) => voice.gender === gender)
+        .map((voice) => `<option value="${voice.id}"${voice.id === chosen ? ' selected' : ''}>`
+          + `${voice.label} (${voice.grade})</option>`).join('');
+      voiceSelector.innerHTML =
+        `<optgroup label="Female voices">${byGender('female')}</optgroup>`
+        + `<optgroup label="Male voices">${byGender('male')}</optgroup>`;
+      voiceSelector.value = chosen;
+      if (window.userProfile?.settings) window.userProfile.settings.kokoroVoice = chosen;
+    } else if (engineVal === 'pocket') {
       let savedVoice = window.userProfile?.settings?.pocketVoice || POCKET_DEFAULT_VOICE;
       if (typeof window.renderPocketVoiceOptions === 'function') {
         savedVoice = window.renderPocketVoiceOptions(voiceSelector, savedVoice);
@@ -4187,6 +4199,24 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
 }
 
 window.onVoiceSelectionChange = function(newVoice) {
+  // Kokoro voices are a separate namespace stored under their own setting.
+  // Falling through to the Pocket path would canonicalise a Kokoro id against
+  // the Pocket voice list and quietly rewrite it to donald_malone.
+  if (isKokoroVoice(newVoice)) {
+    if (window.isPlaying) {
+      window.virtueSpeak?.('Please pause the story first before changing the voice.', 4000);
+      const sel = document.getElementById('voice-selector');
+      const saved = window.userProfile?.settings?.kokoroVoice;
+      if (sel) sel.value = isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
+      return;
+    }
+    if (!window.userProfile) window.userProfile = {};
+    if (!window.userProfile.settings) window.userProfile.settings = {};
+    window.userProfile.settings.kokoroVoice = newVoice;
+    window.saveLocalData?.();
+    window.pocketNotify?.('Kokoro voice updated.');
+    return;
+  }
   if (window.isPlaying) {
     if (window.virtueSpeak) window.virtueSpeak("Please pause the story first before changing the voice.", 4000);
     else alert("Please pause the story first before changing the voice.");
