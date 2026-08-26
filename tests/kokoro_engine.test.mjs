@@ -103,3 +103,55 @@ test('kokoro assets are addressed through the proxy, never a third-party origin'
   assert.match(worker, /\/models\/kokoro\/v1\.0/);
   assert.match(worker, /\/models\/kokoro\/phonemizer\//);
 });
+
+test('the engine resolver reaches Kokoro without breaking the shell boot order', async () => {
+  const utils = await read('public/assets/js/engine_utils.js');
+  // engine_utils is in the app shell; audio_core is lazy-loaded. The resolver
+  // must tolerate the publisher not existing yet instead of throwing at boot.
+  assert.match(utils, /typeof window\.resolveNarrationEngineChoice === 'function'/);
+  assert.match(utils, /catch \(_\) \{ \/\* fall through to pocket \*\/ \}/);
+  assert.match(utils, /if \(choice === 'kokoro'\) return 'kokoro';/);
+});
+
+test('audio_core loads and routes the Kokoro worker', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  assert.match(audio, /if \(engine !== 'pocket' && engine !== 'kokoro'\) return false;/);
+  assert.match(audio, /kokoro_worker\.js\?v=kokoro-v1/);
+  // The Pocket backend planner has nothing to decide for a single WASM graph.
+  assert.match(audio, /const backendPlan = engine === 'kokoro'/);
+  assert.match(audio, /engineLabel = engine === 'kokoro' \? 'Kokoro TTS' : 'Pocket TTS'/);
+  // A voice id from the other engine must never be handed to a worker.
+  assert.match(audio, /window\.resolveVoiceForEngine = function/);
+  assert.match(audio, /if \(engine === 'kokoro'\) return window\.resolveVoiceForEngine\('kokoro', voice\);/);
+});
+
+test('voice ids cannot leak across engines', async () => {
+  // resolveVoiceForEngine is defined on window inside a browser-only module, so
+  // exercise the policy predicate it relies on.
+  assert.equal(policy.isKokoroVoice('donald_malone'), false);
+  assert.equal(policy.isKokoroVoice('af_heart'), true);
+  assert.equal(policy.KOKORO_DEFAULT_VOICE, 'af_heart',
+    'af_heart is the A-grade voice and the Kokoro-only default');
+});
+
+test('settings expose the engine override and the Kokoro voice list', async () => {
+  const settings = await read('public/assets/js/settings_manager.js');
+  const html = await read('public/index.html');
+  const ui = await read('public/assets/js/ui_controller.js');
+
+  assert.match(settings, /export function renderNarrationEngineControls\(\)/);
+  assert.match(settings, /<b>Narration Engine:<\/b>/);
+  // Both directions of override must be offered, plus automatic. The options
+  // are template-generated, so assert on the source table rather than rendered
+  // markup.
+  const optionTable = settings.slice(settings.indexOf('const options = ['),
+                                     settings.indexOf('].map(([value, label])'));
+  assert.match(optionTable, /\['',\s*`Automatic/, 'automatic must be offered');
+  assert.match(optionTable, /\['pocket',/, 'forcing Pocket must be offered');
+  assert.match(optionTable, /\['kokoro',/, 'forcing Kokoro must be offered');
+  // The container has to exist or the render is a silent no-op.
+  assert.match(html, /id="narration-engine-controls"/);
+  assert.match(ui, /window\.renderNarrationEngineControls\(\)/);
+  // Voice picker is hidden when Kokoro is not the active engine.
+  assert.match(settings, /display:\$\{kokoroActive \? 'block' : 'none'\}/);
+});

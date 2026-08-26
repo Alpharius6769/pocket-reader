@@ -1,6 +1,6 @@
 // engine_utils.js — shared engine constants loaded before audio_core, buffer_manager, settings_manager
 // Writes to window so all downstream ES modules read a single source of truth.
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v23';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v24';
 
 const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 2) : 2;
 // Routed through the shared platform helper so a stock iPad — which reports a
@@ -273,6 +273,18 @@ window._resolveActiveEngine = function _resolveActiveEngine() {
   }
   if (engine !== 'pocket' && engine !== 'webspeech') {
     engine = 'pocket';
+  }
+  // "pocket" is the user's choice of NEURAL narration, not a specific model.
+  // Which neural engine actually runs is a device decision made by
+  // selectNarrationEngine() in pocket_backend_policy, published here by
+  // audio_core once it loads. engine_utils is in the app shell and audio_core
+  // is lazy-loaded, so this must tolerate the resolver not existing yet and
+  // fall back to Pocket rather than throwing during boot.
+  if (engine === 'pocket' && typeof window.resolveNarrationEngineChoice === 'function') {
+    try {
+      const choice = window.resolveNarrationEngineChoice();
+      if (choice === 'kokoro') return 'kokoro';
+    } catch (_) { /* fall through to pocket */ }
   }
   return engine;
 };

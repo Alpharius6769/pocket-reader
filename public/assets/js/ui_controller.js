@@ -74,6 +74,10 @@ export function showView(viewId) {
 
       if (viewId === 'settings-view') {
         if (typeof window.initSettingsUI === 'function') window.initSettingsUI();
+        // Rendered on entry like the rest of this panel, so a device whose
+        // engine changed (or whose override was cleared) always shows current
+        // state rather than whatever was true when the page loaded.
+        if (typeof window.renderNarrationEngineControls === 'function') window.renderNarrationEngineControls();
         if (typeof window._populateProfileSettings === 'function') window._populateProfileSettings();
         if (typeof window.refreshSiteHealth === 'function') window.refreshSiteHealth();
         if (typeof window.refreshPerfPanel === 'function') window.refreshPerfPanel();
@@ -1509,7 +1513,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=186', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=188', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

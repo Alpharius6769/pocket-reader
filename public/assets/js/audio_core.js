@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v15';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v16';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -15,6 +15,12 @@ import {
   POCKET_WEBGPU_BUNDLE,
   POCKET_GPU_RESIDENT_STATE_BYTES,
   normalizePocketBackend,
+  selectNarrationEngine,
+  readNarrationEngineOverride,
+  writeNarrationEngineOverride,
+  isKokoroVoice,
+  KOKORO_VOICES,
+  KOKORO_DEFAULT_VOICE,
   recommendedWasmThreadCount,
   recommendedPocketCacheWorkerCount,
   browserMajorVersion,
@@ -40,7 +46,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v23';
+} from './pocket_backend_policy.js?v=backend-v24';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -797,10 +803,62 @@ window.getPocketTtsRuntimeConfig = function getPocketTtsRuntimeConfig() {
 };
 
 export function resolveVoiceWithSentiment(engine, voice, text, ctx = null) {
+  // Kokoro carries no per-emotion voice variants, so there is nothing to route:
+  // the requested voice is the voice.
+  if (engine === 'kokoro') return window.resolveVoiceForEngine('kokoro', voice);
   if (engine !== 'pocket') return _normalizeVoice(engine, voice || null);
   return _resolvePocketRoute(engine, voice, text, ctx).voiceId;
 }
 window.resolveVoiceWithSentiment = resolveVoiceWithSentiment;
+
+// ── Narration engine selection, published for engine_utils and settings ──────
+// engine_utils lives in the app shell and resolves the active engine long
+// before this module loads, so it feature-detects this rather than importing.
+window.resolveNarrationEngineChoice = function resolveNarrationEngineChoice() {
+  return selectNarrationEngine({
+    capability: _pocketDeviceCapability,
+    userAgent: navigator.userAgent || '',
+    deviceMemory: Number(navigator.deviceMemory || 0),
+    lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
+    storage: localStorage,
+  }).engine;
+};
+
+window.describeNarrationEngineChoice = function describeNarrationEngineChoice() {
+  return selectNarrationEngine({
+    capability: _pocketDeviceCapability,
+    userAgent: navigator.userAgent || '',
+    deviceMemory: Number(navigator.deviceMemory || 0),
+    lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
+    storage: localStorage,
+  });
+};
+
+window.getNarrationEngineOverride = () => readNarrationEngineOverride(localStorage);
+
+// Changing engines swaps the model set entirely, so the running worker and its
+// voice registry must go rather than be reused for a voice namespace it does
+// not have.
+window.setNarrationEngineOverride = async function setNarrationEngineOverride(engine) {
+  const stored = writeNarrationEngineOverride(localStorage, engine);
+  try { await _resetPocketEngineForBackend(); } catch (_) {}
+  return stored;
+};
+
+window.KOKORO_VOICES = KOKORO_VOICES;
+window.KOKORO_DEFAULT_VOICE = KOKORO_DEFAULT_VOICE;
+window.isKokoroVoice = isKokoroVoice;
+
+// Which voice id to hand the worker for the engine that is actually running.
+// A Pocket voice id means nothing to Kokoro and vice versa, so a stored voice
+// from the other engine must not leak across.
+window.resolveVoiceForEngine = function resolveVoiceForEngine(engine, voice) {
+  if (engine !== 'kokoro') return voice;
+  const requested = String(voice || '').toLowerCase().trim();
+  if (isKokoroVoice(requested)) return requested;
+  const saved = window.userProfile?.settings?.kokoroVoice;
+  return isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
+};
 
 
 // ── Worker pool settings ─────────────────────────────────────────────────────
@@ -1156,7 +1214,10 @@ async function _loadPocketEngine() {
   const initializationStartedAt = performance.now();
   const engine = _resolveActiveEngine();
   const settings = window.userProfile?.settings || {};
-  if (engine !== 'pocket') return false;
+  // Both neural engines load through this path. They speak the same worker
+  // protocol, so everything below is shared; only the script URL and the voice
+  // namespace differ.
+  if (engine !== 'pocket' && engine !== 'kokoro') return false;
 
   if (loadedVoiceEngine !== engine) {
     console.log(`[AudioCore] Voice engine changed from ${loadedVoiceEngine} to ${engine}. Terminating active workers.`);
@@ -1210,7 +1271,13 @@ async function _loadPocketEngine() {
   _setProgressFill(1);
   // Ensure GPU detection has finished before reporting hardware details.
   await _gpuDetectionPromise;
-  const backendPlan = await _preparePocketBackendPlan();
+  // Kokoro has one WASM graph and no WebGPU variant, so the Pocket backend
+  // planner (eligibility probes, calibration, GPU demotion bookkeeping) has
+  // nothing to decide and running it would only spend time and write
+  // calibration state that does not describe this engine.
+  const backendPlan = engine === 'kokoro'
+    ? { preference: 'wasm', selectedBackend: 'wasm', threadCount: 1, eligibility: { eligible: false } }
+    : await _preparePocketBackendPlan();
   const vendor = _gpuVendor || 'unknown';
   // A second complete inference worker is allowed only for positively
   // high-memory desktop cache jobs. The shared policy keeps every mobile,
@@ -1218,7 +1285,7 @@ async function _loadPocketEngine() {
   let nWorkers = await _recommendedPocketCacheWorkers(backendPlan);
   _pocketBackendRuntime.cacheWorkerCount = nWorkers;
 
-  let engineLabel = 'Pocket TTS';
+  let engineLabel = engine === 'kokoro' ? 'Kokoro TTS' : 'Pocket TTS';
   _setStatus(`Loading ${engineLabel} (${backendPlan.selectedBackend === 'webgpu' ? 'WebGPU FP16' : 'threaded WASM'})...`);
 
   let engineLoadTimerId = null;
@@ -1231,7 +1298,9 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v59', document.baseURI).href;
+        const workerScript = engine === 'kokoro'
+          ? new URL('assets/js/kokoro_worker.js?v=kokoro-v1', document.baseURI).href
+          : new URL('assets/js/pocket_worker.js?v=pocket-worker-v60', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);

@@ -1155,7 +1155,7 @@ export const KOKORO_VOICES = Object.freeze([
   { id: 'am_fenrir',  label: 'Fenrir — American, deep',      gender: 'male',   grade: 'C+' },
   { id: 'am_puck',    label: 'Puck — American, bright',      gender: 'male',   grade: 'C+' },
 ]);
-export const KOKORO_DEFAULT_VOICE = 'am_michael';
+export const KOKORO_DEFAULT_VOICE = 'af_heart';
 
 export function isKokoroVoice(voiceId) {
   const id = String(voiceId || '').toLowerCase().trim();

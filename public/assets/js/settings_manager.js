@@ -5,9 +5,9 @@ import {
 import {
   readPocketDeviceBackendPreference,
   writePocketDeviceBackendPreference,
-} from './pocket_backend_policy.js?v=backend-v23';
+} from './pocket_backend_policy.js?v=backend-v24';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '186';
+export const NARRATION_SERVICE_WORKER_VERSION = '188';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1341,6 +1341,71 @@ function _describeWasmRuntimeFlavor(cfg) {
     + ` <span style="color:var(--text-muted);font-size:0.9em;">${_escapeSettingsHtml(note)}</span>`;
 }
 
+// Two engines now exist and which one runs is a device decision, so the panel
+// has to say which is active and why -- otherwise a reader on a constrained
+// phone has no way to tell Kokoro from Pocket except by ear.
+function _describeNarrationEngine() {
+  const choice = window.describeNarrationEngineChoice?.();
+  if (!choice) return '<span style="color:var(--text-muted)">not resolved yet</span>';
+  const name = choice.engine === 'kokoro' ? 'Kokoro-82M (light)' : 'Pocket TTS';
+  const how = choice.automatic
+    ? `<span style="color:var(--text-muted);font-size:0.9em;">auto — ${_escapeSettingsHtml(choice.reason || 'device default')}</span>`
+    : '<span style="color:var(--accent-blue-text);font-size:0.9em;">chosen in Settings</span>';
+  return `${_escapeSettingsHtml(name)} ${how}`;
+}
+
+// Engine + voice controls. Rendered into an existing settings container rather
+// than a new panel so it inherits the section's styling and scroll behaviour.
+export function renderNarrationEngineControls() {
+  const host = document.getElementById('narration-engine-controls');
+  if (!host) return;
+  const choice = window.describeNarrationEngineChoice?.() || { engine: 'pocket', automatic: true };
+  const override = window.getNarrationEngineOverride?.() || '';
+  const voices = window.KOKORO_VOICES || [];
+  const savedVoice = window.userProfile?.settings?.kokoroVoice
+    || window.KOKORO_DEFAULT_VOICE || 'af_heart';
+
+  const options = [
+    ['', `Automatic (${choice.engine === 'kokoro' ? 'Kokoro' : 'Pocket'} on this device)`],
+    ['pocket', 'Always Pocket TTS — richer, needs more memory'],
+    ['kokoro', 'Always Kokoro — lighter, best on older phones'],
+  ].map(([value, label]) =>
+    `<option value="${value}"${value === override ? ' selected' : ''}>${_escapeSettingsHtml(label)}</option>`
+  ).join('');
+
+  // Only meaningful when Kokoro can actually run; hiding it otherwise avoids
+  // offering a voice the active engine cannot speak.
+  const kokoroActive = choice.engine === 'kokoro';
+  const voiceOptions = voices.map((voice) =>
+    `<option value="${_escapeSettingsHtml(voice.id)}"${voice.id === savedVoice ? ' selected' : ''}>`
+    + `${_escapeSettingsHtml(voice.label)} (${_escapeSettingsHtml(voice.grade)})</option>`
+  ).join('');
+
+  host.innerHTML = `
+    <label for="narration-engine-select" style="display:block;font-size:0.85rem;color:var(--text-muted);margin-bottom:4px;">Narration engine</label>
+    <select id="narration-engine-select" class="pr-select" style="width:100%;margin-bottom:10px;">${options}</select>
+    <div id="kokoro-voice-row" style="display:${kokoroActive ? 'block' : 'none'};">
+      <label for="kokoro-voice-select" style="display:block;font-size:0.85rem;color:var(--text-muted);margin-bottom:4px;">Kokoro voice</label>
+      <select id="kokoro-voice-select" class="pr-select" style="width:100%;">${voiceOptions}</select>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin:6px 0 0;">Letter grades are Kokoro's own quality ratings. Male voices top out at C+.</p>
+    </div>`;
+
+  document.getElementById('narration-engine-select')?.addEventListener('change', async (event) => {
+    await window.setNarrationEngineOverride?.(event.target.value || null);
+    renderNarrationEngineControls();
+    if (typeof window.refreshPerfPanel === 'function') window.refreshPerfPanel();
+    window.pocketNotify?.('Narration engine changed. The next paragraph uses it.');
+  });
+
+  document.getElementById('kokoro-voice-select')?.addEventListener('change', (event) => {
+    if (!window.userProfile?.settings) return;
+    window.userProfile.settings.kokoroVoice = event.target.value;
+    window.saveLocalData?.();
+    window.pocketNotify?.('Kokoro voice updated.');
+  });
+}
+window.renderNarrationEngineControls = renderNarrationEngineControls;
+
 export async function refreshPerfPanel() {
   const p = document.getElementById('perf-panel');
   if (!p) return;
@@ -1359,6 +1424,7 @@ export async function refreshPerfPanel() {
     <li><b>Pocket Cache:</b> ${_escapeSettingsHtml(pocketCfg.cacheVersion)} / ${_escapeSettingsHtml(pocketCfg.chunkingVersion)}</li>
     <li><b>Narration Backend:</b> ${_escapeSettingsHtml(pocketCfg.selectedBackend)} (${_escapeSettingsHtml(pocketCfg.modelPrecision)})</li>
     <li><b>Runtime / Model:</b> ORT ${_escapeSettingsHtml(pocketCfg.ortVersion)} / ${_escapeSettingsHtml(pocketCfg.modelRevision)}</li>
+    <li><b>Narration Engine:</b> ${_describeNarrationEngine()}</li>
     <li><b>WASM Runtime:</b> ${_describeWasmRuntimeFlavor(pocketCfg)}</li>
     <li><b>Relaxed SIMD / .ort:</b> ${pocketCfg.relaxedSimdSupported === null
       ? '<span style="color:var(--text-muted)">not reported yet</span>'
