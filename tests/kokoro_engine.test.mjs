@@ -147,34 +147,23 @@ test('voice ids cannot leak across engines', async () => {
     'af_heart is the A-grade voice and the Kokoro-only default');
 });
 
-test('settings expose the engine override and the Kokoro voice list', async () => {
+test('settings expose the Kokoro voice list without duplicating the engine control', async () => {
   const settings = await read('public/assets/js/settings_manager.js');
   const html = await read('public/index.html');
   const ui = await read('public/assets/js/ui_controller.js');
 
   assert.match(settings, /export function renderNarrationEngineControls\(\)/);
-  assert.match(settings, /<b>Narration Engine:<\/b>/);
-  // Both directions of override must be offered, plus automatic. The options
-  // are template-generated, so assert on the source table rather than rendered
-  // markup.
-  const optionTable = settings.slice(settings.indexOf('const options = ['),
-                                     settings.indexOf('].map(([value, label])'));
-  assert.match(optionTable, /\['',\s*`Automatic/, 'automatic must be offered');
-  assert.match(optionTable, /\['pocket',/, 'forcing Pocket must be offered');
-  assert.match(optionTable, /\['kokoro',/, 'forcing Kokoro must be offered');
   // The container has to exist or the render is a silent no-op.
   assert.match(html, /id="narration-engine-controls"/);
   assert.match(ui, /window\.renderNarrationEngineControls\(\)/);
-  // Voice picker is hidden when Kokoro is not the active engine.
+  // Voice picker is hidden unless Kokoro is the engine actually running —
+  // offering a voice the active engine cannot speak is worse than none.
   assert.match(settings, /display:\$\{kokoroActive \? 'block' : 'none'\}/);
+  assert.match(settings, /const kokoroActive = !usingWebSpeech && choice\.engine === 'kokoro'/);
+  // Device Voice has no neural voice at all, so nothing Kokoro shows there.
+  assert.match(settings, /const usingWebSpeech = window\.userProfile\?\.settings\?\.voiceEngine === 'webspeech'/);
 });
 
-// Verified by executing the real espeak-ng bundle, not by reading minified code:
-// phonemize('Hello there, this is a test.', 'en-us') returns
-// ["həlˈoʊ ðˈɛɹ", "ðɪs ɪz ɐ tˈɛst"] — an ARRAY split on punctuation, with the
-// mark itself dropped. Every phoneme character it produced mapped into Kokoro's
-// 115-entry vocab (100% coverage), and that vocab contains space, comma, period
-// and question mark.
 test('phoneme clauses are rejoined so punctuation pauses survive', async () => {
   const worker = await read('public/assets/js/kokoro_worker.js');
   const fn = worker.slice(worker.indexOf('async function generate('),
@@ -194,4 +183,46 @@ test('unmapped phoneme characters are skipped, never emitted as junk ids', async
                           worker.indexOf('// The graph\'s sequence axis'));
   assert.match(fn, /if \(id !== undefined\) ids\.push\(id\);/,
     'an unknown symbol must be dropped, not pushed as undefined');
+});
+
+// Reported from a live build: "Voice Engine" and "Narration engine" were two
+// separate selects saying overlapping things, and Automatic always read "Pocket
+// on this device" because it rendered a default rather than the real decision.
+test('engine choice is one control, not two overlapping ones', async () => {
+  const html = await read('public/index.html');
+  const settings = await read('public/assets/js/settings_manager.js');
+  const audio = await read('public/assets/js/audio_core.js');
+
+  // The neural choice now lives in the single Voice Engine select.
+  const select = html.slice(html.indexOf('id="voice-engine-select"'),
+                            html.indexOf('id="narration-engine-controls"'));
+  for (const value of ['"auto"', '"pocket"', '"kokoro"', '"webspeech"']) {
+    assert.ok(select.includes(`value=${value}`), `the merged select needs ${value}`);
+  }
+  // The duplicate select must be gone.
+  assert.doesNotMatch(settings, /id="narration-engine-select"/,
+    'the second engine select must not come back');
+  assert.doesNotMatch(html, /id="narration-engine-select"/);
+
+  // Both neural values collapse to the neural path, with the model recorded as
+  // the narration override.
+  assert.match(audio, /if \(engineVal === 'auto' \|\| engineVal === 'kokoro' \|\| engineVal === 'pocket'\)/);
+  assert.match(audio, /writeNarrationEngineOverride\(localStorage, engineVal === 'auto' \? null : engineVal\)/);
+});
+
+test('Automatic is labelled with the engine actually detected for this device', async () => {
+  const settings = await read('public/assets/js/settings_manager.js');
+  // Previously hardcoded to Pocket, so it read "Pocket on this device" even on
+  // hardware routed to Kokoro.
+  assert.match(settings, /autoOption\.textContent = `Automatic - \$\{choice\.engine === 'kokoro' \? 'Kokoro' : 'Pocket TTS'\} on this device`/);
+  assert.match(settings, /Detected: \$\{_escapeSettingsHtml\(choice\.reason/);
+});
+
+test('first-run detection resolves the narration engine, not just the backend', async () => {
+  const setup = await read('public/assets/js/device_setup.js');
+  assert.match(setup, /selectNarrationEngine,/, 'device_setup must import the selector');
+  assert.match(setup, /narrationEngine: narration\.engine,/);
+  assert.match(setup, /narrationEngineReason: narration\.reason,/);
+  // And it has to be visible in the summary the reader is shown.
+  assert.match(setup, /record\.narrationEngine === 'kokoro' \? 'Kokoro-82M' : 'Pocket TTS'/);
 });

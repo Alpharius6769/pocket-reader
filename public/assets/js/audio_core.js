@@ -4085,9 +4085,28 @@ export function applyPlaybackSpeed(rate) {
 }
 window.applyPlaybackSpeed = applyPlaybackSpeed;
 
+// Which option the merged control is showing. 'pocket' and 'kokoro' both
+// collapse to the neural engine internally, so the raw setting cannot round-trip
+// the user's choice on its own.
+let _selectedVoiceEngineControlValue = null;
+
 export function switchReaderVoiceEngine(engineVal, silent = false) {
   if (!engineVal) {
     engineVal = window.userProfile?.settings?.voiceEngine || 'pocket';
+  }
+  // The single Voice Engine control now carries the neural choice too, because
+  // a separate "Narration engine" select said an overlapping thing and left the
+  // reader guessing which one won. 'auto' / 'kokoro' are UI values: both run
+  // the neural path, and which model that means is the narration override.
+  if (engineVal === 'auto' || engineVal === 'kokoro' || engineVal === 'pocket') {
+    writeNarrationEngineOverride(localStorage, engineVal === 'auto' ? null : engineVal);
+    // Swapping the model set invalidates the running worker and its voice
+    // registry; it is rebuilt on the next request.
+    try { _resetPocketEngineForBackend(); } catch (_) {}
+    _selectedVoiceEngineControlValue = engineVal;
+    engineVal = 'pocket';
+  } else if (engineVal === 'webspeech') {
+    _selectedVoiceEngineControlValue = 'webspeech';
   }
   if (engineVal !== 'pocket' && engineVal !== 'webspeech') engineVal = 'pocket';
   if (!document.getElementById('voice-selector')) {
@@ -4112,10 +4131,14 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   if (!window.userProfile.settings) window.userProfile.settings = {};
   window.userProfile.settings.voiceEngine = engineVal;
 
+  const controlValue = _selectedVoiceEngineControlValue || engineVal;
   const globalSel = document.getElementById('voice-engine-select');
-  if (globalSel) globalSel.value = engineVal;
+  if (globalSel) globalSel.value = controlValue;
   const playbarSel = document.getElementById('reader-engine-select');
   if (playbarSel) playbarSel.value = engineVal;
+  if (typeof window.renderNarrationEngineControls === 'function') {
+    try { window.renderNarrationEngineControls(); } catch (_) {}
+  }
 
   const voiceSelector = document.getElementById('voice-selector');
   if (voiceSelector) {

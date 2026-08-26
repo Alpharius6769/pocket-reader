@@ -1,6 +1,7 @@
 import {
   collectPocketDeviceCapability,
   classifyPocketDeviceSupport,
+  selectNarrationEngine,
   selectPocketDeviceSetup,
   writePocketDeviceSetup,
   readPocketDeviceSetup,
@@ -284,7 +285,11 @@ function resultLabel(record) {
     : record.support?.status === 'benchmark-qualified'
       ? 'qualified by local benchmark'
       : 'conservative support profile';
-  return `${platform} · ${backend} · ${support}`;
+  // The narration engine belongs in this line: on a constrained phone it is a
+  // bigger factor than the backend, and without it the summary reported a
+  // WebGPU/WASM decision while staying silent about which model would run.
+  const engine = record.narrationEngine === 'kokoro' ? 'Kokoro-82M' : 'Pocket TTS';
+  return `${platform} · ${engine} · ${backend} · ${support}`;
 }
 
 export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
@@ -329,11 +334,25 @@ export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
       simulateThreadedWasm: true,
       userAgent: navigator.userAgent || '',
     });
+    // Detection resolved WebGPU vs WASM but never which narration ENGINE, which
+    // on a memory-constrained phone is the more consequential decision — the
+    // difference between Pocket's three sessions and Kokoro's one. Record it
+    // alongside the backend so first-run setup reports both.
+    const narration = selectNarrationEngine({
+      capability,
+      userAgent: navigator.userAgent || '',
+      deviceMemory: Number(capability.deviceMemoryGb || navigator.deviceMemory || 0),
+      lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
+      storage: localStorage,
+    });
     const record = writePocketDeviceSetup(localStorage, {
       capability,
       support,
       cpuResults,
       webgpu,
+      narrationEngine: narration.engine,
+      narrationEngineReason: narration.reason,
+      narrationEngineAutomatic: narration.automatic,
       ...selection,
       benchmarkPassed: passed,
       crossOriginIsolated: window.crossOriginIsolated === true,

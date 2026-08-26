@@ -13,7 +13,7 @@ import {
   KOKORO_DEFAULT_VOICE,
 } from './pocket_backend_policy.js?v=backend-v24';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '189';
+export const NARRATION_SERVICE_WORKER_VERSION = '190';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1384,43 +1384,44 @@ export function renderNarrationEngineControls() {
   const voices = KOKORO_VOICES;
   const saved = window.userProfile?.settings?.kokoroVoice;
   const savedVoice = isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
+  const usingWebSpeech = window.userProfile?.settings?.voiceEngine === 'webspeech';
 
-  const options = [
-    ['', `Automatic (${choice.engine === 'kokoro' ? 'Kokoro' : 'Pocket'} on this device)`],
-    ['pocket', 'Always Pocket TTS — richer, needs more memory'],
-    ['kokoro', 'Always Kokoro — lighter, best on older phones'],
-  ].map(([value, label]) =>
-    `<option value="${value}"${value === override ? ' selected' : ''}>${_escapeSettingsHtml(label)}</option>`
-  ).join('');
+  // Keep the single Voice Engine select in step, including labelling which
+  // engine "Automatic" actually resolves to on THIS device -- the previous
+  // wording said "Pocket on this device" everywhere because it was reading a
+  // default rather than the real decision.
+  const select = document.getElementById('voice-engine-select');
+  if (select) {
+    const autoOption = select.querySelector('option[value="auto"]');
+    if (autoOption) {
+      autoOption.textContent = `Automatic - ${choice.engine === 'kokoro' ? 'Kokoro' : 'Pocket TTS'} on this device`;
+    }
+    const desired = usingWebSpeech ? 'webspeech' : (override || 'auto');
+    if (select.value !== desired) select.value = desired;
+  }
 
-  // Only meaningful when Kokoro can actually run; hiding it otherwise avoids
-  // offering a voice the active engine cannot speak.
-  const kokoroActive = choice.engine === 'kokoro';
+  // Only the voice picker and the reason line live here now. The engine choice
+  // itself moved into the Voice Engine select above.
+  const kokoroActive = !usingWebSpeech && choice.engine === 'kokoro';
   const voiceOptions = voices.map((voice) =>
     `<option value="${_escapeSettingsHtml(voice.id)}"${voice.id === savedVoice ? ' selected' : ''}>`
     + `${_escapeSettingsHtml(voice.label)} (${_escapeSettingsHtml(voice.grade)})</option>`
   ).join('');
 
-  host.innerHTML = `
-    <label for="narration-engine-select" style="display:block;font-size:0.85rem;color:var(--text-muted);margin-bottom:4px;">Narration engine</label>
-    <select id="narration-engine-select" class="pr-select" style="width:100%;margin-bottom:10px;">${options}</select>
+  const why = usingWebSpeech
+    ? ''
+    : `<p style="font-size:0.78rem;color:var(--text-muted);margin:2px 0 8px;">${
+        choice.automatic
+          ? `Detected: ${_escapeSettingsHtml(choice.reason || 'using the device default')}`
+          : 'Engine chosen manually.'
+      }</p>`;
+
+  host.innerHTML = `${why}
     <div id="kokoro-voice-row" style="display:${kokoroActive ? 'block' : 'none'};">
       <label for="kokoro-voice-select" style="display:block;font-size:0.85rem;color:var(--text-muted);margin-bottom:4px;">Kokoro voice</label>
-      <select id="kokoro-voice-select" class="pr-select" style="width:100%;">${voiceOptions}</select>
+      <select id="kokoro-voice-select" class="settings-control" style="width:100%;">${voiceOptions}</select>
       <p style="font-size:0.78rem;color:var(--text-muted);margin:6px 0 0;">Letter grades are Kokoro's own quality ratings. Male voices top out at C+.</p>
     </div>`;
-
-  document.getElementById('narration-engine-select')?.addEventListener('change', async (event) => {
-    writeNarrationEngineOverride(localStorage, event.target.value || null);
-    // Swapping engines swaps the whole model set, so any running worker and its
-    // voice registry must go rather than be reused for a namespace it lacks.
-    // audio_core may legitimately not be loaded yet; that is fine, there is
-    // nothing running to reset.
-    try { await window._resetPocketEngineForBackend?.(); } catch (_) {}
-    renderNarrationEngineControls();
-    if (typeof window.refreshPerfPanel === 'function') window.refreshPerfPanel();
-    window.pocketNotify?.('Narration engine changed. The next paragraph uses it.');
-  });
 
   document.getElementById('kokoro-voice-select')?.addEventListener('change', (event) => {
     if (!window.userProfile?.settings) return;
