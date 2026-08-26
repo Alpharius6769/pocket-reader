@@ -1,6 +1,9 @@
 // engine_utils.js — shared engine constants loaded before audio_core, buffer_manager, settings_manager
 // Writes to window so all downstream ES modules read a single source of truth.
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v24';
+import {
+  isMobileLikePlatform,
+  selectNarrationEngine,
+} from './pocket_backend_policy.js?v=backend-v24';
 
 const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 2) : 2;
 // Routed through the shared platform helper so a stock iPad — which reports a
@@ -275,18 +278,48 @@ window._resolveActiveEngine = function _resolveActiveEngine() {
     engine = 'pocket';
   }
   // "pocket" is the user's choice of NEURAL narration, not a specific model.
-  // Which neural engine actually runs is a device decision made by
-  // selectNarrationEngine() in pocket_backend_policy, published here by
-  // audio_core once it loads. engine_utils is in the app shell and audio_core
-  // is lazy-loaded, so this must tolerate the resolver not existing yet and
-  // fall back to Pocket rather than throwing during boot.
-  if (engine === 'pocket' && typeof window.resolveNarrationEngineChoice === 'function') {
+  // Which neural engine runs is a device decision, resolved here from the
+  // shared policy. This used to feature-detect a global published by
+  // audio_core, which meant the answer depended on whether the narration
+  // runtime happened to be loaded yet -- so a cold session resolved Pocket even
+  // on a device that should never run it. Importing the policy directly makes
+  // the decision available from the first frame, which is what "pick the best
+  // engine at startup" actually requires.
+  if (engine === 'pocket') {
     try {
-      const choice = window.resolveNarrationEngineChoice();
-      if (choice === 'kokoro') return 'kokoro';
-    } catch (_) { /* fall through to pocket */ }
+      const choice = selectNarrationEngine({
+        capability: window._pocketDeviceCapability,
+        userAgent: navigator.userAgent || '',
+        deviceMemory: Number(navigator.deviceMemory || 0),
+        lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
+        storage: localStorage,
+      });
+      if (choice?.engine === 'kokoro') return 'kokoro';
+    } catch (_) { /* any failure keeps the historical Pocket default */ }
   }
   return engine;
 };
+
+// Resolved once at boot so the choice (and the reason for it) is observable
+// before narration is ever requested — diagnostics, the settings panel and the
+// first play all read the same answer.
+window.getNarrationEngineDecision = function getNarrationEngineDecision() {
+  try {
+    return selectNarrationEngine({
+      capability: window._pocketDeviceCapability,
+      userAgent: navigator.userAgent || '',
+      deviceMemory: Number(navigator.deviceMemory || 0),
+      lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
+      storage: localStorage,
+    });
+  } catch (_) {
+    return { engine: 'pocket', automatic: true, reason: '' };
+  }
+};
+try {
+  const decision = window.getNarrationEngineDecision();
+  window._narrationEngineDecision = decision;
+  window.Diagnostics?.log?.('INFO', 'Narration engine resolved at startup', decision);
+} catch (_) {}
 
 export {};

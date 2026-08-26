@@ -208,9 +208,21 @@ async function generate(text, voiceId, opts = {}) {
   if (!isReady) throw new Error('Kokoro engine is not initialized.');
   const speed = Math.max(0.5, Math.min(2, Number(opts.speed) || 1));
   const voiceData = await loadVoice(voiceId);
-  // espeak-ng returns one phoneme string per input line.
+  // Verified against the real bundle: phonemize() returns an ARRAY, one entry
+  // per clause, and it splits ON punctuation while dropping the mark itself
+  // ("Hello there, this is a test." -> ["həlˈoʊ ðˈɛɹ", "ðɪs ɪz ɐ tˈɛst"]).
+  //
+  // Kokoro's vocab does contain punctuation, and joining with a plain space
+  // would throw away every pause the writing actually specified, giving a flat
+  // unbroken read. Rejoining with a comma restores a boundary exactly where one
+  // existed. It is an approximation -- a sentence break comes back as a comma
+  // rather than a full stop -- but it is a faithful boundary rather than none,
+  // and it never invents a pause the text did not have.
   const phonemes = await phonemize(String(text || ''), 'en-us');
-  const joined = Array.isArray(phonemes) ? phonemes.join(' ') : String(phonemes || '');
+  const clauses = (Array.isArray(phonemes) ? phonemes : [String(phonemes || '')])
+    .map((clause) => String(clause || '').trim())
+    .filter(Boolean);
+  const joined = clauses.join(', ');
   const ids = tokenizePhonemes(joined);
   if (!ids.length) return new Float32Array(0);
 

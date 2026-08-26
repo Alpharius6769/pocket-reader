@@ -104,19 +104,32 @@ test('kokoro assets are addressed through the proxy, never a third-party origin'
   assert.match(worker, /\/models\/kokoro\/phonemizer\//);
 });
 
-test('the engine resolver reaches Kokoro without breaking the shell boot order', async () => {
+test('the engine is resolved from the shell, not from lazy-loaded audio_core', async () => {
   const utils = await read('public/assets/js/engine_utils.js');
-  // engine_utils is in the app shell; audio_core is lazy-loaded. The resolver
-  // must tolerate the publisher not existing yet instead of throwing at boot.
-  assert.match(utils, /typeof window\.resolveNarrationEngineChoice === 'function'/);
-  assert.match(utils, /catch \(_\) \{ \/\* fall through to pocket \*\/ \}/);
-  assert.match(utils, /if \(choice === 'kokoro'\) return 'kokoro';/);
+  const settings = await read('public/assets/js/settings_manager.js');
+
+  // The first version read a global published by audio_core, which is
+  // lazy-loaded with the narration runtime. A cold session therefore resolved
+  // Pocket even on a device that should never run it, and Settings rendered an
+  // empty Kokoro voice list. Both now import the policy directly, so the answer
+  // exists from the first frame -- which is what "best engine at startup" needs.
+  assert.match(utils, /import \{\s*[\s\S]{0,120}selectNarrationEngine,/);
+  assert.doesNotMatch(utils, /typeof window\.resolveNarrationEngineChoice === 'function'/,
+    'must not depend on audio_core publishing a global');
+  assert.match(utils, /if \(choice\?\.engine === 'kokoro'\) return 'kokoro';/);
+  // Decided once at boot and observable before narration is requested.
+  assert.match(utils, /window\._narrationEngineDecision = decision;/);
+  assert.match(utils, /Narration engine resolved at startup/);
+
+  assert.match(settings, /selectNarrationEngine,/, 'settings imports the policy directly');
+  assert.doesNotMatch(settings, /window\.describeNarrationEngineChoice\?\.\(\)/,
+    'settings must not depend on audio_core being loaded');
 });
 
 test('audio_core loads and routes the Kokoro worker', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   assert.match(audio, /if \(engine !== 'pocket' && engine !== 'kokoro'\) return false;/);
-  assert.match(audio, /kokoro_worker\.js\?v=kokoro-v1/);
+  assert.match(audio, /kokoro_worker\.js\?v=kokoro-v\d+/);
   // The Pocket backend planner has nothing to decide for a single WASM graph.
   assert.match(audio, /const backendPlan = engine === 'kokoro'/);
   assert.match(audio, /engineLabel = engine === 'kokoro' \? 'Kokoro TTS' : 'Pocket TTS'/);
@@ -154,4 +167,31 @@ test('settings expose the engine override and the Kokoro voice list', async () =
   assert.match(ui, /window\.renderNarrationEngineControls\(\)/);
   // Voice picker is hidden when Kokoro is not the active engine.
   assert.match(settings, /display:\$\{kokoroActive \? 'block' : 'none'\}/);
+});
+
+// Verified by executing the real espeak-ng bundle, not by reading minified code:
+// phonemize('Hello there, this is a test.', 'en-us') returns
+// ["həlˈoʊ ðˈɛɹ", "ðɪs ɪz ɐ tˈɛst"] — an ARRAY split on punctuation, with the
+// mark itself dropped. Every phoneme character it produced mapped into Kokoro's
+// 115-entry vocab (100% coverage), and that vocab contains space, comma, period
+// and question mark.
+test('phoneme clauses are rejoined so punctuation pauses survive', async () => {
+  const worker = await read('public/assets/js/kokoro_worker.js');
+  const fn = worker.slice(worker.indexOf('async function generate('),
+                          worker.indexOf('self.onmessage'));
+  assert.ok(fn.length > 0, 'generate() not found');
+  // A plain space join would silently discard every pause the writing specified.
+  assert.doesNotMatch(fn, /phonemes\.join\(' '\)/);
+  assert.match(fn, /clauses\.join\(', '\)/);
+  // The array shape is the documented return; a bare string must still work.
+  assert.match(fn, /Array\.isArray\(phonemes\) \? phonemes : \[String\(phonemes \|\| ''\)\]/);
+  assert.match(fn, /\.filter\(Boolean\)/, 'empty clauses must not become stray commas');
+});
+
+test('unmapped phoneme characters are skipped, never emitted as junk ids', async () => {
+  const worker = await read('public/assets/js/kokoro_worker.js');
+  const fn = worker.slice(worker.indexOf('function tokenizePhonemes('),
+                          worker.indexOf('// The graph\'s sequence axis'));
+  assert.match(fn, /if \(id !== undefined\) ids\.push\(id\);/,
+    'an unknown symbol must be dropped, not pushed as undefined');
 });

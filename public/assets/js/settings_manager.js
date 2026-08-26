@@ -5,9 +5,15 @@ import {
 import {
   readPocketDeviceBackendPreference,
   writePocketDeviceBackendPreference,
+  selectNarrationEngine,
+  readNarrationEngineOverride,
+  writeNarrationEngineOverride,
+  isKokoroVoice,
+  KOKORO_VOICES,
+  KOKORO_DEFAULT_VOICE,
 } from './pocket_backend_policy.js?v=backend-v24';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '188';
+export const NARRATION_SERVICE_WORKER_VERSION = '189';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1344,8 +1350,22 @@ function _describeWasmRuntimeFlavor(cfg) {
 // Two engines now exist and which one runs is a device decision, so the panel
 // has to say which is active and why -- otherwise a reader on a constrained
 // phone has no way to tell Kokoro from Pocket except by ear.
+function _resolveEngineChoice() {
+  // Imported directly rather than read off window: pocket_backend_policy is in
+  // the app shell, audio_core is not. Depending on audio_core meant Settings
+  // showed Pocket and an empty voice list for anyone who had not started
+  // narration yet in that session.
+  return selectNarrationEngine({
+    capability: window._pocketDeviceCapability,
+    userAgent: navigator.userAgent || '',
+    deviceMemory: Number(navigator.deviceMemory || 0),
+    lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
+    storage: localStorage,
+  });
+}
+
 function _describeNarrationEngine() {
-  const choice = window.describeNarrationEngineChoice?.();
+  const choice = _resolveEngineChoice();
   if (!choice) return '<span style="color:var(--text-muted)">not resolved yet</span>';
   const name = choice.engine === 'kokoro' ? 'Kokoro-82M (light)' : 'Pocket TTS';
   const how = choice.automatic
@@ -1359,11 +1379,11 @@ function _describeNarrationEngine() {
 export function renderNarrationEngineControls() {
   const host = document.getElementById('narration-engine-controls');
   if (!host) return;
-  const choice = window.describeNarrationEngineChoice?.() || { engine: 'pocket', automatic: true };
-  const override = window.getNarrationEngineOverride?.() || '';
-  const voices = window.KOKORO_VOICES || [];
-  const savedVoice = window.userProfile?.settings?.kokoroVoice
-    || window.KOKORO_DEFAULT_VOICE || 'af_heart';
+  const choice = _resolveEngineChoice();
+  const override = readNarrationEngineOverride(localStorage) || '';
+  const voices = KOKORO_VOICES;
+  const saved = window.userProfile?.settings?.kokoroVoice;
+  const savedVoice = isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
 
   const options = [
     ['', `Automatic (${choice.engine === 'kokoro' ? 'Kokoro' : 'Pocket'} on this device)`],
@@ -1391,7 +1411,12 @@ export function renderNarrationEngineControls() {
     </div>`;
 
   document.getElementById('narration-engine-select')?.addEventListener('change', async (event) => {
-    await window.setNarrationEngineOverride?.(event.target.value || null);
+    writeNarrationEngineOverride(localStorage, event.target.value || null);
+    // Swapping engines swaps the whole model set, so any running worker and its
+    // voice registry must go rather than be reused for a namespace it lacks.
+    // audio_core may legitimately not be loaded yet; that is fine, there is
+    // nothing running to reset.
+    try { await window._resetPocketEngineForBackend?.(); } catch (_) {}
     renderNarrationEngineControls();
     if (typeof window.refreshPerfPanel === 'function') window.refreshPerfPanel();
     window.pocketNotify?.('Narration engine changed. The next paragraph uses it.');
