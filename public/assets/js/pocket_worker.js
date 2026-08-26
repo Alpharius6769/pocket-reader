@@ -21,7 +21,7 @@ import {
   selectWebGpuVariant,
   shouldDemoteWebGpuSustained,
   POCKET_WEBGPU_WASM_PARITY_RATIO,
-} from './pocket_backend_policy.js?v=backend-v22';
+} from './pocket_backend_policy.js?v=backend-v23';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   computePocketFrameBudget,
@@ -792,7 +792,12 @@ async function fetchSingleModelWithProgress(url, asset, completedBytes) {
 async function fetchModelWithProgress(urls, asset, completedBytes) {
   // Read once per asset, not once per host: both candidate URLs collapse to the
   // same canonical key, so a second lookup could only repeat the same answer.
-  const expectedBytes = Number(currentModelAssetBytes?.[asset] || MODEL_ASSET_BYTES[asset] || 0);
+  // Must follow the ACTIVE format. Using the .onnx table while .ort is in play
+  // hands readCachedModelBuffer a length that cannot match, so the entry fails
+  // its own size check and reports a miss -- silently defeating the durable
+  // cache and re-downloading every model on every launch.
+  const expectedSizes = useOrtFormatWasm ? ORT_FORMAT_MODEL_ASSET_BYTES : MODEL_ASSET_BYTES;
+  const expectedBytes = Number(currentModelAssetBytes?.[asset] || expectedSizes[asset] || 0);
   const cached = urls.length
     ? await readCachedModelBuffer(canonicalModelCacheKey(urls[0]), expectedBytes)
     : null;
@@ -1596,25 +1601,23 @@ function supportsFixedSimd() {
   }
 }
 
-// Which resolved runtimes can actually read .ort models.
+// Which resolved runtimes may read .ort models.
 //
-// Verified 2026-08-22 by inspecting the shipped binaries rather than assuming:
-// the stock ort-wasm-simd-threaded.wasm contains every ORT-format marker the
-// custom build does -- the ORTM file identifier, "ORT format model", the
-// "Invalid ORT format model" parser error and fbs:: symbols. Stock
-// onnxruntime-web therefore loads .ort fine, and gating the format on a custom
-// runtime was leaving devices on .onnx protobuf for no reason. That is exactly
-// what stranded the iPhone 13, which fails the relaxed-SIMD probe and so fell
-// through to stock.
+// Stock ORT was briefly allowed here on the strength of static analysis -- its
+// wasm carries the ORTM identifier, "ORT format model", the "Invalid ORT format
+// model" parser error and fbs:: symbols, so the loader looks compiled in. That
+// was never tested end to end, and the iPhone 13 regressed from ~27 paragraphs
+// to ~11 in the window that change was live. Strings prove a code path exists,
+// not that it is enabled at runtime or that it costs less memory than the
+// protobuf path it replaced.
 //
-// The jsep fallbacks are deliberately NOT listed. They are separate
-// distributions and no one has checked their binaries; an unverified guess here
-// costs a total load failure rather than a little extra memory, so they keep
-// the safe .onnx path until someone confirms them the same way.
+// So: back to the two runtimes .ort was built and measured against. Restoring
+// the last configuration known to reach paragraph 27 is worth more than an
+// unverified optimisation, and the device this was meant to help is moving to
+// Kokoro regardless. Re-enable stock only with a real on-device measurement,
+// not another binary grep.
 function flavorSupportsOrtFormat(flavor) {
-  return flavor === 'relaxed-simd-minimal-ort'
-    || flavor === 'simd-minimal-ort'
-    || flavor === 'stock-wasm-only';
+  return flavor === 'relaxed-simd-minimal-ort' || flavor === 'simd-minimal-ort';
 }
 
 async function probeOrtRuntimeFiles(base, files) {

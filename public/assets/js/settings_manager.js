@@ -5,9 +5,9 @@ import {
 import {
   readPocketDeviceBackendPreference,
   writePocketDeviceBackendPreference,
-} from './pocket_backend_policy.js?v=backend-v22';
+} from './pocket_backend_policy.js?v=backend-v23';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '185';
+export const NARRATION_SERVICE_WORKER_VERSION = '186';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;

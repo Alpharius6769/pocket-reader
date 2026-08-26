@@ -1128,3 +1128,95 @@ export function selectCalibratedBackend(wasm, webgpu, options = {}) {
   }
   return { selectedBackend: 'webgpu', reason: '', speedup, firstSegmentSpeedup, realTimeSpeedup, breakEvenParagraphs };
 }
+
+// ── Narration engine selection ───────────────────────────────────────────────
+// Kokoro-82M is the fallback engine for devices that cannot sustain Pocket TTS.
+//
+// The requested rule was "4 GB RAM or less, or below an iPhone 15 Pro". Neither
+// is readable on Safari: navigator.deviceMemory is not implemented (a real
+// iPhone 13 diagnostic reports ram "Unavailable"), and the model is not exposed
+// either -- evaluateIphoneWebGpuEligibility falls through to "could not be
+// confirmed" for EVERY iPhone. So the rule is expressed with signals that
+// actually exist: the constrained classification, which is already true for all
+// iOS Safari, plus Android's deviceMemory where Chrome does report it.
+export const KOKORO_ENGINE = 'kokoro';
+export const POCKET_ENGINE = 'pocket';
+export const NARRATION_ENGINE_OVERRIDE_KEY = 'pr_narration_engine_override_v1';
+export const KOKORO_MODEL_REVISION = 'kokoro-82m-v1.0';
+
+// Grades are Kokoro's own published quality table. The male voices top out at
+// C+ while the best female voices reach A/A-, so the asymmetry is real and the
+// order here reflects it rather than pretending otherwise.
+export const KOKORO_VOICES = Object.freeze([
+  { id: 'af_heart',   label: 'Heart — American, warm',      gender: 'female', grade: 'A'  },
+  { id: 'af_bella',   label: 'Bella — American, expressive', gender: 'female', grade: 'A-' },
+  { id: 'bf_emma',    label: 'Emma — British, measured',     gender: 'female', grade: 'B-' },
+  { id: 'am_michael', label: 'Michael — American, steady',   gender: 'male',   grade: 'C+' },
+  { id: 'am_fenrir',  label: 'Fenrir — American, deep',      gender: 'male',   grade: 'C+' },
+  { id: 'am_puck',    label: 'Puck — American, bright',      gender: 'male',   grade: 'C+' },
+]);
+export const KOKORO_DEFAULT_VOICE = 'am_michael';
+
+export function isKokoroVoice(voiceId) {
+  const id = String(voiceId || '').toLowerCase().trim();
+  return KOKORO_VOICES.some((voice) => voice.id === id);
+}
+
+export function readNarrationEngineOverride(storage = globalThis.localStorage) {
+  try {
+    const value = storage?.getItem(NARRATION_ENGINE_OVERRIDE_KEY);
+    return value === KOKORO_ENGINE || value === POCKET_ENGINE ? value : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+export function writeNarrationEngineOverride(storage = globalThis.localStorage, engine) {
+  try {
+    if (engine === KOKORO_ENGINE || engine === POCKET_ENGINE) {
+      storage?.setItem(NARRATION_ENGINE_OVERRIDE_KEY, engine);
+      return engine;
+    }
+    storage?.removeItem(NARRATION_ENGINE_OVERRIDE_KEY);
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// An explicit choice always wins, in BOTH directions: a reader on a constrained
+// device who prefers Pocket's voice quality can have it, and a reader on a
+// capable device can pick Kokoro if they would rather have the lighter engine.
+// Returning the reason keeps the settings panel honest about why.
+export function selectNarrationEngine(options = {}) {
+  // Validate rather than trust: options.override is caller-supplied and a stored
+  // value can be stale or hand-edited. An unrecognised string must fall through
+  // to automatic selection, not become the engine name.
+  const requested = options.override ?? readNarrationEngineOverride(options.storage);
+  if (requested === KOKORO_ENGINE || requested === POCKET_ENGINE) {
+    return { engine: requested, automatic: false, reason: 'Chosen in Settings.' };
+  }
+  const capability = options.capability || {};
+  const platform = capability.platform || detectMobilePlatform(options.userAgent || '');
+  const memoryGb = Number(
+    options.deviceMemory ?? capability.deviceMemoryGb ?? 0,
+  );
+  if (platform === 'ios') {
+    return {
+      engine: KOKORO_ENGINE,
+      automatic: true,
+      reason: 'iOS cannot report RAM or model, so the lighter engine is the safe default.',
+    };
+  }
+  if (memoryGb > 0 && memoryGb <= 4) {
+    return {
+      engine: KOKORO_ENGINE,
+      automatic: true,
+      reason: `This device reports ${memoryGb} GB of RAM.`,
+    };
+  }
+  if (options.lowMemoryMode === true || capability.lowMemoryMode === true) {
+    return { engine: KOKORO_ENGINE, automatic: true, reason: 'Low-memory mode is on.' };
+  }
+  return { engine: POCKET_ENGINE, automatic: true, reason: '' };
+}

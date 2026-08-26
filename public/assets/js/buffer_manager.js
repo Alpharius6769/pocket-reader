@@ -1,12 +1,12 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v14';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v15';
 import {
   evaluateCpuThermalRest,
   POCKET_THERMAL_HISTORY_LIMIT,
   writePocketExpressiveChoice,
   detectMobilePlatform,
   isMobileLikePlatform,
-} from './pocket_backend_policy.js?v=backend-v22';
+} from './pocket_backend_policy.js?v=backend-v23';
 
 const HARD_CAP_WORKERS   = window.HARD_CAP_WORKERS;
 const MANUAL_CAP_WORKERS = window.MANUAL_CAP_WORKERS;

@@ -734,14 +734,18 @@ test('a fixed-SIMD device can reach the custom runtime and .ort models', async (
 // model" parser error and fbs:: symbols -- the same ORT-format markers as the
 // custom build. Gating .ort on a custom runtime stranded the iPhone 13 on
 // .onnx protobuf for no reason, since it fails the relaxed probe.
-test('stock ORT is allowed to read .ort, unverified jsep builds are not', async () => {
+test('.ort stays limited to the runtimes it was measured against', async () => {
   const worker = await read('public/assets/js/pocket_worker.js');
   const fn = worker.slice(worker.indexOf('function flavorSupportsOrtFormat(flavor)'),
                           worker.indexOf('async function probeOrtRuntimeFiles'));
   assert.ok(fn.length > 0, 'gate function not found');
-  for (const allowed of ['relaxed-simd-minimal-ort', 'simd-minimal-ort', 'stock-wasm-only']) {
+  for (const allowed of ['relaxed-simd-minimal-ort', 'simd-minimal-ort']) {
     assert.ok(fn.includes(`'${allowed}'`), `${allowed} must be allowed to use .ort`);
   }
+  // Stock was allowed on static analysis alone and the device regressed while
+  // that was live. It stays out until measured on hardware.
+  assert.ok(!fn.includes("'stock-wasm-only'"),
+    'stock must not be re-enabled for .ort without an on-device measurement');
   // An unverified build must keep the safe path: guessing wrong costs a total
   // load failure, not just extra memory.
   assert.ok(!fn.includes('legacy-jsep') && !fn.includes('cdn-jsep'),

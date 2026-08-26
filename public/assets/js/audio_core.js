@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v14';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v15';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -40,7 +40,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v22';
+} from './pocket_backend_policy.js?v=backend-v23';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -1231,7 +1231,7 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v58', document.baseURI).href;
+        const workerScript = new URL('assets/js/pocket_worker.js?v=pocket-worker-v59', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
