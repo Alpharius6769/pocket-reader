@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v195';
+var CACHE_NAME = 'pocket-reader-core-v196';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -62,6 +62,27 @@ function updateAppCache(request, response) {
     });
 }
 
+// Every dedicated worker script needs the isolation headers, not just Pocket's.
+//
+// A dedicated worker inherits its creator's cross-origin embedder policy, and
+// the browser then refuses to run one whose OWN script response does not also
+// assert require-corp. That refusal surfaces as a bare `error` Event on the
+// Worker object -- no message, no filename, no line number -- so nothing in the
+// console says why. GitHub Pages sends no COEP header of its own, which is the
+// whole reason this stamps one here.
+//
+// The test used to name one file, Pocket's, and nothing else. Inside a
+// ?tts_fast=1 isolated session that meant Pocket's worker started and every
+// OTHER worker died on construction: kokoro_worker.js could never synthesize a
+// single paragraph (audio_core caught the empty error and fell back to the
+// device voice -- persisting 'webspeech' as the engine, which then suppressed
+// the cache modal on every later story open), and device_benchmark_worker.js
+// failed the same silent way. Matching the _worker.js suffix keeps the next one
+// working without anyone having to remember this file exists.
+function isDedicatedWorkerScript(pathname) {
+    return /_worker\.js$/.test(pathname);
+}
+
 function withNarrationIsolation(response) {
     if (!response) return response;
     var headers = new Headers(response.headers);
@@ -100,7 +121,7 @@ var OPTIONAL_ASSETS = [
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
     'assets/js/buffer_manager.js?v=buffer-v63',
-    'assets/js/audio_core.js?v=audio-v95',
+    'assets/js/audio_core.js?v=audio-v96',
     'assets/js/pocket_worker.js?v=pocket-worker-v60',
     'assets/js/kokoro_worker.js?v=kokoro-v3',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
@@ -118,19 +139,19 @@ var CORE_ASSETS = [
     'assets/js/experience_coordinator.js?v=experience-v5',
     'assets/js/virtue_controller.js?v=virtue-v16',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v135',
+    'assets/js/ui_controller.js?v=ui-v136',
     'assets/js/supabase_bridge.js?v=supabase-v7',
     'assets/js/profile_merge.js?v=merge-v6',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v12',
     'assets/js/device_benchmark_worker.js?v=device-bench-v1',
-    'assets/js/settings_manager.js?v=settings-v95',
-    'assets/js/library_manager.js?v=library-v25',
+    'assets/js/settings_manager.js?v=settings-v96',
+    'assets/js/library_manager.js?v=library-v27',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v5',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v1',
     'assets/js/hmofa_community.js?v=hmofa-community-v2',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v2',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v48',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v49',
     'assets/js/storage_core.js?v=storage-v16',
     'assets/js/sync_core.js?v=sync-v12',
     'assets/js/cinematic_ui.js?v=cinematic-v7',
@@ -331,10 +352,10 @@ self.addEventListener('fetch', function (event) {
     }
 
     if (url.pathname.indexOf('/assets/') !== -1 && (url.pathname.slice(-3) === '.js' || url.pathname.slice(-4) === '.css')) {
-        var isPocketWorker = url.pathname.indexOf('/pocket_worker.js') !== -1;
+        var isWorkerScript = isDedicatedWorkerScript(url.pathname);
         var fetchAndCache = function () {
             return fetch(event.request).then(function (networkResponse) {
-                var servedResponse = isPocketWorker ? withNarrationIsolation(networkResponse) : networkResponse;
+                var servedResponse = isWorkerScript ? withNarrationIsolation(networkResponse) : networkResponse;
                 return updateAppCache(event.request, servedResponse).then(function () {
                     return servedResponse;
                 });
@@ -352,7 +373,7 @@ self.addEventListener('fetch', function (event) {
             event.respondWith(
                 caches.match(event.request).then(function (cachedResponse) {
                     if (cachedResponse) {
-                        return isPocketWorker ? withNarrationIsolation(cachedResponse) : cachedResponse;
+                        return isWorkerScript ? withNarrationIsolation(cachedResponse) : cachedResponse;
                     }
                     return fetchAndCache();
                 }).catch(function () {
@@ -370,7 +391,7 @@ self.addEventListener('fetch', function (event) {
             updatePromise.catch(function () {
                 return caches.match(event.request).then(function (cachedResponse) {
                     if (!cachedResponse) return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
-                    return isPocketWorker ? withNarrationIsolation(cachedResponse) : cachedResponse;
+                    return isWorkerScript ? withNarrationIsolation(cachedResponse) : cachedResponse;
                 });
             })
         );

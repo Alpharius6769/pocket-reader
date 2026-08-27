@@ -56,6 +56,71 @@ if (!window.userProfile) {
 
 const PROFILE_SCHEMA_VERSION = 3;
 const POCKET_ENGINE_AUTO_VERSION = 'v4';
+
+// Answered at most once per device, whichever way the reader answers. See the
+// recovery prompt in the profile-load path for why this cannot be inferred.
+const ENGINE_DOWNGRADE_RECOVERY_KEY = 'pr_engine_downgrade_recovery_v1';
+
+window.resolveEngineDowngradeRecovery = function resolveEngineDowngradeRecovery(restoreNeural) {
+  try { localStorage.setItem(ENGINE_DOWNGRADE_RECOVERY_KEY, restoreNeural ? 'restored' : 'kept-device'); } catch (_) {}
+  window.closeFeatureDialog?.();
+  if (!restoreNeural) return;
+  if (!window.userProfile) window.userProfile = {};
+  if (!window.userProfile.settings) window.userProfile.settings = {};
+  // 'pocket' is the stored value for BOTH neural engines. Deliberately NOT
+  // routed through switchReaderVoiceEngine('pocket'), which would rewrite the
+  // narration override and silently move a Kokoro reader onto Pocket. Leaving
+  // the override alone restores whichever engine they had actually chosen.
+  window.userProfile.settings.voiceEngine = 'pocket';
+  window.userProfile.settings._engineManuallySet = true;
+  window._pocketNeuralEngineUnavailable = false;
+  window.saveLocalData?.();
+  window.renderNarrationEngineControls?.();
+  try { window.refreshVoiceSelectorForEngine?.(); } catch (_) {}
+  window.pocketNotify?.('Neural narration restored.', 5000);
+};
+
+// Offer a way back from the persisted automatic downgrade, once, ever.
+//
+// Until sw v196 a neural worker that failed to load called
+// switchReaderVoiceEngine('webspeech') NON-silently, so the downgrade was
+// written to the profile AND marked _engineManuallySet -- indistinguishable in
+// stored data from a reader who genuinely prefers the device voice. Because
+// only a neural engine starts a cache job, every story opened afterwards
+// skipped the "Preparing Narration" modal in silence, with nothing on screen
+// connecting the two.
+//
+// The condition asks _resolveActiveEngine rather than reading a settings key,
+// because that resolver IS the thing the bug spoke through: it prefers the
+// in-memory profile and falls back to the stored one, and its answer is what
+// every narration gate in the app actually tests. window._pocketNeuralEngineUnavailable
+// is excluded so a failure happening right now -- already explained by the
+// companion, already retried on the next reload -- never triggers this.
+(function offerEngineDowngradeRecovery() {
+  let attempts = 0;
+  const attempt = () => {
+    if (++attempts > 10) return;
+    try {
+      if (localStorage.getItem(ENGINE_DOWNGRADE_RECOVERY_KEY)) return;
+      if (window._pocketNeuralEngineUnavailable === true) return;
+      if (typeof window._resolveActiveEngine !== 'function') return setTimeout(attempt, 1000);
+      if (window._resolveActiveEngine() !== 'webspeech') return;
+      if (typeof window.showFeatureDialog !== 'function') return setTimeout(attempt, 1000);
+    } catch (_) {
+      return;
+    }
+    window.showFeatureDialog(
+      'Restore neural narration?',
+      '<p>Narration on this device is set to the built-in <strong>Device voice</strong>.</p>'
+      + '<p>Earlier versions could switch to it on their own when a neural voice failed to load, '
+      + 'and saved that switch as though you had made it — so this may not have been your '
+      + 'choice. That fault is fixed.</p>',
+      '<button class="pr-btn-primary" onclick="window.resolveEngineDowngradeRecovery(true)">Use neural narration</button>'
+      + '<button class="pr-btn-sub" onclick="window.resolveEngineDowngradeRecovery(false)">Keep device voice</button>',
+    );
+  };
+  setTimeout(attempt, 2500);
+})();
 const WITHDRAWN_TITLE_HASHES = new Set([2097602949, 4010063105, 498652239, 3528427211]);
 const WITHDRAWN_AUTHOR_HASHES = new Set([1741912528]);
 const WITHDRAWN_FILE_HASHES = new Set([586215127, 4227966908]);

@@ -262,6 +262,15 @@ window.renderPocketVoiceOptions = function renderPocketVoiceOptions(selectEl, se
 };
 
 window._resolveActiveEngine = function _resolveActiveEngine() {
+  // A neural engine that failed to LOAD is unusable for the rest of this page's
+  // life -- but that is a runtime fact about this session, not a preference.
+  // audio_core used to record it by PERSISTING voiceEngine: 'webspeech', which
+  // demoted the account permanently after one transient failure and, because
+  // only a neural engine starts a cache job, silently suppressed the
+  // "Preparing Narration" modal on every later story open. The flag lives in
+  // memory instead: a reload retries the engine, and choosing one in Settings
+  // clears it at once.
+  if (window._pocketNeuralEngineUnavailable === true) return 'webspeech';
   let engine = window.userProfile?.settings?.voiceEngine;
   if (!engine) {
     try {

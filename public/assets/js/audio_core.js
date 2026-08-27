@@ -1733,6 +1733,22 @@ async function _loadPocketEngine() {
   return neuralState === 'ready';
 }
 
+// A neural engine that fails to load must not rewrite the reader's saved
+// preference, and it must not silence the fallback it just promised.
+//
+// This called switchReaderVoiceEngine('webspeech'), which did two things it had
+// no business doing. It PERSISTED voiceEngine: 'webspeech', so a single
+// transient failure demoted the profile for good -- and since only a neural
+// engine starts a cache job, every later story open then skipped the
+// "Preparing Narration" modal with nothing on screen to explain why. And it
+// called pausePlayback(), which cleared window.isPlaying, so the caller took
+// its "User paused during generation" exit and the device voice this function
+// announces never spoke a word. The reader got silence AND a downgraded
+// account, from one failed worker.
+//
+// Now the failure is recorded in memory for this page only. Playback keeps
+// running so _playGeneratedAudio can finish the paragraph on the device voice,
+// a reload retries the neural engine, and picking one in Settings clears it.
 function _fallbackToWebSpeech() {
   const _setStatus = (msg) => {
     const bufferText = document.getElementById('reader-buffer-text');
@@ -1742,13 +1758,38 @@ function _fallbackToWebSpeech() {
   };
 
   _setStatus('Engine failed to load. Check diagnostics for details.');
+  window._pocketNeuralEngineUnavailable = true;
 
+  // Reflect the temporary state in the controls WITHOUT writing it to the
+  // profile, so the reader can see which voice is speaking and still finds
+  // their own choice intact next launch.
+  const controlValue = 'webspeech';
+  const globalSel = document.getElementById('voice-engine-select');
+  if (globalSel) globalSel.value = controlValue;
+  const playbarSel = document.getElementById('reader-engine-select');
+  if (playbarSel) playbarSel.value = controlValue;
+  const voiceSelector = document.getElementById('voice-selector');
+  if (voiceSelector && 'speechSynthesis' in window) {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        _populateWebSpeechVoices(voiceSelector, window.speechSynthesis.getVoices());
+      };
+    } else {
+      _populateWebSpeechVoices(voiceSelector, voices);
+    }
+  }
+
+  window.Diagnostics?.log('WARN', 'Neural engine unavailable for this session; using the device voice', {
+    engine: loadedVoiceEngine || 'unknown',
+    persisted: false,
+  });
   if (typeof window.triggerVirtue === 'function') {
     window.triggerVirtue('virtue_annoyed_bubble');
-    window.virtueSpeak("Couldn't load the neural engine. Switching to Device voice.", 6000);
-  }
-  if (typeof window.switchReaderVoiceEngine === 'function') {
-    window.switchReaderVoiceEngine('webspeech');
+    window.virtueSpeak(
+      "Couldn't load the neural engine, so I'll read with the device voice for now. Your saved choice is untouched — reload to try again.",
+      7000,
+    );
   }
 }
 
@@ -3521,6 +3562,14 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
   }
 
   if (!audioBlob || !(audioBlob instanceof Blob) || audioBlob.size < 100) {
+    // The engine failed to LOAD rather than failing to render this paragraph:
+    // _fallbackToWebSpeech has already announced the device voice, so actually
+    // use it. Stopping here was the difference between narration that continues
+    // less well and total silence one paragraph into the story.
+    if (window._pocketNeuralEngineUnavailable === true && window.isPlaying) {
+      await _playWebSpeech(text);
+      return;
+    }
     console.warn('No audio blob for this paragraph — stopping playback to avoid skip-loop.');
     pausePlayback();
     if (typeof window.virtueSpeak === 'function') {
@@ -4132,6 +4181,10 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   // the neural path, and which model that means is the narration override.
   if (engineVal === 'auto' || engineVal === 'kokoro' || engineVal === 'pocket') {
     writeNarrationEngineOverride(localStorage, engineVal === 'auto' ? null : engineVal);
+    // Asking for a neural engine is asking to try it again, so lift the
+    // session-only 'this engine could not load' flag rather than resolving
+    // straight back to the device voice and looking like the control is dead.
+    window._pocketNeuralEngineUnavailable = false;
     // Swapping the model set invalidates the running worker and its voice
     // registry; it is rebuilt on the next request.
     try { _resetPocketEngineForBackend(); } catch (_) {}

@@ -751,3 +751,106 @@ test('.ort stays limited to the runtimes it was measured against', async () => {
   assert.ok(!fn.includes('legacy-jsep') && !fn.includes('cdn-jsep'),
     'jsep fallbacks must stay on .onnx until their binaries are checked');
 });
+
+// A neural engine that fails to load used to do two things it had no business
+// doing, and together they produced the whole "Kokoro never narrates and the
+// Preparing Narration modal never appears" report.
+test('a failed engine load cannot rewrite the saved voice engine', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const fallback = audio.slice(
+    audio.indexOf('function _fallbackToWebSpeech() {'),
+    audio.indexOf('// ── Play button + Media Session'),
+    // Comments are stripped throughout: an explanation that NAMES the old
+    // behaviour must not read as the old behaviour still being there.
+  ).replace(/^\s*\/\/.*$/gm, '');
+  assert.ok(fallback.length > 100, 'the fallback body must be locatable');
+
+  // It called switchReaderVoiceEngine('webspeech') NON-silently, which persisted
+  // voiceEngine: 'webspeech' and set _engineManuallySet. One transient worker
+  // failure therefore demoted the profile permanently, and because only a
+  // neural engine starts a cache job, every later story open then skipped the
+  // caching modal in total silence.
+  assert.doesNotMatch(fallback, /switchReaderVoiceEngine/,
+    'the automatic downgrade must not route through the user-choice path');
+  assert.doesNotMatch(fallback, /settings\.voiceEngine\s*=/,
+    'the automatic downgrade must not write the saved engine');
+  assert.doesNotMatch(fallback, /saveLocalData/,
+    'the automatic downgrade must not be persisted at all');
+
+  // And it called pausePlayback(), clearing window.isPlaying, so the caller took
+  // its "User paused during generation" exit and the device voice this function
+  // announces never spoke. Silence, not a fallback.
+  assert.doesNotMatch(fallback, /pausePlayback\(/,
+    'the fallback must leave playback running so the device voice can take over');
+
+  assert.match(fallback, /window\._pocketNeuralEngineUnavailable = true/,
+    'the failure must be recorded in memory for this page only');
+
+  // The resolver has to honour the in-memory flag, or nothing changes.
+  const utils = await read('public/assets/js/engine_utils.js');
+  assert.match(utils,
+    /if \(window\._pocketNeuralEngineUnavailable === true\) return 'webspeech';/,
+    'engine resolution must honour the session-only failure flag');
+  // Session-only means session-only: no storage anywhere in the app.
+  for (const name of ['audio_core.js', 'engine_utils.js', 'buffer_manager.js', 'library_manager.js']) {
+    const source = await read(`public/assets/js/${name}`);
+    assert.doesNotMatch(source, /(local|session)Storage[^\n]*_pocketNeuralEngineUnavailable/,
+      `${name} must not persist the session failure flag`);
+  }
+});
+
+test('a failed engine load still narrates the paragraph it was asked for', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  // The dead end: no blob, so stop. With the engine merely unloadable rather
+  // than broken, the device voice can finish the paragraph instead.
+  assert.match(
+    audio,
+    /if \(window\._pocketNeuralEngineUnavailable === true && window\.isPlaying\) \{\s*\n\s*await _playWebSpeech\(text\);/,
+    'an unloadable engine must hand the paragraph to Web Speech, not stop playback',
+  );
+});
+
+test('choosing a neural engine clears the session failure flag', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  // Otherwise the control looks dead: the reader picks Kokoro, resolution keeps
+  // returning 'webspeech', and nothing they do in Settings has any effect until
+  // they happen to reload.
+  assert.match(
+    audio,
+    /engineVal === 'auto' \|\| engineVal === 'kokoro' \|\| engineVal === 'pocket'\) \{[\s\S]{0,400}?window\._pocketNeuralEngineUnavailable = false;/,
+  );
+});
+
+test('the persisted downgrade is offered a way back exactly once', async () => {
+  const library = await read('public/assets/js/library_manager.js');
+  // The old downgrade also set _engineManuallySet, so it is indistinguishable
+  // in stored data from a reader who genuinely prefers the device voice. This
+  // must therefore ASK rather than guess — and only once, either answer.
+  assert.match(library, /const ENGINE_DOWNGRADE_RECOVERY_KEY = 'pr_engine_downgrade_recovery_v1';/);
+  assert.match(library, /localStorage\.setItem\(ENGINE_DOWNGRADE_RECOVERY_KEY, restoreNeural \? 'restored' : 'kept-device'\)/,
+    'both answers must be recorded so the prompt never returns');
+  // The trigger must ask the RESOLVER rather than read a settings key. The
+  // stored profile is not always the value narration runs on — _resolveActiveEngine
+  // prefers the in-memory profile and falls back to storage — and its answer is
+  // what every narration gate in the app actually tests.
+  assert.match(library, /window\._resolveActiveEngine\(\) !== 'webspeech'\) return;/);
+  // It must not fire on a failure happening right now: that one is already
+  // explained by the companion and already retried on the next reload.
+  assert.match(library, /window\._pocketNeuralEngineUnavailable === true\) return;/);
+  // And it cannot sit in loadLocalData(), which nothing in the app calls.
+  const deadStart = library.indexOf('export async function loadLocalData');
+  const deadEnd = library.indexOf('window.loadLocalData = loadLocalData');
+  assert.ok(deadStart > 0 && deadEnd > deadStart, 'loadLocalData must be locatable');
+  assert.ok(!library.slice(deadStart, deadEnd).includes('ENGINE_DOWNGRADE_RECOVERY_KEY'),
+    'the recovery offer must not be placed inside an uncalled function');
+  // Restoring must not rewrite the narration override, which would silently
+  // move a Kokoro reader onto Pocket.
+  const handler = library.slice(
+    library.indexOf('window.resolveEngineDowngradeRecovery ='),
+    library.indexOf('\n};', library.indexOf('window.resolveEngineDowngradeRecovery =')),
+  );
+  const handlerCode = handler.replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(handlerCode, /writeNarrationEngineOverride|switchReaderVoiceEngine/,
+    'the restore must leave the chosen neural engine alone');
+  assert.match(handler, /settings\.voiceEngine = 'pocket'/);
+});

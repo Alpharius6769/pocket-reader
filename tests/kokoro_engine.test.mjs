@@ -7,7 +7,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -444,4 +444,52 @@ test('no behavioural gate compares the resolved engine to the bare literal', asy
     const bad = src.match(/const engine = _resolveActiveEngine\(\);[\s\S]{0,120}?engine (===|!==) 'pocket'/g) || [];
     assert.deepEqual(bad, [], `${name} still gates the resolved engine on the bare literal`);
   }
+});
+
+// Seventh instance of the same shape, one layer down: a hardcoded 'pocket'
+// filename in the service worker instead of a hardcoded 'pocket' engine name.
+//
+// A dedicated worker inherits its creator's COEP and the browser refuses to run
+// one whose own script response does not also assert require-corp — reporting
+// it as a bare `error` Event with no message, filename, or line. GitHub Pages
+// sends no COEP header, so sw.js stamps one; it stamped only pocket_worker.js.
+// Inside a ?tts_fast=1 isolated session that made Kokoro impossible: the worker
+// died on construction, audio_core fell back to the device voice and PERSISTED
+// 'webspeech' as the engine, and every later story open then found a non-neural
+// engine and skipped the cache modal entirely.
+test('the service worker stamps isolation headers on every dedicated worker', async () => {
+  const serviceWorker = await read('public/sw.js');
+
+  // The predicate must be a suffix match, not a list of names to keep in sync.
+  const predicate = serviceWorker.match(
+    /function isDedicatedWorkerScript\(pathname\) \{\s*\n\s*return (.+);\s*\n\s*\}/,
+  );
+  assert.ok(predicate, 'sw.js must classify worker scripts through one predicate');
+  const matchesWorkerScript = new Function('pathname', `return ${predicate[1]};`);
+
+  // Find the worker scripts by SHAPE rather than by name, so a future worker
+  // that does not follow the _worker.js convention still fails this test
+  // instead of silently losing its headers. Only a dedicated worker global
+  // owns self.postMessage; the PCM worklet posts through this.port and is
+  // correctly excluded, because worklets do not carry the COEP requirement.
+  const workerScripts = [];
+  for (const name of await readdir(path.join(ROOT, 'public/assets/js'))) {
+    if (!name.endsWith('.js')) continue;
+    if ((await read(`public/assets/js/${name}`)).includes('self.postMessage(')) workerScripts.push(name);
+  }
+  assert.ok(workerScripts.includes('kokoro_worker.js'), 'the sweep must see the Kokoro worker');
+  assert.ok(workerScripts.includes('pocket_worker.js'), 'the sweep must see the Pocket worker');
+  for (const file of workerScripts) {
+    assert.ok(
+      matchesWorkerScript(`/pocket-reader/assets/js/${file}`),
+      `${file} runs as a dedicated worker but sw.js would serve it without COEP, `
+      + 'so it cannot start in an isolated narration session',
+    );
+  }
+
+  // And the stamp must actually be applied on both the network and cache paths.
+  const applications = serviceWorker.match(/isWorkerScript \? withNarrationIsolation\(/g) || [];
+  assert.equal(applications.length, 3, 'network, versioned-cache and offline-cache paths must all stamp');
+  assert.ok(!/indexOf\('\/[a-z_]+_worker\.js'\)/.test(serviceWorker),
+    'sw.js must not special-case a single worker filename again');
 });
