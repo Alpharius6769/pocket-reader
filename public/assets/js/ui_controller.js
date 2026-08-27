@@ -1196,6 +1196,14 @@ const _TIPS_BY_VIEW = {
   'settings-view': [
     { title: 'Settings', text: 'Tune the voice, worker count, GPU options and more here. You can also re-enable these tips at the bottom of this page.' },
   ],
+  // Away Mode was the one page with no tips, and it is the least
+  // self-explanatory: a queue, a Quick Add list and a job that deliberately
+  // keeps running once the panel is hidden.
+  'away-mode-view': [
+    { title: 'Away Mode', text: 'Away Mode renders a whole story to audio in the background so you can listen offline later, with no network at all.' },
+    { sel: '#away-quick-add-list', title: 'Queue stories', text: 'Add up to five stories here. They cache one after another, so start with the one you want tonight.' },
+    { sel: '#away-queue-list', title: 'Keep it running', text: 'Hiding the panel does not stop the job — caching keeps going while you read something else. Pause or stop it from Settings.' },
+  ],
 };
 
 function _tipDone(view) {
@@ -1513,7 +1521,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=192', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=193', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

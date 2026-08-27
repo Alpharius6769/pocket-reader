@@ -2895,7 +2895,7 @@ window.generateChunk = async function(text, voice) {
   window._lastPocketQualityFailure = null;
   _cancelWorkerIdleRelease();
   const engine = _resolveActiveEngine();
-  if (engine !== 'pocket') return null;
+  if (!_isNeuralEngine(engine)) return null;
 
   const ready = await _loadPocketEngine();
   if (!ready || ttsWorkers.length === 0) {
@@ -3035,7 +3035,7 @@ window.generateChunk = async function(text, voice) {
 window.generateChunkStream = async function(text, voice, onSegment) {
   if (!text || text.trim() === '' || typeof onSegment !== 'function') return null;
   _cancelWorkerIdleRelease();
-  if (_resolveActiveEngine() !== 'pocket') return null;
+  if (!_isNeuralEngine(_resolveActiveEngine())) return null;
   const ready = await _loadPocketEngine();
   if (!ready || ttsWorkers.length === 0) return null;
 
@@ -3089,7 +3089,7 @@ function _signalColdStartOnce() {
   try {
     const engine = _resolveActiveEngine();
     const ready = typeof window._neuralState === 'function' && window._neuralState() === 'ready';
-    if (engine !== 'pocket' || ready) return;
+    if (!_isNeuralEngine(engine) || ready) return;
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
       || (navigator.maxTouchPoints || 0) > 0;
     if (!isMobile) return;
@@ -3135,7 +3135,7 @@ export function togglePlayState() {
   }
 
   let resumePausedPocketAudio = false;
-  if (!window.isPlaying && _resolveActiveEngine() === 'pocket') {
+  if (!window.isPlaying && _isNeuralEngine(_resolveActiveEngine())) {
     // Run synchronously in the tap before any model/network await. If isolation
     // requires a navigation, the resume path asks for one fresh tap afterward.
     preparePocketMobileMediaSession();
@@ -3191,7 +3191,7 @@ export async function playCurrentParagraph() {
   if (typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
 
   const engine = _resolveActiveEngine();
-  const defaultVoice = engine === 'pocket' ? POCKET_DEFAULT_VOICE : '';
+  const defaultVoice = _defaultVoiceForEngine(engine);
   const voice = document.getElementById('voice-selector')?.value || defaultVoice;
 
   try {
@@ -3353,7 +3353,7 @@ let _lookaheadRunning = false;
 let _lastAudioClockPumpAt = 0;
 
 export function _onAudioClockPump() {
-  if (!window.isPlaying || _resolveActiveEngine() !== 'pocket') return;
+  if (!window.isPlaying || !_isNeuralEngine(_resolveActiveEngine())) return;
   const now = Date.now();
   if (now - _lastAudioClockPumpAt < 2000) return;
   _lastAudioClockPumpAt = now;
@@ -3376,7 +3376,7 @@ function _lookaheadShouldYield() {
 
 async function _ensurePlaybackLookahead() {
   if (_lookaheadRunning) return;
-  if (_resolveActiveEngine() !== 'pocket') return;
+  if (!_isNeuralEngine(_resolveActiveEngine())) return;
   if (window.BufferManager?.isActive) return;   // the full cacher already fills ahead of the cursor
   if (_lookaheadShouldYield()) return;
   const story = window.currentStory;
@@ -3787,7 +3787,7 @@ async function _preloadNextParagraphAudio() {
   if (!next) return;
 
   const engine = _resolveActiveEngine();
-  if (engine !== 'pocket') return;
+  if (!_isNeuralEngine(engine)) return;
   const text = story.chapters[next.c]?.paragraphs?.[next.p];
   if (!text || !text.trim() || _isMetaParagraph(text)) return;
 
@@ -4102,6 +4102,22 @@ window.applyPlaybackSpeed = applyPlaybackSpeed;
 // collapse to the neural engine internally, so the raw setting cannot round-trip
 // the user's choice on its own.
 let _selectedVoiceEngineControlValue = null;
+
+// 'pocket' and 'kokoro' are both the NEURAL path. Every gate below used to test
+// for the literal 'pocket', which on a Kokoro device meant generation returned
+// null and the caller fell back to the device voice — the engine was selected,
+// listed, and never actually asked to speak.
+function _isNeuralEngine(engine) {
+  return engine === 'pocket' || engine === 'kokoro';
+}
+
+function _defaultVoiceForEngine(engine) {
+  if (engine === 'kokoro') {
+    const saved = window.userProfile?.settings?.kokoroVoice;
+    return isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
+  }
+  return engine === 'pocket' ? POCKET_DEFAULT_VOICE : '';
+}
 
 export function switchReaderVoiceEngine(engineVal, silent = false) {
   if (!engineVal) {

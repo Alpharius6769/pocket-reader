@@ -13,7 +13,7 @@ import {
   KOKORO_DEFAULT_VOICE,
 } from './pocket_backend_policy.js?v=backend-v24';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '192';
+export const NARRATION_SERVICE_WORKER_VERSION = '193';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1376,6 +1376,37 @@ function _describeNarrationEngine() {
 
 // Engine + voice controls. Rendered into an existing settings container rather
 // than a new panel so it inherits the section's styling and scroll behaviour.
+// Changing the engine is a preference write, not narration. Routing it through
+// switchReaderVoiceEngine -- a DEFERRED action -- pulled in audio_core and
+// buffer_manager just to record a choice, which is why switching popped a
+// "preparing narration" overlay with no story open. Handle it in the shell and
+// only touch the runtime if it is ALREADY loaded and therefore has a live
+// worker to tear down.
+window.onNarrationEngineSelect = function onNarrationEngineSelect(value) {
+  const choice = String(value || 'auto');
+  if (!window.userProfile) window.userProfile = {};
+  if (!window.userProfile.settings) window.userProfile.settings = {};
+
+  if (choice === 'webspeech') {
+    window.userProfile.settings.voiceEngine = 'webspeech';
+  } else {
+    window.userProfile.settings.voiceEngine = 'pocket';
+    writeNarrationEngineOverride(localStorage, choice === 'auto' ? null : choice);
+  }
+  window.saveLocalData?.();
+
+  // Only if the runtime is already up: a loaded engine holds a model set for
+  // the engine being switched away from.
+  if (window.__pocketNarrationRuntimeLoaded === true) {
+    try { window.switchReaderVoiceEngine?.(choice, true); } catch (_) {}
+  }
+  renderNarrationEngineControls();
+  if (typeof window.refreshPerfPanel === 'function') {
+    try { window.refreshPerfPanel(); } catch (_) {}
+  }
+  window.pocketNotify?.('Narration engine updated. The next paragraph uses it.');
+};
+
 export function renderNarrationEngineControls() {
   const host = document.getElementById('narration-engine-controls');
   if (!host) return;

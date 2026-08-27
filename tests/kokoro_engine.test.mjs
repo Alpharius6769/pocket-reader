@@ -316,3 +316,60 @@ test('caching and Away Mode treat Kokoro as a neural engine', async () => {
   // voiceEngine:'pocket' — now explicit rather than incidental.
   assert.match(buffer, /if \(_isNeuralEngine\(activeEngine\)\) \{/);
 });
+
+// Reported: switching engines popped a "preparing narration" overlay with no
+// story open. switchReaderVoiceEngine is a DEFERRED action, so the Settings
+// select was importing audio_core and buffer_manager just to record a
+// preference. And every generation gate tested for the literal 'pocket', so a
+// Kokoro device fell through to the OS voice — the engine was chosen, listed,
+// and never asked to speak.
+test('every neural gate in audio_core accepts Kokoro', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  assert.match(audio, /function _isNeuralEngine\(engine\) \{\s*\n\s*return engine === 'pocket' \|\| engine === 'kokoro';/);
+  // The generation paths specifically: returning null here is what made
+  // playback fall back to the device voice.
+  assert.match(audio, /if \(!_isNeuralEngine\(engine\)\) return null;/);
+  assert.match(audio, /if \(!_isNeuralEngine\(_resolveActiveEngine\(\)\)\) return null;/);
+  // No generation/playback gate may still test the bare literal.
+  for (const dead of [
+    /const engine = _resolveActiveEngine\(\);\s*\n\s*if \(engine !== 'pocket'\) return null;/,
+    /if \(_resolveActiveEngine\(\) !== 'pocket'\) return null;/,
+    /if \(!window\.isPlaying \|\| _resolveActiveEngine\(\) !== 'pocket'\) return;/,
+  ]) {
+    assert.doesNotMatch(audio, dead, 'a pocket-literal gate would strand Kokoro on the device voice');
+  }
+  // The default voice must follow the engine, not always be a Pocket id.
+  assert.match(audio, /function _defaultVoiceForEngine\(engine\)/);
+  assert.match(audio, /const defaultVoice = _defaultVoiceForEngine\(engine\);/);
+});
+
+test('changing engine does not drag in the narration runtime', async () => {
+  const settings = await read('public/assets/js/settings_manager.js');
+  const html = await read('public/index.html');
+  const loader = await read('public/assets/js/narration_runtime_loader.js');
+
+  // Still deferred — that is correct for narration, wrong for a preference.
+  assert.match(loader, /'switchReaderVoiceEngine',/);
+  // So the Settings select must not call it directly.
+  assert.match(html, /onchange="onNarrationEngineSelect\(this\.value\)"/);
+  assert.match(settings, /window\.onNarrationEngineSelect = function/);
+  // The runtime is touched only when it is already up.
+  assert.match(settings, /if \(window\.__pocketNarrationRuntimeLoaded === true\) \{/);
+});
+
+test('Away Mode has first-visit tips like every other page', async () => {
+  const ui = await read('public/assets/js/ui_controller.js');
+  // Anchor on the ASSIGNMENT, not a call site: window._maybeShowPageTips is
+  // referenced from showView long before the registry is declared, so
+  // indexOf() there yields an empty slice that silently passes nothing.
+  const start = ui.indexOf('const _TIPS_BY_VIEW');
+  const registry = ui.slice(start, ui.indexOf('window._maybeShowPageTips = ', start));
+  assert.match(registry, /'away-mode-view': \[/);
+  // Anchored to elements that actually exist, or the tip is skipped silently.
+  assert.match(registry, /sel: '#away-quick-add-list'/);
+  assert.match(registry, /sel: '#away-queue-list'/);
+  const html = await read('public/index.html');
+  for (const id of ['away-quick-add-list', 'away-queue-list']) {
+    assert.ok(html.includes(`id="${id}"`), `${id} must exist for its tip to render`);
+  }
+});
