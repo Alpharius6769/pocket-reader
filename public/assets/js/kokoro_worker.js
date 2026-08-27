@@ -218,33 +218,95 @@ function clauseMarksFrom(text) {
   return marks;
 }
 
-// The graph's sequence axis is fixed at 512 including the two boundary zeros.
-// This used to slice the token stream every 510 ids, which lands wherever it
-// lands -- mid-word, mid-diphthong -- and the two halves were then rendered as
-// separate utterances and concatenated, so a long paragraph got an audible
-// fracture in the middle of a word. Packing whole clauses instead means a seam
-// can only ever fall where the writing already had a pause. Only a single
-// clause longer than the whole sequence axis is still hard-split, and that
-// flushes what came before it first so the damage stays local.
-function packUnitsIntoChunks(unitIds) {
-  const limit = MAX_TOKENS - 2;
+// How much audio ONE inference is allowed to produce.
+//
+// The graph's sequence axis tops out at 512, but filling it is what sets peak
+// memory. Kokoro is non-autoregressive: it materialises the entire utterance in
+// a single forward pass, and the vocoder's intermediates live at the 24 kHz
+// output rate, so activation memory tracks output LENGTH, not parameter count.
+//
+// Measured in Chrome over identical paragraphs:
+// Swept over identical text, peak against cap:
+//   510 (the full axis) -> 592 MB      192 -> 355 MB
+//   256                 -> 440 MB      128 -> 355 MB
+// 192 is the knee: below it the peak stops falling, because what remains is not
+// the chunk any more. Engine init alone is ~250 MB of that floor.
+//
+// For contrast, Pocket measured on the same harness: 356 MB at init and 482 MB
+// at peak, i.e. only 69 MB of activations for the same 20 s, because it is
+// autoregressive and only ever holds one frame. Kokoro trades that bounded
+// activation cost for speed -- capping the chunk buys it back.
+const DEFAULT_MAX_CHUNK_TOKENS = 192;
+let maxChunkTokens = DEFAULT_MAX_CHUNK_TOKENS;
+
+function chunkTokenLimit() {
+  return Math.max(32, Math.min(MAX_TOKENS - 2, maxChunkTokens));
+}
+
+// Phoneme string -> its words, each keeping the space that followed it, so
+// rejoining is lossless and a split between them lands in a real word gap.
+function wordPiecesOf(unitText) {
+  const parts = String(unitText || '').split(' ');
+  const pieces = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    if (!parts[index]) continue;
+    pieces.push(index < parts.length - 1 ? `${parts[index]} ` : parts[index]);
+  }
+  return pieces;
+}
+
+// Seams, in order of preference: between clauses, then between words, and only
+// inside a word if a single word somehow exceeds the whole cap.
+//
+// The clause-preferring behaviour is what made a seam inaudible at the old
+// 510-token cap, and it is doing MORE work now: at 192 tokens (~48 words) a
+// long sentence no longer fits, so the word-gap fallback is on the common path
+// rather than the pathological one. Slicing token ids blindly there -- which is
+// what the previous version did once a unit was oversized -- would put a cut
+// inside a word, and that is exactly the artefact this cap must not introduce.
+function packUnitsIntoChunks(units) {
+  const limit = chunkTokenLimit();
   const chunks = [];
   let current = [];
-  for (const ids of unitIds) {
+  const flush = () => {
+    if (current.length) { chunks.push(current); current = []; }
+  };
+  // Both call sites below only reach this with ids that already fit, but an
+  // oversized chunk would be handed to a graph whose sequence axis is 512 and
+  // fail at inference rather than here -- so the invariant is enforced, not
+  // assumed.
+  const add = (ids) => {
     if (ids.length > limit) {
-      if (current.length) { chunks.push(current); current = []; }
+      flush();
       for (let index = 0; index < ids.length; index += limit) {
         chunks.push(ids.slice(index, index + limit));
       }
-      continue;
+      return;
     }
-    if (current.length + ids.length > limit) {
-      chunks.push(current);
-      current = [];
-    }
+    if (current.length + ids.length > limit) flush();
     current = current.length ? current.concat(ids) : ids.slice();
+  };
+
+  for (const unit of units) {
+    const ids = tokenizePhonemes(unit);
+    if (!ids.length) continue;
+    if (ids.length <= limit) { add(ids); continue; }
+
+    flush();
+    for (const word of wordPiecesOf(unit)) {
+      const wordIds = tokenizePhonemes(word);
+      if (!wordIds.length) continue;
+      if (wordIds.length > limit) {
+        flush();
+        for (let index = 0; index < wordIds.length; index += limit) {
+          chunks.push(wordIds.slice(index, index + limit));
+        }
+        continue;
+      }
+      add(wordIds);
+    }
   }
-  if (current.length) chunks.push(current);
+  flush();
   return chunks;
 }
 
@@ -283,12 +345,11 @@ async function generate(text, voiceId, opts = {}) {
     return `${clause}${mark}${index < clauses.length - 1 ? ' ' : ''}`;
   });
 
-  const unitIds = units.map(tokenizePhonemes).filter((ids) => ids.length);
-  if (!unitIds.length) return new Float32Array(0);
 
   const pieces = [];
   let total = 0;
-  const chunks = packUnitsIntoChunks(unitIds);
+  const chunks = packUnitsIntoChunks(units);
+  if (!chunks.length) return new Float32Array(0);
   for (const chunk of chunks) {
     // Cancelling must FAIL the request, not resolve it short. Breaking out and
     // returning what had been produced so far reported generate_done with
@@ -317,6 +378,9 @@ self.onmessage = async (event) => {
   if (type === 'init') {
     try {
       cancelRequested = false;
+      maxChunkTokens = Number(data.maxChunkTokens) > 0
+        ? Number(data.maxChunkTokens)
+        : DEFAULT_MAX_CHUNK_TOKENS;
       progress(2);
       await loadOrtRuntime();
       progress(10);

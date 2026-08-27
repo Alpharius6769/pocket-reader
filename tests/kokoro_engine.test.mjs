@@ -85,7 +85,7 @@ test('the worker bounds its own memory the way this device needs', async () => {
   assert.match(worker, /const MAX_TOKENS = 512;/);
   // Was chunkTokenIds(), a blind slice every 510 ids. Splitting still never
   // truncates, but it now falls between clauses instead of inside a word.
-  assert.match(worker, /function packUnitsIntoChunks\(unitIds\)/);
+  assert.match(worker, /function packUnitsIntoChunks\(units\)/);
   assert.doesNotMatch(worker, /\.slice\(0, MAX_TOKENS\)/, 'must split, never truncate');
   // Same preallocate-from-Content-Length shape the Pocket loader needed.
   assert.match(worker, /const out = new Uint8Array\(declared\);/);
@@ -530,19 +530,61 @@ test('a Kokoro chunk boundary can only fall between clauses', async () => {
   // concatenated, so a long paragraph fractured audibly inside a word.
   assert.doesNotMatch(worker, /function chunkTokenIds\(/,
     'the blind fixed-stride splitter must be gone');
-  assert.match(worker, /function packUnitsIntoChunks\(unitIds\)/);
-  assert.match(worker, /const chunks = packUnitsIntoChunks\(unitIds\);/);
+  assert.match(worker, /function packUnitsIntoChunks\(units\)/);
+  assert.match(worker, /const chunks = packUnitsIntoChunks\(units\);/);
 
-  // Units are tokenized individually; that is what makes the packing possible.
-  assert.match(worker, /const unitIds = units\.map\(tokenizePhonemes\)/);
+  // The packer takes STRINGS now, not pre-tokenized ids, precisely so it can
+  // fall back to word gaps when one clause exceeds the cap on its own.
+  assert.match(worker, /function wordPiecesOf\(unitText\)/);
+  assert.match(worker, /for \(const word of wordPiecesOf\(unit\)\)/);
 
-  // A single clause longer than the whole sequence axis still has to be split,
-  // but it must flush what came before it so the damage stays local.
   const pack = worker.slice(
-    worker.indexOf('function packUnitsIntoChunks(unitIds)'),
-    worker.indexOf('async function generate('),
+    worker.indexOf('function packUnitsIntoChunks(units)'),
+    worker.indexOf('async function runChunk('),
   );
-  assert.match(pack, /if \(ids\.length > limit\)[\s\S]{0,200}?if \(current\.length\) \{ chunks\.push\(current\)/);
-  assert.match(pack, /if \(current\.length \+ ids\.length > limit\)/,
-    'units must be packed up to the limit rather than one per chunk');
+  assert.ok(pack.length > 200, 'the packer must be locatable');
+
+  // A clause that does not fit on its own flushes what came before it, then
+  // breaks at word gaps -- never inside a word. That fallback used to be the
+  // pathological path at a 510-token cap; at 192 (~48 words) a long sentence
+  // routinely exceeds the cap, so it is now the common path and a blind slice
+  // there would put a cut mid-word on ordinary prose.
+  assert.match(pack, /if \(ids\.length <= limit\) \{ add\(ids\); continue; \}/);
+  assert.match(pack, /flush\(\);\s*\n\s*for \(const word of wordPiecesOf\(unit\)\)/);
+
+  // Slicing survives only for a single "word" longer than the entire cap.
+  assert.match(pack, /if \(wordIds\.length > limit\)[\s\S]{0,220}?wordIds\.slice\(index, index \+ limit\)/);
+
+  // Units are packed up to the limit rather than one per chunk.
+  assert.match(pack, /if \(current\.length \+ ids\.length > limit\) flush\(\);/);
+});
+
+// Kokoro is non-autoregressive: it materialises the whole utterance in one pass
+// and the vocoder's intermediates live at the 24 kHz output rate, so activation
+// memory tracks how much audio ONE call produces. Filling the graph's 512-token
+// axis is therefore the single most expensive thing the worker can do.
+test('one inference is capped well below the graph sequence axis', async () => {
+  const worker = await read('public/assets/js/kokoro_worker.js');
+
+  const cap = Number(worker.match(/const DEFAULT_MAX_CHUNK_TOKENS = (\d+);/)?.[1]);
+  assert.ok(Number.isFinite(cap), 'the worker must declare a chunk cap');
+  assert.ok(cap <= 256, `the cap must stay near the measured knee; found ${cap}`);
+  assert.ok(cap >= 96, `too small a cap only adds seams for no memory; found ${cap}`);
+
+  // Measured over identical text: 510 -> 592 MB, 256 -> 440 MB, 192 -> 355 MB,
+  // 128 -> 355 MB. Below 192 the peak stops falling, so a smaller cap buys
+  // nothing and costs extra seams.
+  assert.match(worker, /function chunkTokenLimit\(\)/);
+  assert.match(worker, /Math\.max\(32, Math\.min\(MAX_TOKENS - 2, maxChunkTokens\)\)/,
+    'the cap must stay clamped inside the graph axis');
+  assert.match(worker, /maxChunkTokens = Number\(data\.maxChunkTokens\) > 0/,
+    'the cap must be overridable so it can be re-measured without a code change');
+
+  // The ORT arena guard was tried here and removed: measured twice at 592 vs
+  // 594 MB (cap 510) and 356.6 vs 354.7 MB (cap 192), i.e. no effect, while the
+  // arena-off run was the slower of the two at the small cap. Kokoro has no
+  // autoregressive KV cache for an arena to ratchet, which is why the guard
+  // Pocket needs does nothing here.
+  assert.doesNotMatch(worker, /enableCpuMemArena|enableMemPattern/,
+    'a measured no-op must not ship as if it were a fix');
 });
