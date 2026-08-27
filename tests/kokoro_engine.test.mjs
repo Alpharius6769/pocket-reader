@@ -263,3 +263,56 @@ test('a Kokoro voice id is never canonicalised against the Pocket voice list', a
     'the Kokoro branch must return before canonicalPocketVoice rewrites the id');
   assert.match(handler, /window\.userProfile\.settings\.kokoroVoice = newVoice;/);
 });
+
+// Audit findings, 2026-08-26. None of these could surface in a structural test
+// alone; each was found by checking the worker against what is actually hosted
+// and against the protocol's caching behaviour.
+test('ORT wasm binaries are pinned, because only the threaded ones are published', async () => {
+  const worker = await read('public/assets/js/kokoro_worker.js');
+  // ort-wasm-simd.wasm and ort-wasm.wasm both 404 on the proxy. Handed a bare
+  // base directory, ORT derives the filename itself and asks for the
+  // non-threaded build when numThreads is 1 -- so base + numThreads:1 was a
+  // guaranteed 404 and the engine could never have initialised at all.
+  assert.match(worker, /ort\.env\.wasm\.wasmPaths = \{/);
+  assert.match(worker, /mjs: `\$\{ORT_BASE\}ort-wasm-simd-threaded\.mjs`/);
+  assert.match(worker, /wasm: `\$\{ORT_BASE\}ort-wasm-simd-threaded\.wasm`/);
+  assert.doesNotMatch(worker, /ort\.env\.wasm\.wasmPaths = ORT_BASE;/,
+    'a bare base string lets ORT pick a filename that is not hosted');
+  assert.doesNotMatch(worker, /ort\.env\.wasm\.numThreads = 1;/,
+    'a hardcoded 1 forces the non-threaded binary');
+  assert.match(worker, /const isolated = self\.crossOriginIsolated === true/);
+});
+
+test('a cancelled generation fails instead of caching truncated audio', async () => {
+  const worker = await read('public/assets/js/kokoro_worker.js');
+  const fn = worker.slice(worker.indexOf('async function generate('),
+                          worker.indexOf('self.onmessage'));
+  // Breaking out of the loop resolved generate_done with partial audio, which
+  // the caller caches — a paragraph interrupted once stayed half-spoken forever.
+  assert.doesNotMatch(fn, /if \(cancelRequested\) break;/);
+  assert.match(fn, /if \(cancelRequested\) throw new Error\('Narration cancelled\.'\);/);
+  assert.match(fn, /if \(pieces\.length !== chunks\.length\) throw new Error/);
+});
+
+// The most consequential audit finding: caching is the entire reason Kokoro
+// exists on these devices, and it was switched off for them. BufferManager
+// tested for the literal 'pocket', so _resolveActiveEngine() returning 'kokoro'
+// hid the caching UI and returned, and Away Mode disabled itself because the
+// merged select now reports 'auto'/'kokoro' rather than 'pocket'.
+test('caching and Away Mode treat Kokoro as a neural engine', async () => {
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  assert.match(buffer, /function _isNeuralEngine\(engine\) \{\s*\n\s*return engine === 'pocket' \|\| engine === 'kokoro';/);
+  assert.match(buffer, /function _isNeuralControlValue\(value\) \{\s*\n\s*return value !== 'webspeech';/);
+
+  // The bail-out that hid the caching UI.
+  assert.match(buffer, /if \(!_isNeuralEngine\(engine\)\) \{/);
+  assert.doesNotMatch(buffer, /const engine = _resolveActiveEngine\(\);\s*\n\s*if \(engine !== 'pocket'\) \{/);
+
+  // Away Mode read the select, which now yields 'auto' or 'kokoro'.
+  assert.match(buffer, /if \(!_isNeuralControlValue\(selectedEngine\)\) \{/);
+  assert.doesNotMatch(buffer, /if \(selectedEngine !== 'pocket'\) \{/);
+
+  // And the modal gate, which only worked because both engines store
+  // voiceEngine:'pocket' — now explicit rather than incidental.
+  assert.match(buffer, /if \(_isNeuralEngine\(activeEngine\)\) \{/);
+});

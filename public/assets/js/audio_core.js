@@ -1235,6 +1235,10 @@ async function _loadPocketEngine() {
     loadedVoiceEngine = null;
   }
 
+  // An engine switch fires the reset without awaiting it (the change handler is
+  // synchronous). Wait for any in-flight teardown before allocating.
+  if (_pocketResetPromise) { try { await _pocketResetPromise; } catch (_) {} }
+
   if (neuralState === 'ready') return true;
   if (neuralState === 'loading') {
     await _engineReadyPromise;
@@ -1299,7 +1303,7 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const workerScript = engine === 'kokoro'
-          ? new URL('assets/js/kokoro_worker.js?v=kokoro-v2', document.baseURI).href
+          ? new URL('assets/js/kokoro_worker.js?v=kokoro-v3', document.baseURI).href
           : new URL('assets/js/pocket_worker.js?v=pocket-worker-v60', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
@@ -2346,10 +2350,14 @@ async function _resetPocketEngineForBackend() {
   if (hadWorkers) {
     // Drop the references above out of scope for the collector, then give the
     // terminated worker's heap a real chance to be reclaimed before anything
-    // allocates again.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    const settleMs = window.isPocketDeviceMemorySafeMode?.() !== false ? 250 : 0;
-    if (settleMs) await new Promise((resolve) => setTimeout(resolve, settleMs));
+    // allocates again. Published so a caller that did not await this still
+    // cannot race a fresh engine load past it.
+    _pocketResetPromise = (async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const settleMs = window.isPocketDeviceMemorySafeMode?.() !== false ? 250 : 0;
+      if (settleMs) await new Promise((resolve) => setTimeout(resolve, settleMs));
+    })().finally(() => { _pocketResetPromise = null; });
+    await _pocketResetPromise;
   }
 }
 // The buffer_manager.js caching circuit breaker recovers from repeated
@@ -2844,6 +2852,11 @@ function _logPocketQuality(level, message, attempt, extra = {}) {
   });
 }
 
+// A reset in flight. _resetPocketEngineForBackend clears state synchronously but
+// then waits for the terminated worker's heap to be reclaimed; anything that
+// loads an engine must wait for that, or an engine switch followed immediately
+// by Play allocates a second full model set on top of the first.
+let _pocketResetPromise = null;
 let _pocketRecyclePromise = null;
 async function _maybeRecyclePocketEngine() {
   if (_pocketRecyclePromise) {

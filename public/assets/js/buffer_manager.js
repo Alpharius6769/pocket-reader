@@ -28,6 +28,20 @@ try {
   window.precacheQueue = [];
 }
 
+// 'pocket' and 'kokoro' are both the NEURAL path and cache identically; only
+// 'webspeech' (the OS voice) has nothing to pre-render. Checks that tested for
+// the literal 'pocket' silently disabled caching and Away Mode on exactly the
+// devices Kokoro was introduced to serve.
+function _isNeuralEngine(engine) {
+  return engine === 'pocket' || engine === 'kokoro';
+}
+
+// The merged Voice Engine control also carries 'auto', which resolves to a
+// neural engine. Only an explicit 'webspeech' is non-neural.
+function _isNeuralControlValue(value) {
+  return value !== 'webspeech';
+}
+
 function _isolationReady() {
   return window.crossOriginIsolated === true && typeof SharedArrayBuffer !== 'undefined';
 }
@@ -944,7 +958,7 @@ export const BufferManager = {
     this.sessionStoryRefs = new Set();
     this.isReverifying = !!(window.currentStory?.isCached || window.currentStory?.audioCached);
     const engine = _resolveActiveEngine();
-    if (engine !== 'pocket') {
+    if (!_isNeuralEngine(engine)) {
       if (this.containerEl) this.containerEl.style.display = 'none';
       return;
     }
@@ -1014,7 +1028,10 @@ export const BufferManager = {
         }
       } catch (e) {}
     }
-    if (activeEngine === 'pocket') {
+    // Reads the stored setting, which is 'pocket' for BOTH neural engines, so
+    // this happened to work for Kokoro. Made explicit rather than incidental:
+    // if the stored value ever distinguishes them, the modal must still show.
+    if (_isNeuralEngine(activeEngine)) {
       this.maxWorkers = 1;
       const earlyModal = document.getElementById('caching-progress-modal');
       if (earlyModal) {
@@ -1174,7 +1191,7 @@ export const BufferManager = {
     this._backendPreparationPromise = null;
     this._backendParallelStarted = false;
     const selectedEngine = document.getElementById('voice-engine-select')?.value || 'pocket';
-    if (selectedEngine !== 'pocket') {
+    if (!_isNeuralControlValue(selectedEngine)) {
       if (btn) {
         btn.innerHTML = `Away Mode &nbsp;<span id="precache-count" class="away-mode-badge">${window.precacheQueue.length} queued</span>`;
         btn.disabled = false;

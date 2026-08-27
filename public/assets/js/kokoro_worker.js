@@ -95,13 +95,30 @@ async function loadOrtRuntime() {
   status('Loading ONNX Runtime...');
   const module = await withTimeout(import(`${ORT_BASE}ort.min.mjs`), MODEL_TIMEOUT_MS, 'ORT import');
   ort = module.default || module;
-  ort.env.wasm.wasmPaths = ORT_BASE;
-  // One session, one pass. Extra threads buy little on a non-autoregressive
-  // graph and each one carries its own stack and arena on a device that has
-  // none to spare.
-  ort.env.wasm.numThreads = 1;
+
+  // Pin the exact binaries rather than handing ORT a base directory.
+  //
+  // Only the THREADED variants are published: ort-wasm-simd.wasm and
+  // ort-wasm.wasm both 404 on the proxy. Given a bare base string ORT derives
+  // the filename itself and asks for the non-threaded build whenever
+  // numThreads is 1 — so the original `wasmPaths = ORT_BASE` plus
+  // `numThreads = 1` guaranteed a 404 and the engine could never have started.
+  // pocket_worker pins {mjs, wasm} for exactly this reason; this mirrors it.
+  ort.env.wasm.wasmPaths = {
+    mjs: `${ORT_BASE}ort-wasm-simd-threaded.mjs`,
+    wasm: `${ORT_BASE}ort-wasm-simd-threaded.wasm`,
+  };
+  // The threaded binary needs SharedArrayBuffer, which needs cross-origin
+  // isolation. Where that is unavailable it still runs, single-threaded.
+  // Kokoro is one non-autoregressive pass, so extra threads buy little and each
+  // carries its own stack and arena on a device with none to spare — two is the
+  // ceiling rather than hardwareConcurrency.
+  const isolated = self.crossOriginIsolated === true && typeof SharedArrayBuffer !== 'undefined';
+  ort.env.wasm.numThreads = isolated ? Math.min(2, self.navigator?.hardwareConcurrency || 1) : 1;
   ort.env.wasm.simd = true;
+  ort.env.wasm.proxy = false;
   ort.env.logLevel = 'error';
+  log('INFO', `Kokoro runtime: threaded WASM x${ort.env.wasm.numThreads}, isolated=${isolated}`);
 }
 
 async function loadPhonemizer() {
@@ -228,12 +245,18 @@ async function generate(text, voiceId, opts = {}) {
 
   const pieces = [];
   let total = 0;
-  for (const chunk of chunkTokenIds(ids)) {
-    if (cancelRequested) break;
+  const chunks = chunkTokenIds(ids);
+  for (const chunk of chunks) {
+    // Cancelling must FAIL the request, not resolve it short. Breaking out and
+    // returning what had been produced so far reported generate_done with
+    // truncated audio, and the caller has no way to know it is incomplete — it
+    // caches it, so a paragraph interrupted once stays half-spoken forever.
+    if (cancelRequested) throw new Error('Narration cancelled.');
     const audio = await runChunk(chunk, voiceData, speed);
     pieces.push(audio);
     total += audio.length;
   }
+  if (pieces.length !== chunks.length) throw new Error('Narration ended before every chunk was rendered.');
   if (pieces.length === 1) return pieces[0];
   const merged = new Float32Array(total);
   let offset = 0;

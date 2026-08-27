@@ -4,12 +4,12 @@
     "sha256": "638c9490837a36d0"
   },
   "audio_core.js": {
-    "version": "audio-v91",
-    "sha256": "f7456f1fe34c4a6f"
+    "version": "audio-v92",
+    "sha256": "c04cfffd6814a4a3"
   },
   "buffer_manager.js": {
-    "version": "buffer-v60",
-    "sha256": "6c1ee800fbd3b702"
+    "version": "buffer-v61",
+    "sha256": "116c0e748c7e102b"
   },
   "cinematic_ui.js": {
     "version": "cinematic-v7",
@@ -32,7 +32,7 @@
     "sha256": "452702fde47e0eab"
   },
   "engine_utils.js": {
-    "version": "sw-191",
+    "version": "sw-192",
     "sha256": "8adb89185086d15c"
   },
   "experience_coordinator.js": {
@@ -56,20 +56,20 @@
     "sha256": "f4c9755b6b44b491"
   },
   "kokoro_worker.js": {
-    "version": "kokoro-v2",
-    "sha256": "586ca10569907c6a"
+    "version": "kokoro-v3",
+    "sha256": "8079ba59d302a2cb"
   },
   "library_manager.js": {
     "version": "library-v25",
     "sha256": "4ae507c94dd9650a"
   },
   "motion_lite.js": {
-    "version": "sw-191",
+    "version": "sw-192",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v44",
-    "sha256": "af02c9100fd5e467"
+    "version": "narration-loader-v45",
+    "sha256": "b1a9a2e7784663ec"
   },
   "pocket_backend_policy.js": {
     "version": "backend-v24",
@@ -96,8 +96,8 @@
     "sha256": "7983e25e8c0d473f"
   },
   "settings_manager.js": {
-    "version": "settings-v91",
-    "sha256": "76a3c2528e4344fb"
+    "version": "settings-v92",
+    "sha256": "a031da975d8a48e8"
   },
   "storage_core.js": {
     "version": "storage-v16",
@@ -116,15 +116,15 @@
     "sha256": "5ab5126a76df718f"
   },
   "ui_controller.js": {
-    "version": "ui-v131",
-    "sha256": "aab399c2a5834c14"
+    "version": "ui-v132",
+    "sha256": "c2cc8a6ff45ba151"
   },
   "virtue_controller.js": {
     "version": "virtue-v16",
     "sha256": "ba77e5307e4d3f6d"
   },
   "sw.js": {
-    "version": "sw-191",
-    "sha256": "6f2618b045b37540"
+    "version": "sw-192",
+    "sha256": "03dd9f4cf0536018"
   }
 }
