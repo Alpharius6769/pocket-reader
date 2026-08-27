@@ -44,10 +44,16 @@ function hostAllowed(hostname, env) {
 // Restrict CORS to known app origins. Configure extra origins via the
 // ALLOWED_ORIGINS Worker variable (comma-separated).
 function resolveAllowedOrigin(request, env) {
+  // Only origins that actually exist. The two pocket-reader-f2y.pages.dev
+  // entries that used to sit here were left over from the Cloudflare Pages
+  // deploy, which is gone -- both names are NXDOMAIN. A *.pages.dev name that
+  // nobody owns can be claimed by creating a Pages project with that name, so
+  // trusting a dead one is a standing subdomain-takeover path into routes that
+  // attach this Worker's own credentials: /api/ forwards with HF_TOKEN, and
+  // /catalog-api/ writes with CATALOG_PROXY_KEY. Add a preview origin back
+  // through the ALLOWED_ORIGINS variable while it exists, not in code.
   const defaults = [
     "https://alpharius6769.github.io",
-    "https://pocket-reader-f2y.pages.dev",
-    "https://phase3-preview.pocket-reader-f2y.pages.dev",
   ];
   const extra = (env && env.ALLOWED_ORIGINS)
     ? env.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)

@@ -16,7 +16,7 @@
 
 import { webkit } from 'playwright';
 
-const APP_URL = process.argv[2] || 'https://pocket-reader-f2y.pages.dev';
+const APP_URL = process.argv[2] || 'https://alpharius6769.github.io/pocket-reader/';
 const SETTLE_MS = 12000;
 
 function section(title) {

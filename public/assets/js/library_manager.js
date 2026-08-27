@@ -730,13 +730,98 @@ export async function loadLocalData() {
 }
 window.loadLocalData = loadLocalData;
 
+// Read the stored profile back at boot. Nothing did.
+//
+// loadLocalData() had NO callers anywhere in the repo. Its only caller had been
+// FrontEnd_code.py in the Anvil host -- `if hasattr(window, 'loadLocalData'):
+// window.loadLocalData()` -- and when the frontend was restructured into
+// public/ and Anvil was dropped, the module came across and the boot call did
+// not. The migrations inside it commented "runs for ALL users" had therefore
+// never run for anyone.
+//
+// What that cost, measured in a browser: a guest wrote displayName, library and
+// settings to pocketReaderData correctly, and after a reload window.userProfile
+// was the empty default while the good copy still sat in localStorage,
+// unread -- an empty shelf. Worse, the next saveLocalData() (opening a story,
+// changing a setting, a playback checkpoint) serialised that empty profile back
+// over the stored one, so the library was not merely hidden, it was destroyed a
+// moment later.
+//
+// Signed-in readers were rescued, but not by anything in this file: the startup
+// cloud pull lives INSIDE loadLocalData too (checkCloudSyncOnStartup, below), so
+// it never ran either. What saved them is that supabase_bridge sets
+// _cloudPushAllowed at its own module load on session restore, so the first
+// ordinary save round-tripped through the compare-and-swap merge and
+// applyCanonicalProfile wrote the cloud library back into memory. The empty
+// push did no damage on the way out because mergeProfile only removes stories
+// carrying a deletion tombstone. Guests had no such backstop.
+//
+// The same dead call also meant seedCuratedLibrary(), the avatar restore, the
+// theme and voice-engine migrations and the first-run setup check had never run
+// on boot for anyone.
+//
+// Ordering is the whole fix: hydrate before anything can save, and make saving
+// impossible until hydration has settled (see _flushLocalData). A failure still
+// releases the latch -- the default profile is then genuinely authoritative and
+// blocking every future write would be worse than starting fresh.
+async function _hydrateLocalProfile() {
+  try {
+    await loadLocalData();
+  } catch (error) {
+    console.error('[Profile] Could not read the stored profile:', error);
+  } finally {
+    _profileHydrated = true;
+    if (_saveDeferredDuringHydration) {
+      _saveDeferredDuringHydration = false;
+      saveLocalData({ immediate: true });
+    }
+    // loadLocalData refreshes settings and the display name but not the shelf,
+    // and the first renderLibrary() has already run against the empty default
+    // by the time we get here -- so without this the reader's stories are
+    // restored in memory and still invisible on screen.
+    try { window.renderLibrary?.(true); } catch (error) { console.warn('[Profile] Library re-render failed:', error); }
+    try { window.updateContinueReading?.(); } catch (_) {}
+    try { window.renderProfileExtras?.(); } catch (_) {}
+  }
+}
+// Wait for the document to finish parsing before hydrating.
+//
+// loadLocalData refreshes the UI through initSettingsUI / applySettings /
+// updateDisplayName, and all three live in settings_manager.js, which
+// index.html loads AFTER this module. Running at module-evaluation time meant
+// every one of those typeof guards was false and silently skipped -- the
+// profile hydrated correctly but the reader's name still read "Guest Reader"
+// and the settings panel still showed defaults. The Anvil host had the same
+// requirement and met it by polling until the modules existed.
+//
+// Module scripts are deferred, so they have all executed by DOMContentLoaded.
+// Waiting costs nothing: _flushLocalData refuses to write until the latch
+// releases, so no save can clobber the stored profile in the meantime.
+// Exposed so a caller that must not race hydration can await it.
+window.__pocketProfileHydration = document.readyState === 'loading'
+  ? new Promise((resolve) => {
+      document.addEventListener('DOMContentLoaded', () => resolve(_hydrateLocalProfile()), { once: true });
+    })
+  : _hydrateLocalProfile();
+
+
 // The synchronous write. This is the expensive part (normalize + sanitize +
 // full deep clone + JSON.stringify + localStorage write), so it is coalesced by
 // saveLocalData()/commitProfileChange() below rather than run on every call.
 // Achievement recomputation was moved OUT of here — it is O(library) work that
 // only needs to run when the library/stats actually change, not on every
 // settings toggle or progress checkpoint (see commitProfileChange).
+// A save before the stored profile has been read back is not a save, it is a
+// deletion: _flushLocalData serialises whatever is in memory, and until
+// hydration finishes that is the empty default. See _hydrateLocalProfile.
+let _profileHydrated = false;
+let _saveDeferredDuringHydration = false;
+
 function _flushLocalData(options = {}) {
+  if (!_profileHydrated) {
+    _saveDeferredDuringHydration = true;
+    return;
+  }
   try {
     window.userProfile = normalizeProfileObject(window.userProfile);
     sanitizeProfileLibrary(window.userProfile, { purgeStorage: false });

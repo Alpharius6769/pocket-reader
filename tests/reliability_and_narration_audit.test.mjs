@@ -114,7 +114,7 @@ test('worker smoke tooling targets the current static app and creates its output
   assert.match(source, /\/assets\/js\/pocket_worker\.js\?v=/);
   assert.doesNotMatch(source, /_\/api\/serviceworker|_\/theme\//);
   const webkit = await read('tests/webkit-smoke/smoke.mjs');
-  assert.match(webkit, /pocket-reader-f2y\.pages\.dev/);
+  assert.match(webkit, /alpharius6769\.github\.io/);
   assert.doesNotMatch(webkit, /hot-wiry-raven/);
 });
 

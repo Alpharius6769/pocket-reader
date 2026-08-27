@@ -15,7 +15,11 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const PAGES_ORIGIN = 'https://pocket-reader-f2y.pages.dev';
+// The live frontend is GitHub Pages under a /pocket-reader/ SUBPATH; the
+// pocket-reader-f2y.pages.dev origin this used to check is NXDOMAIN, so the
+// --live parity check had been reporting 'could not reach' rather than
+// comparing anything.
+const PAGES_ORIGIN = 'https://alpharius6769.github.io/pocket-reader';
 const normalize = (value) => value.replace(/\r\n/g, '\n');
 const read = (file) => normalize(readFileSync(file, 'utf8'));
 const failures = [];

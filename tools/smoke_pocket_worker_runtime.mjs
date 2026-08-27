@@ -32,7 +32,7 @@ const commonHeaders = {
 };
 
 const pageHtml = `<!doctype html><meta charset="utf-8"><title>Pocket worker smoke</title>`;
-const productionOrigin = 'https://pocket-reader-f2y.pages.dev';
+const productionOrigin = 'https://alpharius6769.github.io';
 const blockRelaxed = process.env.BLOCK_RELAXED === '1';
 const expectedRuntimeFlavor = blockRelaxed ? 'stock-wasm-only' : 'relaxed-simd-minimal-ort';
 const useLiveAssets = process.env.USE_LIVE_ASSETS === '1';
@@ -122,7 +122,7 @@ try {
   if (useLiveAssets) {
     await page.goto(`${productionOrigin}/__pocket_worker_smoke__?bootstrap=1`, { waitUntil: 'load' });
     await page.evaluate(async () => {
-      await navigator.serviceWorker.register('/sw.js?v=197', { scope: '/' });
+      await navigator.serviceWorker.register('/sw.js?v=198', { scope: '/' });
       await navigator.serviceWorker.ready;
       if (!navigator.serviceWorker.controller) {
         await new Promise((resolveController, rejectController) => {

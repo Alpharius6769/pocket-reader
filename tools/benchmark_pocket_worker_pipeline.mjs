@@ -85,7 +85,7 @@ if (options.ortModelDir) statSync(options.ortModelDir);
 if (options.runtimeDir) statSync(options.runtimeDir);
 mkdirSync(dirname(options.output), { recursive: true });
 
-const productionOrigin = 'https://pocket-reader-f2y.pages.dev';
+const productionOrigin = 'https://alpharius6769.github.io';
 const mime = {
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',

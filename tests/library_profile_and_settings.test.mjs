@@ -135,3 +135,74 @@ test('the Anthronomicon panel explains what tapping a story actually does', asyn
   // Not everything is in the catalog, so the paste box has to survive.
   assert.match(html, /id="hmofa-url-input"/);
 });
+
+// The stored profile has to be read back at boot, and nothing did.
+//
+// loadLocalData() had NO callers anywhere in the repo. Its only caller had been
+// FrontEnd_code.py in the Anvil host, and when the frontend was restructured
+// into public/ and Anvil was dropped, the module came across and the boot call
+// did not. Measured in a browser: a guest wrote displayName, library and
+// settings to pocketReaderData correctly, and after a reload window.userProfile
+// was the empty default while the good copy sat unread in localStorage.
+test('the stored profile is read back at boot', async () => {
+  const source = await read('public/assets/js/library_manager.js');
+
+  // A caller that is not the definition or the window assignment.
+  const callers = [...source.matchAll(/(^|[^.\w])loadLocalData\(\)/gm)]
+    .filter((m) => !source.slice(Math.max(0, m.index - 40), m.index).includes('function'));
+  assert.ok(callers.length > 0, 'loadLocalData() must actually be invoked somewhere');
+  assert.match(source, /async function _hydrateLocalProfile\(\)/);
+  assert.match(source, /window\.__pocketProfileHydration = /,
+    'hydration must be kicked off by this module, not by a user action');
+  // It must wait for DOMContentLoaded, though: loadLocalData refreshes the UI
+  // through initSettingsUI / applySettings / updateDisplayName, all of which
+  // live in settings_manager.js, which index.html loads AFTER this module.
+  // Running at module-evaluation time made every one of those typeof guards
+  // false, so the profile hydrated but the reader's name still read
+  // "Guest Reader". Safe to wait because _flushLocalData refuses to write
+  // until the latch releases.
+  assert.match(source, /document\.readyState === 'loading'[\s\S]{0,220}DOMContentLoaded/,
+    'hydration must wait for the later modules to define their globals');
+});
+
+test('a save cannot run before the stored profile has been read back', async () => {
+  const source = await read('public/assets/js/library_manager.js');
+
+  // _flushLocalData serialises whatever is in memory. Before hydration that is
+  // the empty default, so an early save is not a save, it is a deletion -- the
+  // library was destroyed a moment after being made invisible.
+  const flush = source.slice(
+    source.indexOf('function _flushLocalData(options = {}) {'),
+    source.indexOf('function _flushLocalData(options = {}) {') + 400,
+  );
+  assert.match(flush, /if \(!_profileHydrated\) \{\s*\n\s*_saveDeferredDuringHydration = true;\s*\n\s*return;/,
+    'a save before hydration must be deferred, never written');
+
+  // The latch has to release even when hydration throws, or one bad read would
+  // block every future write for the life of the page.
+  const hydrate = source.slice(
+    source.indexOf('async function _hydrateLocalProfile()'),
+    source.indexOf('window.__pocketProfileHydration'),
+  );
+  assert.match(hydrate, /finally \{[\s\S]{0,80}_profileHydrated = true;/,
+    'the latch must release in a finally, not only on success');
+  assert.match(hydrate, /_saveDeferredDuringHydration[\s\S]{0,120}saveLocalData\(\{ immediate: true \}\)/,
+    'a deferred save must be flushed once hydration settles, not dropped');
+  // The first renderLibrary() has already run against the empty default.
+  assert.match(hydrate, /window\.renderLibrary\?\.\(true\)/,
+    'the shelf must repaint, or restored stories stay invisible');
+});
+
+test('the boot chain that hangs off the profile read is still intact', async () => {
+  const source = await read('public/assets/js/library_manager.js');
+  const body = source.slice(
+    source.indexOf('export async function loadLocalData()'),
+    source.indexOf('window.loadLocalData = loadLocalData;'),
+  );
+  assert.ok(body.length > 500, 'loadLocalData body must be locatable');
+  // These all live INSIDE loadLocalData, so the missing call disabled every one
+  // of them for everyone, not just local persistence.
+  for (const step of ['seedCuratedLibrary()', 'checkCloudSyncOnStartup', '_loadUserAvatar', 'pr_engine_auto_detected']) {
+    assert.ok(body.includes(step), `${step} must still run as part of the profile read`);
+  }
+});

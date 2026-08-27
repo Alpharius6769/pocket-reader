@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import worker from '../worker/cloudflare_worker.js';
 
 const MODEL_URL = 'https://pocket-reader-proxy.example/models/Pocket%20TTS%20Onnx/english_2026-04/flow_lm_unified_block4_int8.onnx';
-const ORIGIN = 'https://pocket-reader-f2y.pages.dev';
+const ORIGIN = 'https://alpharius6769.github.io';
 
 function installHarness() {
   const originalFetch = globalThis.fetch;
@@ -319,7 +319,7 @@ test('HF Space proxy forwards the Worker secret only to authorised callers', asy
     const browser = await worker.fetch(
       new Request(url, {
         headers: {
-          Origin: 'https://pocket-reader-f2y.pages.dev',
+          Origin: 'https://alpharius6769.github.io',
           Authorization: 'must-not-leak',
         },
       }),
