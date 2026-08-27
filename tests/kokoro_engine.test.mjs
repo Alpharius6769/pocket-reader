@@ -373,3 +373,34 @@ test('Away Mode has first-visit tips like every other page', async () => {
     assert.ok(html.includes(`id="${id}"`), `${id} must exist for its tip to render`);
   }
 });
+
+// Reported from a live Kokoro session: opening a story showed an EMPTY voice
+// dropdown and caching never started.
+test('opening a story rebuilds the voice list for the active engine', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const ui = await read('public/assets/js/ui_controller.js');
+  const loader = await read('public/assets/js/narration_runtime_loader.js');
+
+  // The list was only built inside switchReaderVoiceEngine, so it was populated
+  // when the engine CHANGED and never when a story was opened in a session
+  // already on Kokoro.
+  assert.match(audio, /window\.refreshVoiceSelectorForEngine = function/);
+  assert.match(ui, /viewId === 'reading-view' && typeof window\.refreshVoiceSelectorForEngine === 'function'/);
+  // Lives in audio_core, so it needs the same deferred wrapper as its siblings.
+  assert.match(loader, /'refreshVoiceSelectorForEngine',/);
+});
+
+test('cache queues never canonicalise a Kokoro voice against the Pocket list', async () => {
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  // canonicalPocketVoice() rewrites anything not in POCKET_VOICES to
+  // donald_malone. Applied to a Kokoro id that silently queues an entire cache
+  // job against a voice table Kokoro has no file for — every paragraph would
+  // fail on a 404.
+  const occurrences = buffer.match(/if \(engine === 'kokoro'\)|if \(activeNeural === 'kokoro'\)/g) || [];
+  assert.equal(occurrences.length, 2,
+    'both the single-story queue and the Away Mode queue need the engine branch');
+  assert.match(buffer, /window\.resolveVoiceForEngine\s*\n?\s*\? window\.resolveVoiceForEngine\('kokoro', selected\)/);
+  // And the refusal message must describe the real gate, which is neural vs
+  // device voice — not Pocket specifically.
+  assert.doesNotMatch(buffer, /Away Mode caching requires Pocket TTS/);
+});

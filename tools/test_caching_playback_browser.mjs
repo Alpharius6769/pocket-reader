@@ -116,7 +116,7 @@ try {
     };
 
     const storageModule = await import('/assets/js/storage_core.js?v=storage-v16');
-    await import('/assets/js/buffer_manager.js?v=buffer-v61');
+    await import('/assets/js/buffer_manager.js?v=buffer-v62');
     window.BufferManager.initUI();
 
     const repaired = storageModule.normalizeStoryChapters([{

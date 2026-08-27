@@ -4300,6 +4300,19 @@ window.onVoiceSelectionChange = function(newVoice) {
 };
 window.switchReaderVoiceEngine = switchReaderVoiceEngine;
 
+// The voice list was only ever built inside switchReaderVoiceEngine, so it was
+// populated when the engine CHANGED and never when a story was simply opened in
+// a session that was already on Kokoro — which is why the reader showed an empty
+// voice dropdown. Re-running the same engine resolution on story load fixes it
+// without duplicating the list-building logic.
+window.refreshVoiceSelectorForEngine = function refreshVoiceSelectorForEngine() {
+  const stored = window.userProfile?.settings?.voiceEngine || 'pocket';
+  const control = stored === 'webspeech'
+    ? 'webspeech'
+    : (readNarrationEngineOverride(localStorage) || 'auto');
+  try { switchReaderVoiceEngine(control, true); } catch (_) {}
+};
+
 function _populateWebSpeechVoices(selectEl, voices) {
   const englishVoices = voices.filter(v => v.lang.startsWith('en'));
   const displayVoices = englishVoices.length > 0 ? englishVoices : voices;

@@ -962,12 +962,24 @@ export const BufferManager = {
       if (this.containerEl) this.containerEl.style.display = 'none';
       return;
     }
-    const defaultVoice = POCKET_DEFAULT_VOICE;
-    let voice = document.getElementById('voice-selector')?.value || defaultVoice;
-    const cleanVoice = typeof window.canonicalPocketVoice === 'function'
-      ? window.canonicalPocketVoice(voice)
-      : String(voice || defaultVoice).toLowerCase().trim();
-    voice = POCKET_VOICES.includes(cleanVoice) ? cleanVoice : defaultVoice;
+    // Engine-aware, because canonicalising against POCKET_VOICES rewrote any
+    // Kokoro id to donald_malone — so a Kokoro cache job was queued with a
+    // voice that engine has no file for, and every paragraph would have failed
+    // on a 404 for a voice table that does not exist.
+    let voice;
+    if (engine === 'kokoro') {
+      const selected = document.getElementById('voice-selector')?.value;
+      voice = window.resolveVoiceForEngine
+        ? window.resolveVoiceForEngine('kokoro', selected)
+        : (selected || '');
+    } else {
+      const defaultVoice = POCKET_DEFAULT_VOICE;
+      voice = document.getElementById('voice-selector')?.value || defaultVoice;
+      const cleanVoice = typeof window.canonicalPocketVoice === 'function'
+        ? window.canonicalPocketVoice(voice)
+        : String(voice || defaultVoice).toLowerCase().trim();
+      voice = POCKET_VOICES.includes(cleanVoice) ? cleanVoice : defaultVoice;
+    }
     for (let c = 0; c < window.currentStory.chapters.length; c++) {
       const chap = window.currentStory.chapters[c];
       if (!chap.paragraphs) continue;
@@ -1198,15 +1210,26 @@ export const BufferManager = {
         btn.classList.toggle('active', window.precacheQueue.length > 0);
       }
       if (!window.isPlaying) window.stopBgKeepAlive?.();
-      if (typeof window.virtueSpeak === 'function') window.virtueSpeak('Away Mode caching requires Pocket TTS. Switch to Pocket TTS and try again.', 5000);
+      if (typeof window.virtueSpeak === 'function') window.virtueSpeak('Away Mode caching needs a neural voice. Switch off Device Voice and try again.', 5000);
       return;
     }
-    const defaultVoice = POCKET_DEFAULT_VOICE;
-    const selectedVoice = document.getElementById('voice-selector')?.value || defaultVoice;
-    const cleanVoice = typeof window.canonicalPocketVoice === 'function'
-      ? window.canonicalPocketVoice(selectedVoice)
-      : String(selectedVoice || defaultVoice).toLowerCase().trim();
-    const voice = POCKET_VOICES.includes(cleanVoice) ? cleanVoice : defaultVoice;
+    // Same namespace hazard as the single-story queue above: canonicalising a
+    // Kokoro id against POCKET_VOICES silently swaps it for donald_malone.
+    const activeNeural = _resolveActiveEngine();
+    let voice;
+    if (activeNeural === 'kokoro') {
+      const selected = document.getElementById('voice-selector')?.value;
+      voice = window.resolveVoiceForEngine
+        ? window.resolveVoiceForEngine('kokoro', selected)
+        : (selected || '');
+    } else {
+      const defaultVoice = POCKET_DEFAULT_VOICE;
+      const selectedVoice = document.getElementById('voice-selector')?.value || defaultVoice;
+      const cleanVoice = typeof window.canonicalPocketVoice === 'function'
+        ? window.canonicalPocketVoice(selectedVoice)
+        : String(selectedVoice || defaultVoice).toLowerCase().trim();
+      voice = POCKET_VOICES.includes(cleanVoice) ? cleanVoice : defaultVoice;
+    }
     this.maxWorkers = 1;
     const requestedQueue = [...window.precacheQueue];
     const consumedRefs = new Set();
