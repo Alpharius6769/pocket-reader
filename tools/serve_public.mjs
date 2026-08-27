@@ -64,11 +64,20 @@ const server = createServer(async (request, response) => {
     const type = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
     response.writeHead(200, {
       'Content-Type': type,
-      // Versioned assets are immutable by construction; everything else must
-      // revalidate so a local edit shows up on reload.
-      'Cache-Control': url.searchParams.has('v')
-        ? 'public, max-age=31536000, immutable'
-        : 'no-cache',
+      // Deliberately unlike production: nothing here is cacheable.
+      //
+      // This used to mirror the real cache policy and serve any ?v= asset as
+      // immutable for a year. That is correct for a deploy and actively
+      // misleading for a dev server, because the whole point of running one is
+      // that the files ARE changing under URLs whose version has not moved yet.
+      // Edit theme.css or a module without bumping its ?v= and the browser can
+      // never show you the change -- it serves the year-old copy from disk
+      // cache, through a hard reload, through unregistering the service worker.
+      // Two separate fixes were "verified" against stale bytes before this was
+      // spotted. Production caching comes from the host, never from here.
+      'Cache-Control': 'no-store, must-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
       'Service-Worker-Allowed': '/',
     });
     response.end(body);

@@ -205,3 +205,43 @@ test('the service-worker revision agrees everywhere it is written down', async (
     }
   }
 });
+
+// Mobile Safari zooms the whole page when a focused form control computes below
+// 16px and never zooms back out, leaving the reader panning a page wider than
+// the viewport. Measured on a 375px viewport before the fix: 27 of 74 text
+// controls were under the threshold, including all nineteen fields of the
+// first-run setup wizard -- a new reader's very first tap on an iPhone.
+test('no form control can sit under the iOS focus-zoom threshold', async () => {
+  const css = await read('public/assets/css/theme.css');
+
+  const guard = css.slice(css.indexOf('/* \u2500\u2500 iOS focus zoom'));
+  assert.ok(guard.length > 200, 'the focus-zoom guard must exist');
+  assert.match(guard, /@media \(pointer: coarse\)/,
+    'the guard must be scoped to touch, so desktop typography is untouched');
+  assert.match(guard, /font-size: 16px !important;/,
+    'the guard has to beat the single-class sizes and body.touch-large');
+  const selectorList = guard.slice(guard.indexOf('coarse) {'), guard.indexOf('font-size'));
+  for (const control of ['input', 'select', 'textarea']) {
+    assert.ok(selectorList.includes(control), `${control} must be covered by the guard`);
+  }
+
+  // The root font size is 14px, not 16px, so every rem-based control size is
+  // ~12% smaller than it reads. body.touch-large exists to make phone targets
+  // BIGGER, yet its 1.1rem was 15.4px -- under the threshold, so the one mode
+  // meant to be easier on a phone was also zooming the page on every tap.
+  const touchLarge = css.slice(
+    css.indexOf('body.touch-large .settings-control,'),
+    css.indexOf('body.touch-large .star-rating label'),
+  );
+  assert.ok(touchLarge.length > 0, 'the touch-large control block must exist');
+  assert.match(touchLarge, /font-size: max\(16px, [0-9.]+rem\) !important;/,
+    'touch-large must clear the threshold while staying larger than the default');
+  assert.doesNotMatch(touchLarge, /font-size: 1\.1rem !important;/);
+
+  // A viewport lock would also stop the zoom, at the cost of taking pinch-zoom
+  // away from readers who need it. It must not creep back in as a shortcut.
+  const html = await read('public/index.html');
+  const viewport = html.match(/<meta name="viewport"[^>]*>/)?.[0] || '';
+  assert.doesNotMatch(viewport, /maximum-scale|user-scalable/,
+    'pinch-zoom must stay available');
+});

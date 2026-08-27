@@ -394,6 +394,28 @@ let customVoiceStates = new Map();
 let currentVoiceName = null;
 let voiceConditioningCache = new Map();
 const MAX_CONSTRAINED_CUSTOM_VOICES = 2;
+// Conditioned voice states are by far the largest live allocation in this
+// worker. Measured against the shipped english_2026-04 manifest, ONE of them is
+// 46.9 MB -- eighteen flow-LM state tensors, six of which are
+// [2,1,1000,16,64] float32 at 7.81 MB apiece.
+//
+// Nothing bounded them unless constrainedMemoryMode was on. Every emotion is a
+// separate voice asset (donald_malone_happy, donald_malone_sad, ...), so a
+// story narrated in balanced mode cycles eight of them and retained 375 MB;
+// expressive mode reaches thirteen and 609 MB. That sat on top of the ~126 MB
+// of ONNX sessions and was the ceiling every other memory measure in this file
+// -- the disabled ORT arena, the worker teardown after caching, the idle
+// release -- was compensating for after the fact.
+//
+// Evicting a conditioned state does NOT unregister the voice: the ~5 MB raw
+// record stays in customVoiceStates, so re-use costs one local re-conditioning
+// rather than a refetch and a round trip through the main thread.
+const MAX_CONDITIONED_VOICES = 4;
+// Set for the whole of a generation. currentVoiceName cannot serve this: a
+// register_precompiled_voice for the NEXT paragraph arrives while this one is
+// still rendering and reassigns it, which would drop protection from the state
+// runGenerationPipeline is actively reading.
+let generatingVoiceName = null;
 let constrainedMemoryMode = false;
 // Platform resolved by the main thread and delivered in the init message.
 // The worker must NOT re-sniff this: WorkerNavigator exposes no maxTouchPoints,
@@ -922,10 +944,49 @@ function touchCustomVoice(voiceName) {
   customVoiceStates.set(voiceName, state);
 }
 
+// Map preserves insertion order, so re-inserting on every hit turns it into an
+// LRU. Without this, eviction would drop whichever voice was conditioned first
+// regardless of how recently the narration used it.
+function touchConditionedVoice(key) {
+  if (!voiceConditioningCache.has(key)) return;
+  const state = voiceConditioningCache.get(key);
+  voiceConditioningCache.delete(key);
+  voiceConditioningCache.set(key, state);
+}
+
+// Replacing an entry without disposing the old one leaked a full 46.9 MB state
+// per re-conditioning -- and on WebGPU that is GPU-resident, which the JS GC
+// cannot reclaim at all. force:true re-conditions on every backend switch and
+// on every register_precompiled_voice, so this ran often.
+function setConditionedVoice(key, state) {
+  const previous = voiceConditioningCache.get(key);
+  if (previous && previous !== state) disposeGpuState(previous);
+  voiceConditioningCache.delete(key);
+  voiceConditioningCache.set(key, state);
+}
+
+function conditionedVoiceLimit() {
+  return constrainedMemoryMode ? MAX_CONSTRAINED_CUSTOM_VOICES : MAX_CONDITIONED_VOICES;
+}
+
+// Bound the conditioned states on EVERY device. The raw records are left alone,
+// so nothing is unregistered and the main thread's voice memo stays truthful.
+function evictExcessConditionedVoices(protectedVoice = null) {
+  const limit = conditionedVoiceLimit();
+  const keep = new Set([protectedVoice, generatingVoiceName, currentVoiceName].filter(Boolean));
+  while (voiceConditioningCache.size > limit) {
+    const victim = [...voiceConditioningCache.keys()].find((name) => !keep.has(name));
+    if (!victim) return;
+    disposeGpuState(voiceConditioningCache.get(victim));
+    voiceConditioningCache.delete(victim);
+  }
+}
+
 function evictConstrainedCustomVoices(protectedVoice = null) {
   if (!constrainedMemoryMode) return;
+  const keep = new Set([protectedVoice, generatingVoiceName, currentVoiceName].filter(Boolean));
   while (customVoiceStates.size > MAX_CONSTRAINED_CUSTOM_VOICES) {
-    const voiceName = [...customVoiceStates.keys()].find((name) => name !== protectedVoice);
+    const voiceName = [...customVoiceStates.keys()].find((name) => !keep.has(name));
     if (!voiceName) return;
     disposeGpuState(voiceConditioningCache.get(voiceName));
     voiceConditioningCache.delete(voiceName);
@@ -1100,6 +1161,7 @@ async function ensurePredefinedVoiceCached(voiceName, options = {}) {
   }
 
   if (!force && voiceConditioningCache.has(voiceName)) {
+    touchConditionedVoice(voiceName);
     return voiceConditioningCache.get(voiceName);
   }
 
@@ -1107,7 +1169,8 @@ async function ensurePredefinedVoiceCached(voiceName, options = {}) {
     postMessage({ type: "status", status: statusText, state: "loading" });
   }
   const conditioned = stateFromVoiceRecord(predefinedVoiceRecords[voiceName]);
-  voiceConditioningCache.set(voiceName, conditioned);
+  setConditionedVoice(voiceName, conditioned);
+  evictExcessConditionedVoices(voiceName);
   return conditioned;
 }
 
@@ -1123,6 +1186,7 @@ async function ensureCustomVoiceCached(voiceName, options = {}) {
   touchCustomVoice(key);
 
   if (!force && voiceConditioningCache.has(key)) {
+    touchConditionedVoice(key);
     return voiceConditioningCache.get(key);
   }
 
@@ -1131,7 +1195,8 @@ async function ensureCustomVoiceCached(voiceName, options = {}) {
   }
 
   const conditioned = stateFromVoiceRecord(customVoiceStates.get(key));
-  voiceConditioningCache.set(key, conditioned);
+  setConditionedVoice(key, conditioned);
+  evictExcessConditionedVoices(key);
   return conditioned;
 }
 
@@ -3081,6 +3146,10 @@ async function startGeneration(text, voiceName, jobId, opts) {
   isGenerating = true;
   cancelRequested = false;
   activeGenerationJobId = jobId;
+  // Pin this voice's conditioned state for the whole render. A voice
+  // registration for the next paragraph arrives mid-generation and moves
+  // currentVoiceName, so that variable alone cannot protect it.
+  generatingVoiceName = voiceName;
   // The main thread parks a promise in ttsQueue[jobId] and only resolves it on
   // 'complete' or 'generate_error'. Anything that returns from here without one
   // of those strands that promise until _runPocketWorkerGeneration's timeout --
@@ -3222,6 +3291,11 @@ async function startGeneration(text, voiceName, jobId, opts) {
     isGenerating = false;
     cancelRequested = false;
     activeGenerationJobId = null;
+    generatingVoiceName = null;
+    // The render is over, so the states it pinned can go. Doing this here rather
+    // than only on the next conditioning means an idle worker settles back to
+    // the cap instead of sitting on every emotion the paragraph happened to use.
+    evictExcessConditionedVoices(currentVoiceName);
     postMessage({ type: "status", status: "Finished", state: "idle" });
     setTimeout(processGenerationQueue, 0); // Sequentially trigger the next task
   }

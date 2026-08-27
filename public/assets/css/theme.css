@@ -3546,7 +3546,14 @@ body.touch-large .playback-dropdown,
 body.touch-large .search-input,
 body.touch-large .search-big-input {
   padding: 14px 16px !important;
-  font-size: 1.1rem !important;
+  /* 1.1rem is 15.4px against this stylesheet's 14px root, so the large-touch
+     accessibility mode was landing BELOW the 16px iOS focus-zoom threshold --
+     the one mode whose whole purpose is being easier to use on a phone was
+     also the one that zoomed the page on every tap. max() keeps the intent
+     (larger than the 0.95rem default) while clearing the threshold, and it
+     outranks the blanket rule at the end of this file, which is why that rule
+     alone could not fix this. */
+  font-size: max(16px, 1.1rem) !important;
   min-height: 52px !important;
 }
 body.touch-large .star-rating label {
@@ -4366,3 +4373,34 @@ html[data-motion='reduced'] *::after { animation-duration: 1ms !important; anima
 #reading-view .reader-drawer-controls { flex: 0 0 auto; }
 #reading-view .reader-buffer-container,
 #reading-view .playback-bar { flex: 0 0 auto; }
+
+
+/* ── iOS focus zoom ──────────────────────────────────────────────
+   Mobile Safari zooms the whole page when a focused form control computes to
+   less than 16px, and it does not zoom back out: the reader is left on a page
+   wider than the viewport, panning sideways to reach anything else.
+
+   This bites here far harder than the stylesheet looks, because the root font
+   size is 14px, not 16px. Every rem-based control size is therefore ~12%
+   smaller than it reads: .settings-control at 0.95rem is 13.3px, and even
+   body.touch-large's deliberately-enlarged 1.1rem is 15.4px -- still under the
+   threshold. Measured on a 375px viewport, 27 of the 74 text controls were
+   below it, including all nineteen fields of the first-run setup wizard, so a
+   new reader's very first interaction on an iPhone zoomed the page.
+
+   16px is the exact threshold and no form control is above it, so this raises
+   without shrinking anything. !important is deliberate and load-bearing: this
+   is a platform constraint rather than a design preference, and it has to beat
+   both the many single-class sizes and the existing !important in
+   body.touch-large. An element-specificity version of this rule was tried
+   first and lost to .settings-control on every <select> in the app.
+
+   Deliberately NOT fixed with maximum-scale=1 on the viewport, which also stops
+   the zoom but takes pinch-zoom away from readers who rely on it. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

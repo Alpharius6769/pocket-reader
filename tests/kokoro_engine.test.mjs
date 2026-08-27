@@ -83,7 +83,9 @@ test('the worker bounds its own memory the way this device needs', async () => {
   // 512 is a hard graph limit; splitting keeps long paragraphs whole where
   // truncating would silently drop audio.
   assert.match(worker, /const MAX_TOKENS = 512;/);
-  assert.match(worker, /function chunkTokenIds\(ids\)/);
+  // Was chunkTokenIds(), a blind slice every 510 ids. Splitting still never
+  // truncates, but it now falls between clauses instead of inside a word.
+  assert.match(worker, /function packUnitsIntoChunks\(unitIds\)/);
   assert.doesNotMatch(worker, /\.slice\(0, MAX_TOKENS\)/, 'must split, never truncate');
   // Same preallocate-from-Content-Length shape the Pocket loader needed.
   assert.match(worker, /const out = new Uint8Array\(declared\);/);
@@ -171,7 +173,10 @@ test('phoneme clauses are rejoined so punctuation pauses survive', async () => {
   assert.ok(fn.length > 0, 'generate() not found');
   // A plain space join would silently discard every pause the writing specified.
   assert.doesNotMatch(fn, /phonemes\.join\(' '\)/);
-  assert.match(fn, /clauses\.join\(', '\)/);
+  // And a comma join discarded which KIND of pause it was. The real mark is
+  // restored per clause now; see the punctuation test below for the contract.
+  assert.match(fn, /const marks = clauseMarksFrom\(text\);/);
+  assert.doesNotMatch(fn, /clauses\.join\(', '\)/);
   // The array shape is the documented return; a bare string must still work.
   assert.match(fn, /Array\.isArray\(phonemes\) \? phonemes : \[String\(phonemes \|\| ''\)\]/);
   assert.match(fn, /\.filter\(Boolean\)/, 'empty clauses must not become stray commas');
@@ -492,4 +497,52 @@ test('the service worker stamps isolation headers on every dedicated worker', as
   assert.equal(applications.length, 3, 'network, versioned-cache and offline-cache paths must all stamp');
   assert.ok(!/indexOf\('\/[a-z_]+_worker\.js'\)/.test(serviceWorker),
     'sw.js must not special-case a single worker filename again');
+});
+
+// espeak splits on punctuation and DROPS the mark it split on. Rejoining the
+// clauses with ", " turned every sentence end, question and exclamation in a
+// paragraph into one long comma-separated run -- a flat delivery that was ours,
+// not the model's: Kokoro's vocab carries . ! ? ; : — … and the quote marks.
+test('Kokoro is given the punctuation the writing actually had', async () => {
+  const worker = await read('public/assets/js/kokoro_worker.js');
+
+  assert.match(worker, /const CLAUSE_MARK_RE = /);
+  assert.match(worker, /function clauseMarksFrom\(text\)/);
+  // Verified against phonemizer 1.2.1: the clause count equals the source mark
+  // count exactly, for commas, terminals, semicolons, colons, em dashes and
+  // commas inside quotes. Where it does not, inventing a boundary is worse than
+  // a flat one, so the old comma join is the fallback.
+  assert.match(worker, /const aligned = marks\.length === clauses\.length;/);
+  assert.match(worker, /aligned \? marks\[index\] : \(index < clauses\.length - 1 \? ',' : ''\)/);
+  assert.doesNotMatch(worker, /clauses\.join\(', '\)/,
+    'every boundary must no longer collapse to a comma');
+
+  // "..." is one pause, not three sentence ends, and there is a token for it.
+  assert.match(worker, /'\u2026'/, 'an ellipsis run must map to the ellipsis token');
+});
+
+test('a Kokoro chunk boundary can only fall between clauses', async () => {
+  const worker = await read('public/assets/js/kokoro_worker.js');
+
+  // The graph's sequence axis is fixed at 512. This used to slice the token
+  // stream every 510 ids, which lands wherever it lands -- mid-word, mid
+  // diphthong -- and the halves were rendered as separate utterances and
+  // concatenated, so a long paragraph fractured audibly inside a word.
+  assert.doesNotMatch(worker, /function chunkTokenIds\(/,
+    'the blind fixed-stride splitter must be gone');
+  assert.match(worker, /function packUnitsIntoChunks\(unitIds\)/);
+  assert.match(worker, /const chunks = packUnitsIntoChunks\(unitIds\);/);
+
+  // Units are tokenized individually; that is what makes the packing possible.
+  assert.match(worker, /const unitIds = units\.map\(tokenizePhonemes\)/);
+
+  // A single clause longer than the whole sequence axis still has to be split,
+  // but it must flush what came before it so the damage stays local.
+  const pack = worker.slice(
+    worker.indexOf('function packUnitsIntoChunks(unitIds)'),
+    worker.indexOf('async function generate('),
+  );
+  assert.match(pack, /if \(ids\.length > limit\)[\s\S]{0,200}?if \(current\.length\) \{ chunks\.push\(current\)/);
+  assert.match(pack, /if \(current\.length \+ ids\.length > limit\)/,
+    'units must be packed up to the limit rather than one per chunk');
 });

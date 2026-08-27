@@ -195,17 +195,56 @@ function tokenizePhonemes(phonemeString) {
   return ids;
 }
 
-// The graph's sequence axis is fixed at 512 including the two boundary zeros,
-// so a long paragraph is split on phoneme boundaries and the pieces are
-// concatenated. Splitting rather than truncating is the difference between a
-// slightly seamed paragraph and a silently missing one.
-function chunkTokenIds(ids) {
-  const limit = MAX_TOKENS - 2;
-  if (ids.length <= limit) return [ids];
-  const chunks = [];
-  for (let index = 0; index < ids.length; index += limit) {
-    chunks.push(ids.slice(index, index + limit));
+// espeak splits on punctuation and DROPS the mark it split on, so rejoining the
+// clauses with ", " flattened every sentence end, question and exclamation in a
+// paragraph into one long comma-separated run. Kokoro's vocab carries
+// . ! ? ; : — … and the quote marks, so the model was being denied prosody it
+// can actually render -- the flat, unbroken delivery was ours, not the model's.
+//
+// Verified against the shipped phonemizer (1.2.1): the returned clause count
+// equals the source mark count exactly, for commas, terminals, semicolons,
+// colons, em dashes, and commas inside quotes. Where it does NOT line up the
+// old join is used instead, because inventing a boundary is worse than a flat
+// one.
+const CLAUSE_MARK_RE = /[.!?;:,—…]+/g;
+
+function clauseMarksFrom(text) {
+  const marks = [];
+  for (const match of String(text || '').matchAll(CLAUSE_MARK_RE)) {
+    const run = match[0];
+    // "..." is one pause, not three sentence ends, and Kokoro has a token for it.
+    marks.push(/^\.{2,}$/.test(run) ? '…' : run[0]);
   }
+  return marks;
+}
+
+// The graph's sequence axis is fixed at 512 including the two boundary zeros.
+// This used to slice the token stream every 510 ids, which lands wherever it
+// lands -- mid-word, mid-diphthong -- and the two halves were then rendered as
+// separate utterances and concatenated, so a long paragraph got an audible
+// fracture in the middle of a word. Packing whole clauses instead means a seam
+// can only ever fall where the writing already had a pause. Only a single
+// clause longer than the whole sequence axis is still hard-split, and that
+// flushes what came before it first so the damage stays local.
+function packUnitsIntoChunks(unitIds) {
+  const limit = MAX_TOKENS - 2;
+  const chunks = [];
+  let current = [];
+  for (const ids of unitIds) {
+    if (ids.length > limit) {
+      if (current.length) { chunks.push(current); current = []; }
+      for (let index = 0; index < ids.length; index += limit) {
+        chunks.push(ids.slice(index, index + limit));
+      }
+      continue;
+    }
+    if (current.length + ids.length > limit) {
+      chunks.push(current);
+      current = [];
+    }
+    current = current.length ? current.concat(ids) : ids.slice();
+  }
+  if (current.length) chunks.push(current);
   return chunks;
 }
 
@@ -225,27 +264,31 @@ async function generate(text, voiceId, opts = {}) {
   if (!isReady) throw new Error('Kokoro engine is not initialized.');
   const speed = Math.max(0.5, Math.min(2, Number(opts.speed) || 1));
   const voiceData = await loadVoice(voiceId);
-  // Verified against the real bundle: phonemize() returns an ARRAY, one entry
-  // per clause, and it splits ON punctuation while dropping the mark itself
-  // ("Hello there, this is a test." -> ["həlˈoʊ ðˈɛɹ", "ðɪs ɪz ɐ tˈɛst"]).
-  //
-  // Kokoro's vocab does contain punctuation, and joining with a plain space
-  // would throw away every pause the writing actually specified, giving a flat
-  // unbroken read. Rejoining with a comma restores a boundary exactly where one
-  // existed. It is an approximation -- a sentence break comes back as a comma
-  // rather than a full stop -- but it is a faithful boundary rather than none,
-  // and it never invents a pause the text did not have.
+  // phonemize() returns an ARRAY, one entry per clause, splitting ON
+  // punctuation and dropping the mark ("Hello there, this is a test." ->
+  // ["həlˈoʊ ðˈɛɹ", "ðɪs ɪz ɐ tˈɛst"]). Putting the real mark back is
+  // what lets the model render a question as a question. See clauseMarksFrom.
   const phonemes = await phonemize(String(text || ''), 'en-us');
   const clauses = (Array.isArray(phonemes) ? phonemes : [String(phonemes || '')])
     .map((clause) => String(clause || '').trim())
     .filter(Boolean);
-  const joined = clauses.join(', ');
-  const ids = tokenizePhonemes(joined);
-  if (!ids.length) return new Float32Array(0);
+  if (!clauses.length) return new Float32Array(0);
+
+  const marks = clauseMarksFrom(text);
+  const aligned = marks.length === clauses.length;
+  const units = clauses.map((clause, index) => {
+    const mark = aligned ? marks[index] : (index < clauses.length - 1 ? ',' : '');
+    // Trailing space between clauses; the vocab has one, and without it two
+    // clauses run together as a single word.
+    return `${clause}${mark}${index < clauses.length - 1 ? ' ' : ''}`;
+  });
+
+  const unitIds = units.map(tokenizePhonemes).filter((ids) => ids.length);
+  if (!unitIds.length) return new Float32Array(0);
 
   const pieces = [];
   let total = 0;
-  const chunks = chunkTokenIds(ids);
+  const chunks = packUnitsIntoChunks(unitIds);
   for (const chunk of chunks) {
     // Cancelling must FAIL the request, not resolve it short. Breaking out and
     // returning what had been produced so far reported generate_done with

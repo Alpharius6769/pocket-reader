@@ -854,3 +854,57 @@ test('the persisted downgrade is offered a way back exactly once', async () => {
     'the restore must leave the chosen neural engine alone');
   assert.match(handler, /settings\.voiceEngine = 'pocket'/);
 });
+
+// The conditioned flow-LM state is the single largest live allocation in the
+// narration worker: 46.9 MB each, measured against the shipped english_2026-04
+// manifest (eighteen tensors, six of them [2,1,1000,16,64] float32). Every
+// emotion is its own voice asset, so an unbounded cache retained 375 MB across
+// a balanced story and 609 MB across an expressive one, on top of ~126 MB of
+// sessions.
+test('conditioned voice states are bounded on every device, not just constrained ones', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+
+  assert.match(worker, /const MAX_CONDITIONED_VOICES = \d+;/,
+    'there must be a cap that applies when constrainedMemoryMode is off');
+  assert.match(worker, /function conditionedVoiceLimit\(\)[\s\S]{0,200}?constrainedMemoryMode \? MAX_CONSTRAINED_CUSTOM_VOICES : MAX_CONDITIONED_VOICES/,
+    'the cap must tighten on constrained devices rather than only existing there');
+
+  // The old evictor returned immediately unless constrainedMemoryMode was set,
+  // so a high-memory Android or desktop kept every emotion it ever rendered.
+  const general = worker.slice(
+    worker.indexOf('function evictExcessConditionedVoices('),
+    worker.indexOf('function evictConstrainedCustomVoices('),
+  );
+  assert.ok(general.length > 100, 'the general evictor must exist');
+  assert.doesNotMatch(general, /if \(!constrainedMemoryMode\) return;/,
+    'the general evictor must not be gated on constrained mode');
+  assert.match(general, /disposeGpuState\(/, 'evicted states must be disposed, not just dropped');
+
+  // Insertion order is only an LRU if reads reorder it.
+  assert.match(worker, /function touchConditionedVoice\(/);
+  assert.match(worker, /if \(!force && voiceConditioningCache\.has\(voiceName\)\) \{\s*\n\s*touchConditionedVoice\(voiceName\);/);
+  assert.match(worker, /if \(!force && voiceConditioningCache\.has\(key\)\) \{\s*\n\s*touchConditionedVoice\(key\);/);
+
+  // force:true re-conditions on every backend switch and every voice
+  // registration. Overwriting the map entry without disposing leaked a whole
+  // 46.9 MB state each time -- GPU-resident under WebGPU, where the JS garbage
+  // collector cannot reach it at all.
+  assert.match(worker, /function setConditionedVoice\(key, state\) \{[\s\S]{0,320}?disposeGpuState\(previous\)/);
+  assert.ok(!/voiceConditioningCache\.set\((voiceName|key), conditioned\)/.test(worker),
+    'conditioning must go through setConditionedVoice so the previous state is disposed');
+});
+
+test('the voice a generation is reading cannot be evicted underneath it', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  // register_precompiled_voice for the NEXT paragraph arrives while the current
+  // one is still rendering, and it reassigns currentVoiceName -- so that
+  // variable alone cannot protect the state runGenerationPipeline is reading.
+  assert.match(worker, /let generatingVoiceName = null;/);
+  assert.match(worker, /activeGenerationJobId = jobId;[\s\S]{0,400}?generatingVoiceName = voiceName;/,
+    'the generating voice must be pinned when the generation starts');
+  assert.match(worker, /generatingVoiceName = null;/, 'and released when it ends');
+  for (const fn of ['evictExcessConditionedVoices', 'evictConstrainedCustomVoices']) {
+    const body = worker.slice(worker.indexOf(`function ${fn}(`), worker.indexOf(`function ${fn}(`) + 700);
+    assert.match(body, /generatingVoiceName/, `${fn} must honour the in-flight generation`);
+  }
+});
