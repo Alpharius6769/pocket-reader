@@ -8,8 +8,14 @@ enabled = true
 head_sampling_rate = 1
 
 [vars]
-# Additive to the defaults in cloudflare_worker.js resolveAllowedOrigin().
-ALLOWED_ORIGINS = "https://alpharius6769.github.io,https://pocket-reader-f2y.pages.dev,https://phase3-preview.pocket-reader-f2y.pages.dev"
+# Additive to the defaults in cloudflare_worker.js resolveAllowedOrigin(), which
+# is why the two pocket-reader-f2y.pages.dev entries had to come out of BOTH
+# places: dropping them from the code alone would have left this var adding them
+# straight back. Both names are NXDOMAIN since the Pages project was removed, and
+# an unowned *.pages.dev name can be claimed by creating a Pages project with it
+# -- which would have handed the claimant CORS access to /api/ (forwarded with
+# HF_TOKEN) and /catalog-api/ (written with CATALOG_PROXY_KEY).
+ALLOWED_ORIGINS = "https://alpharius6769.github.io"
 # Set to "1" only for local development. Production must not reflect CORS for
 # arbitrary localhost origins.
 ALLOW_LOCALHOST_ORIGINS = "0"
