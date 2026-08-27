@@ -2108,8 +2108,12 @@ window.showCacheDecisionModal = function() {
   if (!window.currentStory) return;
   if (window._pocketSuppressCacheDecision) return;
   
+  // Both neural engines cache. Testing for the literal 'pocket' meant a Kokoro
+  // device opened a story and startCaching was never called at all — no modal,
+  // no queue, no narration. This is the same namespace slip as the queue
+  // builders and the generation gates.
   const engine = _resolveActiveEngine();
-  if (engine === 'pocket') {
+  if (_isNeuralEngine(engine)) {
     window.startCaching('Normal');
   }
 };

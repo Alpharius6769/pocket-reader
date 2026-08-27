@@ -3195,7 +3195,10 @@ export async function playCurrentParagraph() {
   const voice = document.getElementById('voice-selector')?.value || defaultVoice;
 
   try {
-    if (engine === 'pocket') {
+    // THE playback dispatch. Testing for the literal 'pocket' sent every Kokoro
+    // paragraph down the Web Speech branch — the engine was loaded and the OS
+    // voice spoke instead, which is what "Kokoro is using device voices" was.
+    if (_isNeuralEngine(engine)) {
       await _playGeneratedAudio(text, story.title, window.currentChapterIndex, window.currentParagraphIndex, voice);
     } else {
       await _playWebSpeech(text);

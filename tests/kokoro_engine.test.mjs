@@ -404,3 +404,44 @@ test('cache queues never canonicalise a Kokoro voice against the Pocket list', a
   // device voice — not Pocket specifically.
   assert.doesNotMatch(buffer, /Away Mode caching requires Pocket TTS/);
 });
+
+// Fifth and sixth instances of the same slip, both found by sweeping every
+// comparison against the RESOLVED engine rather than the stored setting (which
+// is 'pocket' for both neural engines and therefore safe to compare).
+test('the playback dispatch and cache decision both accept Kokoro', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
+
+  // Playback: the else branch is Web Speech, so a literal 'pocket' test sent
+  // every Kokoro paragraph to the OS voice with the engine loaded and idle.
+  assert.match(audio, /if \(_isNeuralEngine\(engine\)\) \{\s*\n\s*await _playGeneratedAudio\(/);
+  assert.doesNotMatch(audio, /if \(engine === 'pocket'\) \{\s*\n\s*await _playGeneratedAudio\(/);
+
+  // Cache decision: without this, opening a story on Kokoro never called
+  // startCaching at all — no modal, no queue, no narration.
+  assert.match(buffer, /if \(_isNeuralEngine\(engine\)\) \{\s*\n\s*window\.startCaching\('Normal'\);/);
+  assert.doesNotMatch(buffer, /if \(engine === 'pocket'\) \{\s*\n\s*window\.startCaching\('Normal'\);/);
+});
+
+test('no behavioural gate compares the resolved engine to the bare literal', async () => {
+  // The stored settings.voiceEngine is 'pocket' for BOTH neural engines, so
+  // comparing THAT is safe. Comparing the value returned by
+  // _resolveActiveEngine() is not — that is where every one of these bugs lived.
+  const files = ['audio_core.js', 'buffer_manager.js'];
+  const allowed = [
+    // Pocket-only expressive prosody; correctly skipped for an engine without it.
+    /if \(_resolveActiveEngine\(\) === 'pocket'\) \{\s*\n\s*try \{ await window\.refreshPocketDeviceCapability/,
+    // UI value mapping, not a behavioural gate.
+    /const neuralEngine = engineVal === 'pocket' \? _resolveActiveEngine\(\) : engineVal;/,
+    // The loadable-engine check, which names both explicitly.
+    /if \(engine !== 'pocket' && engine !== 'kokoro'\) return false;/,
+  ];
+  for (const name of files) {
+    let src = await read(`public/assets/js/${name}`);
+    for (const ok of allowed) src = src.replace(ok, '');
+    // Anything left that assigns from _resolveActiveEngine and then compares to
+    // 'pocket' is a gate that would strand Kokoro.
+    const bad = src.match(/const engine = _resolveActiveEngine\(\);[\s\S]{0,120}?engine (===|!==) 'pocket'/g) || [];
+    assert.deepEqual(bad, [], `${name} still gates the resolved engine on the bare literal`);
+  }
+});
