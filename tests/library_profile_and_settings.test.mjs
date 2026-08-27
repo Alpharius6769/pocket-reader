@@ -206,3 +206,41 @@ test('the boot chain that hangs off the profile read is still intact', async () 
     assert.ok(body.includes(step), `${step} must still run as part of the profile read`);
   }
 });
+
+// The voice-engine block inside loadLocalData had never run, so restoring the
+// boot hydration meant its conditions had to be re-checked rather than trusted.
+// One of them was unsafe.
+test('the voice-engine default fills a gap and never overrides a choice', async () => {
+  const source = await read('public/assets/js/library_manager.js');
+  const block = source.slice(
+    source.indexOf('// ── Voice-engine default'),
+    source.indexOf("localStorage.setItem('pr_engine_auto_detected'"),
+  );
+  assert.ok(block.length > 200, 'the voice-engine default block must be locatable');
+
+  // It used to also re-run when `!_manuallySet && _autoVersion !== ...`, which
+  // overwrote a stored 'webspeech' with 'pocket'. _engineManuallySet cannot
+  // carry that weight: it is stripped from the sync payload while voiceEngine
+  // itself syncs, so a reader who picks Device voice on their phone arrives on
+  // their tablet with 'webspeech' and no flag. Verified in a browser that this
+  // exact shape used to flip to neural and persist it.
+  // Comments stripped: the explanation NAMES the removed clause, and an
+  // explanation must not read as the clause still being there.
+  const code = block.replace(/^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(code, /_manuallySet/,
+    'a flag that does not survive sync must not gate whether a choice is honoured');
+  assert.doesNotMatch(code, /_autoVersion/,
+    're-running detection could only ever overwrite a deliberate webspeech');
+  assert.match(block, /const _needsDetect = !_savedEngine \|\| !\['pocket', 'webspeech'\]\.includes\(_savedEngine\);/,
+    'the default may only fill a missing or invalid value');
+
+  // The asymmetry that makes this necessary must stay documented where it bites.
+  for (const rel of ['public/assets/js/profile_merge.js', 'public/assets/js/sync_core.js']) {
+    const sync = await read(rel);
+    const deviceOnly = sync.slice(sync.indexOf('maxWorkers'), sync.indexOf('maxWorkers') + 400);
+    assert.match(deviceOnly, /_engineManuallySet/,
+      `${rel} still strips _engineManuallySet, so the default must not depend on it`);
+    assert.doesNotMatch(deviceOnly, /'voiceEngine'/,
+      `${rel}: voiceEngine syncs; if that ever changes, revisit the default above`);
+  }
+});

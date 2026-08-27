@@ -837,7 +837,9 @@ test('the persisted downgrade is offered a way back exactly once', async () => {
   // It must not fire on a failure happening right now: that one is already
   // explained by the companion and already retried on the next reload.
   assert.match(library, /window\._pocketNeuralEngineUnavailable === true\) return;/);
-  // And it cannot sit in loadLocalData(), which nothing in the app calls.
+  // And it must stay OUT of loadLocalData. That function does now run (the boot
+  // hydration was restored), but the prompt has to survive a hydration failure,
+  // and it polls for _resolveActiveEngine and showFeatureDialog itself.
   const deadStart = library.indexOf('export async function loadLocalData');
   const deadEnd = library.indexOf('window.loadLocalData = loadLocalData');
   assert.ok(deadStart > 0 && deadEnd > deadStart, 'loadLocalData must be locatable');

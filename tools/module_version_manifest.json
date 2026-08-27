@@ -60,8 +60,8 @@
     "sha256": "fb89f6d03f566d0d"
   },
   "library_manager.js": {
-    "version": "library-v29",
-    "sha256": "d55648992ba4503b"
+    "version": "library-v30",
+    "sha256": "284279966dcfe6c7"
   },
   "motion_lite.js": {
     "version": "sw-198",
@@ -125,6 +125,6 @@
   },
   "sw.js": {
     "version": "sw-198",
-    "sha256": "50254b01241dc19b"
+    "sha256": "4f4c5fe9f7b200f7"
   }
 }

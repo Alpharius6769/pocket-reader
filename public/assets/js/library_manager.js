@@ -667,13 +667,32 @@ export async function loadLocalData() {
       }
     }
 
-    // ── Voice-engine default migration (runs for ALL users) ─────────────────
+    // ── Voice-engine default (fills a gap; never overrides a choice) ────────
+    //
+    // This block had never run -- loadLocalData had no caller until the boot
+    // hydration was restored -- so enabling it needed its conditions re-checked
+    // rather than trusted. One of them was unsafe.
+    //
+    // It used to ALSO re-run whenever `!_manuallySet && _autoVersion !==
+    // POCKET_ENGINE_AUTO_VERSION`, overwriting a stored 'webspeech' with
+    // 'pocket'. _engineManuallySet cannot carry the weight that clause put on
+    // it, because it is in DEVICE_ONLY_SETTINGS / DEVICE_SETTING_KEYS and is
+    // stripped from the sync payload while voiceEngine itself syncs. So a
+    // reader who picks Device voice on their phone arrives on their tablet with
+    // voiceEngine: 'webspeech' and no flag -- and this would have silently
+    // switched them to neural narration there. Verified in a browser: that
+    // exact profile shape flipped to 'pocket' and persisted it.
+    //
+    // The clause bought nothing either way. "Auto-detect" here only ever
+    // assigns 'pocket'; the real per-device decision is selectNarrationEngine()
+    // inside _resolveActiveEngine, which runs live on every call and picks
+    // Kokoro or Pocket from the device profile. So the only thing re-running it
+    // could change was somebody's deliberate 'webspeech'.
+    //
+    // What remains fills a genuinely absent or corrupt value, which is what a
+    // default is for.
     const _savedEngine = window.userProfile.settings.voiceEngine;
-    const _autoVersion = localStorage.getItem('pr_engine_auto_detected');
-    const _manuallySet = window.userProfile.settings._engineManuallySet;
-    const _needsDetect = !_savedEngine
-      || !['pocket', 'webspeech'].includes(_savedEngine)
-      || (!_manuallySet && _autoVersion !== POCKET_ENGINE_AUTO_VERSION);
+    const _needsDetect = !_savedEngine || !['pocket', 'webspeech'].includes(_savedEngine);
     if (_needsDetect) {
       window.userProfile.settings.voiceEngine = 'pocket';
       localStorage.setItem('pr_engine_auto_detected', POCKET_ENGINE_AUTO_VERSION);
