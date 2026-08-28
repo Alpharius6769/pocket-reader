@@ -494,7 +494,11 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
       : error.message && error.message !== 'Upload failed'
       ? error.message
       : 'Error parsing document. Please try a different file.';
-    alert(msg);
+    // Through the companion, not a blocking dialog: alert() freezes the page,
+    // reads as a system failure inside an installed PWA and takes audio focus on
+    // iOS standalone. triggerVirtue on the next line already proves the
+    // companion is available here.
+    window.pocketNotify?.(msg, 7000);
     if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_network_error');
   } finally {
     clearTimeout(timeoutId);
@@ -1067,7 +1071,7 @@ export async function loadStory(url, options = {}) {
         fetchUrl = validEntryUrl;
       } else {
         if (!preventNavigate) {
-          alert(`Could not load stored chapters for "${existingLibEntry.title || 'Uploaded Document'}". Please re-upload the file.`);
+          window.pocketNotify?.(`Could not load stored chapters for "${existingLibEntry.title || 'Uploaded Document'}". Please re-upload the file.`, 7000);
           if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
         }
         return;
@@ -1122,7 +1126,7 @@ export async function loadStory(url, options = {}) {
     if (/^(\/local-upload\/|local:\/\/)/i.test(fetchUrl)) {
       if (!preventNavigate) {
         if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-        alert(`Could not load stored chapters for "${(existingLibEntry && existingLibEntry.title) || 'this uploaded document'}". Please re-upload the file.`);
+        window.pocketNotify?.(`Could not load stored chapters for "${(existingLibEntry && existingLibEntry.title) || 'this uploaded document'}". Please re-upload the file.`, 7000);
       }
       return;
     }

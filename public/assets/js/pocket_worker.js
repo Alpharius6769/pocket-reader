@@ -4,7 +4,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v14';
+} from './tts_pronunciation_core.js?v=pron-v15';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -85,7 +85,8 @@ const ORT_FORMAT_MODEL_ASSET_BYTES = {
   flow_lm_decode_block4: 87522240,
   flow_lm_unified_block4: 87264376,
 };
-const MODEL_DOWNLOAD_TOTAL_BYTES = Object.values(MODEL_ASSET_BYTES).reduce((sum, size) => sum + size, 0);
+// No MODEL_DOWNLOAD_TOTAL_BYTES: the summed total had no reader. The per-asset
+// map above is still used to report download progress.
 const METADATA_TIMEOUT_MS = 30000;
 const MODULE_TIMEOUT_MS = 45000;
 const MODEL_STALL_TIMEOUT_MS = 60000;

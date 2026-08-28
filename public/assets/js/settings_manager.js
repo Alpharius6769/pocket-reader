@@ -1,7 +1,7 @@
 // settings_manager.js — Worker detection, GPU-aware advanced settings, diagnostics
 import {
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v14';
+} from './tts_pronunciation_core.js?v=pron-v15';
 import {
   POCKET_MAX_CACHE_WORKERS,
   readPocketDeviceBackendPreference,
@@ -14,7 +14,7 @@ import {
   KOKORO_DEFAULT_VOICE,
 } from './pocket_backend_policy.js?v=backend-v25';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '201';
+export const NARRATION_SERVICE_WORKER_VERSION = '202';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -928,15 +928,15 @@ export async function clearNeuralEngineCache() {
       }
       window.hideLoadingOverlay?.();
       if (deleted) {
-        alert("Neural Engine cache cleared successfully! Hit Play to redownload a fresh copy.");
+        window.pocketNotify?.('Neural engine cache cleared. Press Play to download a fresh copy.', 6000);
         if (window.Diagnostics) window.Diagnostics.log('INFO', 'User cleared Pocket/ONNX cache.');
       } else {
-        alert("No Neural Engine files found in the browser cache. They might already be cleared.");
+        window.pocketNotify?.('No neural engine files are cached on this device.', 6000);
       }
     } catch (e) {
       window.hideLoadingOverlay?.();
       console.error("Failed to clear Neural Engine cache:", e);
-      alert("Error clearing cache: " + e.message);
+      window.pocketNotify?.(`The cache could not be cleared: ${e.message}`, 7000);
     }
   }
 }
@@ -1089,16 +1089,16 @@ export function initPushNotifications(checkbox) {
     }
     if (!('Notification' in window) || !navigator.serviceWorker || !window.PushManager) {
       setPushUpdatesEnabled(false);
-      alert("Push notifications are not supported in this browser or require app installation."); return;
+      window.pocketNotify?.('This browser cannot deliver push notifications. Installing Pocket Reader to your home screen may enable them.', 7000); return;
     }
     if (window.location.pathname.startsWith('/debug/')) {
       setPushUpdatesEnabled(false);
       // The service worker is not registered under /debug/, and push needs one.
-      alert('Push notifications need the service worker, which is not active on debug pages. Open the app at its normal address, then enable this.');
+      window.pocketNotify?.('Push needs the service worker, which does not run on debug pages. Open the app at its normal address, then enable this.', 8000);
       return;
     }
     Notification.requestPermission().then(async (permission) => {
-      if (permission !== 'granted') { setPushUpdatesEnabled(false); alert("Notification permission denied by browser."); return; }
+      if (permission !== 'granted') { setPushUpdatesEnabled(false); window.pocketNotify?.('Your browser refused notification permission.', 6000); return; }
       let vapidKey = window.VAPID_PUBLIC_KEY || window.VAPID_PUBLIC || '';
       if (!vapidKey && window.HF_API_BASE) {
         try {
@@ -1111,7 +1111,7 @@ export function initPushNotifications(checkbox) {
         if (typeof window.virtueSpeak === 'function') {
           window.virtueSpeak("Push updates require a VAPID key configured on your backend server.", 5000);
         } else {
-          alert("Push updates require a VAPID public key configured on your backend server.");
+          window.pocketNotify?.('Push updates need a VAPID public key on the backend. None is configured.', 7000);
         }
         return;
       }
@@ -1130,7 +1130,7 @@ export function initPushNotifications(checkbox) {
         window.triggerVirtue('virtue_bubble_wink');
         window.virtueSpeak("I'll always find my way to you. New chapters won't slip past me.", 4000);
       }
-    }).catch((err) => { console.error('Push subscription failed:', err); setPushUpdatesEnabled(false); alert(`Could not enable push notifications: ${err.message}`); });
+    }).catch((err) => { console.error('Push subscription failed:', err); setPushUpdatesEnabled(false); window.pocketNotify?.(`Push notifications could not be enabled: ${err.message}`, 7000); });
   } else {
     setPushUpdatesEnabled(false);
     // Drop the SW push-meta stash so a later rotation does not silently
@@ -1509,6 +1509,30 @@ window.syncNarrationControls = function syncNarrationControls() {
   }
 };
 
+// Pocket-only settings, hidden when Pocket is not what will actually speak.
+//
+// Both cards were shown unconditionally. On Kokoro -- which is every iPhone and
+// every device reporting 4 GB or less -- the emotion controls have no per-emotion
+// voices to select between, and the backend card is inert because
+// _loadPocketEngine hardcodes Kokoro's plan. Worse, "Re-run backend
+// optimization" checks isolation FIRST, so on an un-isolated device it stored a
+// resume token, rewrote the URL with ?tts_fast=1 and reloaded the whole app --
+// to reach a call that returns immediately.
+export function syncPocketOnlySettings() {
+  const engine = _resolveEngineChoice()?.engine;
+  const usingWebSpeech = window.userProfile?.settings?.voiceEngine === 'webspeech';
+  const pocketActive = !usingWebSpeech && engine === 'pocket';
+  for (const id of ['expressive-narration-card', 'narration-backend-card']) {
+    const card = document.getElementById(id);
+    if (!card) continue;
+    card.hidden = !pocketActive;
+    // hidden alone loses to `display` from a class in this stylesheet, and
+    // `details` carries its own default display, so set it explicitly too.
+    card.style.display = pocketActive ? '' : 'none';
+  }
+}
+window.syncPocketOnlySettings = syncPocketOnlySettings;
+
 export function renderNarrationEngineControls() {
   const host = document.getElementById('narration-engine-controls');
   if (!host) return;
@@ -1558,6 +1582,8 @@ export function renderNarrationEngineControls() {
       <select id="kokoro-voice-select" class="settings-control" style="width:100%;">${voiceOptions}</select>
       <p style="font-size:0.78rem;color:var(--text-muted);margin:6px 0 0;">Letter grades are Kokoro's own quality ratings. Male voices top out at C+.</p>
     </div>`;
+
+  syncPocketOnlySettings();
 
   document.getElementById('kokoro-voice-select')?.addEventListener('change', (event) => {
     if (!window.userProfile?.settings) return;

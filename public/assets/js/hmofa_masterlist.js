@@ -558,7 +558,8 @@ function checkbox(group, value, count) {
   label.className = 'hmofa-facet-option';
   const input = document.createElement('input');
   input.type = 'checkbox';
-  input.dataset.filterGroup = group;
+  // No data-filter-group: the change listener below closes over `group`
+  // directly, so the attribute was written and never read.
   input.value = value;
   input.checked = state[group].has(value);
   input.addEventListener('change', () => {

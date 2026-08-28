@@ -2,8 +2,8 @@ import re
 import httpx
 from typing import Optional
 from bs4 import BeautifulSoup
-from scrapers_core import fetch, make_client
-from scrapers_cloudflare import detect_cloudflare, CloudflareBlocked
+from scrapers_core import fetch
+from scrapers_cloudflare import CloudflareBlocked
 from parsers_core import Chapter, ScrapeResult
 
 

@@ -168,12 +168,14 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(audio, /wasmReferenceRtf: _pocketBackendRuntime\.wasmReferenceRtf/);
   // Full ?v= form on purpose: a bare version string is invisible to
   // check_module_versions.mjs, so this pin silently rotted past a bump.
-  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v62/);
+  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v63/);
   assert.match(worker, /wasmReferenceRtf/);
   assert.match(worker, /releaseAllSessions/);
   assert.match(worker, /wasm_rtf_sample/);
   assert.match(worker, /POCKET_WEBGPU_WASM_PARITY_RATIO/);
-  assert.match(worker, /Never honor a stale requested=1/);
+  // A stale requested=1 must never pin an isolated session to one thread, so a
+  // requested count below 2 is discarded in favour of the policy recommendation.
+  assert.match(worker, /if \(requested >= 2\) return requested;\s*\n\s*return recommended;/);
   assert.match(buffer, /_isolationReady/);
   assert.match(buffer, /Slow 1-thread mode/);
   assert.match(buffer, /Threaded WASM/);
@@ -211,10 +213,10 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
   assert.match(serviceWorker, /pocket-reader-core-v\d+/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v141/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v142/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
-  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v62/);
+  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v63/);
   assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v25/);
   assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v13/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);

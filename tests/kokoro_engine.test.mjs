@@ -175,7 +175,11 @@ test('phoneme clauses are rejoined so punctuation pauses survive', async () => {
   assert.doesNotMatch(fn, /phonemes\.join\(' '\)/);
   // And a comma join discarded which KIND of pause it was. The real mark is
   // restored per clause now; see the punctuation test below for the contract.
-  assert.match(fn, /const marks = clauseMarksFrom\(text\);/);
+  // Counted on the NORMALISED string, not the raw one: alignment compares mark
+  // count against clause count, and normalizeForPocketTts can change the mark
+  // count (a stripped [2s] tag, an expanded contraction).
+  assert.match(fn, /const marks = clauseMarksFrom\(spoken\);/);
+  assert.match(fn, /const phonemes = await phonemize\(spoken, 'en-us'\);/);
   assert.doesNotMatch(fn, /clauses\.join\(', '\)/);
   // The array shape is the documented return; a bare string must still work.
   assert.match(fn, /Array\.isArray\(phonemes\) \? phonemes : \[String\(phonemes \|\| ''\)\]/);
@@ -625,8 +629,13 @@ test('both engine selects share one handler and stay in sync', async () => {
   // One writer keeps both elements aligned.
   assert.match(settings, /function _syncEngineSelects\(controlValue\)/);
   assert.match(settings, /for \(const id of \['voice-engine-select', 'reader-engine-select'\]\)/);
-  // Assigning .value must not re-enter the change handler.
-  assert.match(settings, /Assigning \.value does not fire a change event/);
+  // Assigning .value must not re-enter the change handler, so the sync writer
+  // must set .value directly and never dispatch an event or call the handler.
+  const syncFn = settings.slice(settings.indexOf('function _syncEngineSelects'));
+  const syncBody = syncFn.slice(0, syncFn.indexOf('\n}'));
+  assert.match(syncBody, /el\.value = controlValue/);
+  assert.doesNotMatch(syncBody, /dispatchEvent|onNarrationEngineSelect\(/,
+    're-entering the handler from the sync writer would loop the two selects');
 });
 
 test('opening the reader does not drag in the narration runtime', async () => {
@@ -726,4 +735,78 @@ test('Pocket backend calibration is gated on the Pocket engine at both ends', as
 
   assert.match(buffer, /if \(_resolveActiveEngine\(\) === 'pocket'\) \{\s*\n\s*await window\.ensurePocketBackendOptimized\?\.\(voice\);/);
   assert.match(audio, /async function _ensurePocketBackendOptimizedForVoice\(voiceName\) \{[\s\S]{0,500}?if \(_resolveActiveEngine\(\) !== 'pocket'\) return _pocketBackendRuntime;/);
+});
+
+// Second audit, 2026-08-28. Both of these only became reachable when Kokoro
+// could first synthesize past its opening paragraph, so neither had ever run in
+// anger before the previous commit.
+test('Kokoro applies the same pronunciation rules Pocket does', async () => {
+  const worker = await read('public/assets/js/kokoro_worker.js');
+  const core = await read('public/assets/js/tts_pronunciation_core.js');
+
+  // normalizeForPocketTts had exactly one caller in the codebase, inside
+  // pocket_worker.js, so on Kokoro the reader's Settings overrides, their
+  // per-story overrides and the whole built-in ruleset were discarded in
+  // silence -- and an inline [2s] tag was read out character by character.
+  assert.match(worker, /import \{ normalizeForPocketTts \} from '\.\/tts_pronunciation_core\.js\?v=[a-z0-9-]+';/);
+  assert.match(worker, /const spoken = normalizeForPocketTts\(String\(text \|\| ''\), \{/);
+  assert.match(worker, /pronunciationOverrides: opts\.pronunciationOverrides \|\| \[\],/);
+  // The normalised string is what gets phonemized AND what marks are counted on.
+  assert.doesNotMatch(worker, /phonemize\(String\(text \|\| ''\), 'en-us'\)/,
+    'the raw text must not reach the phonemizer once normalisation exists');
+
+  // Kokoro tokenizes the em-dash and splits clauses on it, so Pocket's cadence
+  // hack that flattens em-dashes to commas must not apply to it.
+  assert.match(worker, /keepClausePunctuation: true,/);
+  assert.match(core, /const keepClausePunctuation = !Array\.isArray\(settings\) && settings\.keepClausePunctuation === true;/);
+  assert.match(core, /if \(!keepClausePunctuation\) \{[\s\S]{0,200}?out = out\.replace\(\/—\/g, ', '\);/);
+  // The pause-tag strip is NOT optional -- left in, the characters reach the
+  // phonemizer and get spoken by whichever engine is running. A two-space indent
+  // means it sits at the top level of the function; four would mean somebody had
+  // moved it inside the guard.
+  const coreLines = core.split('\n');
+  const tagComment = coreLines.findIndex((l) => l.includes('Strip pseudo-SSML inline pause tags'));
+  assert.ok(tagComment > 0, 'the [Ns] pause-tag strip must exist');
+  const stripLine = coreLines.slice(tagComment).find((l) => l.trimStart().startsWith('out = '));
+  assert.match(stripLine, /^ {2}out = /,
+    'the [Ns] strip must sit outside the keepClausePunctuation guard');
+
+  // The render changed, so cached Kokoro audio has to be invalidated.
+  const audio = await read('public/assets/js/audio_core.js');
+  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov2';/);
+});
+
+test('the Pocket worker recycle does not run on Kokoro', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const fn = audio.slice(audio.indexOf('async function _maybeRecyclePocketEngine()'),
+                         audio.indexOf('window.generateChunk = async function'));
+  assert.ok(fn.length > 0, '_maybeRecyclePocketEngine not found');
+
+  // The drift it clears is autoregressive. Kokoro is one forward pass with no KV
+  // cache -- the same reason the ORT arena guard was measured as a no-op there --
+  // so a recycle rebuilt an 86 MB session every 20 paragraphs for nothing.
+  assert.match(fn, /if \(_resolveActiveEngine\(\) !== 'pocket'\) return false;/);
+  // And it must bail BEFORE the paragraph counter, or Kokoro still advances a
+  // threshold it can never legitimately reach.
+  const gate = fn.indexOf("_resolveActiveEngine() !== 'pocket'");
+  const counter = fn.indexOf('window._pocketParagraphCount = (window._pocketParagraphCount || 0) + 1');
+  assert.ok(gate > 0 && counter > gate, 'the engine gate must precede the paragraph counter');
+});
+
+test('Pocket-only settings are hidden when Pocket is not the running engine', async () => {
+  const settings = await read('public/assets/js/settings_manager.js');
+  const html = await read('public/index.html');
+
+  // Both cards were shown unconditionally. On Kokoro the emotion controls have
+  // no per-emotion voices to choose between, and the backend card is inert --
+  // and "Re-run backend optimization" could force a whole ?tts_fast=1 page
+  // reload on an un-isolated device to reach a call that returns immediately.
+  assert.match(html, /id="expressive-narration-card"/);
+  assert.match(html, /id="narration-backend-card"/);
+  assert.match(settings, /export function syncPocketOnlySettings\(\)/);
+  assert.match(settings, /const pocketActive = !usingWebSpeech && engine === 'pocket';/);
+  assert.match(settings, /for \(const id of \['expressive-narration-card', 'narration-backend-card'\]\)/);
+  // hidden alone loses to a class-set display in this stylesheet.
+  assert.match(settings, /card\.style\.display = pocketActive \? '' : 'none';/);
+  assert.match(settings, /^\s*syncPocketOnlySettings\(\);$/m, 'it has to actually be called');
 });

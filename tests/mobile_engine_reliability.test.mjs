@@ -329,8 +329,11 @@ test('audio chunks are fingerprinted so segmentation changes cannot desync playb
   assert.match(storage, /async function deleteAudioChunk\(/, 'the delete helper must exist');
 
   // Pre-fingerprint chunks are grandfathered rather than wiping every user's
-  // cached narration on upgrade.
-  assert.match(storage, /Chunks written before fingerprinting existed carry no textHash/);
+  // cached narration on upgrade. The `found.textHash &&` above IS that
+  // grandfathering: no stored hash means no mismatch, so the chunk is kept.
+  // Assert the shape rather than the sentence explaining it.
+  assert.doesNotMatch(storage, /found\.textHash !== expected \|\| !found\.textHash/,
+    'a missing textHash must not count as a mismatch');
 
   // Every read and write site must pass the paragraph text.
   const reads = [...audio.matchAll(/getAudioChunk\([^)]*\)/g)].map((m) => m[0]);

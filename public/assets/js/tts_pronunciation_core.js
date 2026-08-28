@@ -1,6 +1,11 @@
 // Browser-safe Pocket TTS pronunciation and tuning helpers.
 // Keep this module free of Node-only APIs; it is imported by the app and worker.
 
+// Deliberately NOT bumped alongside the module's own ?v=. This is the version
+// of the RULES, and it is folded into Pocket's audio cache key; the rules did
+// not change when Kokoro was given access to them (keepClausePunctuation
+// defaults off, so Pocket's output is byte-identical). Bumping it would
+// re-render every cached Pocket paragraph for no audible difference.
 export const PRONUNCIATION_RULESET_VERSION = 'pron-v14'; // v14: Mulberry32 PRNG & voice seed consistency
 export const DEFAULT_POCKET_PLAYBACK_SPEED = 1.0;
 export const DEFAULT_POCKET_TEMPERATURE_PRESET = 'balanced';
@@ -266,8 +271,22 @@ export function getBuiltInPronunciationRuleCount() {
     + PLURAL_FIXES.length;
 }
 
+// Shared by BOTH narration workers.
+//
+// Everything here except the two cadence rules noted below is front-end
+// agnostic: contractions, the reader's own overrides, the built-in respellings
+// and the "No. 5" expansion all work by writing a word the way it should sound,
+// which any phonemizer honours. That is why Kokoro uses this too -- it
+// previously used none of it, so a reader's pronunciation rules were discarded
+// in silence on every device that runs Kokoro.
+//
+// settings.keepClausePunctuation is for an engine whose own front-end already
+// renders clause marks. Pocket's zero-shot cadence drifts on an em-dash, so it
+// flattens them; Kokoro tokenizes the em-dash directly and splits clauses on
+// it, so flattening would cost a pause it can actually produce.
 export function normalizeForPocketTts(text, settings = {}) {
   const overrides = Array.isArray(settings) ? settings : settings.pronunciationOverrides;
+  const keepClausePunctuation = !Array.isArray(settings) && settings.keepClausePunctuation === true;
   const protectedText = protectSegments(text);
   let out = protectedText.text;
 
@@ -277,14 +296,20 @@ export function normalizeForPocketTts(text, settings = {}) {
 
   out = applyPronunciationOverrides(out, overrides);
   
-  // Strip commas directly preceding "and" to prevent random pauses in TTS
-  out = out.replace(/,\s+(and\b)/gi, ' $1');
-  
-  // Strip pseudo-SSML inline pause tags to prevent zero-shot cadence drift
+  if (!keepClausePunctuation) {
+    // Strip commas directly preceding "and" to prevent random pauses in TTS
+    out = out.replace(/,\s+(and\b)/gi, ' $1');
+  }
+
+  // Strip pseudo-SSML inline pause tags so they are never spoken aloud. Not
+  // optional for either engine: left in, the literal characters reach the
+  // phonemizer and get read out.
   out = out.replace(/\[(?:\d+(?:\.\d+)?)\s*s\]/gi, '');
-  
+
   // Normalize typography that causes cadence/timbre drift
-  out = out.replace(/—/g, ', '); // em-dash to comma
+  if (!keepClausePunctuation) {
+    out = out.replace(/—/g, ', '); // em-dash to comma
+  }
   out = out.replace(/…/g, '...'); // ellipsis character to three dots
   
   out = applyStressHeteronyms(out, STRESS_HETERONYMS);

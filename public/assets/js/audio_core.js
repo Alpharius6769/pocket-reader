@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v14';
+} from './tts_pronunciation_core.js?v=pron-v15';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -139,9 +139,9 @@ const POCKET_NARRATION_CACHE_VERSION = 'narrv18';
 const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // Kokoro's render-shape version. Bump whenever anything that changes the audio
 // for the same (text, voice) changes: the chunk cap, the clause rejoin, the
-// phonemizer, or the model revision. k1 = 192/256 device-class cap, clause
-// marks restored.
-const KOKORO_NARRATION_CACHE_VERSION = 'kokorov1';
+// phonemizer, or the model revision. v2 = text now goes through
+// normalizeForPocketTts (pronunciation overrides, contractions, [Ns] strip).
+const KOKORO_NARRATION_CACHE_VERSION = 'kokorov2';
 // Identity-anchored voice pack subpath on B2 (see Back end/tools/build_anchored_pack_v2.py).
 // Every v2 emotion state shares a neutral identity anchor, so emotion switches keep
 // the same perceived speaker. Loader falls back to the legacy v1 files when a v2
@@ -551,7 +551,12 @@ const _prosodyDrift = createProsodyDriftGuard();
 function _effectiveProsodyTier() {
   return _prosodyDrift.effectiveTier(_emotionMode());
 }
-window.getPocketProsodyTier = _effectiveProsodyTier;
+// Not published: _effectiveProsodyTier is read by _artifactCappedTemperature and
+// _resolvePocketRoute in this module and by nothing outside it. The window alias
+// belonged to the same family as _recordPocketProsodyOutcome and should have
+// gone with it. The two hooks that ARE published unreferenced --
+// inspectPocketEmotion and inspectPocketPreload -- say in their own comments
+// that they exist for diagnostics, which is what makes them deliberate.
 
 // Called once per synthesized paragraph with whether it passed the quality
 // guard cleanly. Only tier transitions are logged, not every paragraph.
@@ -1322,8 +1327,8 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const workerScript = engine === 'kokoro'
-          ? new URL('assets/js/kokoro_worker.js?v=kokoro-v6', document.baseURI).href
-          : new URL('assets/js/pocket_worker.js?v=pocket-worker-v62', document.baseURI).href;
+          ? new URL('assets/js/kokoro_worker.js?v=kokoro-v7', document.baseURI).href
+          : new URL('assets/js/pocket_worker.js?v=pocket-worker-v63', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -2951,6 +2956,19 @@ async function _maybeRecyclePocketEngine() {
     await _pocketRecyclePromise;
     return true;
   }
+  // POCKET ONLY. The drift this exists to clear is autoregressive: ONNX Runtime
+  // state accumulating across frames until the voice starts hallucinating,
+  // reported at roughly paragraph 25-30. Kokoro is one forward pass with no KV
+  // cache -- which is exactly why the ORT arena guard Pocket needs was measured
+  // as a no-op there (592 vs 594 MB, 356.6 vs 354.7 MB) and left out -- and its
+  // memory is flat from paragraph 5 to 30. There is no accumulating state for a
+  // recycle to clear.
+  //
+  // Running it anyway cost every Kokoro device a full teardown, ORT re-import
+  // and 86 MB session rebuild once per 20 paragraphs, for nothing. It only
+  // started happening when Kokoro could first synthesize past its opening
+  // paragraph; before that no session ever survived to 20.
+  if (_resolveActiveEngine() !== 'pocket') return false;
   window._pocketParagraphCount = (window._pocketParagraphCount || 0) + 1;
   const recycleEvery = _pocketBackendRuntime?.selectedBackend === 'webgpu' ? 60 : 20;
   if (window._pocketParagraphCount < recycleEvery) return false;

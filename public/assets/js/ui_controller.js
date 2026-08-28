@@ -411,7 +411,7 @@ export function populateReaderUI(storyObj, authorFallback) {
   if (progBar && storyObj.chapters) {
     _buildReaderProgressIndex(storyObj);
     progBar.max = Math.max(0, (window._readerTotalParas || 1) - 1);
-    progBar.value = _readerGlobalIndex(window.currentChapterIndex || 0, window.currentParagraphIndex || 0);
+    _setReaderProgress(progBar, window.currentChapterIndex || 0, window.currentParagraphIndex || 0);
 
     // Notches mark each chapter's starting position along the whole-story bar.
     const notches = el('chapter-notches');
@@ -580,6 +580,20 @@ function _buildReaderProgressIndex(storyObj) {
 // Exposed so library_manager (chapter-merge) can rebuild the index in place.
 window._buildReaderProgressIndex = _buildReaderProgressIndex;
 
+// A range input announces its raw number, so a screen reader read the seek bar
+// as "412" rather than a position in the book. aria-valuetext replaces that with
+// the same wording the visual scrub preview shows.
+function _setReaderProgress(progBar, c, p) {
+  if (!progBar) return;
+  progBar.value = _readerGlobalIndex(c, p);
+  const chapter = window.currentStory?.chapters?.[c];
+  const title = chapter?.title?.trim();
+  const chapterLabel = title && !/^chapter\s+\d+\s*$/i.test(title)
+    ? `Chapter ${c + 1}: ${title}`
+    : `Chapter ${c + 1}`;
+  progBar.setAttribute('aria-valuetext', `${chapterLabel}, paragraph ${p + 1}`);
+}
+
 function _readerGlobalIndex(c, p) {
   const offs = window._readerParaOffsets;
   if (!offs || !offs.length) return 0;
@@ -623,7 +637,7 @@ window._readerSeekCommit = function(v) {
   // so resuming live updates can't briefly snap the thumb back to the pre-seek
   // spot (the old fixed 300ms timer could expire mid-paragraph-advance).
   const progBar = document.getElementById('chapter-progress-bar');
-  if (progBar) progBar.value = _readerGlobalIndex(loc.c, loc.p);
+  _setReaderProgress(progBar, loc.c, loc.p);
   const elP = document.getElementById('chapter-seek-preview');
   if (elP) setTimeout(() => { elP.style.opacity = '0'; }, 1200);
   window._readerSeeking = false;
@@ -646,7 +660,7 @@ export function updateReaderUIText() {
   const progBar = document.getElementById('chapter-progress-bar');
   if (progBar && !window._readerSeeking) {
     if (!window._readerParaOffsets) _buildReaderProgressIndex(window.currentStory);
-    progBar.value = _readerGlobalIndex(window.currentChapterIndex || 0, window.currentParagraphIndex || 0);
+    _setReaderProgress(progBar, window.currentChapterIndex || 0, window.currentParagraphIndex || 0);
   }
 
   updateTimeRemaining();
@@ -924,18 +938,8 @@ export function openCacheModal() {
 }
 window.openCacheModal = openCacheModal;
 
-export function closeWipModal() {
-  const cb = document.getElementById('hide-wip-checkbox');
-  if (cb && cb.checked) {
-    try {
-      localStorage.setItem('hide_wip_warning', 'true');
-    } catch (e) {}
-  }
-
-  const modal = document.getElementById('wip-modal-overlay');
-  if (modal) modal.classList.remove('active');
-}
-window.closeWipModal = closeWipModal;
+// closeWipModal() and its hide_wip_warning flag were removed with the
+// unreachable modal they served. Use showSettingsModal() for a notice.
 
 export function setLibraryFilter(filter) {
   document.querySelectorAll('.filter-chip').forEach((btn) => {
@@ -1249,7 +1253,7 @@ function _isElemVisible(el) {
 
 // Any full-screen modal/overlay a tip must not render behind or fight with.
 function _isBlockingOverlayOpen() {
-  const ids = ['global-loading-overlay', 'cache-modal-overlay', 'wip-modal-overlay',
+  const ids = ['global-loading-overlay', 'cache-modal-overlay',
                'settings-modal-overlay', 'first-time-setup-modal', 'caching-progress-modal'];
   return ids.some((id) => _isElemVisible(document.getElementById(id)));
 }
@@ -1539,7 +1543,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=201', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=202', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

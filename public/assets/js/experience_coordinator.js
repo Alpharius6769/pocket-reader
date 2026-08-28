@@ -4,7 +4,6 @@ const MAX_PENDING_EVENTS = 12;
 const BLOCKING_OVERLAY_IDS = Object.freeze([
   'global-loading-overlay',
   'cache-modal-overlay',
-  'wip-modal-overlay',
   'settings-modal-overlay',
   'first-time-setup-modal',
   'caching-progress-modal',
@@ -166,8 +165,10 @@ export function queueNotice({ id, title, message, tone = 'info', duration = 4200
 window.queueNotice = queueNotice;
 
 export function setExperienceSuppressed(suppressed, reason = '') {
+  // The class is what the stylesheet acts on. A data-experience-suppressed
+  // attribute carrying the reason was set here too and read by nothing -- not
+  // JS, not CSS, not markup.
   document.body.classList.toggle('experience-suppressed', !!suppressed);
-  document.body.dataset.experienceSuppressed = suppressed ? reason : '';
 }
 window.setExperienceSuppressed = setExperienceSuppressed;
 

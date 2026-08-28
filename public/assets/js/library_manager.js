@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v14';
+} from './tts_pronunciation_core.js?v=pron-v15';
 import { profileHash, storyKeyFor, mergeClockedMap } from './profile_merge.js?v=merge-v7';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
@@ -55,7 +55,6 @@ if (!window.userProfile) {
 }
 
 const PROFILE_SCHEMA_VERSION = 3;
-const POCKET_ENGINE_AUTO_VERSION = 'v4';
 
 // Answered at most once per device, whichever way the reader answers. See the
 // recovery prompt in the profile-load path for why this cannot be inferred.
@@ -694,8 +693,12 @@ export async function loadLocalData() {
     const _savedEngine = window.userProfile.settings.voiceEngine;
     const _needsDetect = !_savedEngine || !['pocket', 'webspeech'].includes(_savedEngine);
     if (_needsDetect) {
+      // No pr_engine_auto_detected flag written here. It existed to version-gate
+      // a re-detection clause, and when that clause was removed (see above -- it
+      // could only ever overwrite a deliberate 'webspeech') the flag became
+      // write-only, along with the POCKET_ENGINE_AUTO_VERSION constant that was
+      // its only value.
       window.userProfile.settings.voiceEngine = 'pocket';
-      localStorage.setItem('pr_engine_auto_detected', POCKET_ENGINE_AUTO_VERSION);
       console.log(`[AutoDetect] Engine auto-selected: ${window.userProfile.settings.voiceEngine} (cores: ${navigator.hardwareConcurrency}, memory: ${navigator.deviceMemory || '?'}GB, GPU: ${!!navigator.gpu})`);
       if (typeof window.saveLocalData === 'function') window.saveLocalData();
       else saveLocalData();
@@ -1074,7 +1077,6 @@ export function clearTextCache() {
   ) {
     localStorage.removeItem('pocketReaderData');
     localStorage.removeItem('pr_setup_complete');
-    localStorage.removeItem('pr_engine_auto_detected');
     localStorage.removeItem('pr_profile_owner');
     window.userProfile = {
       displayName: "Guest Reader",
@@ -1093,8 +1095,11 @@ export function clearTextCache() {
         firstSleepTimer: 0,
       },
     };
-    alert("Text cache and library cleared. Refreshing page.");
-    location.reload();
+    // The alert here was load-bearing by accident: it blocked until dismissed,
+    // which is what let the message be read before the reload wiped it. A
+    // non-blocking notice needs the delay made explicit instead.
+    window.pocketNotify?.('Text cache and library cleared. Reloading...', 2000);
+    setTimeout(() => location.reload(), 1200);
   }
 }
 window.clearTextCache = clearTextCache;
@@ -2126,9 +2131,15 @@ export function showStorageInfo() {
     const bytes = new Blob([data]).size;
     sizeStr = (bytes / 1024).toFixed(2) + " KB";
   } catch (e) {}
-  alert(
-    `Storage Information:\n\nText&Profiles:LocalStorage(${sizeStr})\nAudio Files:IndexedDB(Browser Managed)\n\nTo free up space without losing your library,use 'Clear audio cache'.`
-  );
+  // A multi-line report is not a one-line companion notice, so this uses the
+  // settings modal rather than pocketNotify. It was an alert(), which blocks the
+  // page and renders as an unstyled system dialog inside an installed PWA.
+  window.showSettingsModal?.('Storage', `
+    <dl class="account-facts">
+      <div><dt>Text and profiles</dt><dd>localStorage (${sizeStr})</dd></div>
+      <div><dt>Generated audio</dt><dd>IndexedDB (managed by the browser)</dd></div>
+    </dl>
+    <p class="settings-help">To free space without losing your library, use <strong>Clear audio cache</strong>.</p>`);
 }
 window.showStorageInfo = showStorageInfo;
 
@@ -2170,11 +2181,11 @@ export function handleRestoreFile(event) {
         const restored = normalizeProfileObject(parsed);
         sanitizeProfileLibrary(restored, { purgeStorage: true });
         localStorage.setItem('pocketReaderData', JSON.stringify(cloneProfileForSync(restored)));
-        alert("Backup restored. The page will now reload.");
-        location.reload();
+        window.pocketNotify?.('Backup restored. Reloading...', 2000);
+        setTimeout(() => location.reload(), 1200);
       }
     } catch (err) {
-      alert("Failed to parse backup file. It might be corrupted.");
+      window.pocketNotify?.('That backup file could not be read. It may be corrupted or from another app.', 7000);
     }
   };
   reader.readAsText(file);

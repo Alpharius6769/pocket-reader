@@ -137,18 +137,18 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v17">
 <link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v13">
 <link rel="modulepreload" href="assets/js/engine_utils.js">
-<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v52">
-<link rel="modulepreload" href="assets/js/api_core.js?v=search-v24">
-<link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v5">
-<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v17">
+<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v53">
+<link rel="modulepreload" href="assets/js/api_core.js?v=search-v25">
+<link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v6">
+<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v18">
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v25">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v13">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v101">
-<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v31">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v102">
+<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v32">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v8">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v12">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v141">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v142">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v8">
 
 <!-- ==========================================
@@ -165,7 +165,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.indexOf('/debug/') !== -1 || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=201', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=202', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -480,10 +480,10 @@ Playback-only modules remain deferred so they do not compete with first paint.
 
       <label class="settings-label pr-layout-029" for="profile-edit-fav-1">Favorite stories (up to 5)</label>
       <input id="profile-edit-fav-1" class="settings-control" placeholder="Favorite story #1">
-      <input id="profile-edit-fav-2" class="settings-control pr-layout-030" placeholder="Favorite story #2">
-      <input id="profile-edit-fav-3" class="settings-control pr-layout-030" placeholder="Favorite story #3">
-      <input id="profile-edit-fav-4" class="settings-control pr-layout-030" placeholder="Favorite story #4">
-      <input id="profile-edit-fav-5" class="settings-control pr-layout-030" placeholder="Favorite story #5">
+      <input id="profile-edit-fav-2" aria-label="Favorite story 2" class="settings-control pr-layout-030" placeholder="Favorite story #2">
+      <input id="profile-edit-fav-3" aria-label="Favorite story 3" class="settings-control pr-layout-030" placeholder="Favorite story #3">
+      <input id="profile-edit-fav-4" aria-label="Favorite story 4" class="settings-control pr-layout-030" placeholder="Favorite story #4">
+      <input id="profile-edit-fav-5" aria-label="Favorite story 5" class="settings-control pr-layout-030" placeholder="Favorite story #5">
 
       <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-color);">
         <h3 style="margin:0 0 10px;font-size:1rem;color:var(--text-main);">Goals &amp; Streaks</h3>
@@ -643,7 +643,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
           </div>
         </div>
         <div class="library-search-container pr-layout-046">
-          <input class="pr-layout-047" type="text" id="library-search-input" placeholder="Search library by title, author, fandom, or tags..."
+          <input class="pr-layout-047" type="text" id="library-search-input" aria-label="Search your library" placeholder="Search library by title, author, fandom, or tags..."
             oninput="renderLibrary(true)">
         </div>
         <div id="library-grid" class="grid-layout"></div>
@@ -659,7 +659,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
                 AO3 Advanced Search
               </h1>
               <div class="pr-layout-052">
-                <input id="ao3-page-search" class="search-big-input pr-layout-053" type="search" placeholder="Search general tags, characters, relationships..." onkeydown="if (event.key === 'Enter') { event.preventDefault(); handlePageSearch(); }">
+                <input id="ao3-page-search" aria-label="Search AO3 tags, characters and relationships" class="search-big-input pr-layout-053" type="search" placeholder="Search general tags, characters, relationships..." onkeydown="if (event.key === 'Enter') { event.preventDefault(); handlePageSearch(); }">
                 <button class="pr-btn-primary pr-layout-054" onclick="handlePageSearch()">Search</button>
               </div>
 
@@ -667,7 +667,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
               <div class="pr-layout-055">
                 <div class="pr-layout-056">
                   <span class="pr-layout-057">Sort by:</span>
-                  <select id="ao3-search-sort" class="settings-control pr-layout-058" onchange="handlePageSearch()">
+                  <select id="ao3-search-sort" aria-label="Sort search results" class="settings-control pr-layout-058" onchange="handlePageSearch()">
                     <option value="revised_at" selected>Last Updated</option>
                     <option value="word_count">Word Count</option>
                     <option value="kudos">Kudos</option>
@@ -858,13 +858,13 @@ Playback-only modules remain deferred so they do not compete with first paint.
                      choice. Leaving Kokoro out here meant a reader on a
                      constrained phone could see the engine in Settings but not
                      switch it, or read its voices, from the page they narrate on. -->
-                <select id="reader-engine-select" class="playback-dropdown pr-layout-053" onchange="onNarrationEngineSelect(this.value)">
+                <select id="reader-engine-select" aria-label="Narration engine" class="playback-dropdown pr-layout-053" onchange="onNarrationEngineSelect(this.value)">
                   <option value="auto">Automatic</option>
                   <option value="pocket">Pocket TTS</option>
                   <option value="kokoro">Kokoro</option>
                   <option value="webspeech">Device</option>
                 </select>
-                <select id="voice-selector" class="playback-dropdown pr-layout-053" onchange="if(window.onVoiceSelectionChange) window.onVoiceSelectionChange(this.value)">
+                <select id="voice-selector" aria-label="Narrator voice" class="playback-dropdown pr-layout-053" onchange="if(window.onVoiceSelectionChange) window.onVoiceSelectionChange(this.value)">
                   <optgroup label="Male voices">
                     <option value="donald_malone" selected>Donald Malone - American, Midwestern (Default & Recommended)</option>
                     <option value="bill_boerst">Bill Boerst - American (Recommended)</option>
@@ -925,7 +925,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
             <span id="hmofa-bridge-status"><strong>Tap any story below</strong> to load it straight into Pocket Reader. Something not in the catalog? Paste its link here instead.</span>
           </div>
           <div class="hmofa-interceptor-controls">
-            <input id="hmofa-url-input" class="hmofa-url-input" type="url" placeholder="Paste AO3 story URL or Work ID..." onkeydown="if (event.key === 'Enter') { event.preventDefault(); window.handleHmofaManualFetch(); }">
+            <input id="hmofa-url-input" aria-label="Paste an AO3 story URL or work ID" class="hmofa-url-input" type="url" placeholder="Paste AO3 story URL or Work ID..." onkeydown="if (event.key === 'Enter') { event.preventDefault(); window.handleHmofaManualFetch(); }">
             <button class="pr-btn-primary hmofa-fetch-btn" onclick="window.handleHmofaManualFetch()">
               <span>Fetch for Pocket Reader</span>
             </button>
@@ -939,7 +939,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
              embed could never work while narrating. A fetch is not subject to
              that rule. hmofa_masterlist.js owns everything below. -->
         <div class="hmofa-toolbar">
-          <input id="hmofa-search" class="hmofa-url-input" type="search" placeholder="Search title, author, species, or tag...">
+          <input id="hmofa-search" aria-label="Search the story index" class="hmofa-url-input" type="search" placeholder="Search title, author, species, or tag...">
           <select id="hmofa-wordcount" class="hmofa-select" aria-label="Word count"></select>
           <select id="hmofa-minrating" class="hmofa-select" aria-label="Minimum community rating"></select>
           <select id="hmofa-sort" class="hmofa-select" aria-label="Sort stories"></select>
@@ -976,7 +976,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
           <div class="profile-avatar-container pr-layout-096" onclick="document.getElementById('profile-avatar-upload').click()" title="Change profile picture">
             <img loading="lazy" decoding="async" id="profile-avatar-img" class="profile-avatar pr-layout-097" src="assets/img/profile%20512.png" alt="">
             <span class="profile-avatar-edit">Edit</span>
-            <input class="pr-layout-008" id="profile-avatar-upload" type="file" accept="image/*" onchange="handleAvatarUpload(event)">
+            <input class="pr-layout-008" id="profile-avatar-upload" aria-label="Upload a profile picture" type="file" accept="image/*" onchange="handleAvatarUpload(event)">
           </div>
           <div>
             <h1 class="pr-layout-038" id="profile-name">Guest Reader</h1>
@@ -1090,9 +1090,13 @@ Playback-only modules remain deferred so they do not compete with first paint.
             <p class="pr-layout-120" id="sleep-timer-status">Timer disabled.</p>
           </div>
 
-          <div class="settings-card">
+          <!-- Pocket-only. Hidden by _syncPocketOnlySettings() when the resolved
+               engine is Kokoro or the device voice: Kokoro ships one voice per
+               speaker with no emotional references, so every control in here is
+               inert there. -->
+          <div class="settings-card" id="expressive-narration-card">
             <h3>Expressive Narration <span class="pr-layout-121">(Pocket TTS only)</span></h3>
-            <p class="pr-layout-122">These tuning options apply to Pocket TTS. They have no effect on Device voices.</p>
+            <p class="pr-layout-122">These tuning options apply to Pocket TTS. They have no effect on Kokoro or Device voices.</p>
 
             <label class="settings-label" for="expressive-prosody-toggle">Emotion-aware delivery</label>
             <input id="expressive-prosody-toggle" name="expressive-prosody-toggle" type="checkbox" onchange="applySettings()">
@@ -1271,7 +1275,12 @@ Playback-only modules remain deferred so they do not compete with first paint.
                   </div>
                 </div>
               </details>
-              <details class="pr-layout-142">
+              <!-- Pocket-only, same reason: Kokoro has one WASM graph and no
+                   WebGPU variant, so _loadPocketEngine hardcodes its plan and
+                   ignores this select entirely. Left visible, "Re-run backend
+                   optimization" also cost an un-isolated device a full
+                   ?tts_fast=1 page reload to reach a guaranteed no-op. -->
+              <details class="pr-layout-142" id="narration-backend-card">
                 <summary class="pr-layout-137">Narration backend</summary>
                 <div class="pr-layout-143">
                   <label class="settings-label" for="pocket-backend-select">Backend selection</label>
@@ -1472,19 +1481,12 @@ Playback-only modules remain deferred so they do not compete with first paint.
       </div>
     </div>
 
-    <div id="wip-modal-overlay" class="modal-overlay">
-      <div class="cache-modal">
-        <h3>Work in progress</h3>
-        <p class="pr-layout-170">This dialog is ready for future notices.</p>
-        <div class="pr-layout-171">
-          <input id="hide-wip-checkbox" type="checkbox">
-          <label class="pr-layout-172" for="hide-wip-checkbox">Don't show this warning again</label>
-        </div>
-        <div class="modal-buttons">
-          <button class="pr-btn-success" onclick="closeWipModal()">Close</button>
-        </div>
-      </div>
-    </div>
+    <!-- The "Work in progress" modal lived here and could not be opened:
+         nothing anywhere added .active to it, and its own body read "This
+         dialog is ready for future notices." Its Close button called
+         closeWipModal(), which wrote a hide_wip_warning flag that no code
+         read, and its id was carried in two separate modal-management arrays
+         in other modules. showSettingsModal() covers this need already. -->
 
     <div id="settings-modal-overlay" class="modal-overlay"></div>
     <div id="virtue-container" class="virtue-container pr-layout-173">
@@ -1520,21 +1522,21 @@ Playback-only modules remain deferred so they do not compete with first paint.
     <script src='assets/js/diagnostics.js?v=diag-v7' type='module'></script>
     <script src='assets/js/storage_core.js?v=storage-v17' type='module'></script>
     <script src='assets/js/sync_core.js?v=sync-v13' type='module'></script>
-    <script src='assets/js/api_core.js?v=search-v24' type='module'></script>
-    <script src='assets/js/experience_coordinator.js?v=experience-v5' type='module'></script>
-    <script src='assets/js/virtue_controller.js?v=virtue-v17' type='module'></script>
+    <script src='assets/js/api_core.js?v=search-v25' type='module'></script>
+    <script src='assets/js/experience_coordinator.js?v=experience-v6' type='module'></script>
+    <script src='assets/js/virtue_controller.js?v=virtue-v18' type='module'></script>
     <script src='assets/js/engine_utils.js' type='module'></script>
-    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v52' type='module'></script>
-    <script src='assets/js/tts_pronunciation_core.js?v=pron-v14' type='module'></script>
-    <script src='assets/js/library_manager.js?v=library-v31' type='module'></script>
+    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v53' type='module'></script>
+    <script src='assets/js/tts_pronunciation_core.js?v=pron-v15' type='module'></script>
+    <script src='assets/js/library_manager.js?v=library-v32' type='module'></script>
     <!-- Pulls in hmofa_catalog_core.js via a versioned import. The catalog
          itself is only downloaded when the masterlist view is opened. -->
-    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v6' type='module'></script>
+    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v7' type='module'></script>
     <script src='assets/js/device_setup.js?v=device-setup-v13' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v101' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v102' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v8' type='module'></script>
     <script src='assets/js/reader_features.js?v=features-v12' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v141' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v142' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v8' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v5' type='module'></script>
   </div>

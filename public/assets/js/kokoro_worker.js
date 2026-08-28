@@ -18,6 +18,15 @@
 // generate_error. Audio is Float32Array at 24 kHz, which is already
 // audio_core's default sample rate.
 
+// The SAME text normalisation Pocket uses: contractions, the reader's own
+// pronunciation overrides, the built-in respellings, and the [Ns] pause-tag
+// strip. None of it ran here before -- normalizeForPocketTts() had exactly one
+// caller in the codebase, inside pocket_worker.js -- so a reader on Kokoro
+// (which is every iPhone) had their Settings overrides, their per-story
+// overrides and the whole built-in ruleset silently discarded, and any inline
+// [2s] tag read out character by character.
+import { normalizeForPocketTts } from './tts_pronunciation_core.js?v=pron-v15';
+
 self.postMessage({ type: 'status', status: 'Worker Thread Started', state: 'idle' });
 
 const PROXY_BASE_URL = self.PR_PROXY_BASE || 'https://pocket-reader-proxy.alpharius67.workers.dev';
@@ -122,7 +131,10 @@ async function loadOrtRuntime() {
 }
 
 async function loadPhonemizer() {
-  status('Loading pronunciation engine...');
+  // "Phoneme engine", not "pronunciation engine": this is espeak-ng, and the
+  // old wording read as though the reader's pronunciation rules were being
+  // loaded here. They are applied in generate(), by normalizeForPocketTts.
+  status('Loading phoneme engine...');
   // espeak-ng compiled to WASM, self-hosted alongside the model. The bundle
   // makes no external requests, which is what keeps narration working offline
   // and inside the COEP-isolated session.
@@ -335,13 +347,23 @@ async function generate(text, voiceId, opts = {}) {
   // punctuation and dropping the mark ("Hello there, this is a test." ->
   // ["həlˈoʊ ðˈɛɹ", "ðɪs ɪz ɐ tˈɛst"]). Putting the real mark back is
   // what lets the model render a question as a question. See clauseMarksFrom.
-  const phonemes = await phonemize(String(text || ''), 'en-us');
+  // keepClausePunctuation: Kokoro's vocab carries the em-dash and clauseMarksFrom
+  // splits on it, so the Pocket cadence hack that flattens em-dashes to commas
+  // would cost a pause this engine can actually render.
+  const spoken = normalizeForPocketTts(String(text || ''), {
+    pronunciationOverrides: opts.pronunciationOverrides || [],
+    keepClausePunctuation: true,
+  });
+  const phonemes = await phonemize(spoken, 'en-us');
   const clauses = (Array.isArray(phonemes) ? phonemes : [String(phonemes || '')])
     .map((clause) => String(clause || '').trim())
     .filter(Boolean);
   if (!clauses.length) return new Float32Array(0);
 
-  const marks = clauseMarksFrom(text);
+  // Counted on the normalised string, not the raw one: alignment is a
+  // mark-count-vs-clause-count comparison, and normalisation can add or remove
+  // marks (a stripped [2s] tag, an expanded contraction).
+  const marks = clauseMarksFrom(spoken);
   const aligned = marks.length === clauses.length;
   const units = clauses.map((clause, index) => {
     const mark = aligned ? marks[index] : (index < clauses.length - 1 ? ',' : '');

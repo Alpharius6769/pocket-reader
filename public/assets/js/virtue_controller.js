@@ -80,8 +80,9 @@ export const virtueAssets = {
   "virtue_network_error":              "virtue_annoyed",       // network/API failure
 };
 
-const VIRTUE_BOUNDS_CACHE_KEY = 'virtue_bubble_bounds_v5';
-const _DETECT_BLOCKLIST = new Set(['virtue_thinking', 'virtue_changed_settings']);
+// VIRTUE_BOUNDS_CACHE_KEY and _DETECT_BLOCKLIST belonged to the auto bubble
+// detector. Both were declaration-only once it was switched off in favour of
+// the hand-tuned virtueCoordinates table above.
 
 // Priority events may interrupt idle chatter, but still respect a short global
 // gap so five unlocks cannot chain five full Virtue appearances.

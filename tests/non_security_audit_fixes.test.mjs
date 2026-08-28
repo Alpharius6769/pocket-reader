@@ -227,3 +227,93 @@ test('the app never walks the reader out to the account root', async () => {
   assert.match(html, /window\.location\.pathname\.indexOf\('\/debug\/'\) !== -1/);
   assert.doesNotMatch(html, /pathname\.startsWith\('\/debug\/'\)/);
 });
+
+// ── Second audit, 2026-08-28 ────────────────────────────────────────────────
+
+test('no shipped path raises an unconditional blocking dialog', async () => {
+  // The project's own position, from ui_companion_and_bridge: alert() blocks the
+  // page, reads as a system failure inside an installed PWA, and takes audio
+  // focus on iOS standalone. It is legitimate ONLY as the last-resort fallback
+  // inside pocketNotify, and as the `else` half of a companion-first pair.
+  //
+  // The previous guard banned three specific historical strings, so seven calls
+  // phrased differently survived -- including one immediately followed by
+  // triggerVirtue, which proves the companion was available.
+  const ui = await read('public/assets/js/ui_controller.js');
+  assert.match(ui, /if \(typeof alert === 'function'\) alert\(text\);/,
+    'pocketNotify keeps alert as its own last resort');
+
+  for (const name of ['api_core.js', 'library_manager.js', 'audio_core.js', 'buffer_manager.js', 'settings_manager.js']) {
+    const source = await read(`public/assets/js/${name}`);
+    const offenders = source.split('\n')
+      .map((line, i) => [line, i + 1])
+      .filter(([line]) => /(^|[^.\w])alert\(/.test(line))
+      .filter(([line]) => !line.trimStart().startsWith('//'))
+      // companion-first pairs are the sanctioned pattern
+      .filter(([line]) => !/else\s+alert\(/.test(line))
+      .map(([line, n]) => `${name}:${n} ${line.trim().slice(0, 70)}`);
+    assert.deepEqual(offenders, [],
+      'route these through pocketNotify (one line) or showSettingsModal (a report)');
+  }
+});
+
+test('every form control has an accessible name', async () => {
+  const html = await read('public/index.html');
+  const labelledFor = new Set([...html.matchAll(/<label[^>]*\bfor="([^"]+)"/g)].map((m) => m[1]));
+  const wrapped = new Set();
+  for (const lm of html.matchAll(/<label\b[^>]*>([\s\S]*?)<\/label>/g)) {
+    for (const im of lm[1].matchAll(/<(?:input|select|textarea)\b[^>]*\bid="([^"]+)"/g)) wrapped.add(im[1]);
+  }
+  const bare = [];
+  for (const m of html.matchAll(/<(input|select|textarea)\b([^>]*)>/g)) {
+    const attrs = m[2];
+    const type = /\btype="([^"]+)"/.exec(attrs)?.[1];
+    if (type && ['hidden', 'submit', 'button'].includes(type)) continue;
+    if (/aria-label|aria-labelledby|title=/.test(attrs)) continue;
+    const id = /\bid="([^"]+)"/.exec(attrs)?.[1];
+    if (id && (labelledFor.has(id) || wrapped.has(id))) continue;
+    bare.push(`line ${html.slice(0, m.index).split('\n').length}: <${m[1]} ${id ? '#' + id : 'no id'}>`);
+  }
+  // A placeholder is not an accessible name. The tell that this was an oversight
+  // rather than a policy: #setup-fav-2..5 carried aria-labels while the
+  // identical #profile-edit-fav-2..5 did not.
+  assert.deepEqual(bare, [], 'these announce only their role to a screen reader');
+});
+
+test('the reader seek bar announces a position, not a raw number', async () => {
+  const ui = await read('public/assets/js/ui_controller.js');
+  assert.match(ui, /function _setReaderProgress\(progBar, c, p\)/);
+  assert.match(ui, /progBar\.setAttribute\('aria-valuetext'/);
+  // One writer, so no site can set the value and forget the spoken form.
+  const direct = [...ui.matchAll(/progBar\.value = _readerGlobalIndex/g)];
+  assert.equal(direct.length, 1, 'only _setReaderProgress may write the value');
+});
+
+test('removed UI leaves no orphaned state behind it', async () => {
+  const html = await read('public/index.html');
+  const ui = await read('public/assets/js/ui_controller.js');
+  const experience = await read('public/assets/js/experience_coordinator.js');
+  const library = await read('public/assets/js/library_manager.js');
+  const virtue = await read('public/assets/js/virtue_controller.js');
+  const masterlist = await read('public/assets/js/hmofa_masterlist.js');
+  const audio = await read('public/assets/js/audio_core.js');
+
+  // A modal nothing could open, whose "don't show again" nothing read, whose id
+  // two other modules carried in their overlay lists.
+  assert.doesNotMatch(html, /wip-modal-overlay|hide-wip-checkbox/);
+  assert.doesNotMatch(ui, /function closeWipModal|window\.closeWipModal =/);
+  assert.doesNotMatch(ui, /setItem\('hide_wip_warning'/);
+  assert.doesNotMatch(experience, /wip-modal-overlay/);
+  // A flag written and cleared but never read, with a constant that was its
+  // only value.
+  assert.doesNotMatch(library, /setItem\('pr_engine_auto_detected'|POCKET_ENGINE_AUTO_VERSION = /);
+  // Constants left behind by the sprite detector, and the last unreferenced
+  // export from the narration-engine wrapper batch.
+  assert.doesNotMatch(virtue, /VIRTUE_BOUNDS_CACHE_KEY = |_DETECT_BLOCKLIST = /);
+  assert.doesNotMatch(audio, /window\.getPocketProsodyTier = /);
+  // dataset attributes with no reader in JS, CSS or markup.
+  assert.doesNotMatch(experience, /dataset\.experienceSuppressed = /);
+  assert.doesNotMatch(masterlist, /dataset\.filterGroup = /);
+  // The class the stylesheet actually acts on must stay.
+  assert.match(experience, /classList\.toggle\('experience-suppressed'/);
+});

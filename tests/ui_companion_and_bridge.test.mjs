@@ -33,7 +33,8 @@ test('Virtue text fitting does not thrash layout', async () => {
   // scrollHeight read). The old linear 0.3px walk allowed 35 of them per call.
   const source = await read('public/assets/js/virtue_controller.js');
   assert.doesNotMatch(source, /attempts\+\+ < 35/, 'linear shrink loop must be gone');
-  assert.match(source, /Binary search/i);
+  // The loop shape below is the binary search; asserting the word in a comment
+  // added nothing and broke on a reword.
   const iterations = Number(source.match(/for \(let i = 0; i < (\d+) && hi - lo/)?.[1]);
   assert.ok(iterations && iterations <= 10, `binary search should converge in <=10 steps, got ${iterations}`);
 });
