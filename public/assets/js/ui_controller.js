@@ -103,8 +103,8 @@ export function showView(viewId) {
       // Opening a story must rebuild the voice list for whichever engine is
       // active, or a Kokoro session shows an empty dropdown and caching then
       // queues with no voice at all.
-      if (viewId === 'reading-view' && typeof window.refreshVoiceSelectorForEngine === 'function') {
-        try { window.refreshVoiceSelectorForEngine(); } catch (_) {}
+      if (viewId === 'reading-view' && typeof window.syncNarrationControls === 'function') {
+        try { window.syncNarrationControls(); } catch (_) {}
       }
 
       if (viewId === 'home-view') {
@@ -1528,7 +1528,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=199', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=200', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

@@ -390,8 +390,10 @@ test('opening a story rebuilds the voice list for the active engine', async () =
   // when the engine CHANGED and never when a story was opened in a session
   // already on Kokoro.
   assert.match(audio, /window\.refreshVoiceSelectorForEngine = function/);
-  assert.match(ui, /viewId === 'reading-view' && typeof window\.refreshVoiceSelectorForEngine === 'function'/);
-  // Lives in audio_core, so it needs the same deferred wrapper as its siblings.
+  // Superseded: the reader now calls the SHELL sync, because the deferred
+  // refresher imported the whole runtime just to fill a dropdown. The deferred
+  // one still exists for Pocket/Device, which genuinely need the runtime.
+  assert.match(ui, /viewId === 'reading-view' && typeof window\.syncNarrationControls === 'function'/);
   assert.match(loader, /'refreshVoiceSelectorForEngine',/);
 });
 
@@ -587,4 +589,45 @@ test('one inference is capped well below the graph sequence axis', async () => {
   // Pocket needs does nothing here.
   assert.doesNotMatch(worker, /enableCpuMemArena|enableMemPattern/,
     'a measured no-op must not ship as if it were a fix');
+});
+
+// Reported: switching engine on the READER page looped a "preparing narration"
+// modal with no story open, and the two selects never reflected each other.
+// One cause: they ran different handlers, and the reader one was a DEFERRED
+// action, so changing a preference there imported the whole narration runtime.
+test('both engine selects share one handler and stay in sync', async () => {
+  const html = await read('public/index.html');
+  const settings = await read('public/assets/js/settings_manager.js');
+
+  // Same handler on both, or they cannot agree.
+  const readerSel = html.slice(html.indexOf('id="reader-engine-select"'), html.indexOf('id="voice-selector"'));
+  assert.match(readerSel, /onchange="onNarrationEngineSelect\(this\.value\)"/);
+  const settingsSel = html.slice(html.indexOf('id="voice-engine-select"'));
+  assert.match(settingsSel.slice(0, 300), /onchange="onNarrationEngineSelect\(this\.value\)"/);
+  // The reader select must NOT call the deferred action any more.
+  assert.doesNotMatch(readerSel, /switchReaderVoiceEngine/);
+
+  // One writer keeps both elements aligned.
+  assert.match(settings, /function _syncEngineSelects\(controlValue\)/);
+  assert.match(settings, /for \(const id of \['voice-engine-select', 'reader-engine-select'\]\)/);
+  // Assigning .value must not re-enter the change handler.
+  assert.match(settings, /Assigning \.value does not fire a change event/);
+});
+
+test('opening the reader does not drag in the narration runtime', async () => {
+  const ui = await read('public/assets/js/ui_controller.js');
+  const settings = await read('public/assets/js/settings_manager.js');
+  const loader = await read('public/assets/js/narration_runtime_loader.js');
+
+  // refreshVoiceSelectorForEngine is deferred, so calling it on view entry
+  // loaded audio_core + buffer_manager just to fill a dropdown.
+  assert.match(loader, /'refreshVoiceSelectorForEngine',/);
+  assert.match(ui, /viewId === 'reading-view' && typeof window\.syncNarrationControls === 'function'/);
+  assert.doesNotMatch(ui, /viewId === 'reading-view' && typeof window\.refreshVoiceSelectorForEngine/);
+
+  // Kokoro's list is buildable in the shell; Pocket/Device need the runtime and
+  // are only refreshed when it is already up.
+  assert.match(settings, /window\.syncNarrationControls = function/);
+  assert.match(settings, /if \(engine === 'kokoro'\) \{/);
+  assert.match(settings, /if \(window\.__pocketNarrationRuntimeLoaded === true\)/);
 });

@@ -13,7 +13,7 @@ import {
   KOKORO_DEFAULT_VOICE,
 } from './pocket_backend_policy.js?v=backend-v24';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '199';
+export const NARRATION_SERVICE_WORKER_VERSION = '200';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1382,6 +1382,20 @@ function _describeNarrationEngine() {
 // "preparing narration" overlay with no story open. Handle it in the shell and
 // only touch the runtime if it is ALREADY loaded and therefore has a live
 // worker to tear down.
+// The Settings and reader-playbar selects are two views of ONE preference, so
+// both must land here. The reader select used to call switchReaderVoiceEngine
+// directly, which is a DEFERRED action: changing the engine there imported
+// audio_core and buffer_manager purely to record a choice, which is where the
+// looping "preparing narration" modal came from with no story open — and
+// because the two selects ran different code, neither reflected the other.
+function _syncEngineSelects(controlValue) {
+  for (const id of ['voice-engine-select', 'reader-engine-select']) {
+    const el = document.getElementById(id);
+    // Assigning .value does not fire a change event, so this cannot re-enter.
+    if (el && el.value !== controlValue) el.value = controlValue;
+  }
+}
+
 window.onNarrationEngineSelect = function onNarrationEngineSelect(value) {
   const choice = String(value || 'auto');
   if (!window.userProfile) window.userProfile = {};
@@ -1394,6 +1408,7 @@ window.onNarrationEngineSelect = function onNarrationEngineSelect(value) {
     writeNarrationEngineOverride(localStorage, choice === 'auto' ? null : choice);
   }
   window.saveLocalData?.();
+  _syncEngineSelects(choice);
 
   // Only if the runtime is already up: a loaded engine holds a model set for
   // the engine being switched away from.
@@ -1405,6 +1420,47 @@ window.onNarrationEngineSelect = function onNarrationEngineSelect(value) {
     try { window.refreshPerfPanel(); } catch (_) {}
   }
   window.pocketNotify?.('Narration engine updated. The next paragraph uses it.');
+};
+
+// Called on reader entry. Everything here is shell-only on purpose: the old
+// hook called refreshVoiceSelectorForEngine, a DEFERRED action, so simply
+// OPENING a story imported audio_core and buffer_manager to fill a dropdown —
+// pulling up the narration runtime (and its modal) with no story playing.
+//
+// Kokoro's voice list is just KOKORO_VOICES, which lives in the shell policy, so
+// it can be built here with no runtime at all. Pocket and Device genuinely need
+// the runtime (the Pocket voice registry, speechSynthesis), so those are left to
+// the deferred path and only run if it is ALREADY loaded.
+window.syncNarrationControls = function syncNarrationControls() {
+  try { renderNarrationEngineControls(); } catch (_) {}
+
+  const usingWebSpeech = window.userProfile?.settings?.voiceEngine === 'webspeech';
+  const engine = usingWebSpeech ? 'webspeech' : _resolveEngineChoice().engine;
+  const selector = document.getElementById('voice-selector');
+  if (!selector) return;
+
+  if (engine === 'kokoro') {
+    const saved = window.userProfile?.settings?.kokoroVoice;
+    const chosen = isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
+    const group = (gender) => KOKORO_VOICES
+      .filter((voice) => voice.gender === gender)
+      .map((voice) => `<option value="${_escapeSettingsHtml(voice.id)}"${voice.id === chosen ? ' selected' : ''}>`
+        + `${_escapeSettingsHtml(voice.label)} (${_escapeSettingsHtml(voice.grade)})</option>`)
+      .join('');
+    const markup = `<optgroup label="Female voices">${group('female')}</optgroup>`
+      + `<optgroup label="Male voices">${group('male')}</optgroup>`;
+    // Rebuild only when it is not already the Kokoro list, so re-entering the
+    // reader does not discard the user's current selection.
+    if (!selector.querySelector(`option[value="${chosen}"]`)) selector.innerHTML = markup;
+    selector.value = chosen;
+    if (window.userProfile?.settings) window.userProfile.settings.kokoroVoice = chosen;
+    return;
+  }
+
+  if (window.__pocketNarrationRuntimeLoaded === true
+      && typeof window.refreshVoiceSelectorForEngine === 'function') {
+    try { window.refreshVoiceSelectorForEngine(); } catch (_) {}
+  }
 };
 
 export function renderNarrationEngineControls() {
@@ -1429,6 +1485,9 @@ export function renderNarrationEngineControls() {
     }
     const desired = usingWebSpeech ? 'webspeech' : (override || 'auto');
     if (select.value !== desired) select.value = desired;
+    // The reader playbar shows the same preference and is a different element,
+    // so it has to be reconciled from the same source of truth.
+    _syncEngineSelects(desired);
   }
 
   // Only the voice picker and the reason line live here now. The engine choice
