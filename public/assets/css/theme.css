@@ -3141,8 +3141,10 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
 
 #device-setup-modal {
   overflow: hidden;
+  /* No backdrop-filter: the ground is 97% opaque, so a 10px blur behind it is
+     invisible while still forcing a GPU layer and a readback every frame. That
+     cost lands during first-run device setup, on the slowest hardware. */
   background: rgba(7, 8, 9, 0.97);
-  backdrop-filter: blur(10px);
 }
 
 #device-setup-modal > .device-setup-card {
@@ -4297,8 +4299,9 @@ html[data-motion='reduced'] *::after { animation-duration: 1ms !important; anima
 /* First-run setup is a blocking surface, not a transparent card over Home. */
 #first-time-setup-modal {
   overflow: hidden;
+  /* Same as #device-setup-modal: 96% opaque, so the blur cannot be seen and
+     only costs a compositor layer on the very first launch. */
   background: rgba(7, 8, 9, 0.96);
-  backdrop-filter: blur(10px);
 }
 
 #first-time-setup-modal > .pr-card {
@@ -4398,5 +4401,53 @@ html[data-motion='reduced'] *::after { animation-duration: 1ms !important; anima
   select,
   textarea {
     font-size: 16px !important;
+  }
+}
+
+/* Chapter jump list. Replaces the inline onmouseover/onmouseout that used to be
+   emitted per chapter — inert on touch, and parsed for every chapter in the
+   story. Hover styling belongs here, where it costs nothing on a phone. */
+.chapter-jump-item {
+  background: var(--bg-mid);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  cursor: pointer;
+  color: var(--accent-blue-text);
+  font-weight: 600;
+  transition: border-color 0.1s;
+}
+@media (hover: hover) {
+  .chapter-jump-item:hover { border-color: var(--accent-blue); }
+}
+
+/* Reader chapters are rendered lazily.
+   renderFullStory puts every chapter of a story in the DOM at once so that
+   continuous scroll, getElementById('reader-p-C-P') and scrollIntoView all keep
+   working. For a long fic that is tens of thousands of nodes, and without this
+   the browser lays out and paints all of them on every reflow.
+   content-visibility:auto lets it skip the work for sections that are off
+   screen while keeping them scrollable, findable and anchor-navigable.
+   The per-chapter contain-intrinsic-size is set inline by renderFullStory from
+   that chapter's own length; `auto` there tells the browser to remember the
+   real size once measured, so the estimate only matters on first pass. */
+.reader-chapter {
+  content-visibility: auto;
+}
+
+/* The tip card's "don't show again" row is the one touch target the sitewide
+   44px coarse-pointer rules miss: _renderTip builds the card in JS with inline
+   styles, so the stylesheet never reaches it. Measured on a 390px viewport with
+   pointer:coarse it came out 300x24 -- wide enough, less than half the height
+   a thumb needs. The label already wraps the checkbox, so growing the row grows
+   the real target. Gated on coarse pointer, so the mouse layout is unchanged. */
+@media (pointer: coarse) {
+  .pr-tip-optout {
+    min-height: 44px;
+  }
+  .pr-tip-optout input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
   }
 }

@@ -1662,6 +1662,26 @@ ${favoriteBtn}
     }
 }
 
+// How many library cards are drawn at once. Raised by the "Show more" button
+// and reset whenever the view is rebuilt from scratch, so a filter change does
+// not leave a previously-expanded page silently applied to a different set.
+const LIBRARY_PAGE_SIZE = 24;
+let _libraryRenderLimit = LIBRARY_PAGE_SIZE;
+let _libraryFilterSignature = '';
+
+window.showMoreLibraryStories = function showMoreLibraryStories() {
+  // The signature is unchanged by paging, so the reset above does not fire and
+  // this genuinely accumulates.
+  _libraryRenderLimit += LIBRARY_PAGE_SIZE;
+  // skipAnimation: the already-visible cards must not replay their entrance
+  // animation just because more were appended below them.
+  renderLibrary(true);
+};
+
+window.resetLibraryRenderLimit = function resetLibraryRenderLimit() {
+  _libraryRenderLimit = LIBRARY_PAGE_SIZE;
+};
+
 export function renderLibrary(skipAnimation = false) {
   const grid = document.getElementById('library-grid');
   if (!grid) return;
@@ -1719,12 +1739,39 @@ export function renderLibrary(skipAnimation = false) {
   }
 
   library = library.slice().sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+
+  // Reset the page when the RESULT SET changes, not when a caller remembers to.
+  // Hooking every filter, search keystroke and collection change would miss one
+  // eventually, and the symptom would be an expanded page silently applied to a
+  // different set of stories. Deriving it here cannot drift.
+  const filterSignature = `${filter}|${searchQuery}|${collectionId}|${library.length}`;
+  if (filterSignature !== _libraryFilterSignature) {
+    _libraryFilterSignature = filterSignature;
+    _libraryRenderLimit = LIBRARY_PAGE_SIZE;
+  }
+
   const isList = grid.classList.contains('list-mode');
   let html = '';
 
-  library.forEach((story) => {
+  // Bounded render. Each card is ~30-40 elements (options menu, five rating
+  // radios plus labels, tag pills, badges), and this drew EVERY story with no
+  // limit -- 200 stories is roughly 8,000 nodes built synchronously, on the
+  // phones least able to afford it. The masterlist has been paginated at 20/50
+  // for the same reason; the library never was.
+  //
+  // Newest-first is already the sort order, so the first page is the stories a
+  // reader actually wants. The rest are one tap away rather than always paid for.
+  const visible = library.slice(0, _libraryRenderLimit);
+  visible.forEach((story) => {
     html += _buildStoryCardHtml(story, isList);
   });
+
+  const remaining = library.length - visible.length;
+  if (remaining > 0) {
+    html += `<button id="library-show-more" class="pr-btn-sub" style="grid-column:1/-1;margin-top:8px;padding:12px;"`
+      + ` onclick="window.showMoreLibraryStories()">Show ${remaining} more`
+      + `${remaining === 1 ? ' story' : ' stories'}</button>`;
+  }
 
   grid.innerHTML = html;
 

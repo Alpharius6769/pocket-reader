@@ -32,7 +32,7 @@
     "sha256": "452702fde47e0eab"
   },
   "engine_utils.js": {
-    "version": "sw-202",
+    "version": "sw-203",
     "sha256": "b7cfb22c873c8515"
   },
   "experience_coordinator.js": {
@@ -60,11 +60,11 @@
     "sha256": "04106c6c2f24bad8"
   },
   "library_manager.js": {
-    "version": "library-v32",
-    "sha256": "bb7d0c3e8a3b1605"
+    "version": "library-v33",
+    "sha256": "c3318ff74ea35795"
   },
   "motion_lite.js": {
-    "version": "sw-202",
+    "version": "sw-203",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
@@ -96,8 +96,8 @@
     "sha256": "7fb1a486ce7e7264"
   },
   "settings_manager.js": {
-    "version": "settings-v102",
-    "sha256": "b930b825264b0da1"
+    "version": "settings-v103",
+    "sha256": "99a10d732ace1391"
   },
   "storage_core.js": {
     "version": "storage-v17",
@@ -116,15 +116,15 @@
     "sha256": "34a608981d57269a"
   },
   "ui_controller.js": {
-    "version": "ui-v142",
-    "sha256": "22d8087e3ddac60d"
+    "version": "ui-v143",
+    "sha256": "ce7b94c8cd2a21c6"
   },
   "virtue_controller.js": {
     "version": "virtue-v18",
     "sha256": "2b1a159f3a2b791f"
   },
   "sw.js": {
-    "version": "sw-202",
-    "sha256": "dde878a32da6464a"
+    "version": "sw-203",
+    "sha256": "5d4b0869e06bc6cc"
   }
 }

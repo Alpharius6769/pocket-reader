@@ -17,6 +17,11 @@ const _OFFSCREEN_RELEASABLE = Object.freeze({
   'library-view': ['library-grid'],
   'profile-view': ['achievements-grid-container'],
   'away-mode-view': ['away-queue-list', 'away-quick-add-list'],
+  // The reader is by far the largest of these — a whole story is ~1,000-1,200
+  // <p> nodes — and it was the one view never released. Safe to clear because
+  // renderFullStory() rebuilds it from window.currentStory whenever the reader
+  // is reopened, exactly like the others.
+  'reading-view': ['reader-content'],
 });
 
 function _releaseOffscreenViewDom(leavingViewId) {
@@ -149,6 +154,18 @@ export function showView(viewId) {
         }
 
         _syncReaderSidebarArrow();
+
+        // Rebuild the story text if it was released while the reader was off
+        // screen. Guarded on the container actually being empty: normal
+        // navigation must not re-render ~1,200 paragraphs for nothing, and a
+        // story that was never opened has nothing to draw. updateReaderUIText()
+        // below re-applies the current-paragraph highlight either way.
+        const readerContent = document.getElementById('reader-content');
+        if (readerContent && readerContent.childElementCount === 0
+            && window.currentStory?.chapters?.length
+            && typeof window.renderFullStory === 'function') {
+          try { window.renderFullStory(window.currentStory); } catch (_) {}
+        }
 
         if (typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
       }
@@ -297,8 +314,10 @@ export function renderChaptersTab() {
 
   window.currentStory.chapters.forEach((ch, idx) => {
     const title = _formatChapterTitle(idx, ch.title);
-    html += `<li style="background:var(--bg-mid);border:1px solid var(--border-color);border-radius:6px;padding:10px;cursor:pointer;color:var(--accent-blue-text);font-weight:600;transition:border-color 0.1s;" 
- onmouseover="this.style.borderColor='var(--accent-blue)'" onmouseout="this.style.borderColor='var(--border-color)'" onclick="window.jumpToBookmark(${idx}, 0)">${_escapeHtml(title)}</li>`;
+    // Hover is expressed in CSS (.chapter-jump-item:hover) rather than two
+    // inline handlers per chapter: on touch they never fire, and they were
+    // parsed and retained for every chapter in the story regardless.
+    html += `<li class="chapter-jump-item" onclick="window.jumpToBookmark(${idx}, 0)">${_escapeHtml(title)}</li>`;
   });
   html += '</ul>';
   container.innerHTML = html;
@@ -450,6 +469,26 @@ export function renderFullStory(storyObj) {
   for (let c = 0; c < storyObj.chapters.length; c++) {
     const chapter = storyObj.chapters[c];
 
+    // Each chapter is its own section so the browser can SKIP rendering the
+    // ones that are off screen (see .reader-chapter in theme.css). A long fic
+    // is tens of thousands of nodes in one div; laying all of it out on every
+    // reflow is a cost a phone pays continuously for text nobody is looking at.
+    //
+    // Sections rather than chapter-only rendering: continuous scroll across
+    // chapter boundaries keeps working exactly as before, every paragraph stays
+    // in the DOM for getElementById/scrollIntoView, and browsers without
+    // content-visibility simply render it all as they do today.
+    //
+    // The size estimate is derived per chapter instead of a flat guess. A
+    // skipped section is laid out at its estimate until it is first rendered,
+    // so a bad number makes the scrollbar jump and lands resume-scroll in the
+    // wrong place. ~60 characters per line at the default reader width, ~28px
+    // per line, plus paragraph margins.
+    const _chars = (chapter.paragraphs || []).reduce((n, t) => n + (t ? t.length : 0), 0);
+    const _paras = (chapter.paragraphs || []).length;
+    const _estPx = Math.max(400, Math.round((_chars / 60) * 28 + _paras * 16));
+    parts.push(`<section class="reader-chapter" style="contain-intrinsic-size:auto ${_estPx}px">`);
+
     function _fmt(idx, t) {
       if (!t || !t.trim() || t.trim().toLowerCase() === `chapter ${idx+1}`) return `Chapter ${idx + 1}`;
       const tStr = t.trim();
@@ -474,19 +513,36 @@ export function renderFullStory(storyObj) {
         `data-chapter="${c}" data-paragraph="${p}"${metaAttr}>${_escapeHtml(para)}</p>`
       );
     });
+
+    parts.push('</section>');
   }
 
   contentDiv.innerHTML = parts.join("");
 
-  contentDiv.querySelectorAll('.reader-paragraph').forEach(p => {
-    p.ondblclick = () => {
-      const c = parseInt(p.dataset.chapter, 10);
-      const paraIdx = parseInt(p.dataset.paragraph, 10);
+  // ONE delegated listener instead of a closure per paragraph.
+  //
+  // This attached an individual ondblclick to every .reader-paragraph. A 60k-word
+  // story is roughly 1,000-1,200 paragraphs, so that was 1,000+ closures created
+  // on load and retained for the whole session — on the device least able to
+  // afford them. The chapter/paragraph indices already live in data- attributes,
+  // so a single listener on the container reads them from the event target and
+  // behaves identically.
+  //
+  // Bound once per container, not per render: renderFullStory runs again on
+  // every story open, and re-adding would stack duplicate listeners that each
+  // fire the seek.
+  if (!contentDiv._prSeekDelegated) {
+    contentDiv._prSeekDelegated = true;
+    contentDiv.addEventListener('dblclick', (event) => {
+      const target = event.target.closest?.('.reader-paragraph');
+      if (!target || !contentDiv.contains(target)) return;
+      const c = parseInt(target.dataset.chapter, 10);
+      const paraIdx = parseInt(target.dataset.paragraph, 10);
       if (!isNaN(c) && !isNaN(paraIdx) && typeof window.seekToParagraph === 'function') {
         window.seekToParagraph(c, paraIdx);
       }
-    };
-  });
+    });
+  }
 
   updateReaderUIText();
 }
@@ -1349,7 +1405,7 @@ function _renderTip(view, tips, idx, tip, target, token) {
   card.innerHTML =
     `<div style="font-weight:700;color:var(--accent-green,#3ecf8e);margin-bottom:6px;">${tip.title || 'Tip'}</div>` +
     `<div style="margin-bottom:12px;">${tip.text || ''}</div>` +
-    `<label style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-muted,#9fb0c3);margin-bottom:12px;cursor:pointer;">` +
+    `<label class="pr-tip-optout" style="display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-muted,#9fb0c3);margin-bottom:12px;cursor:pointer;">` +
     `<input type="checkbox" id="pr-tip-dismiss"> Don't show tips on this page again</label>` +
     `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">` +
     `<span style="font-size:0.75rem;color:var(--text-muted,#9fb0c3);">${idx + 1} / ${tips.length}</span>` +
@@ -1543,7 +1599,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=202', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=203', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)
