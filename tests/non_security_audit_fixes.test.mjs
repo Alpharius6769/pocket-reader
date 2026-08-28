@@ -110,3 +110,120 @@ test('stored AO3 export front matter is removed before narration', async () => {
   assert.match(ui, /storyAuthor/);
   assert.match(ui, /chapter\|part\|book/);
 });
+
+// ── Audit 2026-08-28 ────────────────────────────────────────────────────────
+// Each of these guards a control or hook that existed, looked wired, and did
+// nothing. None of them threw, which is why they survived: a guarded call to a
+// global that is not defined, or a select whose value is overwritten a moment
+// later, fails silently by construction.
+
+test('renderAccountCenter is reachable from the two hooks that call it', async () => {
+  const cinematic = await read('public/assets/js/cinematic_ui.js');
+  const bridge = await read('public/assets/js/supabase_bridge.js');
+  const ui = await read('public/assets/js/ui_controller.js');
+
+  // It was a module-local function. Both callers reach for it through window
+  // behind a typeof guard, so after an OAuth sign-in and after the first-run
+  // wizard the Account Center kept saying "Guest reader" until a reload.
+  assert.match(cinematic, /^window\.renderAccountCenter = renderAccountCenter;$/m);
+  for (const [name, source] of [['supabase_bridge', bridge], ['ui_controller', ui]]) {
+    assert.match(source, /typeof window\.renderAccountCenter === 'function'/,
+      `${name} still calls it, so the export has to stay`);
+  }
+});
+
+test('the Settings worker override reaches the pool as a ceiling', async () => {
+  const policy = await read('public/assets/js/pocket_backend_policy.js');
+  const audio = await read('public/assets/js/audio_core.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
+
+  // userMaxWorkers may only lower the count: the conditions in the policy are
+  // memory-safety limits, not preferences.
+  assert.match(policy, /Math\.max\(1, Math\.min\(value, Math\.floor\(ceiling\)\)\)/);
+  assert.match(audio, /userMaxWorkers: settings\.enableManualWorkers/);
+
+  // Nothing may re-derive a pool size from settings.maxWorkers and then have it
+  // overwritten -- that is what made the control decorative.
+  assert.doesNotMatch(buffer, /this\.maxWorkers = Number\(settings\.maxWorkers\)/,
+    'BufferManager.start must not compute a count the policy replaces');
+  assert.doesNotMatch(audio, /function _getMaxWorkers\(\)/);
+});
+
+test('the device-setup summary has an element and a way to re-run', async () => {
+  const html = await read('public/index.html');
+  const setup = await read('public/assets/js/device_setup.js');
+
+  // renderPocketDeviceSetupSummary ran on every Settings entry against an id
+  // that appeared in no markup, and its re-run entry point takes a button
+  // argument for an onclick that was never added.
+  assert.match(setup, /setSetupText\('device-setup-settings-summary'/);
+  assert.match(html, /id="device-setup-settings-summary"/);
+  assert.match(html, /onclick="window\.runPocketDeviceDiagnosticsFromSettings\(this\)"/);
+  // The failure path must restore the summary too, or a failed re-run leaves
+  // "Running the device benchmark..." on screen for good.
+  assert.match(setup, /\.finally\(\(\) => \{[\s\S]{0,400}renderPocketDeviceSetupSummary\(\);/);
+});
+
+test('the prosody drift guard is reset per story and chapter', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  // window.resetPocketProsodyDrift had no callers, so a chapter that tripped the
+  // guard carried its demotion into the next book.
+  assert.match(audio, /function _syncProsodyDriftToPosition\(\)/);
+  assert.match(audio, /_syncProsodyDriftToPosition\(\);/);
+  assert.match(audio, /if \(moved\) _prosodyDrift\.reset\(\);/);
+});
+
+test('settings controls map to the field names they actually write', async () => {
+  const settings = await read('public/assets/js/settings_manager.js');
+  const html = await read('public/index.html');
+
+  // The map named three elements that do not exist, so the lookup fell through
+  // to the raw element id. touchTargetSize is synced, so it went unstamped and
+  // could lose a merge against another device.
+  const map = settings.slice(settings.indexOf('_SETTING_FIELD_BY_CONTROL = Object.freeze({'));
+  const entries = [...map.slice(0, map.indexOf('});')).matchAll(/'([a-z0-9-]+)':/g)].map((m) => m[1]);
+  assert.ok(entries.length > 10, 'the control map should not be empty');
+  for (const id of entries) {
+    assert.match(html, new RegExp(`id="${id}"`), `_SETTING_FIELD_BY_CONTROL names #${id}, which is in no markup`);
+  }
+});
+
+test('the story narration preset speaks the vocabulary the runtime accepts', async () => {
+  const features = await read('public/assets/js/reader_features.js');
+  const audio = await read('public/assets/js/audio_core.js');
+
+  // 'full' is a TIER name; _emotionMode() takes MODE names and silently fell
+  // back to balanced for anything else, so the preset's Full option was inert.
+  assert.match(features, /<option value="expressive">Expressive<\/option>/);
+  assert.doesNotMatch(features, /<option value="full">/);
+  // Presets already saved with the dead value still have to work.
+  assert.match(audio, /const mode = raw === 'full' \? 'expressive' : raw;/);
+  // And the voice list has to follow the engine that will actually speak.
+  assert.match(features, /engine === 'kokoro'\s*\n\s*\? KOKORO_VOICES\.map/);
+  // From the shared policy, not window.KOKORO_VOICES: that global is published
+  // by the lazy-loaded audio_core, so before narration had ever started the
+  // Kokoro branch produced an empty list.
+  assert.match(features, /import \{ isMobileLikePlatform, KOKORO_VOICES \}/);
+  assert.doesNotMatch(features, /window\.KOKORO_VOICES/);
+});
+
+test('catalog refresh notifies through a global that exists', async () => {
+  const list = await read('public/assets/js/hmofa_masterlist.js');
+  assert.doesNotMatch(list, /window\.showNotice\s*\(/);
+  assert.match(list, /window\.pocketNotify\?\.\(/);
+});
+
+test('the app never walks the reader out to the account root', async () => {
+  const standalone = await read('public/standard-page.html');
+  const html = await read('public/index.html');
+  const ui = await read('public/assets/js/ui_controller.js');
+
+  // Production is served from a subpath, so a literal '/' is a different site.
+  assert.doesNotMatch(standalone, /url=\/"|location\.replace\('\/'/);
+  assert.match(standalone, /new URL\('\.\/', document\.baseURI\)/);
+  assert.doesNotMatch(ui, /window\.location\.replace\('\/'\);/);
+  // The service worker gates /debug/ with indexOf; index.html used startsWith,
+  // which can never match on a subpath, so the two disagreed.
+  assert.match(html, /window\.location\.pathname\.indexOf\('\/debug\/'\) !== -1/);
+  assert.doesNotMatch(html, /pathname\.startsWith\('\/debug\/'\)/);
+});

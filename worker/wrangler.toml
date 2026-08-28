@@ -20,10 +20,13 @@ ALLOWED_ORIGINS = "https://alpharius6769.github.io"
 # arbitrary localhost origins.
 ALLOW_LOCALHOST_ORIGINS = "0"
 ALLOWED_PROXY_HOSTS = "archiveofourown.org,fichub.net"
-# /catalog-api/* re-origins Anthronomicon community-snapshot, rate, click, and
-# story-metadata to the Pages origin. Curator/Turnstile routes are not proxied.
-# It is gated on an allowed browser Origin or X-Pocket-Proxy-Key, so it does not
-# widen the origin allowlist above; the native build cannot use it yet.
+# The Worker also exposes /catalog-api/*, which re-origins the Anthronomicon
+# community-snapshot, rate, click and story-metadata routes. It needs no var of
+# its own -- it is gated on an allowed browser Origin or X-Pocket-Proxy-Key, so
+# it does not widen the allowlist above. Curator/Turnstile routes are not
+# proxied, and the native build cannot use the route yet.
+
+# Endpoint for the scheduled chapter-refresh sweep (see [triggers] below).
 CHAPTER_SYNC_URL = "https://alpharius6769-pocket-reader.hf.space/api/sync/chapters"
 
 # IMPORTANT: The following secrets must be set via `wrangler secret put <NAME>`:

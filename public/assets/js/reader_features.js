@@ -1,4 +1,4 @@
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v24';
+import { isMobileLikePlatform, KOKORO_VOICES } from './pocket_backend_policy.js?v=backend-v25';
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -237,18 +237,47 @@ export function saveBookmarkDetails(storyKey, bookmarkId) {
 }
 window.saveBookmarkDetails = saveBookmarkDetails;
 
+// Voice list and emotion values both have to follow the engine that will
+// actually speak, and the emotion values have to be ones _emotionMode() accepts.
+//
+// The emotion select offered neutral / balanced / FULL. _emotionMode() accepts
+// neutral / balanced / EXPRESSIVE and falls back to balanced for anything else,
+// so picking Full per story silently gave balanced. 'full' is the tier
+// vocabulary from POCKET_PROSODY_TIERS; 'expressive' is the mode vocabulary the
+// Settings select uses, and requestedProsodyTier() is the only thing allowed to
+// map between them.
+function _presetVoiceOptions(preset) {
+  const engine = typeof window._resolveActiveEngine === 'function' ? window._resolveActiveEngine() : 'pocket';
+  // A Pocket id means nothing to Kokoro. Offering seven voices it cannot speak
+  // wrote one into narrationPreset.voice, which populateReaderUI then pushed
+  // straight into #voice-selector.
+  // KOKORO_VOICES is imported from the shared policy rather than read off
+  // window: the global of that name is published by audio_core, which is
+  // lazy-loaded, so opening this dialog before narration had ever started gave
+  // an empty voice list. POCKET_VOICES is a shell global (engine_utils), so it
+  // is always present.
+  const options = engine === 'kokoro'
+    ? KOKORO_VOICES.map((voice) => ({ id: voice.id, label: `${voice.label} (${voice.grade})` }))
+    : (window.POCKET_VOICES || []).map((voice) => ({ id: voice, label: String(voice).replaceAll('_', ' ') }));
+  return options
+    .map(({ id, label }) => `<option value="${esc(id)}" ${preset.voice === id ? 'selected' : ''}>${esc(label)}</option>`)
+    .join('');
+}
+
 export function openStoryNarrationPreset(story = window.currentStory) {
   if (!story) return;
   window._narrationPresetTarget = story;
   const preset = story.narrationPreset || {};
   showFeatureDialog('Story narration', `
-    <label class="field-row"><span>Voice</span><select id="story-preset-voice" class="settings-control"><option value="">Use global voice</option>${(window.POCKET_VOICES || []).map((voice) => `<option value="${esc(voice)}" ${preset.voice === voice ? 'selected' : ''}>${esc(voice.replaceAll('_', ' '))}</option>`).join('')}</select></label>
-    <label class="field-row"><span>Emotion</span><select id="story-preset-emotion" class="settings-control"><option value="">Use global setting</option><option value="neutral">Neutral</option><option value="balanced">Balanced</option><option value="full">Full</option></select></label>
-    <label class="field-row"><span>Speed</span><input id="story-preset-speed" type="range" min="0.8" max="1.5" step="0.02" value="${Number(preset.speed) || 1.0}"><output>${Number(preset.speed) || 1.0}x</output></label>
+    <label class="field-row"><span>Voice</span><select id="story-preset-voice" class="settings-control"><option value="">Use global voice</option>${_presetVoiceOptions(preset)}</select></label>
+    <label class="field-row"><span>Emotion</span><select id="story-preset-emotion" class="settings-control"><option value="">Use global setting</option><option value="neutral">Neutral</option><option value="balanced">Balanced</option><option value="expressive">Expressive</option></select></label>
+    <label class="field-row"><span>Speed</span><input id="story-preset-speed" type="range" min="0.5" max="2" step="0.05" value="${Number(preset.speed) || 1.0}"><output>${Number(preset.speed) || 1.0}x</output></label>
     <label class="field-row"><span>Story pronunciations</span><textarea id="story-preset-pronunciation" class="settings-control" rows="4" maxlength="2000" placeholder="Alopex = al-oh-pex">${esc((preset.pronunciationOverrides || []).map((entry) => `${entry.term} = ${entry.soundsLike}`).join('\n'))}</textarea><small>One term per line. These rules override global pronunciations for this story.</small></label>`,
   '<button class="pr-btn-sub" onclick="closeFeatureDialog()">Cancel</button><button class="pr-btn-primary" onclick="saveStoryNarrationPreset()">Save preset</button>');
   const emotion = document.getElementById('story-preset-emotion');
-  if (emotion) emotion.value = preset.emotion || '';
+  // A preset saved before this fix holds the dead 'full'; show it as the
+  // Expressive it was always meant to be rather than silently blanking it.
+  if (emotion) emotion.value = preset.emotion === 'full' ? 'expressive' : (preset.emotion || '');
   const speed = document.getElementById('story-preset-speed');
   speed?.addEventListener('input', () => { speed.nextElementSibling.textContent = `${speed.value}x`; });
 }

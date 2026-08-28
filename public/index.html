@@ -26,6 +26,10 @@
 
 <!-- Sets the Android Chrome top-bar and tab-switcher color to your Dark Blue theme -->
 <meta name="theme-color" content="#111214">
+<!-- The Referrer-Policy in public/_headers never reaches a browser: GitHub
+     Pages does not read _headers. This meta does the same job, and is the only
+     one of that file's three security headers with a meta equivalent. -->
+<meta name="referrer" content="strict-origin-when-cross-origin">
 
 <!-- ==========================================
 2. GLOBAL STYLESHEET
@@ -130,22 +134,22 @@ Playback-only modules remain deferred so they do not compete with first paint.
 -->
 <link rel="modulepreload" href="assets/js/diagnostics.js?v=diag-v7">
 <link rel="modulepreload" href="assets/js/motion_lite.js">
-<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v16">
-<link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v12">
+<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v17">
+<link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v13">
 <link rel="modulepreload" href="assets/js/engine_utils.js">
-<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v51">
-<link rel="modulepreload" href="assets/js/api_core.js?v=search-v23">
+<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v52">
+<link rel="modulepreload" href="assets/js/api_core.js?v=search-v24">
 <link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v5">
-<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v16">
-<link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v24">
+<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v17">
+<link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v25">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
-<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v12">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v100">
-<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v30">
-<link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v7">
-<link rel="modulepreload" href="assets/js/reader_features.js?v=features-v11">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v140">
-<link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v7">
+<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v13">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v101">
+<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v31">
+<link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v8">
+<link rel="modulepreload" href="assets/js/reader_features.js?v=features-v12">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v141">
+<link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v8">
 
 <!-- ==========================================
 3. SERVICE WORKER REGISTRATION
@@ -154,10 +158,14 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-      if (window.location.pathname.startsWith('/debug/') || window.__prServiceWorkerRegistration) return;
+      // indexOf, not startsWith: the app is served from a subpath, so a debug
+      // route is /pocket-reader/debug/... and a leading-slash test never
+      // matched. sw.js gates the same path with indexOf and did match, so the
+      // two disagreed about whether /debug/ is service-worker territory.
+      if (window.location.pathname.indexOf('/debug/') !== -1 || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=200', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=201', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -1044,6 +1052,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
             <p class="pr-layout-119">Pocket Reader - Web</p>
             <span class="settings-label pr-layout-118">Tips</span>
             <button class="pr-btn-sub" onclick="if(window.resetTips) window.resetTips()">Re-enable first-time tips</button>
+            <!-- "Don't show again" on the install banner is otherwise a one-way
+                 door: showIOSInstallPrompt() clears that flag and re-shows the
+                 banner, and it existed with nothing to call it. -->
+            <span class="settings-label pr-layout-118">Install</span>
+            <button class="pr-btn-sub" onclick="if(window.showIOSInstallPrompt) window.showIOSInstallPrompt()">Show the install prompt again</button>
           </div>
 
           <div class="settings-card">
@@ -1092,6 +1105,17 @@ Playback-only modules remain deferred so they do not compete with first paint.
               <option value="expressive">Expressive — widest emotional range</option>
             </select>
             <p class="pr-layout-123">Balanced follows sustained scene emotion while keeping voice changes stable. Expressive widens the range further; if a long listen starts producing artifacts it steps itself back down automatically, then recovers. Neutral keeps one tone throughout.</p>
+
+            <label class="settings-label pr-layout-118" for="playback-speed-slider">Narration speed</label>
+            <div class="pr-layout-084">
+              <span class="pr-layout-085">0.5x</span>
+              <input id="playback-speed-slider" name="playback-speed-slider" class="pr-layout-086" type="range"
+                     min="0.5" max="2" step="0.05" value="1" aria-describedby="playback-speed-label"
+                     oninput="window.onNarrationSpeedChange(this.value, false)"
+                     onchange="window.onNarrationSpeedChange(this.value)">
+              <span class="pr-layout-087" id="playback-speed-label">1.00x</span>
+            </div>
+            <p class="pr-layout-123">Applies to every story that has no speed of its own. A story's narration preset overrides it.</p>
 
             <label class="settings-label pr-layout-118" for="punct-pause-toggle">Punctuation pauses (slower; off by default)</label>
             <input id="punct-pause-toggle" name="punct-pause-toggle" type="checkbox" onchange="applySettings()">
@@ -1234,9 +1258,15 @@ Playback-only modules remain deferred so they do not compete with first paint.
                     <span>Enable manual override</span>
                   </label>
                   <div class="pr-layout-008" id="manual-workers-container">
-                    <label class="settings-label" for="max-workers-input">Max Workers (1-8)</label>
-                    <input type="number" id="max-workers-input" class="settings-control pr-layout-140" min="1" max="8" value="4" onchange="applySettings()">
-                    <p class="warning-msg">Increasing workers may cause audio glitches or UI lag on weaker devices.</p>
+                    <!-- A ceiling, not a target. The narration pool is sized by
+                         the device policy (platform, memory, isolation, battery)
+                         and this can only lower that result. The range and label
+                         are rewritten from POCKET_MAX_CACHE_WORKERS on open;
+                         they used to read 1-8 against a policy whose maximum
+                         answer is 2, and nothing read the value at all. -->
+                    <label class="settings-label" for="max-workers-input">Max narration workers</label>
+                    <input type="number" id="max-workers-input" class="settings-control pr-layout-140" min="1" max="2" value="2" onchange="applySettings()">
+                    <p class="warning-msg">A ceiling on the automatic choice. Lower it to 1 if narration causes audio glitches or UI lag; it cannot raise the count above what this device is judged able to run.</p>
                     <button class="pr-btn-sub pr-layout-141" onclick="resetWorkerSettings()">Reset to auto-detected</button>
                   </div>
                 </div>
@@ -1263,6 +1293,14 @@ Playback-only modules remain deferred so they do not compete with first paint.
               <p class="settings-help">Best-effort browser hardware signals. Browsers intentionally round or hide some values, especially RAM and GPU model.</p>
               <div id="device-profile-grid" class="device-profile-grid"></div>
               <button class="pr-btn-sub pr-layout-129" data-settings-safe-action="true" onclick="refreshDeviceProfile()">Refresh device profile</button>
+              <!-- renderPocketDeviceSetupSummary() has run on every Settings
+                   entry since it was written, targeting an element that was
+                   never added -- so the first-launch device test result had
+                   nowhere to appear, and its re-run entry point
+                   (runPocketDeviceDiagnosticsFromSettings, which takes the
+                   button as an argument) had no button to be called from. -->
+              <p class="settings-help pr-layout-146" id="device-setup-settings-summary" role="status" aria-live="polite">Diagnostics have not run on this device.</p>
+              <button class="pr-btn-sub pr-layout-129" data-settings-safe-action="true" type="button" onclick="window.runPocketDeviceDiagnosticsFromSettings(this)">Re-run device test</button>
             </div>
 
             <div class="settings-card">
@@ -1351,7 +1389,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
 
                     <p class="pr-layout-164">Assets &amp; platforms</p>
                     <p><b>Game-Icons.net:</b> <a class="pr-layout-159" href="https://game-icons.net/" target="_blank">Website</a> &middot; <a class="pr-layout-159" href="https://creativecommons.org/licenses/by/3.0/" target="_blank">CC-BY 3.0</a>. Achievement icons by <b>Lorc, Delapouite</b> &amp; contributors.</p>
-                    <p><b>Hosting:</b> Cloudflare Pages (frontend) &middot; <a class="pr-layout-159" href="https://huggingface.co/spaces" target="_blank">Hugging Face Spaces</a> (backend) &middot; Cloudflare Worker/B2 (proxy and assets).</p>
+                    <p><b>Hosting:</b> GitHub Pages (frontend) &middot; <a class="pr-layout-159" href="https://huggingface.co/spaces" target="_blank">Hugging Face Spaces</a> (backend) &middot; Cloudflare Worker/B2 (proxy and assets).</p>
                     <p class="pr-layout-165">Full license texts and attributions are in the repository's <a class="pr-layout-159" href="NOTICE.txt" target="_blank"><code>NOTICE</code></a> and <a class="pr-layout-159" href="ATTRIBUTIONS.txt" target="_blank"><code>ATTRIBUTIONS.md</code></a>.</p>
                   </div>
                 </details>
@@ -1380,11 +1418,12 @@ Playback-only modules remain deferred so they do not compete with first paint.
                 </div>
 
                 <label class="settings-label" for="away-workers-select" style="margin-top:10px;">Parallel Narration Workers</label>
+                <!-- Same ceiling as Settings. The 3 and 4 options that used to
+                     be here could never take effect: the policy answers 1 or 2,
+                     and Away Mode caching is the only mode that ever reaches 2. -->
                 <select id="away-workers-select" class="settings-control" onchange="window.saveAwayWorkersSetting(this.value)">
-                  <option value="1">1 Worker (Recommended for Mobile)</option>
-                  <option value="2">2 Workers (Faster - CPU/GPU Intensive)</option>
-                  <option value="3">3 Workers</option>
-                  <option value="4">4 Workers (Extreme)</option>
+                  <option value="1">1 worker (recommended on phones)</option>
+                  <option value="2">2 workers (faster; high-memory desktops only)</option>
                 </select>
               </div>
 
@@ -1479,24 +1518,24 @@ Playback-only modules remain deferred so they do not compete with first paint.
       </div>
     </div>
     <script src='assets/js/diagnostics.js?v=diag-v7' type='module'></script>
-    <script src='assets/js/storage_core.js?v=storage-v16' type='module'></script>
-    <script src='assets/js/sync_core.js?v=sync-v12' type='module'></script>
-    <script src='assets/js/api_core.js?v=search-v23' type='module'></script>
+    <script src='assets/js/storage_core.js?v=storage-v17' type='module'></script>
+    <script src='assets/js/sync_core.js?v=sync-v13' type='module'></script>
+    <script src='assets/js/api_core.js?v=search-v24' type='module'></script>
     <script src='assets/js/experience_coordinator.js?v=experience-v5' type='module'></script>
-    <script src='assets/js/virtue_controller.js?v=virtue-v16' type='module'></script>
+    <script src='assets/js/virtue_controller.js?v=virtue-v17' type='module'></script>
     <script src='assets/js/engine_utils.js' type='module'></script>
-    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v51' type='module'></script>
+    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v52' type='module'></script>
     <script src='assets/js/tts_pronunciation_core.js?v=pron-v14' type='module'></script>
-    <script src='assets/js/library_manager.js?v=library-v30' type='module'></script>
+    <script src='assets/js/library_manager.js?v=library-v31' type='module'></script>
     <!-- Pulls in hmofa_catalog_core.js via a versioned import. The catalog
          itself is only downloaded when the masterlist view is opened. -->
-    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v5' type='module'></script>
-    <script src='assets/js/device_setup.js?v=device-setup-v12' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v100' type='module'></script>
-    <script src='assets/js/cinematic_ui.js?v=cinematic-v7' type='module'></script>
-    <script src='assets/js/reader_features.js?v=features-v11' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v140' type='module'></script>
-    <script src='assets/js/supabase_bridge.js?v=supabase-v7' type='module'></script>
+    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v6' type='module'></script>
+    <script src='assets/js/device_setup.js?v=device-setup-v13' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v101' type='module'></script>
+    <script src='assets/js/cinematic_ui.js?v=cinematic-v8' type='module'></script>
+    <script src='assets/js/reader_features.js?v=features-v12' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v141' type='module'></script>
+    <script src='assets/js/supabase_bridge.js?v=supabase-v8' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v5' type='module'></script>
   </div>
 </body>

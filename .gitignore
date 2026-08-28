@@ -24,10 +24,10 @@ b2-upload-onnxruntime/
 voice-zero-pocket-pack*/
 _backup_*/
 
-# Native GGML / audio.cpp experiment (parked; see GGML_NATIVE_PATH.md).
+# Native GGML / audio.cpp experiment (parked).
 # NOT committed: the upstream clone is re-cloneable, the Windows binaries are
 # published audio.cpp releases, and the model tree lives on B2 under
-# `ggml/pocket-tts/` per GGML_NATIVE_PATH.md policy #2. Tracking it put a
+# `ggml/pocket-tts/` (see tools/b2_upload_ggml_pocket_tts.py). Tracking it put a
 # 208 MB safetensors in git history, which GitHub hard-rejects (100 MB/file).
 vendor/
 

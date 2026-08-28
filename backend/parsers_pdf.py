@@ -1,7 +1,6 @@
 import os
-import io
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 import pypdfium2 as pdfium
 from parsers_core import (
     Chapter, clean_text, split_paragraphs_pdf, drop_front_back_matter,
@@ -127,23 +126,3 @@ def extract_pdf_metadata(path) -> dict:
     except Exception:
         return {}
 
-
-def extract_pdf_cover(path) -> Optional[bytes]:
-    try:
-        pdf = pdfium.PdfDocument(str(path))
-        try:
-            page = pdf[0]
-            try:
-                bitmap = page.render(scale=2.0, draw_annots=False)
-                pil = bitmap.to_pil()
-                if pil.mode != "RGB":
-                    pil = pil.convert("RGB")
-                buf = io.BytesIO()
-                pil.save(buf, format="PNG")
-                return buf.getvalue()
-            finally:
-                page.close()
-        finally:
-            pdf.close()
-    except Exception:
-        return None

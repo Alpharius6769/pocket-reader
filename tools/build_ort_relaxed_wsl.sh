@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The repo root, derived from this script rather than hardcoded to one
+# machine's home directory. Both output paths below used to default to an
+# absolute /mnt/c/Users/<name>/... path that existed nowhere else.
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+
 ORT_TAG="${ORT_TAG:-v1.27.0}"
 JOBS="${JOBS:-14}"
 BUILD_ROOT="${BUILD_ROOT:-/opt/pocket-ort-relaxed}"
 SOURCE_DIR="${BUILD_ROOT}/onnxruntime"
-WINDOWS_OUTPUT="${WINDOWS_OUTPUT:-/mnt/c/Users/Chris/Documents/Web Build Antigravity Branch/ort-relaxed-build/onnxruntime/1.27.0-relaxed}"
+WINDOWS_OUTPUT="${WINDOWS_OUTPUT:-${REPO_ROOT}/ort-relaxed-build/onnxruntime/1.27.0-relaxed}"
 LOG_DIR="${WINDOWS_OUTPUT}/build-evidence"
-STOCK_ORT_DIST="${STOCK_ORT_DIST:-/mnt/c/Users/Chris/Documents/Web Build Antigravity Branch/pocket-webgpu-build/npm/package/dist}"
+STOCK_ORT_DIST="${STOCK_ORT_DIST:-${REPO_ROOT}/pocket-webgpu-build/npm/package/dist}"
 
 mkdir -p "${BUILD_ROOT}" "${WINDOWS_OUTPUT}" "${LOG_DIR}"
 exec > >(tee -a "${LOG_DIR}/build.log") 2>&1

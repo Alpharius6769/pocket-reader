@@ -1,5 +1,5 @@
 /**
- * Supabase auth + profile sync bridge for the standalone Cloudflare Pages app.
+ * Supabase auth + profile sync bridge for the standalone web app.
  *
  * CONTRACT: exposes one window.pocketCloud API used by sync_core,
  * ui_controller, library_manager, settings_manager, and cinematic_ui.
@@ -14,7 +14,7 @@
  * The publishable key below is designed to ship in frontend JS. Access is
  * enforced by Row Level Security, not by key secrecy.
  */
-import { mergeProfile, normalizeProfile } from './profile_merge.js?v=merge-v6';
+import { mergeProfile, normalizeProfile } from './profile_merge.js?v=merge-v7';
 
 const SUPABASE_URL = 'https://dctjxeqjtctyvvrdlcxo.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KUGiCZjxfxQb2eQwOTQO0A_MY8ihwur';
@@ -560,4 +560,5 @@ window.pocketCloud = {
   deleteAccountData,
   isSignedIn: () => !!session?.access_token,
 };
-window.pocketAuth = window.pocketCloud;
+// window.pocketCloud is the one name; the pocketAuth alias that sat here was
+// never read, and two names for one object is how call sites drift apart.

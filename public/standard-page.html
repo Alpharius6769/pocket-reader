@@ -3,11 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="0; url=/">
+  <!--
+    A leftover route from the Anvil host, kept only so an old bookmark or an
+    indexed link still lands somewhere useful.
+
+    Both redirects below resolve against this file's own directory, NOT the
+    server root. Production is served from a subpath
+    (alpharius6769.github.io/pocket-reader/), so the literal "/" this used to
+    use sent visitors to the account root instead of the app -- the same trap
+    sw.js documents at SHELL_URL and fixes everywhere else.
+  -->
+  <meta http-equiv="refresh" content="0; url=./">
   <title>Pocket Reader</title>
-  <script>location.replace('/' + location.search + location.hash);</script>
+  <script>
+    (function () {
+      var target = new URL('./', document.baseURI).href + location.search + location.hash;
+      location.replace(target);
+    })();
+  </script>
 </head>
 <body>
-  <p>Opening <a href="/">Pocket Reader</a>…</p>
+  <p>Opening <a href="./">Pocket Reader</a>…</p>
 </body>
 </html>

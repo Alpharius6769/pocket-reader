@@ -1,16 +1,14 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v16';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v17';
 import {
   evaluateCpuThermalRest,
+  POCKET_MAX_CACHE_WORKERS,
   POCKET_THERMAL_HISTORY_LIMIT,
   writePocketExpressiveChoice,
   detectMobilePlatform,
   isMobileLikePlatform,
-} from './pocket_backend_policy.js?v=backend-v24';
+} from './pocket_backend_policy.js?v=backend-v25';
 
-const HARD_CAP_WORKERS   = window.HARD_CAP_WORKERS;
-const MANUAL_CAP_WORKERS = window.MANUAL_CAP_WORKERS;
-const DEFAULT_MAX_WORKERS = window.DEFAULT_MAX_WORKERS;
 const POCKET_VOICES = window.POCKET_VOICES || [];
 const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'donald_malone';
 const _resolveActiveEngine = window._resolveActiveEngine;
@@ -652,10 +650,10 @@ export const BufferManager = {
   pauseBtnEl: null,
   // Concurrency control
   activeWorkers: 0,
-  maxWorkers: DEFAULT_MAX_WORKERS,
-  DEFAULT_MAX_WORKERS: DEFAULT_MAX_WORKERS,
-  HARD_CAP_WORKERS: HARD_CAP_WORKERS,    // auto-detect ceiling (50% cores, max 4)
-  MANUAL_CAP_WORKERS: MANUAL_CAP_WORKERS,  // ceiling when the user manually overrides (75% cores, max 8)
+  // Set by _ensureCacheBackendReady from the device policy on the first
+  // paragraph of every job. The DEFAULT_MAX / HARD_CAP / MANUAL_CAP fields that
+  // used to be mirrored here were read by nothing once that policy took over.
+  maxWorkers: 1,
   _generation: 0,         // bumped on each (re)start so stale worker loops retire themselves
   _resumeAttempted: false,
   sessionStoryRefs: new Set(),
@@ -1022,12 +1020,13 @@ export const BufferManager = {
     this.isActive = false;
     this._backendPreparationPromise = null;
     this._backendParallelStarted = false;
-    // Load worker settings from user profile (auto‑detected or manual)
+    // Start at one worker. The three lines that used to sit here read
+    // settings.maxWorkers and clamped it against HARD_CAP/MANUAL_CAP, and every
+    // one of those results was discarded: the neural branch below forces 1, and
+    // _ensureCacheBackendReady then sets the real count from the device policy.
+    // The user ceiling now reaches that policy directly as userMaxWorkers.
     const settings = window.userProfile?.settings || {};
-    this.maxWorkers = Number(settings.maxWorkers) || this.DEFAULT_MAX_WORKERS;
-    const cap = settings.enableManualWorkers ? this.MANUAL_CAP_WORKERS : this.HARD_CAP_WORKERS;
-    if (this.maxWorkers > cap) this.maxWorkers = cap;
-    if (this.maxWorkers < 1) this.maxWorkers = 1;
+    this.maxWorkers = 1;
 
     // Pocket TTS is strictly capped to 1 worker to ensure memory safety and prevent race conditions
     let activeEngine = settings.voiceEngine;
@@ -1044,7 +1043,6 @@ export const BufferManager = {
     // this happened to work for Kokoro. Made explicit rather than incidental:
     // if the stored value ever distinguishes them, the modal must still show.
     if (_isNeuralEngine(activeEngine)) {
-      this.maxWorkers = 1;
       const earlyModal = document.getElementById('caching-progress-modal');
       if (earlyModal) {
         this.cachingModalEl = earlyModal;
@@ -1535,7 +1533,15 @@ export const BufferManager = {
     if (!this._backendPreparationPromise) {
       this._backendPreparationPromise = (async () => {
         this._showModalStatus('Loading the narration engine for uncached audio...');
-        await window.ensurePocketBackendOptimized?.(voice);
+        // Pocket-only. The backend planner probes WebGPU eligibility, runs a
+        // calibration pass and writes calibration state, none of which describes
+        // Kokoro -- and it resolves the voice through ensurePocketVoiceLoaded(),
+        // which answers a Pocket voice pack for any id it does not recognise.
+        // _loadPocketEngine already skips the planner for Kokoro; this is the
+        // other door into it.
+        if (_resolveActiveEngine() === 'pocket') {
+          await window.ensurePocketBackendOptimized?.(voice);
+        }
         let workers = 1;
         try {
           workers = Math.max(1, Number(await window.preparePocketCacheWorkerPool?.()) || 1);
@@ -2226,9 +2232,14 @@ window.stopAwayModeFromSubpage = function() {
   if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
 };
 
+// A ceiling on the device policy, matching the Settings control. The old range
+// went to 4, which nothing could honour: _ensureCacheBackendReady overwrites
+// maxWorkers from recommendedPocketCacheWorkerCount(), whose largest answer is
+// POCKET_MAX_CACHE_WORKERS. The value now reaches that policy as userMaxWorkers
+// instead of being set here and replaced a moment later.
 window.saveAwayWorkersSetting = function(val) {
   const num = parseInt(val, 10);
-  if (!isNaN(num) && num >= 1 && num <= 4) {
+  if (!isNaN(num) && num >= 1 && num <= POCKET_MAX_CACHE_WORKERS) {
     if (window.BufferManager) {
       window.BufferManager.maxWorkers = num;
     }

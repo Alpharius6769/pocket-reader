@@ -3,7 +3,7 @@
 import {
   isMobileLikePlatform,
   selectNarrationEngine,
-} from './pocket_backend_policy.js?v=backend-v24';
+} from './pocket_backend_policy.js?v=backend-v25';
 
 const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 2) : 2;
 // Routed through the shared platform helper so a stock iPad — which reports a
@@ -39,6 +39,12 @@ const baseFallbacks = {
   enthused: 'happy',
   shout: 'surprised'
 };
+
+// Rayne has one built state, so every emotion the router picks must land on
+// neutral rather than on a state with no file behind it.
+const RAYNE_NEUTRAL_ONLY_FALLBACKS = Object.freeze(
+  Object.fromEntries(VOICE_ZERO_ALL_EMOTIONS.map((emotion) => [emotion, 'neutral'])),
+);
 
 window.POCKET_DEFAULT_VOICE = 'donald_malone';
 window.POCKET_DEFAULT_EMOTION = 'neutral';
@@ -143,20 +149,27 @@ window.POCKET_VOICE_PACK = {
       availableEmotions: VOICE_ZERO_ALL_EMOTIONS,
       fallbackEmotions: baseFallbacks
     },
+    // Project-owned personal clone. Unlike the Voice-Zero six this has no
+    // upstream: the reference material is maintainer-held and only the neutral
+    // state has been built, so availableEmotions is the single entry and every
+    // routed emotion resolves back to it. Two things were wrong here:
+    // sourceUrl held a local directory path in a field that is a URL
+    // everywhere else, and the full baseFallbacks map implied emotion states
+    // that do not exist. RAYNE_NEUTRAL_ONLY_FALLBACKS says the true thing.
     {
       id: 'rayne',
       displayName: 'Rayne (Personal)',
       gender: 'female',
       accent: 'Personal Clone',
       recommended: false,
-      recommendedUse: 'Custom user-cloned voice.',
+      recommendedUse: 'Custom user-cloned voice. Neutral delivery only.',
       sourceName: 'Rayne',
       sourceFolder: 'rayne',
-      sourceUrl: `/personal voices/rayne`,
-      originUrl: 'local',
-      license: 'personal',
+      sourceUrl: null,
+      originUrl: null,
+      license: 'Project-owned (see ATTRIBUTIONS.md)',
       availableEmotions: ['neutral'],
-      fallbackEmotions: baseFallbacks
+      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
     }
   ]
 };
@@ -205,20 +218,10 @@ window.canonicalPocketVoice = function canonicalPocketVoice(voiceName) {
   return window.POCKET_DEFAULT_VOICE;
 };
 
-window.isPocketBaseVoice = function isPocketBaseVoice(voiceName) {
-  const token = _cleanPocketToken(voiceName);
-  const alias = window.POCKET_VOICE_ALIASES[token];
-  return window.POCKET_VOICES.includes(token) || window.POCKET_VOICES.includes(alias);
-};
-
-window.isPocketAssetVoice = function isPocketAssetVoice(voiceName) {
-  const token = _cleanPocketToken(voiceName);
-  if (window.POCKET_VOICE_ASSET_IDS.includes(token)) return true;
-  const match = token.match(/^(.+)_(neutral|calm|happy|sad|worried|surprised|tired|frustrated|anger|excited|enthused|shout|confused)$/);
-  if (!match) return false;
-  const base = window.POCKET_VOICE_ALIASES[match[1]] || match[1];
-  return window.POCKET_VOICE_ASSET_IDS.includes(`${base}_${match[2]}`);
-};
+// isPocketBaseVoice() and isPocketAssetVoice() lived here and had no callers.
+// Voice classification in the running code goes through canonicalPocketVoice()
+// and resolvePocketAssetVoiceId() below, which answer the question the callers
+// actually ask ("what should I load?") rather than a yes/no about a string.
 
 window.resolvePocketAssetVoiceId = function resolvePocketAssetVoiceId(voiceName, emotionName) {
   const canonical = window.canonicalPocketVoice(voiceName);

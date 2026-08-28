@@ -12,16 +12,21 @@ from pathlib import Path
 import boto3
 from botocore.client import Config
 
-ENG = Path(r"C:\Users\Chris\Documents\Web Build Antigravity Branch")
+# Repo root, resolved from this file rather than hardcoded: tools/ sits one
+# level below it. The absolute Windows path this used to carry only worked on
+# one machine, under one directory name.
+ENG = Path(os.environ.get("POCKET_READER_ROOT") or Path(__file__).resolve().parent.parent)
 FILES = [
     "public/assets/js/pocket_worker.js",
+    # kokoro_worker.js is half the browser narration path and was missing from
+    # this list, so a snapshot taken after Kokoro landed captured only Pocket.
+    "public/assets/js/kokoro_worker.js",
     "public/assets/js/audio_core.js",
     "public/assets/js/buffer_manager.js",
     "public/assets/js/pocket_backend_policy.js",
     "public/assets/js/device_setup.js",
     "public/assets/js/settings_manager.js",
     "public/sw.js",
-    "AGENT_HANDOFF_MASTER.md",
 ]
 
 

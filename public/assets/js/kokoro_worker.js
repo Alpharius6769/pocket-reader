@@ -236,8 +236,13 @@ function clauseMarksFrom(text) {
 // at peak, i.e. only 69 MB of activations for the same 20 s, because it is
 // autoregressive and only ever holds one frame. Kokoro trades that bounded
 // activation cost for speed -- capping the chunk buys it back.
-const DEFAULT_MAX_CHUNK_TOKENS = 192;
-let maxChunkTokens = DEFAULT_MAX_CHUNK_TOKENS;
+// 192 is the constrained-device cap. A device that is NOT memory-constrained
+// can afford the 256 step (440 MB peak against 355 MB) and buys back inference
+// count and seam count for it, so the cap follows the device class the main
+// thread already reports rather than being one number for everything.
+const CONSTRAINED_MAX_CHUNK_TOKENS = 192;
+const ROOMY_MAX_CHUNK_TOKENS = 256;
+let maxChunkTokens = CONSTRAINED_MAX_CHUNK_TOKENS;
 
 function chunkTokenLimit() {
   return Math.max(32, Math.min(MAX_TOKENS - 2, maxChunkTokens));
@@ -378,9 +383,13 @@ self.onmessage = async (event) => {
   if (type === 'init') {
     try {
       cancelRequested = false;
+      // An explicit cap wins (the measurement tools sweep it). Otherwise take
+      // the device class the main thread sends: constrainedMemoryMode was
+      // already in every init message and was being dropped on the floor here,
+      // so the phone this engine exists for got the same cap as a desktop.
       maxChunkTokens = Number(data.maxChunkTokens) > 0
         ? Number(data.maxChunkTokens)
-        : DEFAULT_MAX_CHUNK_TOKENS;
+        : (data.constrainedMemoryMode === false ? ROOMY_MAX_CHUNK_TOKENS : CONSTRAINED_MAX_CHUNK_TOKENS);
       progress(2);
       await loadOrtRuntime();
       progress(10);
@@ -397,10 +406,14 @@ self.onmessage = async (event) => {
           precision: 'q8f16',
           modelRevision: 'kokoro-82m-v1.0',
           sampleRate: SAMPLE_RATE,
-          threads: 1,
+          // Report what ORT was actually configured with. This was hardcoded to
+          // 1 while the line above logs numThreads, so an isolated session that
+          // started two threads told the Settings panel it had started one.
+          threads: ort?.env?.wasm?.numThreads || 1,
+          maxChunkTokens: chunkTokenLimit(),
         },
       });
-      log('INFO', 'Kokoro engine ready (single 86MB session, non-autoregressive)');
+      log('INFO', `Kokoro engine ready (single 86MB session, non-autoregressive, chunk cap ${chunkTokenLimit()})`);
     } catch (error) {
       isReady = false;
       self.postMessage({ type: 'init_error', error: error?.message || String(error) });

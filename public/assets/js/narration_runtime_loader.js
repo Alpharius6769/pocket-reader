@@ -8,8 +8,8 @@ export function ensureNarrationRuntime() {
   if (narrationRuntimePromise) return narrationRuntimePromise;
 
   window.__pocketNarrationRuntimeLoading = true;
-  narrationRuntimePromise = import('./audio_core.js?v=audio-v98')
-    .then(() => import('./buffer_manager.js?v=buffer-v63'))
+  narrationRuntimePromise = import('./audio_core.js?v=audio-v99')
+    .then(() => import('./buffer_manager.js?v=buffer-v64'))
     .then(() => {
       window.__pocketNarrationRuntimeLoaded = true;
       window.__pocketNarrationRuntimeLoading = false;
@@ -83,7 +83,6 @@ const DEFERRED_NARRATION_ACTIONS = [
   'seekToParagraph',
   'seekToChapter',
   'saveBookmark',
-  'applyPlaybackSpeed',
   'onVoiceSelectionChange',
   'preparePocketCacheWorkerPool',
   'rerunPocketBackendOptimization',

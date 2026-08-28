@@ -93,5 +93,7 @@ test('narration plays through a media element, never a Web Audio graph, on mobil
   // does not use the streaming path.
   const source = await read('public/assets/js/audio_core.js');
   assert.match(source, /_preferDirectMobileMediaPlayback/);
-  assert.match(source, /if \(!_preferDirectMobileMediaPlayback\(\)\)[\s\S]{0,200}_createPocketPcmStream/);
+  // The gate now also requires Pocket: Kokoro returns a whole utterance in one
+  // pass, so a segment stream would collect nothing and be torn down again.
+  assert.match(source, /if \(engine === 'pocket' && !_preferDirectMobileMediaPlayback\(\)\)[\s\S]{0,400}_createPocketPcmStream/);
 });

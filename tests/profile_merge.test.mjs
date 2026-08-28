@@ -5,7 +5,7 @@ import {
 } from '../public/assets/js/profile_merge.js';
 
 /**
- * These guard the port of Server_code.py's merge (MIGRATION_PLAN.md Phase 4).
+ * These guard the port of the retired Anvil host's Server_code.py merge.
  * The Anvil implementation is being deleted, so these tests are the only
  * remaining specification of the semantics.
  */

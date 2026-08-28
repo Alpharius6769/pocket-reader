@@ -11,7 +11,11 @@ from pathlib import Path
 import boto3
 from botocore.client import Config
 
-ROOT = Path(r"C:\Users\Chris\Documents\Web Build Antigravity Branch\vendor\audiocpp-models\pocket-tts")
+# Resolved from this file (tools/ is one level below the repo root) so the
+# script runs from a clone. Override with POCKET_TTS_GGML_ROOT. The absolute
+# Windows path this used to carry only worked on one machine.
+ROOT = Path(os.environ.get("POCKET_TTS_GGML_ROOT")
+            or Path(__file__).resolve().parent.parent / "vendor" / "audiocpp-models" / "pocket-tts")
 PREFIX = "ggml/pocket-tts/"
 
 

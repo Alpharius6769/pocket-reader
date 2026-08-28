@@ -1,4 +1,21 @@
-# Cloudflare Pages headers.
+# INERT ON THE CURRENT HOST. Read this before trusting anything below.
+#
+# This is a Cloudflare Pages / Netlify header file. The frontend is deployed by
+# .github/workflows/deploy-github-pages.yml, and GitHub Pages does not read
+# _headers -- it has no mechanism for custom response headers at all. Every
+# rule here is therefore documentation, not configuration, until the frontend
+# moves back to a host that reads it.
+#
+# What that costs today, and what covers it:
+#   /sw.js no-cache        - covered. Registration requests sw.js?v=NNN and the
+#                            version is bumped on every service-worker change,
+#                            so the URL itself defeats the cache.
+#   immutable /assets/*    - covered. Every module URL carries ?v=, and sw.js
+#                            serves those cache-first with no revalidation.
+#   Referrer-Policy        - covered. index.html sets <meta name="referrer">.
+#   nosniff, X-Frame-Options - NOT covered. Neither has a <meta> equivalent
+#                            (frame-ancestors is ignored in meta CSP), so on
+#                            GitHub Pages they are simply absent.
 #
 # DELIBERATELY ABSENT: Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy.
 # Do not add them here. Cross-origin isolation is opt-in per navigation, applied

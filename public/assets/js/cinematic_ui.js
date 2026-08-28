@@ -144,6 +144,13 @@ function renderAccountCenter() {
     </div>
     <p class="settings-help">Sync includes profile, settings, library metadata, progress, favorites, ratings, bookmarks, collections, achievements, statistics, and goals. Story text, generated audio, model files, cookies, and device tuning remain local.</p>`;
 }
+// Two callers reach for this through window behind a typeof guard -- after an
+// OAuth sign-in lands (supabase_bridge) and after the first-run wizard finishes
+// (ui_controller) -- and it was never exported, so both silently skipped. The
+// neighbouring window.renderProfileExtras() on the same lines does exist, so
+// the profile card updated while the account card kept saying "Guest reader",
+// which reads as a sync failure rather than a missing export.
+window.renderAccountCenter = renderAccountCenter;
 
 window.exportPocketProfile = () => {
   const payload = window.buildSyncPayloadV3?.() || profile();

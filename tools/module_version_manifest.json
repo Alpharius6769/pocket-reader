@@ -1,19 +1,19 @@
 {
   "api_core.js": {
-    "version": "search-v23",
-    "sha256": "638c9490837a36d0"
+    "version": "search-v24",
+    "sha256": "aa01da8654baa051"
   },
   "audio_core.js": {
-    "version": "audio-v98",
-    "sha256": "0787627a4a8d4438"
+    "version": "audio-v99",
+    "sha256": "7bbb603b872a66f6"
   },
   "buffer_manager.js": {
-    "version": "buffer-v63",
-    "sha256": "8285b572f4ca0a7c"
+    "version": "buffer-v64",
+    "sha256": "873b674f5a37fa62"
   },
   "cinematic_ui.js": {
-    "version": "cinematic-v7",
-    "sha256": "50790fa92b70428f"
+    "version": "cinematic-v8",
+    "sha256": "79d2bec5a8123b1f"
   },
   "data_transfer.js": {
     "version": "transfer-v5",
@@ -24,16 +24,16 @@
     "sha256": "f1d50ff5ecfc7a1f"
   },
   "device_setup.js": {
-    "version": "device-setup-v12",
-    "sha256": "9ee1cb728f72a73f"
+    "version": "device-setup-v13",
+    "sha256": "707de7bfc9b2f4d5"
   },
   "diagnostics.js": {
     "version": "diag-v7",
     "sha256": "452702fde47e0eab"
   },
   "engine_utils.js": {
-    "version": "sw-200",
-    "sha256": "0f8fdc7651e9e90a"
+    "version": "sw-201",
+    "sha256": "b7cfb22c873c8515"
   },
   "experience_coordinator.js": {
     "version": "experience-v5",
@@ -48,32 +48,32 @@
     "sha256": "b792219fc5307417"
   },
   "hmofa_masterlist.js": {
-    "version": "hmofa-list-v5",
-    "sha256": "a82decc90c5af277"
+    "version": "hmofa-list-v6",
+    "sha256": "bdbb1aed221fd4e2"
   },
   "hmofa_preferences.js": {
     "version": "hmofa-prefs-v2",
     "sha256": "f4c9755b6b44b491"
   },
   "kokoro_worker.js": {
-    "version": "kokoro-v5",
-    "sha256": "3717985bf3260045"
+    "version": "kokoro-v6",
+    "sha256": "d6cbdbcf0493518b"
   },
   "library_manager.js": {
-    "version": "library-v30",
-    "sha256": "284279966dcfe6c7"
+    "version": "library-v31",
+    "sha256": "8e4d5598003c69e6"
   },
   "motion_lite.js": {
-    "version": "sw-200",
+    "version": "sw-201",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v51",
-    "sha256": "9206f9804af75843"
+    "version": "narration-loader-v52",
+    "sha256": "01d20a12172edb7c"
   },
   "pocket_backend_policy.js": {
-    "version": "backend-v24",
-    "sha256": "f13f9fdd4842c9fe"
+    "version": "backend-v25",
+    "sha256": "1c3fa460d534fa2e"
   },
   "pocket_pcm_worklet.js": {
     "version": "pcm-v1",
@@ -84,47 +84,47 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v61",
-    "sha256": "7547d826147a961f"
+    "version": "pocket-worker-v62",
+    "sha256": "096d3760303370cc"
   },
   "profile_merge.js": {
-    "version": "merge-v6",
-    "sha256": "fb0a17774b2cd334"
+    "version": "merge-v7",
+    "sha256": "a9269fe38f144bfb"
   },
   "reader_features.js": {
-    "version": "features-v11",
-    "sha256": "7983e25e8c0d473f"
+    "version": "features-v12",
+    "sha256": "7fb1a486ce7e7264"
   },
   "settings_manager.js": {
-    "version": "settings-v100",
-    "sha256": "993e3da8e0c80a50"
+    "version": "settings-v101",
+    "sha256": "c8ea5e94a23c92d7"
   },
   "storage_core.js": {
-    "version": "storage-v16",
-    "sha256": "8fa6c5d1eedc89e8"
+    "version": "storage-v17",
+    "sha256": "3d8b0fd665c354b8"
   },
   "supabase_bridge.js": {
-    "version": "supabase-v7",
-    "sha256": "02087ef0a1e20be8"
+    "version": "supabase-v8",
+    "sha256": "8e82b7c60e7b40e7"
   },
   "sync_core.js": {
-    "version": "sync-v12",
-    "sha256": "8b14b10f590c36f4"
+    "version": "sync-v13",
+    "sha256": "f06534dbfc13fa1c"
   },
   "tts_pronunciation_core.js": {
     "version": "pron-v14",
     "sha256": "5ab5126a76df718f"
   },
   "ui_controller.js": {
-    "version": "ui-v140",
-    "sha256": "d4a8e253f6f03d81"
+    "version": "ui-v141",
+    "sha256": "8019bfd499710f41"
   },
   "virtue_controller.js": {
-    "version": "virtue-v16",
-    "sha256": "ba77e5307e4d3f6d"
+    "version": "virtue-v17",
+    "sha256": "c402a4d4b0ff59c0"
   },
   "sw.js": {
-    "version": "sw-200",
-    "sha256": "b81c33441b7aaaf4"
+    "version": "sw-201",
+    "sha256": "50e50036aa7902a0"
   }
 }

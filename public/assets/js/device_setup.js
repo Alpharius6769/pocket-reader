@@ -8,7 +8,7 @@ import {
   wasmThreadCandidates,
   POCKET_DEVICE_SETUP_KEY,
   isIosLikePlatform,
-} from './pocket_backend_policy.js?v=backend-v24';
+} from './pocket_backend_policy.js?v=backend-v25';
 
 const SETTINGS_RISK_ACK_KEY = 'pr_settings_risk_ack_v1';
 const SUPPORT_NOTICE_KEY = 'pr_device_support_notice_v2';
@@ -425,10 +425,25 @@ requestAnimationFrame(() => {
 });
 
 window.runPocketDeviceDiagnosticsFromSettings = (button) => {
-  if (button) button.disabled = true;
+  const originalLabel = button?.textContent || 'Re-run device test';
+  if (button) {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Testing this device...';
+  }
+  setSetupText('device-setup-settings-summary', 'Running the device benchmark...');
   runPocketDeviceDiagnostics({ onboarding: false })
     .catch((error) => window.showSettingsModal?.('Device diagnostics failed', `<p>${escapeHtml(String(error?.message || error))}</p>`))
-    .finally(() => { if (button) button.disabled = false; });
+    .finally(() => {
+      // The success path renders this itself; the failure path did not, so a
+      // failed re-run left "Running the device benchmark..." on screen forever.
+      renderPocketDeviceSetupSummary();
+      if (button) {
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+        button.textContent = originalLabel;
+      }
+    });
 };
 
 export function renderPocketDeviceSetupSummary() {

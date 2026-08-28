@@ -1,12 +1,12 @@
 import { animate, stagger } from './motion_lite.js';
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v24';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v25';
 import {
   DEFAULT_POCKET_PLAYBACK_SPEED,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
 } from './tts_pronunciation_core.js?v=pron-v14';
-import { profileHash, storyKeyFor, mergeClockedMap } from './profile_merge.js?v=merge-v6';
+import { profileHash, storyKeyFor, mergeClockedMap } from './profile_merge.js?v=merge-v7';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
 window._ACH_ICONS = {
@@ -1909,24 +1909,16 @@ export function deleteBookmark(storyRef, cIdx, pIdx) {
 }
 window.deleteBookmark = deleteBookmark;
 
-window._masterlistData = [];
-window._masterlistSortAsc = true;
-window._masterlistSortCol = 'title';
-
-export async function loadHMOFA() {}
-window.loadHMOFA = loadHMOFA;
-export function switchHmofaViewMode() {}
-window.switchHmofaViewMode = switchHmofaViewMode;
-export function sortByColumn() {}
-window.sortByColumn = sortByColumn;
-export function sortMasterlist() {}
-window.sortMasterlist = sortMasterlist;
-export function renderMasterlist() {}
-window.renderMasterlist = renderMasterlist;
+// The masterlist lives in hmofa_masterlist.js. What sat here was its
+// predecessor reduced to nothing: loadHMOFA, switchHmofaViewMode,
+// sortByColumn, sortMasterlist and renderMasterlist were all empty function
+// bodies exported and published on window, alongside _masterlistData,
+// _masterlistSortAsc and _masterlistSortCol, which were assigned and never
+// read. Nothing in the app, the tests or the tools referenced any of them.
 
 // A story that shipped with the app rather than one the reader sought out.
 // The tag is the only marker — curated entries use ordinary stable keys — and
-// loadCuratedLibrary() backfills it onto older untagged profiles from the
+// seedCuratedLibrary() backfills it onto older untagged profiles from the
 // backend's list, which is the authority on what is curated.
 export function isCuratedStory(story) {
   return Boolean(story) && story.source === 'curated';

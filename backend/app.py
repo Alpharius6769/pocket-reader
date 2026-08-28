@@ -82,15 +82,19 @@ logging.basicConfig(
 log = logging.getLogger("pocket-reader.app")
 
 # Config
-# Exact-match origin list (no wildcards): the production Pages origin and the
-# stable per-branch preview alias. Per-deployment hash URLs are deliberately not
-# listed. Retired frontend origins are intentionally not accepted.
-# NOTE: the ALLOWED_ORIGINS env var on the Hugging Face Space overrides this
-# entirely -- this default only applies when that variable is unset or empty.
-DEFAULT_ALLOWED_ORIGINS = (
-    "https://pocket-reader-f2y.pages.dev,"
-    "https://phase3-preview.pocket-reader-f2y.pages.dev"
-)
+# Exact-match origin list (no wildcards). The ALLOWED_ORIGINS env var on the
+# Hugging Face Space overrides this entirely; this default applies only when
+# that variable is unset or empty.
+#
+# It used to list two pocket-reader-f2y.pages.dev names and NOT the real origin.
+# Those were removed from the Worker's own default and from wrangler.toml when
+# the Cloudflare Pages deploy was retired, for a reason that applies just as
+# much here: both names are NXDOMAIN, and an unowned *.pages.dev name can be
+# claimed by anyone who creates a Pages project with it. Trusting a dead one is
+# a standing subdomain-takeover path -- and while the env var normally masks
+# this default, a blank or missing variable would have fallen back to allowing
+# two names the project does not own while blocking the one it does.
+DEFAULT_ALLOWED_ORIGINS = "https://alpharius6769.github.io"
 ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGINS)
 if not ALLOWED_ORIGINS.strip():
     ALLOWED_ORIGINS = DEFAULT_ALLOWED_ORIGINS
@@ -461,10 +465,8 @@ SEARCH_OVERLOAD_TTL_SECONDS = int(os.environ.get("SEARCH_OVERLOAD_TTL_SECONDS", 
 # rankings barely move minute-to-minute, and every cache hit is one less request
 # against the shared egress IP that all app users funnel through.
 SEARCH_POSITIVE_TTL_SECONDS = int(os.environ.get("SEARCH_POSITIVE_TTL_SECONDS", 30 * 60))
-MASTERLIST_CACHE = TTLCache(
-    max_entries=2,
-    ttl_seconds=30 * 60,
-    label="masterlist")
+# MASTERLIST_CACHE removed with /api/masterlist: it fronted an empty JSON file
+# for a route no client calls.
 
 
 def is_valid_url(url: str) -> bool:
@@ -1316,29 +1318,29 @@ async def ao3_chapter_count(url: str, request: Request):
         return {"count": None}
 
 
+# /api/masterlist is retired, not merely unused.
+#
+# It served backend/masterlist.json -- a file whose stories array is empty --
+# while the frontend reads the real catalog straight from the published
+# Anthronomicon index and caches it against that build hash. The route, the
+# empty data file and the MASTERLIST_CACHE that fronted it were all dead.
+#
+# 410 rather than deletion, so an old cached frontend gets a definite answer
+# instead of an HTML error page it would try to parse as JSON.
 @app.get("/api/masterlist")
 async def fetch_masterlist():
-    cached = await MASTERLIST_CACHE.get("hmofa")
-    if cached is not None:
-        return cached
-    # The previous community sheet is intentionally retired. Keep the HMOFA
-    # page/API contract, but serve only Pocket Reader's independent catalog.
-    try:
-        payload_out = json.loads((BASE / "masterlist.json").read_text(encoding="utf-8"))
-        stories = payload_out.get("stories") if isinstance(payload_out, dict) else []
-        if not isinstance(stories, list):
-            stories = []
-        payload_out = {"status": "success", "source": "Pocket Reader independent catalog",
-                       "stories": stories, "count": len(stories)}
-        await MASTERLIST_CACHE.put("hmofa", payload_out)
-        return payload_out
-    except Exception:
-        log.exception("Independent masterlist load failed")
-        raise HTTPException(status_code=500, detail="Masterlist error")
+    raise HTTPException(
+        status_code=410,
+        detail="The masterlist is served by the Anthronomicon index, not this API.")
+
 
 @app.get("/api/state/load/{user_id}")
 async def load_user_state(user_id: str):
-    # Disabled — see save_user_state. IDOR surface; sync not wired up yet.
+    # Cloud sync runs through Supabase, not this API. These endpoints predate it
+    # and were an IDOR surface (any caller could read any user_id), so they stay
+    # an explicit 410 for old clients. There is no matching save route: the note
+    # here used to point at a save_user_state() that does not exist, and to call
+    # sync "not wired up yet", which stopped being true when Supabase landed.
     raise HTTPException(status_code=410, detail="Cloud sync is not available.")
 
 
@@ -1668,6 +1670,12 @@ async def _probe_site(label: str, url: str, cookies: dict, domain: str) -> dict:
 @app.get("/api/ao3")
 async def fetch_ao3_story(url: str, request: Request):
     """Fetch and parse an AO3 story, entirely server-side.
+
+    NOT on the web app's current path: the frontend ingests AO3 through
+    /api/scrape, FicHub, and /api/upload. This is the server-side fallback and
+    the manual entry point, kept because it is the only route that can reach a
+    work when the browser-side chain is blocked. It is origin-gated and consumes
+    the shared scrape budget like every other ingest route.
 
     Strategy 1 (primary): Download the EPUB directly from AO3's own download button.
       AO3 exposes a /downloads/{id}/title.epub link on every work page; we scrape

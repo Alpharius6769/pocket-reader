@@ -1,10 +1,10 @@
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 from parsers_core import Chapter, guard_zip_bomb, sanitize_narration_chapters
 
 # Format mappings
-from parsers_epub import parse_epub, extract_epub_metadata, extract_epub_cover
-from parsers_pdf import parse_pdf, extract_pdf_metadata, extract_pdf_cover
+from parsers_epub import parse_epub, extract_epub_metadata
+from parsers_pdf import parse_pdf, extract_pdf_metadata
 from parsers_document import parse_docx, extract_docx_metadata, parse_html_file, parse_txt
 
 
@@ -61,11 +61,7 @@ def parse_file(path) -> List[Chapter]:
     return chapters
 
 
-def extract_cover(path) -> Optional[bytes]:
-    """Isolate and extract cover artwork bytes based on file format extension."""
-    ext = Path(path).suffix.lower()
-    if ext == ".epub":
-        return extract_epub_cover(path)
-    if ext == ".pdf":
-        return extract_pdf_cover(path)
-    return None
+# No extract_cover(): nothing in the stack consumes cover bytes. The upload
+# payload carries title, author, words and chapters only, and the reader draws
+# its own placeholder from the title when a story has no coverImage. The
+# dispatcher and the two format extractors it fanned out to were unreachable.

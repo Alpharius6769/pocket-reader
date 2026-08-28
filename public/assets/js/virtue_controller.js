@@ -1,5 +1,5 @@
 import { animate } from './motion_lite.js';
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v24';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v25';
 
 export const virtueState = {
   virtueCooldown: false,
@@ -533,123 +533,13 @@ export function dismissVirtue() {
 }
 window.dismissVirtue = dismissVirtue;
 
-export function _autoDetectVirtueBubbles() {
-  // Disabled: auto-detector is off; bubble positions are hand-tuned in virtueCoordinates.
-}
-window._autoDetectVirtueBubbles = _autoDetectVirtueBubbles;
-
-async function _detectBubbleBounds(spriteKey) {
-  return new Promise((resolve) => {
-    const url = new URL(`assets/img/${spriteKey}.webp`, document.baseURI).href;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-
-    img.onload = () => {
-      try {
-        const w = img.width,
-          h = img.height;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(img, 0, 0);
-
-        const data = ctx.getImageData(0, 0, w, h).data;
-        const isWhite = new Uint8Array(w * h);
-
-        for (let i = 0; i < w * h; i++) {
-          const r = data[i * 4],
-            g = data[i * 4 + 1],
-            b = data[i * 4 + 2],
-            a = data[i * 4 + 3];
-          if (a > 200 && r > 230 && g > 230 && b > 230) isWhite[i] = 1;
-        }
-
-        const visited = new Uint8Array(w * h);
-        let bestArea = 0,
-          bestBounds = null;
-        const stack = [];
-
-        for (let y = 0; y < h; y++) {
-          for (let x = 0; x < w; x++) {
-            const idx = y * w + x;
-            if (!isWhite[idx] || visited[idx]) continue;
-
-            stack.length = 0;
-            stack.push(idx);
-            visited[idx] = 1;
-
-            let minX = x,
-              maxX = x,
-              minY = y,
-              maxY = y,
-              area = 0;
-
-            while (stack.length) {
-              const cur = stack.pop();
-              const cx = cur % w,
-                cy = (cur - cx) / w;
-
-              area++;
-
-              if (cx < minX) minX = cx;
-              if (cx > maxX) maxX = cx;
-              if (cy < minY) minY = cy;
-              if (cy > maxY) maxY = cy;
-
-              if (cx > 0 && isWhite[cur - 1] && !visited[cur - 1]) {
-                visited[cur - 1] = 1;
-                stack.push(cur - 1);
-              }
-              if (cx < w - 1 && isWhite[cur + 1] && !visited[cur + 1]) {
-                visited[cur + 1] = 1;
-                stack.push(cur + 1);
-              }
-              if (cy > 0 && isWhite[cur - w] && !visited[cur - w]) {
-                visited[cur - w] = 1;
-                stack.push(cur - w);
-              }
-              if (cy < h - 1 && isWhite[cur + w] && !visited[cur + w]) {
-                visited[cur + w] = 1;
-                stack.push(cur + w);
-              }
-            }
-
-            if (area > bestArea) {
-              bestArea = area;
-              bestBounds = { minX, maxX, minY, maxY };
-            }
-          }
-        }
-
-        if (!bestBounds || bestArea < (w * h * 0.05)) {
-          resolve(null);
-          return;
-        }
-
-        const bw = bestBounds.maxX - bestBounds.minX;
-        const bh = bestBounds.maxY - bestBounds.minY;
-        const ixL = bw * 0.26,
-          ixR = bw * 0.04,
-          iy = bh * 0.08;
-
-        resolve({
-          top: ((bestBounds.minY + iy) / h * 100).toFixed(1) + '%',
-          left: ((bestBounds.minX + ixL) / w * 100).toFixed(1) + '%',
-          width: ((bw - ixL - ixR) / w * 100).toFixed(1) + '%',
-          height: ((bh - 2 * iy) / h * 100).toFixed(1) + '%',
-        });
-      } catch (e) {
-        resolve(null);
-      }
-    };
-
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
-}
+// Bubble geometry is hand-tuned in virtueCoordinates above.
+//
+// _autoDetectVirtueBubbles() (an empty exported stub) and the 112-line
+// _detectBubbleBounds() it was the only entry point for lived here: a canvas
+// readback, white-pixel mask, flood fill and bounds scan per sprite. The
+// detector was switched off in favour of the hand-tuned table and the code was
+// left behind, unreachable, along with a window export nothing called.
 
 const _VIRTUE_DATA = {
   "companion": {

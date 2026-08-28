@@ -1,4 +1,4 @@
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v24';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v25';
 
 const DB_NAME = 'PocketReaderDB';
 const DB_VERSION = 3;
@@ -628,7 +628,8 @@ export function paragraphFingerprint(text) {
   }
   return hash.toString(16);
 }
-window._paragraphFingerprint = paragraphFingerprint;
+// Not published on window: it is exported for the modules that key cache reads
+// and writes on it, and the alias had no callers.
 
 export async function saveAudioChunk(storyTitle, chapIdx, paraIdx, engine, voice, audioBlob, isPermanent = false, text = null) {
   if (!(audioBlob instanceof Blob) || audioBlob.size < 100) {

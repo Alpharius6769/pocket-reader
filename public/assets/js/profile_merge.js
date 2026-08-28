@@ -3,7 +3,7 @@
  *
  * A faithful port of Server_code.py's _normalize_profile / _merge_profile and
  * their helpers, which previously ran inside a server-side transaction. See
- * MIGRATION_PLAN.md Phase 4.
+ * Ported from the retired Anvil host's Server_code.py.
  *
  * WHY THIS RUNS CLIENT-SIDE NOW
  * The old service executed the merge on the server. Here it runs in the browser and the

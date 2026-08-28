@@ -1,9 +1,13 @@
 // Minimal static server for local verification of the deployable `public/` tree.
 //
-// Mirrors the two things Cloudflare Pages does that the app depends on: it
+// Mirrors the two things the static host does that the app depends on: it
 // serves index.html for navigations (so client routing and the service worker
-// behave as they do in production) and it sets the same long-lived cache policy
-// on versioned assets. Isolation headers are deliberately NOT forced here — the
+// behave as they do in production) and it sets a long-lived cache policy on
+// versioned assets.
+//
+// Note that production is GitHub Pages, which sends no custom headers at all --
+// public/_headers is inert there, and this server is deliberately no stricter.
+// Isolation headers are also NOT forced here: the
 // service worker injects COOP/COEP itself for ?tts_fast=1 sessions, and forcing
 // them globally would mask a regression in that path.
 //

@@ -74,7 +74,7 @@ test('audio ended-with-error pauses playback (H7)', async () => {
 
 test('library hashes and login merge share profile_merge (M2/M3)', async () => {
   const library = await read('public/assets/js/library_manager.js');
-  assert.match(library, /import \{ profileHash, storyKeyFor, mergeClockedMap \} from '\.\/profile_merge\.js\?v=merge-v6'/);
+  assert.match(library, /import \{ profileHash, storyKeyFor, mergeClockedMap \} from '\.\/profile_merge\.js\?v=merge-v7'/);
   assert.doesNotMatch(library, /replace\(\/\[\^a-z0-9\]\+\/g/);
   assert.match(library, /function getStoryStableKey\(story\) \{\s*return storyKeyFor\(/);
   const merge = library.slice(

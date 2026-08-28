@@ -20,7 +20,7 @@ Pocket Reader is an offline-capable story reader with browser-side Pocket TTS na
 
 - **GitHub Pages:** frontend and PWA shell (`https://alpharius6769.github.io/pocket-reader/`).
 - **Supabase:** authentication, profiles, and account synchronization.
-- **Hugging Face Space:** story search, scraping, uploads, curated-library API, FicHub relay, masterlist data, health endpoints, and push subscriptions.
+- **Hugging Face Space:** story search, scraping, uploads, curated-library API, FicHub relay, health endpoints, and push subscriptions.
 - **Cloudflare Worker:** edge routing for Pocket TTS, ONNX Runtime Web, and Voice-Zero assets.
 - **HMOFA Anthronomicon & Masterlist:** interactive story catalog (`https://alpharius6769.github.io/hmofa-story-index/`) authored by Chris (Alpharius67 / Fluffarius). Pocket Reader renders it natively in the masterlist view from the index's published catalog JSON, so a tap loads the story directly. The standalone site is unaffected. See `ANTHRONOMICON_BRIDGE.md`.
 - **Backblaze B2:** origin storage for model bundles and voice assets.
@@ -40,9 +40,9 @@ node tools/verify_release_parity.mjs --live
 FastAPI backend for the Pocket Reader web app. This Space is a lightweight I/O router: it searches and scrapes supported story sources, parses uploaded files, serves bundled curated PDFs, registers push subscriptions, and provides health and diagnostics endpoints.
 
 No neural text-to-speech inference runs on this backend. Narration runs in the browser through Pocket TTS assets loaded by the frontend, with the browser's native Web Speech voices available as a fallback.
-The shipped Pocket voice catalog is the Voice-Zero Emotional Pack: three male and three female CC0-positioned Voice-Zero voices with neutral, calm, happy, sad, worried, surprised, tired, frustrated, and optional high-intensity emotion references.
+The shipped Pocket voice catalog is the Voice-Zero Emotional Pack: three male and three female CC0-positioned Voice-Zero voices with neutral, calm, happy, sad, worried, surprised, tired, frustrated, and optional high-intensity emotion references. A seventh voice, Rayne, is a project-owned personal clone with a neutral reference only (see `ATTRIBUTIONS.md`). On memory-constrained devices narration runs on Kokoro-82M instead, which has its own voice list.
 
-The frontend is hosted separately on Cloudflare Pages and talks to this backend through the Cloudflare Worker over HTTPS. Supabase provides authentication and the authenticated profile-sync bridge used by the web app. The unauthenticated FastAPI `/api/state/*` endpoints are intentionally disabled.
+The frontend is hosted separately on GitHub Pages and talks to this backend through the Cloudflare Worker over HTTPS. Supabase provides authentication and the authenticated profile-sync bridge used by the web app. The unauthenticated FastAPI `/api/state/*` endpoints are intentionally disabled.
 Cloud sync stores canonical JSON profile objects with schema version, sanitized library entries, settings, stats, and deletion tombstones.
 
 ### API Surface
@@ -55,11 +55,11 @@ Cloud sync stores canonical JSON profile objects with schema version, sanitized 
 | POST | `/api/search` | Search AO3 using basic/advanced filters; returns paged results with `limit` defaulting to 15 |
 | POST | `/api/scrape` | Fetch and parse a supported story URL |
 | POST | `/api/upload` | Parse EPUB/PDF/DOCX/TXT/HTML upload |
-| GET | `/api/masterlist` | Proxy/cache HMOFA masterlist CSV data |
+| GET | `/api/masterlist` | Retired; returns `410`. The catalog is served by the Anthronomicon index |
 | GET | `/api/library/curated` | List bundled curated PDFs |
 | GET | `/api/library/curated/{filename}` | Parse a bundled curated PDF |
 | GET | `/api/library/curated/{filename}/download` | Download a bundled curated PDF |
-| GET | `/api/ao3` | AO3-specific EPUB/FicHub fetch and parse path |
+| GET | `/api/ao3` | AO3-specific EPUB/FicHub fetch and parse path (server-side fallback; the web app uses `/api/scrape` + `/api/upload`) |
 | GET | `/api/ao3/chapter_count` | Published AO3 chapter count probe |
 | GET | `/api/fichub-proxy` | Backend FicHub JSON proxy |
 | GET | `/api/fetch-epub` | Backend FicHub EPUB relay |
@@ -69,8 +69,7 @@ Cloud sync stores canonical JSON profile objects with schema version, sanitized 
 | POST | `/api/unsubscribe` | Remove a browser push subscription |
 | POST | `/api/send-push/{user_id}` | Admin-only push delivery |
 | POST | `/api/sync/chapters` | Admin-only throttled chapter-refresh sweep |
-| POST | `/api/state/save` | Disabled; returns `410` |
-| GET | `/api/state/load/{user_id}` | Disabled; returns `410` |
+| GET | `/api/state/load/{user_id}` | Disabled; returns `410`. Cloud sync runs through Supabase |
 
 ### Required Configuration
 
@@ -112,7 +111,8 @@ Optional scraping/model routing:
 ### Operational Notes
 
 - Curated-library responses are sanitized server-side before listing, fetching, or downloading bundled PDFs.
-- The browser service worker uses network-first caching for theme JS/CSS so deployed UI fixes replace stale app code quickly. Large visual/model assets remain cache-friendly.
+- Every JS/CSS URL carries a `?v=` tag that changes with its content, so the service worker serves those cache-first with no revalidation: a deploy reaches a returning browser because the URL itself changed, not because the cache was re-checked. `tools/check_module_versions.mjs` fails the build if a module's content changed without its version. Unversioned assets stay network-first. Large visual/model assets remain cache-friendly.
+- GitHub Pages sends no custom response headers, so `public/_headers` is inert there. `Referrer-Policy` is set by a `<meta>` in `index.html`; `X-Content-Type-Options` and `X-Frame-Options` have no meta equivalent and are simply absent on this host.
 - Browser-reported device data is approximate by design. A PWA does not unlock exact RAM, CPU, GPU, or thermal telemetry; exact hardware telemetry requires a native wrapper.
 
 Optional tuning:

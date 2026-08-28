@@ -3,6 +3,7 @@ import {
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
 } from './tts_pronunciation_core.js?v=pron-v14';
 import {
+  POCKET_MAX_CACHE_WORKERS,
   readPocketDeviceBackendPreference,
   writePocketDeviceBackendPreference,
   selectNarrationEngine,
@@ -11,9 +12,9 @@ import {
   isKokoroVoice,
   KOKORO_VOICES,
   KOKORO_DEFAULT_VOICE,
-} from './pocket_backend_policy.js?v=backend-v24';
+} from './pocket_backend_policy.js?v=backend-v25';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '200';
+export const NARRATION_SERVICE_WORKER_VERSION = '201';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -65,7 +66,10 @@ if (!window.userProfile) {
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const HARD_CAP_WORKERS   = window.HARD_CAP_WORKERS;
-const MANUAL_CAP_WORKERS = window.MANUAL_CAP_WORKERS;
+// The narration pool's real ceiling, not the generic worker cap. The control
+// used to advertise 1-MANUAL_CAP (up to 8) against a policy that can only ever
+// return 1 or 2, so six of its values were indistinguishable.
+const NARRATION_WORKER_CEILING = POCKET_MAX_CACHE_WORKERS;
 const DEFAULT_MAX_WORKERS = window.DEFAULT_MAX_WORKERS;
 
 // Safe defaults that are guaranteed stable on any device.
@@ -442,8 +446,13 @@ export function initSettingsUI() {
     el('scroll-behavior-select').value = settings.scrollBehavior;
   }
 
-  // No speed slider/label exists. settings.speed is read directly at playback
-  // time by audio_core's getEffectivePlaybackRate().
+  // Global narration speed. Read on every paragraph by audio_core's
+  // getEffectivePlaybackRate(); a story's own narrationPreset.speed still wins.
+  if (el('playback-speed-slider')) {
+    const rate = Math.min(2, Math.max(0.5, Number(settings.speed) || 1));
+    el('playback-speed-slider').value = String(rate);
+    window.onNarrationSpeedChange?.(rate, false);
+  }
 
   if (el('app-font-slider') && settings.appFontSize) {
     el('app-font-slider').value = settings.appFontSize;
@@ -503,10 +512,10 @@ export function initSettingsUI() {
   }
   if (manualContainer) manualContainer.style.display = settings.enableManualWorkers ? 'block' : 'none';
   if (maxInput) {
-    maxInput.max = MANUAL_CAP_WORKERS;
-    maxInput.value = settings.maxWorkers || DEFAULT_MAX_WORKERS;
+    maxInput.max = NARRATION_WORKER_CEILING;
+    maxInput.value = Math.min(NARRATION_WORKER_CEILING, Number(settings.maxWorkers) || DEFAULT_MAX_WORKERS);
     const label = document.querySelector('label[for="max-workers-input"]');
-    if (label) label.textContent = `Max Workers (1-${MANUAL_CAP_WORKERS})`;
+    if (label) label.textContent = `Max narration workers (1-${NARRATION_WORKER_CEILING})`;
   }
   if (detailsEl && isStrongDevice) detailsEl.open = true;
 
@@ -549,7 +558,9 @@ export function initSettingsUI() {
         window._gpuVendor = p.gpu;
       }
       if (detectedGpuEl && window._gpuVendor) detectedGpuEl.textContent = window._gpuVendor;
-      if (typeof updateGpuToggles === 'function') updateGpuToggles();
+      // A call to updateGpuToggles() sat here behind a typeof guard. No such
+      // function exists anywhere -- the per-vendor GPU toggles it refreshed were
+      // replaced by the backend selection policy, and the call outlived them.
     }).catch(() => {});
   }
 
@@ -689,7 +700,7 @@ export function applySettings() {
     if (maxInput && settings.enableManualWorkers) {
       let val = parseInt(maxInput.value, 10);
       if (isNaN(val) || val < 1)      val = DEFAULT_MAX_WORKERS;
-      if (val > MANUAL_CAP_WORKERS)   val = MANUAL_CAP_WORKERS;
+      if (val > NARRATION_WORKER_CEILING) val = NARRATION_WORKER_CEILING;
       maxInput.value       = val;
       settings.maxWorkers  = val;
     } else if (!settings.enableManualWorkers) {
@@ -752,10 +763,17 @@ const _SETTING_FIELD_BY_CONTROL = Object.freeze({
   'reading-font-select': 'readerFontFamily',
   'reader-font-slider': 'readerFontSize',
   'scroll-behavior-select': 'scrollBehavior',
-  'touch-target-select': 'touchTargetSize',
-  'low-memory-toggle': 'lowMemoryMode',
+  // These three named elements that do not exist -- touch-target-select,
+  // low-memory-toggle and worker-count-slider were renamed in the markup and
+  // never here. The lookup falls through to t.name || t.id, so editing them
+  // stamped a raw element id as a sync field name. Harmless for the two
+  // device-local settings, but touchTargetSize IS synced, so an accessibility
+  // change went unstamped and could lose a merge against another device.
+  'touch-target-size-toggle': 'touchTargetSize',
+  'low-mem-toggle': 'lowMemoryMode',
+  'max-workers-input': 'maxWorkers',
   'manual-workers-toggle': 'enableManualWorkers',
-  'worker-count-slider': 'maxWorkers',
+  'playback-speed-slider': 'speed',
 });
 ['change', 'input'].forEach((evt) => {
   document.addEventListener(evt, (e) => {
@@ -766,6 +784,34 @@ const _SETTING_FIELD_BY_CONTROL = Object.freeze({
     }
   }, true);
 });
+
+// ── onNarrationSpeedChange — the global playback rate ───────────────────────
+// settings.speed was stored, defaulted, cloud-synced, merged, and read on every
+// paragraph by getEffectivePlaybackRate() -- and no control anywhere could set
+// it. audio_core exported an applyPlaybackSpeed() for exactly this job, but it
+// had no callers and was itself a deferred narration action, so wiring a slider
+// to it would have pulled the whole narration runtime in on a drag.
+//
+// Lives in the shell instead, like onNarrationEngineSelect: writing a number
+// and nudging the element that is already playing needs no engine.
+window.onNarrationSpeedChange = function onNarrationSpeedChange(value, commit = true) {
+  const requested = Number(value);
+  const next = Number.isFinite(requested) ? Math.min(2, Math.max(0.5, requested)) : 1;
+  const label = document.getElementById('playback-speed-label');
+  if (label) label.textContent = `${next.toFixed(2)}x`;
+  if (!commit) return next;
+
+  if (window.userProfile?.settings) window.userProfile.settings.speed = next;
+  _markSettingsEdited('speed');
+  if (typeof window.saveLocalData === 'function') window.saveLocalData();
+
+  // Apply in place where that is possible. A media element takes a new rate
+  // mid-paragraph; a Web Speech utterance bakes its rate in at speak() time, so
+  // it picks the change up on the next paragraph instead.
+  if (window.currentAudio instanceof HTMLAudioElement) window.currentAudio.playbackRate = next;
+  if (typeof window.updateTimeRemaining === 'function') window.updateTimeRemaining();
+  return next;
+};
 
 // ── onChunkModeChange — reveal word-count sliders only in words mode ─────────
 window.onChunkModeChange = function() {
@@ -1564,7 +1610,9 @@ export async function refreshPerfPanel() {
     }).catch(() => {});
   }
   p.innerHTML = `<ul style="font-size:0.85rem;padding-left:20px;color:var(--text-main);line-height:1.6;">
-    <li><b>Neural Engine:</b> ${isNeural ? `<span style="color:var(--accent-green);">Active (Pocket TTS)</span>` : 'Inactive'}</li>
+    <li><b>Neural Engine:</b> ${isNeural
+      ? `<span style="color:var(--accent-green);">Active (${_escapeSettingsHtml(_resolveEngineChoice()?.engine === 'kokoro' ? 'Kokoro-82M' : 'Pocket TTS')})</span>`
+      : 'Inactive'}</li>
     <li><b>Engine State:</b> ${typeof window._neuralState === 'function' ? window._neuralState() : 'idle (loading...)'}</li>
     ${pocketRows}
     <li><b>GPU Vendor:</b> ${gpuVendor}</li>
@@ -1589,7 +1637,9 @@ window.refreshPerfPanel = refreshPerfPanel;
 if (typeof window.saveAwayWorkersSetting !== 'function') {
   window.saveAwayWorkersSetting = function(val) {
     const num = parseInt(val, 10);
-    if (!isNaN(num) && num >= 1 && num <= 4) {
+    // Same ceiling as buffer_manager's real implementation, which replaces this
+    // once the narration runtime loads.
+    if (!isNaN(num) && num >= 1 && num <= NARRATION_WORKER_CEILING) {
       if (window.userProfile && window.userProfile.settings) {
         window.userProfile.settings.enableManualWorkers = true;
         window.userProfile.settings.maxWorkers = num;

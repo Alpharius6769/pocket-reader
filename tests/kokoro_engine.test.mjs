@@ -334,7 +334,12 @@ test('every neural gate in audio_core accepts Kokoro', async () => {
   // The generation paths specifically: returning null here is what made
   // playback fall back to the device voice.
   assert.match(audio, /if \(!_isNeuralEngine\(engine\)\) return null;/);
-  assert.match(audio, /if \(!_isNeuralEngine\(_resolveActiveEngine\(\)\)\) return null;/);
+  // generateChunkStream resolves the engine into a local now, because it also
+  // has to hand that engine to _resolvePocketRoute -- it used to pass the
+  // literal 'pocket', which rewrote a Kokoro voice into a Pocket emotion asset.
+  assert.match(audio, /const engine = _resolveActiveEngine\(\);\s*\n\s*if \(!_isNeuralEngine\(engine\)\) return null;/);
+  assert.doesNotMatch(audio, /_resolvePocketRoute\('pocket'/,
+    "a route built for the literal 'pocket' cannot serve a Kokoro session");
   // No generation/playback gate may still test the bare literal.
   for (const dead of [
     /const engine = _resolveActiveEngine\(\);\s*\n\s*if \(engine !== 'pocket'\) return null;/,
@@ -568,10 +573,20 @@ test('a Kokoro chunk boundary can only fall between clauses', async () => {
 test('one inference is capped well below the graph sequence axis', async () => {
   const worker = await read('public/assets/js/kokoro_worker.js');
 
-  const cap = Number(worker.match(/const DEFAULT_MAX_CHUNK_TOKENS = (\d+);/)?.[1]);
-  assert.ok(Number.isFinite(cap), 'the worker must declare a chunk cap');
-  assert.ok(cap <= 256, `the cap must stay near the measured knee; found ${cap}`);
-  assert.ok(cap >= 96, `too small a cap only adds seams for no memory; found ${cap}`);
+  // Two caps now, chosen by device class. constrainedMemoryMode was already in
+  // every init message and the worker dropped it, so the phone this engine
+  // exists for got the same cap as a desktop with room to spare.
+  const constrained = Number(worker.match(/const CONSTRAINED_MAX_CHUNK_TOKENS = (\d+);/)?.[1]);
+  const roomy = Number(worker.match(/const ROOMY_MAX_CHUNK_TOKENS = (\d+);/)?.[1]);
+  assert.ok(Number.isFinite(constrained) && Number.isFinite(roomy),
+    'the worker must declare a chunk cap for each device class');
+  assert.ok(constrained <= roomy, 'the constrained cap must not exceed the roomy one');
+  for (const cap of [constrained, roomy]) {
+    assert.ok(cap <= 256, `the cap must stay near the measured knee; found ${cap}`);
+    assert.ok(cap >= 96, `too small a cap only adds seams for no memory; found ${cap}`);
+  }
+  assert.match(worker, /data\.constrainedMemoryMode === false \? ROOMY_MAX_CHUNK_TOKENS : CONSTRAINED_MAX_CHUNK_TOKENS/,
+    'the device class the main thread sends must pick the cap');
 
   // Measured over identical text: 510 -> 592 MB, 256 -> 440 MB, 192 -> 355 MB,
   // 128 -> 355 MB. Below 192 the peak stops falling, so a smaller cap buys
@@ -630,4 +645,85 @@ test('opening the reader does not drag in the narration runtime', async () => {
   assert.match(settings, /window\.syncNarrationControls = function/);
   assert.match(settings, /if \(engine === 'kokoro'\) \{/);
   assert.match(settings, /if \(window\.__pocketNarrationRuntimeLoaded === true\)/);
+});
+
+// Eighth instance of the same slip, and the one that mattered most: not an
+// engine name this time but a VOICE ASSET, one layer below where every gate
+// above stops looking.
+//
+// generateChunk resolved the engine correctly and _resolvePocketRoute passed a
+// Kokoro id straight through -- and then _generatePocketAttempt called
+// ensurePocketVoiceLoaded() on it unconditionally. That helper answers
+// donald_malone_neutral for any id it does not recognise, so every Kokoro
+// paragraph downloaded a ~5-6 MB Pocket .safetensors and posted
+// register_precompiled_voice to a worker that handles four message types and
+// not that one. No ack, 60s registration timeout, fatal quality failure, one
+// retry, then null -- playback stopped with "The neural engine couldn't produce
+// audio" and caching with "Neural engine failed". On every iOS device, which is
+// the whole population selectNarrationEngine routes to Kokoro.
+test('Pocket voice registration cannot run on a Kokoro session', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+
+  // The route records which engine it was built for, so the decision below
+  // matches the route being run rather than re-deriving it.
+  assert.match(audio, /return \{ engine, voiceId: _normalizeVoice\(engine, voice \|\| null\)/);
+  assert.match(audio, /return \{ engine, voiceId, baseVoice, emotion, emotionInfo \};/);
+
+  // And the Pocket-only preparation is gated on it.
+  assert.match(
+    audio,
+    /if \(route\.engine === 'pocket'\) \{\s*\n\s*workerVoice = await ensurePocketVoiceLoaded\(route\.voiceId\);\s*\n\s*await _ensurePocketBackendOptimizedForVoice\(workerVoice\);\s*\n\s*\}/,
+    'voice registration and backend calibration must not run for a non-Pocket engine',
+  );
+  // Exactly one call site, and the positive assertion above pins it inside the
+  // gate -- so a second, ungated one cannot creep back alongside it.
+  assert.equal(
+    (audio.match(/ensurePocketVoiceLoaded\(route\.voiceId\)/g) || []).length, 1,
+    'an ungated call is the bug: it resolves a Kokoro id to a Pocket voice pack',
+  );
+
+  // The worker really does handle only these four, which is why an ungated
+  // register_precompiled_voice never gets an answer.
+  const worker = await read('public/assets/js/kokoro_worker.js');
+  assert.doesNotMatch(worker, /register_precompiled_voice/);
+  for (const type of ['init', 'cancel_generation', 'generate', 'dispose_backend']) {
+    assert.match(worker, new RegExp(`type === '${type}'`));
+  }
+});
+
+// Same shape, on the prefetch path: a hardcoded engine rather than the resolved
+// one. Pinned to 'pocket' the lookahead rewrote the Kokoro voice into a Pocket
+// emotion asset, then read and wrote cache keys under engine 'pocket' with the
+// Pocket prosody tag while playback reads 'kokoro' -- so every slot missed, and
+// every miss committed the worker to a synthesis that could not succeed.
+test('the playback lookahead resolves its engine instead of assuming one', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  assert.doesNotMatch(audio, /const engine = 'pocket';/,
+    'a literal engine cannot be right for both engines');
+  assert.match(audio, /const selVoice = document\.getElementById\('voice-selector'\)\?\.value \|\| _defaultVoiceForEngine\(engine\);/,
+    'the fallback voice must follow the engine too');
+});
+
+// Kokoro renders were keyed on position and voice alone: _prosodyCacheTag
+// returned '' for every non-Pocket engine, so none of the markers that say HOW
+// a chunk was rendered were in the key. Changing the per-inference chunk cap
+// moves every seam in a paragraph, and textHash only catches re-segmentation of
+// the paragraph itself.
+test('Kokoro audio is cached under a render-shape version', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = '[a-z0-9]+';/);
+  assert.match(audio, /if \(engine === 'kokoro'\) return `#\$\{KOKORO_NARRATION_CACHE_VERSION\}`;/);
+  assert.match(audio, /if \(engine === 'kokoro'\) return \[_prosodyCacheTag\(engine\)\];/);
+});
+
+// The other door into the Pocket voice-pack path. _loadPocketEngine already
+// skips the backend planner for Kokoro, but the cache loop reaches it through
+// window.ensurePocketBackendOptimized -- which ends in ensurePocketVoiceLoaded()
+// and would resolve a Kokoro id to donald_malone_neutral all the same.
+test('Pocket backend calibration is gated on the Pocket engine at both ends', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const buffer = await read('public/assets/js/buffer_manager.js');
+
+  assert.match(buffer, /if \(_resolveActiveEngine\(\) === 'pocket'\) \{\s*\n\s*await window\.ensurePocketBackendOptimized\?\.\(voice\);/);
+  assert.match(audio, /async function _ensurePocketBackendOptimizedForVoice\(voiceName\) \{[\s\S]{0,500}?if \(_resolveActiveEngine\(\) !== 'pocket'\) return _pocketBackendRuntime;/);
 });

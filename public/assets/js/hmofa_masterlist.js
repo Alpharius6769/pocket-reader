@@ -359,15 +359,15 @@ export async function refreshHmofaCatalog() {
     loadCommunity(true);
     const count = state.records.length.toLocaleString('en-US');
     setStatus(`Catalog updated (${count} stories).`);
-    if (window.showNotice) {
-      window.showNotice(`Catalog refreshed (${count} stories).`, 'info');
-    }
+    // window.showNotice is defined nowhere in the app, so both of these were
+    // silent no-ops guarded by their own existence check. pocketNotify is the
+    // real notifier (ui_controller). setStatus above still writes the in-page
+    // line either way, which is why the gap was invisible.
+    window.pocketNotify?.(`Catalog refreshed (${count} stories).`);
   } catch (error) {
     window.Diagnostics?.log('WARN', 'HMOFA catalog refresh failed', { error: String(error) });
     setStatus('Could not refresh the catalog just now.', true);
-    if (window.showNotice) {
-      window.showNotice('Could not refresh the catalog. Check your connection.', 'error');
-    }
+    window.pocketNotify?.('Could not refresh the catalog. Check your connection.');
   } finally {
     if (button) {
       button.disabled = false;

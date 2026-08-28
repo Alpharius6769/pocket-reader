@@ -550,7 +550,31 @@ export function recommendedWasmThreadCount(options = {}) {
 // desktop-only opt-in selected from positive coarse evidence. Browsers cap and
 // round deviceMemory; 8 GiB is therefore the strongest portable signal we can
 // require without attempting to fingerprint exact RAM.
+// The true ceiling on concurrent narration workers. Every branch below returns
+// 1 or this; a second complete inference worker is the most any device is ever
+// offered, because each one holds its own copy of the model weights.
+//
+// Exported so the Settings control can advertise the real range. It used to
+// offer 1-8 against a function that cannot return more than 2, so six of its
+// eight values were indistinguishable from each other.
+export const POCKET_MAX_CACHE_WORKERS = 2;
+
+// options.userMaxWorkers is a CEILING, never a floor: it can only lower the
+// count this function would otherwise return. Raising it is not offered because
+// the conditions below are memory-safety limits, not preferences -- a reader who
+// asks for four workers on a 4 GB phone is asking for the OOM this exists to
+// prevent. Lowering is genuinely useful (two workers can still cause audio
+// glitches on a machine that technically qualifies), and it is what makes the
+// Settings override an honest control rather than a decorative one.
 export function recommendedPocketCacheWorkerCount(options = {}) {
+  const ceiling = Number(options.userMaxWorkers);
+  const capped = (value) => (Number.isFinite(ceiling) && ceiling >= 1
+    ? Math.max(1, Math.min(value, Math.floor(ceiling)))
+    : value);
+  return capped(_recommendedPocketCacheWorkerCount(options));
+}
+
+function _recommendedPocketCacheWorkerCount(options = {}) {
   const platform = options.platform || detectMobilePlatform(options.userAgent || '');
   const memoryGb = Number(options.deviceMemory ?? options.memoryGb ?? 0);
   const hardwareConcurrency = Math.max(0, Number(options.hardwareConcurrency || 0));
@@ -569,7 +593,7 @@ export function recommendedPocketCacheWorkerCount(options = {}) {
   if (options.saveData === true || options.lowMemoryMode === true || batteryTooLow) return 1;
   if (memoryGb < 8) return 1;
   if (hardwareConcurrency < Math.max(8, wasmThreads * 2)) return 1;
-  return 2;
+  return POCKET_MAX_CACHE_WORKERS;
 }
 
 function isBudgetAndroidUA(userAgent = '') {

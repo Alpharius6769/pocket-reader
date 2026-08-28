@@ -249,7 +249,7 @@ test('the onset ramp maths are monotonic, bounded and unity-terminating', async 
   assert.equal(Math.max(0, Math.round(0 * 24000)), 0);
 });
 
-test('playback speed comes from the profile, not a phantom DOM control', async () => {
+test('playback speed comes from the profile, through a control that exists', async () => {
   const [audio, ui, settings, loader, html] = await Promise.all([
     read('public/assets/js/audio_core.js'),
     read('public/assets/js/ui_controller.js'),
@@ -258,16 +258,14 @@ test('playback speed comes from the profile, not a phantom DOM control', async (
     read('public/index.html'),
   ]);
 
-  // There is no speed slider or label in the app and there never was one in the
-  // shipped DOM. Every playback path read `getElementById('speed-slider')?.value
-  // || '1'`, so the rate resolved to 1.0 on every paragraph and clobbered
-  // anything set elsewhere -- settings.speed and narrationPreset.speed were
-  // stored, cloud-synced and merged but never reached playback at all.
+  // Every playback path once read `getElementById('speed-slider')?.value || '1'`
+  // against a slider that existed in no markup, so the rate resolved to 1.0 on
+  // every paragraph and clobbered anything set elsewhere. Those ids must stay
+  // gone; the replacement control uses its own.
   for (const [name, source] of [['audio_core', audio], ['ui_controller', ui], ['settings_manager', settings], ['loader', loader], ['index.html', html]]) {
     assert.doesNotMatch(source, /getElementById\(['"]speed-slider['"]\)/, `${name} still reads the phantom slider`);
     assert.doesNotMatch(source, /getElementById\(['"]speed-label['"]\)/, `${name} still reads the phantom label`);
   }
-  assert.doesNotMatch(html, /speed-slider|speed-label/);
 
   assert.match(audio, /export function getEffectivePlaybackRate\(\)/);
   // Per-story preset wins over the profile default.
@@ -276,9 +274,23 @@ test('playback speed comes from the profile, not a phantom DOM control', async (
   assert.match(audio, /window\.currentAudio\.playbackRate = getEffectivePlaybackRate\(\)/);
   assert.match(audio, /utterance\.rate = getEffectivePlaybackRate\(\)/);
   assert.match(audio, /playbackRate: getEffectivePlaybackRate\(\)/);
-  // applyPlaybackSpeed now takes the rate rather than reading the DOM.
-  assert.match(audio, /export function applyPlaybackSpeed\(rate\)/);
-  assert.doesNotMatch(loader, /applyPlaybackSpeedSlider/);
+
+  // settings.speed is stored, defaulted, synced, merged and read on every
+  // paragraph -- and for a while nothing could write it. audio_core exported an
+  // applyPlaybackSpeed() for the job with no callers, and it was a DEFERRED
+  // narration action, so wiring a slider to it would have pulled the whole
+  // narration runtime in on a drag. The writer lives in the shell instead.
+  assert.doesNotMatch(audio, /(?:export function|window\.)applyPlaybackSpeed/,
+    'the speed writer belongs in the shell, not in the lazy-loaded runtime');
+  assert.doesNotMatch(loader, /applyPlaybackSpeed/,
+    'setting a preference must not import audio_core');
+  assert.match(settings, /window\.onNarrationSpeedChange = function/);
+  assert.match(settings, /window\.userProfile\.settings\.speed = next;/);
+  assert.match(html, /id="playback-speed-slider"/);
+  assert.match(html, /onchange="window\.onNarrationSpeedChange\(this\.value\)"/);
+  // Populated from the profile when the panel opens, or the control shows 1.00x
+  // over a stored 1.5 and the next drag silently resets it.
+  assert.match(settings, /el\('playback-speed-slider'\)\.value = String\(rate\)/);
 });
 
 test('the narration sanitizer cannot truncate a non-AO3 document', async () => {

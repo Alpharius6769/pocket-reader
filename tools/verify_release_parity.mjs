@@ -1,7 +1,7 @@
 /**
  * Pre-deploy parity check.
  *
- * The Anvil legs are gone (MIGRATION_PLAN.md Phase 5): there is no Anvil app
+ * The Anvil legs are gone: there is no Anvil app
  * mirror, no FrontEnd_code.py and no serviceworker.py to compare against. What
  * remains are the two places content genuinely exists twice -- backend/ versus
  * the Hugging Face checkout -- plus config sanity, plus an optional live check

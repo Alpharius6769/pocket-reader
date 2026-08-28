@@ -90,13 +90,9 @@ window._rateLimit = {
     retryAfterUntil: 0,
     running: false,
   },
-  masterlist: {
-    lastAt: 0,
-    minIntervalMs: 5000,
-    queue: [],
-    retryAfterUntil: 0,
-    running: false,
-  },
+  // No 'masterlist' bucket: the catalog is fetched from the published index by
+  // hmofa_masterlist.js, which caches it itself against the build hash and never
+  // calls rateLimitedFetch. The bucket that used to sit here throttled nothing.
   health: {
     lastAt: 0,
     minIntervalMs: 5000,

@@ -8,7 +8,7 @@ const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
  * Invariants of the static site that replaced the Anvil-hosted app.
  *
  * Originally these compared the Pages build against Anvil's copies. Anvil is
- * deleted (MIGRATION_PLAN.md Phase 5), so the cross-host comparisons are gone
+ * deleted, so the cross-host comparisons are gone
  * and what remains are the properties that must hold on their own.
  */
 
@@ -113,14 +113,20 @@ test('all public files are free of deleted Anvil asset paths', async () => {
 // Asserted against `backend/`, not the "Hugging Face Space" checkout: that
 // checkout is a deploy target (and a bare gitlink CI does not fetch), so
 // reading it made this test fail with ENOENT on every CI run.
-test('HMOFA catalog uses the independent local source', async () => {
-  const [app, catalog] = await Promise.all([
-    readFile(new URL('../backend/app.py', import.meta.url), 'utf8'),
-    readFile(new URL('../backend/masterlist.json', import.meta.url), 'utf8'),
-  ]);
+test('the HMOFA catalog is served by the index, not this API', async () => {
+  const app = await readFile(new URL('../backend/app.py', import.meta.url), 'utf8');
   assert.doesNotMatch(app, /docs\.google\.com\/spreadsheets/);
-  assert.match(app, /Pocket Reader independent catalog/);
-  assert.deepEqual(JSON.parse(catalog).stories, []);
+  // /api/masterlist served backend/masterlist.json, whose stories array was
+  // empty, to a frontend that reads the published index directly. Route and
+  // data file are both retired; the route answers 410 so an old cached client
+  // gets JSON rather than an HTML error page.
+  assert.match(app, /@app\.get\("\/api\/masterlist"\)/);
+  assert.match(app, /The masterlist is served by the Anthronomicon index/);
+  assert.doesNotMatch(app, /MASTERLIST_CACHE\s*=/);
+  await assert.rejects(
+    () => readFile(new URL('../backend/masterlist.json', import.meta.url), 'utf8'),
+    'the empty masterlist.json is retired along with the route that read it',
+  );
 });
 
 const precachedAssets = (source) =>
@@ -140,11 +146,11 @@ test('the service worker precaches every module the shell loads', async () => {
     'these modules are loaded by index.html but never precached, so offline boot would fail on them');
 });
 
-// Guards the decision recorded in MIGRATION_PLAN.md: global COOP/COEP breaks
-// OAuth popups, which Google sign-in through Supabase depends on. Isolation is
-// applied per-navigation by the service worker instead. This test exists because
-// adding these headers looks like an obvious improvement.
-test('_headers does not set COOP/COEP globally', async () => {
+// Global COOP/COEP breaks OAuth popups, which Google sign-in through Supabase
+// depends on. Isolation is applied per-navigation by the service worker
+// instead. This test exists because adding these headers looks like an obvious
+// improvement.
+test('_headers does not set COOP/COEP globally, and says it is inert', async () => {
   const headers = await read('public/_headers');
   const active = headers.split('\n').filter((l) => !l.trimStart().startsWith('#'));
   for (const banned of ['Cross-Origin-Opener-Policy', 'Cross-Origin-Embedder-Policy']) {
@@ -153,6 +159,17 @@ test('_headers does not set COOP/COEP globally', async () => {
   }
   assert.ok(active.some((l) => l.includes('Cache-Control: no-cache')),
     'the service worker and shell must not be long-cached');
+  // GitHub Pages does not read _headers, so every rule in it is documentation.
+  // The file has to say so, or it reads as live config and the gaps it leaves
+  // go unnoticed.
+  assert.match(headers, /INERT ON THE CURRENT HOST/,
+    '_headers must state that the current host ignores it');
+});
+
+// The one header from _headers that a static host can still deliver.
+test('index.html carries the referrer policy _headers cannot deliver', async () => {
+  const html = await read('public/index.html');
+  assert.match(html, /<meta name="referrer" content="strict-origin-when-cross-origin">/);
 });
 
 test('the PWA manifest is valid and self-hosted', async () => {

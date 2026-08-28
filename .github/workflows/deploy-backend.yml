@@ -1,7 +1,6 @@
 name: Deploy backend to Hugging Face
 
 # backend/ is the source of truth; the Hugging Face Space is a deploy target.
-# See MIGRATION_PLAN.md Phase 2.
 on:
   push:
     branches: [main]
@@ -112,7 +111,7 @@ jobs:
       # pushed AND in terminal stage RUNNING, and only then do we probe health.
       #
       # The health probe MUST send the token. The Space went private with
-      # MIGRATION_PLAN Option B, and HF answers 404 -- not 401 -- to an
+      # The Space is private, and HF answers 404 -- not 401 -- to an
       # unauthenticated request for a private Space. An unauthenticated probe
       # therefore never returns 200 and this gate could only ever time out.
       - name: Wait for the Space to rebuild onto the pushed commit

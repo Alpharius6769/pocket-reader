@@ -248,7 +248,12 @@ test('HMOFA masterlist supports cache-bypass refresh, full weekly trending backf
   // Refresh Catalogue bypasses HTTP cache and shows active UX
   assert.match(list, /fetchRemoteCatalog\(\{\s*bypassHttpCache:\s*true\s*\}\)/);
   assert.match(list, /button\.classList\.add\('loading'\)/);
-  assert.match(list, /window\.showNotice/);
+  // Asserting the STRING window.showNotice passed while the call could never
+  // fire: nothing defines that global. Assert the notifier that exists, and
+  // that the dead name has not come back.
+  assert.match(list, /window\.pocketNotify\?\.\(/);
+  assert.doesNotMatch(list, /window\.showNotice\s*\(/,
+    'showNotice is defined nowhere; a guarded call to it is a silent no-op');
   assert.match(css, /#hmofa-refresh-catalog\.loading svg/);
 
   // Weekly Trending implements intelligent backfill to guarantee at least 20 stories

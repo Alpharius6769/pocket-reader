@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v16';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v17';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -15,7 +15,6 @@ import {
   POCKET_WEBGPU_BUNDLE,
   POCKET_GPU_RESIDENT_STATE_BYTES,
   normalizePocketBackend,
-  selectNarrationEngine,
   readNarrationEngineOverride,
   writeNarrationEngineOverride,
   isKokoroVoice,
@@ -46,7 +45,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v24';
+} from './pocket_backend_policy.js?v=backend-v25';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -130,14 +129,19 @@ const POCKET_BALANCED_EMOTION_MAP = {
   confused: 'worried',
 };
 const POCKET_EMOTION_PATTERN = new RegExp(`_(${POCKET_ALL_EMOTIONS.join('|')})$`);
-// narrv18: embedded AO3 metadata removal and outline-less chapter splitting can
-// shift chapter/paragraph indices, so old position-keyed audio must not be reused.
-// must never be reused for the newly normalized story layout.
-// (voice+emotion+text) on all generation paths — bumped so existing position-
-// keyed cached audio re-renders with the consistent engine instead of the old
-// per-render variation.
+// Pocket audio cache keys are position-based, so anything that shifts chapter
+// or paragraph indices must invalidate them: embedded AO3 metadata removal and
+// outline-less chapter splitting both do, and reusing old audio across such a
+// change plays the wrong paragraph with nothing to detect it. Bump on any
+// change to how a paragraph is rendered as well, so cached audio re-renders
+// rather than mixing engines.
 const POCKET_NARRATION_CACHE_VERSION = 'narrv18';
 const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
+// Kokoro's render-shape version. Bump whenever anything that changes the audio
+// for the same (text, voice) changes: the chunk cap, the clause rejoin, the
+// phonemizer, or the model revision. k1 = 192/256 device-class cap, clause
+// marks restored.
+const KOKORO_NARRATION_CACHE_VERSION = 'kokorov1';
 // Identity-anchored voice pack subpath on B2 (see Back end/tools/build_anchored_pack_v2.py).
 // Every v2 emotion state shares a neutral identity anchor, so emotion switches keep
 // the same perceived speaker. Loader falls back to the legacy v1 files when a v2
@@ -204,7 +208,12 @@ function _emotionFromAssetVoice(voice) {
 }
 
 function _emotionMode() {
-  const mode = window.currentStory?.narrationPreset?.emotion || window.userProfile?.settings?.voiceEmotionMode || 'balanced';
+  const raw = window.currentStory?.narrationPreset?.emotion || window.userProfile?.settings?.voiceEmotionMode || 'balanced';
+  // 'full' is the TIER name (POCKET_PROSODY_TIERS); 'expressive' is the MODE
+  // name. The story-preset dialog offered the tier name, so every story saved
+  // with "Full" fell through to balanced here. The dialog now offers the mode
+  // name; this accepts the ones already stored instead of quietly ignoring them.
+  const mode = raw === 'full' ? 'expressive' : raw;
   return ['neutral', 'balanced', 'expressive'].includes(mode) ? mode : 'balanced';
 }
 
@@ -557,7 +566,8 @@ function _recordProsodyOutcome(clean) {
     change,
   );
 }
-window._recordPocketProsodyOutcome = _recordProsodyOutcome;
+// No window alias: _recordProsodyOutcome is called from generateChunk in this
+// module and from nowhere else, so publishing it only widened the surface.
 
 // Exposed for diagnostics and browser verification: "does narration actually
 // vary by emotion" is otherwise unanswerable from outside this module, which is
@@ -567,7 +577,30 @@ window.inspectPocketEmotion = (text) => _detectPocketEmotion(String(text || ''))
 
 // Reset per story/chapter so one rough chapter does not permanently flatten the
 // rest of the book.
-window.resetPocketProsodyDrift = () => _prosodyDrift.reset();
+window.resetPocketProsodyDrift = () => {
+  _prosodyDriftPosition = null;
+  _prosodyDrift.reset();
+};
+
+// ...and actually call it. This export had no callers anywhere, so a chapter
+// that tripped the guard carried its demotion into every later chapter and the
+// next book, which is exactly what the line above says must not happen. (The
+// guard does re-escalate on its own after 20 clean paragraphs, so this was a
+// slow recovery rather than a permanent one -- but "recovers eventually" is not
+// what a per-chapter reset means.)
+//
+// Driven from position rather than from a navigation hook because there are
+// five ways to change chapter (skipChapter, seekToChapter, seekToParagraph, the
+// paragraph-end rollover, and a resumed story) and a hook on each is four more
+// chances to miss one. playCurrentParagraph runs on every one of them.
+let _prosodyDriftPosition = null;
+function _syncProsodyDriftToPosition() {
+  const key = `${window.currentStory?.storyKey || window.currentStory?.title || ''}::${window.currentChapterIndex || 0}`;
+  if (_prosodyDriftPosition === key) return;
+  const moved = _prosodyDriftPosition !== null;
+  _prosodyDriftPosition = key;
+  if (moved) _prosodyDrift.reset();
+}
 
 function _artifactCappedTemperature(baseTemperature, emotion, retryLevel = 0) {
   // POCKET_FULL_TEMP_CAPS was previously dead: this function computed the mode
@@ -581,9 +614,15 @@ function _artifactCappedTemperature(baseTemperature, emotion, retryLevel = 0) {
   return Number(Math.max(0.5, capped - (retryLevel ? 0.06 : 0)).toFixed(2));
 }
 
+// The route carries the engine it was resolved FOR, because everything
+// downstream of it -- voice registration, backend calibration, the prosody
+// cache tag -- is Pocket-specific and must not run for another engine. Deriving
+// it again later from _resolveActiveEngine() would not be equivalent: the two
+// hardcoded 'pocket' call sites this replaced proved the resolved engine and
+// the engine a route was built for can disagree.
 function _resolvePocketRoute(engine, voice, text, ctx = null) {
   if (engine !== 'pocket') {
-    return { voiceId: _normalizeVoice(engine, voice || null), baseVoice: voice || '', emotion: 'neutral', emotionInfo: null };
+    return { engine, voiceId: _normalizeVoice(engine, voice || null), baseVoice: voice || '', emotion: 'neutral', emotionInfo: null };
   }
   const baseVoice = _baseVoiceId(voice || window.userProfile?.settings?.pocketVoice || POCKET_DEFAULT_VOICE);
   const lockedEmotion = _emotionFromAssetVoice(voice);
@@ -632,7 +671,7 @@ function _resolvePocketRoute(engine, voice, text, ctx = null) {
   const voiceId = typeof window.resolvePocketAssetVoiceId === 'function'
     ? window.resolvePocketAssetVoiceId(baseVoice, emotion)
     : `${baseVoice}_${emotion}`;
-  return { voiceId, baseVoice, emotion, emotionInfo };
+  return { engine, voiceId, baseVoice, emotion, emotionInfo };
 }
 
 function _isPocketThroughputCache() {
@@ -694,6 +733,14 @@ function _buildPocketProsodyOpts(selectedVoice, overrides = {}) {
 // The tag never reaches the worker or voice resolution; it is purely
 // a storage key suffix.
 function _prosodyCacheTag(engine, throughputOverride = null) {
+  // Kokoro renders are versioned too. This returned '' for every non-Pocket
+  // engine, so a Kokoro chunk was keyed on position and voice alone and carried
+  // none of the markers that say HOW it was rendered. Changing the per-inference
+  // chunk cap (510 -> 192, and now 192/256 by device class) moves every seam in
+  // a paragraph, and audio rendered under the old cap was being replayed as if
+  // nothing had changed -- textHash catches re-segmentation of the paragraph,
+  // not a change in how that paragraph is split for inference.
+  if (engine === 'kokoro') return `#${KOKORO_NARRATION_CACHE_VERSION}`;
   if (engine !== 'pocket') return '';
   const s = window.userProfile?.settings || {};
   const wordsMode = s.chunkMode === 'words';
@@ -737,6 +784,7 @@ window._prosodyCacheTag = _prosodyCacheTag;
 // was blind to audio the other had already rendered — playback re-synthesized
 // paragraphs that were sitting in the cache. Readers should try every variant.
 function _prosodyCacheTagVariants(engine) {
+  if (engine === 'kokoro') return [_prosodyCacheTag(engine)];
   if (engine !== 'pocket') return [''];
   const current = _prosodyCacheTag(engine);
   const flipped = _prosodyCacheTag(engine, !_isPocketThroughputCache());
@@ -811,39 +859,17 @@ export function resolveVoiceWithSentiment(engine, voice, text, ctx = null) {
 }
 window.resolveVoiceWithSentiment = resolveVoiceWithSentiment;
 
-// ── Narration engine selection, published for engine_utils and settings ──────
-// engine_utils lives in the app shell and resolves the active engine long
-// before this module loads, so it feature-detects this rather than importing.
-window.resolveNarrationEngineChoice = function resolveNarrationEngineChoice() {
-  return selectNarrationEngine({
-    capability: _pocketDeviceCapability,
-    userAgent: navigator.userAgent || '',
-    deviceMemory: Number(navigator.deviceMemory || 0),
-    lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
-    storage: localStorage,
-  }).engine;
-};
-
-window.describeNarrationEngineChoice = function describeNarrationEngineChoice() {
-  return selectNarrationEngine({
-    capability: _pocketDeviceCapability,
-    userAgent: navigator.userAgent || '',
-    deviceMemory: Number(navigator.deviceMemory || 0),
-    lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
-    storage: localStorage,
-  });
-};
-
-window.getNarrationEngineOverride = () => readNarrationEngineOverride(localStorage);
-
-// Changing engines swaps the model set entirely, so the running worker and its
-// voice registry must go rather than be reused for a voice namespace it does
-// not have.
-window.setNarrationEngineOverride = async function setNarrationEngineOverride(engine) {
-  const stored = writeNarrationEngineOverride(localStorage, engine);
-  try { await _resetPocketEngineForBackend(); } catch (_) {}
-  return stored;
-};
+// Narration engine selection is NOT re-published here.
+//
+// Four wrappers used to sit at this point -- resolveNarrationEngineChoice,
+// describeNarrationEngineChoice, getNarrationEngineOverride and
+// setNarrationEngineOverride -- under a comment saying engine_utils
+// feature-detects them rather than importing. It stopped doing that when the
+// engine decision moved into the shell: engine_utils and settings_manager both
+// import selectNarrationEngine from the policy directly, precisely so the
+// answer does not depend on whether this lazy-loaded module has arrived. That
+// left all four unreferenced, and a fifth path to the same decision is exactly
+// what made "which engine is running" ambiguous in the first place.
 
 window.KOKORO_VOICES = KOKORO_VOICES;
 window.KOKORO_DEFAULT_VOICE = KOKORO_DEFAULT_VOICE;
@@ -861,28 +887,15 @@ window.resolveVoiceForEngine = function resolveVoiceForEngine(engine, voice) {
 };
 
 
-// ── Worker pool settings ─────────────────────────────────────────────────────
-// maxWorkers is read dynamically from userProfile.settings at engine load time.
-const HARD_CAP_WORKERS   = window.HARD_CAP_WORKERS;
-const MANUAL_CAP_WORKERS = window.MANUAL_CAP_WORKERS;
-const DEFAULT_MAX_WORKERS = window.DEFAULT_MAX_WORKERS;
-
-function _getMaxWorkers() {
-  const settings = window.userProfile?.settings || {};
-  const cores    = navigator.hardwareConcurrency || 2;
-  let n;
-  if (settings.enableManualWorkers && settings.maxWorkers) {
-    // Manual override: honour the user's choice up to the manual ceiling.
-    n = Number(settings.maxWorkers);
-    if (isNaN(n) || n < 1) n = DEFAULT_MAX_WORKERS;
-    if (n > MANUAL_CAP_WORKERS) n = MANUAL_CAP_WORKERS;
-  } else {
-    // auto: min(cores, HARD_CAP) but never below 2
-    n = Math.min(HARD_CAP_WORKERS, Math.max(2, cores));
-    if (isNaN(n) || n < 1) n = DEFAULT_MAX_WORKERS;
-  }
-  return n;
-}
+// The narration worker pool is sized by recommendedPocketCacheWorkerCount()
+// alone (see _recommendedPocketCacheWorkers below), which weighs platform,
+// memory, isolation, battery and thermal state. The HARD_CAP / MANUAL_CAP /
+// DEFAULT_MAX constants and the _getMaxWorkers() that read them lived here
+// until that policy took over, and were left behind with no callers -- while
+// the comment above them still claimed maxWorkers was "read dynamically from
+// userProfile.settings at engine load time", which is what made the dead
+// Settings override look wired. settings.maxWorkers now reaches the pool for
+// real, as a ceiling passed to the policy.
 
 // ── GPU vendor detection ─────────────────────────────────────────────────────
 let _gpuVendor = 'unknown';
@@ -994,7 +1007,12 @@ async function _recommendedPocketCacheWorkers(plan = _pocketBackendRuntime) {
     } catch (_) {}
   }
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const settings = window.userProfile?.settings || {};
   return recommendedPocketCacheWorkerCount({
+    // The Settings override, as a ceiling. Nothing read settings.maxWorkers on
+    // this path before, so the control and its "may cause audio glitches"
+    // warning described an effect that could not happen.
+    userMaxWorkers: settings.enableManualWorkers ? Number(settings.maxWorkers) : NaN,
     throughputMode: window._pocketThroughputCache === true,
     backend: plan?.selectedBackend || _pocketBackendRuntime.selectedBackend,
     platform: _pocketDeviceCapability?.platform || detectMobilePlatform(navigator.userAgent || ''),
@@ -1011,7 +1029,8 @@ async function _recommendedPocketCacheWorkers(plan = _pocketBackendRuntime) {
     batteryCharging: battery?.charging,
   });
 }
-window.getRecommendedPocketCacheWorkerCount = _recommendedPocketCacheWorkers;
+// Not published: the pool size is decided here and read by _loadPocketEngine.
+// The window alias had no callers.
 
 async function _preparePocketBackendPlan(force = false) {
   if (_pocketBackendPlanPromise && !force) return _pocketBackendPlanPromise;
@@ -1303,8 +1322,8 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const workerScript = engine === 'kokoro'
-          ? new URL('assets/js/kokoro_worker.js?v=kokoro-v5', document.baseURI).href
-          : new URL('assets/js/pocket_worker.js?v=pocket-worker-v61', document.baseURI).href;
+          ? new URL('assets/js/kokoro_worker.js?v=kokoro-v6', document.baseURI).href
+          : new URL('assets/js/pocket_worker.js?v=pocket-worker-v62', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -1393,7 +1412,7 @@ async function _loadPocketEngine() {
               ? ` (last status: ${workerObj._lastStatus})`
               : '';
             failWorkerStartup(
-              `Pocket TTS worker went silent for ${Math.round(budget / 1000)}s during startup${stalledAt}`
+              `${engineLabel} worker went silent for ${Math.round(budget / 1000)}s during startup${stalledAt}`
               + ' — treating it as terminated (on iOS this is normally the tab memory ceiling).',
             );
           }, budget);
@@ -1445,7 +1464,7 @@ async function _loadPocketEngine() {
             }
           } else if (data.type === 'status' && i === 0 && data.state === 'loading') {
             window._pocketLoadTelemetry.lastProgressAt = Date.now();
-            _setStatus(data.status || 'Preparing Pocket TTS...');
+            _setStatus(data.status || `Preparing ${engineLabel}...`);
           } else if (data.type === 'diagnostic') {
             // INFO-level worker telemetry (per-paragraph pipeline stats) floods
             // the console on long cache jobs and adds nothing the diagnostics
@@ -1673,7 +1692,10 @@ async function _loadPocketEngine() {
 
         worker.postMessage({
           type: 'init',
-          voiceEngine: 'pocket',
+          // The engine actually being started. Neither worker reads this today,
+          // but a message that names the wrong engine is a trap for the next
+          // thing that does -- and this whole file's history is that trap.
+          voiceEngine: engine,
           backendPreference: backendPlan.preference,
           selectedBackend: backendPlan.selectedBackend,
           wasmThreadCount: backendPlan.threadCount,
@@ -2314,6 +2336,11 @@ async function prefetchPocketVoiceAssets(voiceIds = []) {
 window.prefetchPocketVoiceAssets = prefetchPocketVoiceAssets;
 
 async function _ensurePocketBackendOptimizedForVoice(voiceName) {
+  // Belt and braces with the call-site gates: this ends in
+  // ensurePocketVoiceLoaded(), so reaching it on a Kokoro session would load a
+  // Pocket voice pack and post register_precompiled_voice to a worker that
+  // cannot answer it. There is nothing here for another engine to calibrate.
+  if (_resolveActiveEngine() !== 'pocket') return _pocketBackendRuntime;
   const plan = await _preparePocketBackendPlan();
   if (plan.preference === 'wasm' || !plan.eligibility.eligible || plan.calibration) return _pocketBackendRuntime;
   if (_pocketBackendOptimizationPromise) return _pocketBackendOptimizationPromise;
@@ -2844,11 +2871,31 @@ function _recordPocketTtsCalibrationFromTelemetry(telemetry) {
   _pocketTtsCalibrationRecorded = true;
 }
 
+// Voice registration and backend calibration are POCKET-ONLY, and running them
+// for another engine is not merely wasteful -- it is fatal.
+//
+// ensurePocketVoiceLoaded() resolves whatever it is given through
+// resolvePocketAssetVoiceId(), which answers donald_malone_neutral for any id
+// it does not recognise. A Kokoro voice ('af_heart') is exactly such an id, so
+// every Kokoro paragraph downloaded a ~5-6 MB Pocket .safetensors and posted
+// register_precompiled_voice to a worker whose onmessage handles four types and
+// not that one. No ack ever came, the 60s registration timeout rejected, and
+// the caller saw a fatal quality failure -- twice, because generateChunk takes
+// one quality retry. Playback then stopped with "The neural engine couldn't
+// produce audio" and caching with "Neural engine failed".
+//
+// Kokoro fetches its own voices/{id}.bin inside generate(), so the correct
+// preparation for it is none: hand the worker the id the route already holds.
+// This is the same 'pocket'-means-neural slip the engine gates fixed, one layer
+// down, and it is gated on route.engine rather than a fresh
+// _resolveActiveEngine() call so the decision matches the route being run.
 async function _generatePocketAttempt(workerObj, text, route, retryLevel = 0, handlers = {}) {
   let workerVoice = route.voiceId;
   try {
-    workerVoice = await ensurePocketVoiceLoaded(route.voiceId);
-    await _ensurePocketBackendOptimizedForVoice(workerVoice);
+    if (route.engine === 'pocket') {
+      workerVoice = await ensurePocketVoiceLoaded(route.voiceId);
+      await _ensurePocketBackendOptimizedForVoice(workerVoice);
+    }
     const opts = _buildPocketProsodyOpts(workerVoice, {
       paragraphEmotion: route.emotion,
       retryLevel,
@@ -3076,7 +3123,8 @@ window.generateChunk = async function(text, voice) {
 window.generateChunkStream = async function(text, voice, onSegment) {
   if (!text || text.trim() === '' || typeof onSegment !== 'function') return null;
   _cancelWorkerIdleRelease();
-  if (!_isNeuralEngine(_resolveActiveEngine())) return null;
+  const engine = _resolveActiveEngine();
+  if (!_isNeuralEngine(engine)) return null;
   const ready = await _loadPocketEngine();
   if (!ready || ttsWorkers.length === 0) return null;
 
@@ -3085,7 +3133,7 @@ window.generateChunkStream = async function(text, voice, onSegment) {
   window.setCinematicSynthesisSuppressed?.(true);
   try {
     const startedAt = performance.now();
-    const route = _resolvePocketRoute('pocket', voice, text);
+    const route = _resolvePocketRoute(engine, voice, text);
     const attempt = await _generatePocketAttempt(null, text, route, 0, { onSegment });
     if (attempt.quality.fatal || !attempt.result?.audio?.length) {
       _logPocketQuality('ERROR', 'Pocket streamed synthesis failed quality validation', attempt, { streamed: true });
@@ -3230,6 +3278,7 @@ export async function playCurrentParagraph() {
 
   if (!window.isPlaying) return;
   if (typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
+  _syncProsodyDriftToPosition();
 
   const engine = _resolveActiveEngine();
   const defaultVoice = _defaultVoiceForEngine(engine);
@@ -3427,10 +3476,16 @@ async function _ensurePlaybackLookahead() {
   if (!story?.chapters) return;
   _lookaheadRunning = true;
   try {
-    const engine = 'pocket';
+    // Must be the RESOLVED engine, not the literal. Pinned to 'pocket' this
+    // rewrote every Kokoro voice into a Pocket emotion asset, read and wrote
+    // cache keys under engine 'pocket' with the Pocket prosody tag while
+    // playback reads 'kokoro' with an empty tag -- so every slot was a
+    // guaranteed miss, and each miss then committed the worker to a synthesis
+    // that could not succeed.
+    const engine = _resolveActiveEngine();
     const title = story.title;
     const storyRef = story.storyKey || window.getStoryStableKey?.(story) || title;
-    const selVoice = document.getElementById('voice-selector')?.value || POCKET_DEFAULT_VOICE;
+    const selVoice = document.getElementById('voice-selector')?.value || _defaultVoiceForEngine(engine);
     let c = window.currentChapterIndex, p = window.currentParagraphIndex;
     for (let i = 0; i < POCKET_PLAYBACK_LOOKAHEAD; i++) {
       if (_lookaheadShouldYield()) break;
@@ -3506,7 +3561,12 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
     let stream = null;
     try {
       if (engine === 'pocket') await _ensurePocketBackendOptimizedForVoice(cleanVoice);
-      if (!_preferDirectMobileMediaPlayback()) {
+      // Segment streaming is a Pocket capability: it is autoregressive, so it
+      // can hand back audio while it is still generating. Kokoro is one forward
+      // pass and returns the whole utterance at once, so a stream would collect
+      // zero segments and be torn down again -- an AudioWorklet built and
+      // discarded on every paragraph for nothing.
+      if (engine === 'pocket' && !_preferDirectMobileMediaPlayback()) {
         try {
           stream = await _createPocketPcmStream(() => {
             if (window.isPlaying) _handleParagraphEnd();
@@ -4051,7 +4111,6 @@ export function seekToParagraph(chapterIndex, paragraphIndex) {
 
   if (wasPlaying) {
     window.isPlaying = true;
-    const playBtn = document.getElementById('play-btn-main');
     _updatePlayButton(true);
     startBgKeepAlive();
     playCurrentParagraph();
@@ -4080,7 +4139,6 @@ export function seekToChapter(chapterIndexStr) {
 
   if (wasPlaying) {
     window.isPlaying = true;
-    const playBtn = document.getElementById('play-btn-main');
     _updatePlayButton(true);
     startBgKeepAlive();
     playCurrentParagraph();
@@ -4110,45 +4168,14 @@ export function getEffectivePlaybackRate() {
 }
 window.getEffectivePlaybackRate = getEffectivePlaybackRate;
 
-/**
- * Applies a playback rate and persists it to the profile.
- *
- * Takes the rate as an argument now. It previously read the phantom slider, so
- * it could only ever apply 1.0 -- including its "pause first" guard, which could
- * never actually change anything.
- */
-export function applyPlaybackSpeed(rate) {
-  const requested = Number(rate);
-  const next = Number.isFinite(requested)
-    ? Math.min(2, Math.max(0.5, requested))
-    : getEffectivePlaybackRate();
-
-  if (window.isPlaying) {
-    if (window.virtueSpeak) window.virtueSpeak("Please pause the story first before changing playback speed.", 4000);
-    else window.pocketNotify?.("Pause the story first, then change playback speed.", 4000);
-    return;
-  }
-
-  if (window.userProfile && window.userProfile.settings) {
-    window.userProfile.settings.speed = next;
-  }
-  if (typeof window.saveLocalData === 'function') window.saveLocalData();
-
-  // Only the media element can take a new rate in place. A WebSpeech utterance
-  // bakes its rate in at speak() time, so the next paragraph picks the new value
-  // up via getEffectivePlaybackRate() — there is nothing to re-apply here. (The
-  // old SpeechSynthesisUtterance branch tried to restart playback, but it was
-  // unreachable: the guard above returns early whenever isPlaying is true.)
-  if (window.currentAudio instanceof HTMLAudioElement) {
-    window.currentAudio.playbackRate = next;
-  }
-
-  if (!window.isPlaying && window.virtueSpeak) {
-    window.virtueSpeak("Speed changed.", 2500);
-  }
-  if (typeof window.updateTimeRemaining === 'function') window.updateTimeRemaining();
-}
-window.applyPlaybackSpeed = applyPlaybackSpeed;
+// A global narration speed lives in settings.speed and is read here on every
+// paragraph. Writing it is settings_manager's onNarrationSpeedChange, NOT a
+// function in this module: applyPlaybackSpeed() used to live here, exported,
+// on window and listed in narration_runtime_loader's deferred actions -- with
+// no caller anywhere, because the control it was written for did not exist.
+// Reinstating it here would also have meant a slider drag pulling in the whole
+// narration runtime through the deferred shim, which is the cost the engine
+// select was moved out of this module to avoid.
 
 // Which option the merged control is showing. 'pocket' and 'kokoro' both
 // collapse to the neural engine internally, so the raw setting cannot round-trip

@@ -331,7 +331,7 @@ export function renderBookmarksTab() {
     const timeStr = new Date(bm.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     html += `<li style="background:var(--bg-mid);border:1px solid var(--border-color);border-radius:6px;padding:10px;cursor:pointer;" 
- onclick="window.jumpToBookmark(${bm.c},${bm.p})"><div style="font-size:0.8rem;color:var(--accent-blue-text);margin-bottom:4px;font-weight:bold;">Chapter ${bm.c + 1}-${dateStr}${timeStr}</div><div style="font-size:0.85rem;color:var(--text-main);font-style:italic;">"${_escapeHtml(bm.t)}"</div></li>`;
+ onclick="window.jumpToBookmark(${bm.c},${bm.p})"><div style="font-size:0.8rem;color:var(--accent-blue-text);margin-bottom:4px;font-weight:bold;">Chapter ${bm.c + 1} · ${dateStr}, ${timeStr}</div><div style="font-size:0.85rem;color:var(--text-main);font-style:italic;">"${_escapeHtml(bm.t)}"</div></li>`;
   });
 
   html += '</ul>';
@@ -994,9 +994,18 @@ function _shouldShowPWABanner() {
   return true;
 }
 
+// The way back from "Don't show again". Reachable from Settings; without a
+// caller the permanent dismissal was a one-way door.
 window.showIOSInstallPrompt = function() {
   localStorage.removeItem('pwaBannerDismissed');
   _showPWABanner();
+  // _shouldShowPWABanner() also refuses when the app is already installed or
+  // the device is a desktop, so say why rather than looking like a dead button.
+  if (!_shouldShowPWABanner()) {
+    window.pocketNotify?.(_isPWA()
+      ? 'Pocket Reader is already installed on this device.'
+      : 'The install prompt appears on phones and tablets.');
+  }
 };
 
 function _buildBannerAction() {
@@ -1173,7 +1182,9 @@ if (document.readyState === 'loading') {
   _pinLayoutShell();
 }
 
-window.isAppReady = true;
+// (No window.isAppReady flag: nothing ever read it. Readiness that matters is
+// observable -- __pocketProfileHydration for the profile, __pocketNarrationRuntimeLoaded
+// for narration -- and a second, coarser flag only invited guessing.)
 
 // ── First-time page tips ─────────────────────────────────────────────────────
 // Lightweight guided popovers that point (with an arrow) at a key feature the
@@ -1398,9 +1409,6 @@ window.resetTips = function() {
   else if (typeof alert === 'function') alert('Tips re-enabled.');
 };
 
-// The embedded story index lives on a fixed origin. Everything below is scoped
-// to it: the handshake is posted only to this origin, and inbound story-load
-// commands are accepted only from it.
 // Drops the ?tts_fast=1 flag and reloads unisolated. Narration can be started
 // again afterwards; it re-isolates on demand.
 export function exitPocketNarrationIsolation() {
@@ -1409,7 +1417,10 @@ export function exitPocketNarrationIsolation() {
     target.searchParams.delete('tts_fast');
     window.location.replace(target.toString());
   } catch (_) {
-    window.location.replace('/');
+    // './' resolves against the app's own base, not the account root. On the
+    // production subpath a literal '/' walks the reader out of the app --
+    // the same trap sw.js documents at SHELL_URL.
+    window.location.replace(new URL('./', document.baseURI).href);
   }
 }
 window.exitPocketNarrationIsolation = exitPocketNarrationIsolation;
@@ -1528,7 +1539,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=200', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=201', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)
@@ -2307,4 +2318,5 @@ window._setControlsLocked = function(locked) {
   });
 };
 
-window.uiControllerLoaded = true;
+// (No window.uiControllerLoaded flag either: also never read. Modules that need
+// something from this one feature-detect that specific function instead.)

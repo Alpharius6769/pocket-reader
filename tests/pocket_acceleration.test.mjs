@@ -44,7 +44,17 @@ test('high-memory desktop cache parallelism is bounded and releases its second w
   const buffer = await read('public/assets/js/buffer_manager.js');
   assert.match(policy, /function recommendedPocketCacheWorkerCount/);
   assert.match(policy, /memoryGb < 8/);
-  assert.match(policy, /return 2/);
+  // The ceiling is a named constant now, because the Settings control used to
+  // offer 1-8 against a function that can only ever answer 1 or this.
+  assert.match(policy, /export const POCKET_MAX_CACHE_WORKERS = 2;/);
+  assert.match(policy, /return POCKET_MAX_CACHE_WORKERS;/);
+  // settings.maxWorkers reaches the pool as a ceiling that can only lower the
+  // count. Nothing read it before: audio_core's only reader, _getMaxWorkers(),
+  // had no callers, so the override and its glitch warning did nothing.
+  assert.match(policy, /options\.userMaxWorkers/);
+  assert.match(audio, /userMaxWorkers: settings\.enableManualWorkers \? Number\(settings\.maxWorkers\) : NaN/);
+  assert.doesNotMatch(audio, /function _getMaxWorkers\(\)/,
+    'the dead worker-cap helper must not come back alongside the live policy');
   assert.match(audio, /preparePocketCacheWorkerPool/);
   assert.match(audio, /trimPocketCacheWorkerPool/);
   assert.match(audio, /const dispatchWorker = workerObj \|\| _selectReadyPocketWorker/);
@@ -156,7 +166,9 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(audio, /wasm_rtf_sample/);
   assert.match(audio, /shouldProbeBundle/);
   assert.match(audio, /wasmReferenceRtf: _pocketBackendRuntime\.wasmReferenceRtf/);
-  assert.match(audio, /pocket-worker-v61/);
+  // Full ?v= form on purpose: a bare version string is invisible to
+  // check_module_versions.mjs, so this pin silently rotted past a bump.
+  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v62/);
   assert.match(worker, /wasmReferenceRtf/);
   assert.match(worker, /releaseAllSessions/);
   assert.match(worker, /wasm_rtf_sample/);
@@ -199,12 +211,12 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
   assert.match(serviceWorker, /pocket-reader-core-v\d+/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v140/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v141/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
-  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v61/);
-  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v24/);
-  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v12/);
+  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v62/);
+  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v25/);
+  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v13/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
   const shell = await read('public/index.html');
   const swRevision = serviceWorker.match(/pocket-reader-core-v(\d+)/)?.[1];
@@ -260,7 +272,7 @@ test('mobile playback uses one media-session transport map with seek support', a
   // now lives in the encoded samples (_encodeWAV fadeInSec) so it also works on
   // phones. _preferDirectMobileMediaPlayback now gates only PCM streaming.
   assert.doesNotMatch(audio, /_setupAudioRouting\(/);
-  assert.match(audio, /if \(!_preferDirectMobileMediaPlayback\(\)\) \{/);
+  assert.match(audio, /if \(engine === 'pocket' && !_preferDirectMobileMediaPlayback\(\)\) \{/);
   assert.doesNotMatch(audio, /function _setupMediaSession\(/);
 });
 
