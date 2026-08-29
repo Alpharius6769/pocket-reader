@@ -235,15 +235,34 @@ function _snapshotNarrationStory(story, storyRef) {
   };
 }
 
+// What can be handed to loadStory() after the isolation reload.
+//
+// This used to accept only URLs and /api/ paths, which inverted the restore:
+// the caller above prefers `storyEntry?.storyKey` precisely BECAUSE the library
+// hydrated and the entry was found, so the better hydration worked, the more
+// certainly loadRef was a bare stable key like `s_3615280716` -- and this
+// rejected it. _requestFastNarrationReload has the same fallback for any story
+// with no url/sourceUrl, which is every curated story. With canLoadHandoff
+// false the restore depended entirely on chapters already being in local
+// storage; when that missed, nothing restored and the user got
+// "Preparing the story timed out. Open it again and retry caching."
+// (Reproduced on the 4 GB rig: coi true, currentStory null, back on Home.)
+//
+// A library reference is exactly as loadable as a URL here: loadStory()
+// resolves a stable key or title against the library before it fetches
+// anything -- `story.storyKey === url || getStoryStableKey(story) === url` --
+// and that is the same value the library Play button passes.
 function _isLoadableHandoffRef(ref) {
   const value = String(ref || '').trim();
+  if (!value) return false;
   if (/^(\/api\/|\/local-upload\/|local:\/\/)/i.test(value)) return true;
   try {
     const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return true;
   } catch (_) {
-    return false;
+    // Not a URL. It may still be a library reference, checked below.
   }
+  return Boolean(window.findLibraryStoryByRef?.(value));
 }
 
 function _requestFastNarrationReload(mode, action = 'cache') {

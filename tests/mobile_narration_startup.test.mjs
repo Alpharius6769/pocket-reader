@@ -11,7 +11,7 @@ test('heavy narration modules remain deferred until narration is requested', asy
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
   assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v102'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v64'\)/);
+  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v65'\)/);
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
@@ -95,8 +95,8 @@ test('a narration-resume fix advances the immutable module and service-worker re
     read('public/sw.js'),
     read('public/index.html'),
   ]);
-  assert.match(loader, /buffer_manager\.js\?v=buffer-v64/);
-  assert.match(worker, /buffer_manager\.js\?v=buffer-v64/);
+  assert.match(loader, /buffer_manager\.js\?v=buffer-v65/);
+  assert.match(worker, /buffer_manager\.js\?v=buffer-v65/);
   assert.match(worker, /pocket-reader-core-v\d+/);
   // Derived, not pinned: the shell must register whatever revision the service
   // worker actually ships. Hardcoding the number here only forced a mechanical

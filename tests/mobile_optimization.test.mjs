@@ -137,3 +137,48 @@ test('the ruled-out Kokoro session tweaks stay reverted, with the measurement ke
   assert.match(body, /tests\/android-oom/);
   assert.match(body, /Peak before: 396, 400, 405 MB\. Peak after: 373, 421 MB\./);
 });
+
+test('the isolation handoff can restore a story the library resolves', async () => {
+  const bm = await read('public/assets/js/buffer_manager.js');
+  const api = await read('public/assets/js/api_core.js');
+  const fn = bm.slice(bm.indexOf('function _isLoadableHandoffRef'), bm.indexOf('function _requestFastNarrationReload'));
+
+  // The restore prefers `storyEntry?.storyKey` precisely BECAUSE the library
+  // hydrated and the entry was found, so the better hydration worked, the more
+  // certainly loadRef was a bare stable key — which the URL-only check rejected.
+  assert.match(bm, /const loadRef = storyEntry\?\.storyKey \|\| storyEntry\?\.url/,
+    'the restore still prefers the stable key, so the check must accept one');
+  assert.match(fn, /window\.findLibraryStoryByRef\?\.\(value\)/,
+    'a library reference must count as loadable');
+  assert.match(fn, /if \(!value\) return false;/,
+    'an empty ref must stay unloadable — _continueCaching passes undefined');
+
+  // Justified only because loadStory really does resolve a bare key itself.
+  assert.match(api, /story\.storyKey === url/);
+  assert.match(api, /window\.getStoryStableKey\?\.\(story\) === url/);
+});
+
+test('the phonemizer gets a stream async-iterator where the engine lacks one', async () => {
+  const w = await read('public/assets/js/kokoro_worker.js');
+
+  // espeak-ng's data package unpacks with `for await (const c of stream)`, which
+  // only shipped in Safari 17.4 / Chrome 124. Below those it throws from inside
+  // an un-caught IIFE and en_dict never reaches the WASM filesystem.
+  assert.match(w, /function _installStreamAsyncIteratorPolyfill\(\)/);
+
+  // Feature-detected: it must be inert on engines that already have it —
+  // WebKit 26.5 does, so iOS 26 must be untouched.
+  assert.match(w, /if \(typeof ReadableStream\.prototype\[Symbol\.asyncIterator\] === 'function'\) return;/);
+  assert.match(w, /if \(typeof ReadableStream === 'undefined'\) return;/);
+
+  // Early exit must release the reader instead of leaking the lock.
+  assert.match(w, /await reader\.cancel\(\)/);
+
+  // The package unpacks during module evaluation, so patching after the import
+  // would be too late to matter.
+  const load = w.slice(w.indexOf('async function loadPhonemizer'), w.indexOf('async function loadVocab'));
+  const installAt = load.indexOf('_installStreamAsyncIteratorPolyfill();');
+  const importAt = load.indexOf('import(PHONEMIZER_URL)');
+  assert.ok(installAt !== -1 && importAt !== -1 && installAt < importAt,
+    'the polyfill must be installed before the phonemizer import');
+});

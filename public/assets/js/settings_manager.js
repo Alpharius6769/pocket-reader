@@ -14,7 +14,7 @@ import {
   KOKORO_DEFAULT_VOICE,
 } from './pocket_backend_policy.js?v=backend-v25';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '205';
+export const NARRATION_SERVICE_WORKER_VERSION = '206';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;

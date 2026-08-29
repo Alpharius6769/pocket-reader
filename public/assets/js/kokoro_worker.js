@@ -130,6 +130,38 @@ async function loadOrtRuntime() {
   log('INFO', `Kokoro runtime: threaded WASM x${ort.env.wasm.numThreads}, isolated=${isolated}`);
 }
 
+// espeak-ng's data package unpacks itself with
+//   for await (const chunk of blob.stream().pipeThrough(new DecompressionStream('gzip')))
+// and async iteration over a ReadableStream only shipped in Safari 17.4 and
+// Chrome 124. Below those it throws `TypeError: e is not async iterable` from
+// inside an un-caught IIFE, so en_dict, intonations and the voice tables never
+// reach the WASM filesystem and phonemisation runs on whatever espeak can do
+// without its dictionaries.
+//
+// Scope, honestly: this is NOT the iPhone bug. WebKit 26.5 was checked directly
+// and supports async iteration, so iOS 26 is unaffected — it was found because
+// the 4 GB test rig runs Chrome 113. It matters for older iOS, which is exactly
+// the device class this engine exists to serve.
+//
+// Feature-detected, so it installs only where the capability is missing and is
+// inert everywhere else.
+function _installStreamAsyncIteratorPolyfill() {
+  if (typeof ReadableStream === 'undefined') return;
+  if (typeof ReadableStream.prototype[Symbol.asyncIterator] === 'function') return;
+  ReadableStream.prototype[Symbol.asyncIterator] = function streamAsyncIterator() {
+    const reader = this.getReader();
+    return {
+      next() { return reader.read(); },
+      async return(value) {
+        await reader.cancel().catch(() => {});
+        return { done: true, value };
+      },
+      [Symbol.asyncIterator]() { return this; },
+    };
+  };
+  log('INFO', 'Installed ReadableStream async-iterator polyfill for the phonemizer');
+}
+
 async function loadPhonemizer() {
   // "Phoneme engine", not "pronunciation engine": this is espeak-ng, and the
   // old wording read as though the reader's pronunciation rules were being
@@ -138,6 +170,9 @@ async function loadPhonemizer() {
   // espeak-ng compiled to WASM, self-hosted alongside the model. The bundle
   // makes no external requests, which is what keeps narration working offline
   // and inside the COEP-isolated session.
+  // Must run BEFORE the import: the data package unpacks during module
+  // evaluation, so patching afterwards would be too late.
+  _installStreamAsyncIteratorPolyfill();
   const module = await withTimeout(import(PHONEMIZER_URL), MODEL_TIMEOUT_MS, 'phonemizer import');
   phonemize = module.phonemize || module.default?.phonemize;
   if (typeof phonemize !== 'function') throw new Error('phonemizer module exposed no phonemize()');
