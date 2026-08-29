@@ -113,3 +113,32 @@ test('the tip card opt-out is a real touch target', async () => {
   assert.ok(labelAt < inputAt && inputAt < closeAt,
     'the dismiss checkbox must stay inside its label — the label is the 44px target');
 });
+
+test('Kokoro session creation does not pin two copies of the model', async () => {
+  const w = await read('public/assets/js/kokoro_worker.js');
+  const body = w.slice(w.indexOf('async function loadModel'), w.indexOf('async function loadVoice'));
+
+  // Measured: the app sits at ~136 MB, then session creation adds +64 MB and
+  // +184 MB in two consecutive 250 ms samples, peaking near 400 MB against a
+  // 350 MB budget. Steady-state synthesis is only ~298 MB.
+
+  // The download must not stay bound across the await while ORT copies the
+  // same bytes into the WASM heap.
+  assert.doesNotMatch(body, /const buffer = await fetchBuffer/,
+    'the model download must not be held in a const across session creation');
+  assert.match(body, /let modelBytes = await fetchBuffer/);
+  assert.match(body, /const creating = ort\.InferenceSession\.create\(modelBytes,/);
+  assert.match(body, /\n  modelBytes = null;/,
+    'the JS-side copy must be released before awaiting the session build');
+
+  // 'all' materialises fresh optimised weight tensors on top of the copy just
+  // made, at the moment headroom is thinnest.
+  assert.match(body, /graphOptimizationLevel: 'basic'/);
+  assert.doesNotMatch(body, /graphOptimizationLevel: 'all'/);
+
+  // Already measured as a no-op for Kokoro — re-adding costs locality for nothing.
+  // Strip comments first: the block above explains why these are absent and
+  // names them, so scanning raw source would match the explanation.
+  const code = body.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(code, /enableCpuMemArena|enableMemPattern/);
+});

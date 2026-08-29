@@ -154,7 +154,7 @@ async function loadVocab() {
 async function loadModel() {
   status('Preparing narration model...');
   progress(30);
-  const buffer = await fetchBuffer(`${KOKORO_BASE}/model_q8f16.onnx`, 'Kokoro model');
+  let modelBytes = await fetchBuffer(`${KOKORO_BASE}/model_q8f16.onnx`, 'Kokoro model');
   progress(70);
   status('Preparing narration session...');
   // Declared so the main-thread silence watchdog does not mistake a long
@@ -163,11 +163,40 @@ async function loadModel() {
     type: 'status', status: 'Preparing narration session...', state: 'loading',
     phase: 'blocking', budgetMs: MODEL_TIMEOUT_MS,
   });
+
+  // Measured on a 4 GB device emulator, 2026-08-28 (tests/android-oom): the app
+  // sits at ~136 MB, then session creation adds +64 MB and +184 MB in two
+  // consecutive 250 ms samples, peaking near 400 MB. Steady-state synthesis is
+  // only ~298 MB, so this transient — not sustained use — is what an
+  // iPhone-class ~350 MB footprint budget kills, before one paragraph caches.
+  //
+  // Two contributors, addressed here:
+  //
+  // 1. We held the ~86 MB download in a `const` across the whole await while
+  //    ORT copied the same bytes into the WASM heap, so both copies were live
+  //    at once. Handing the bytes over and dropping our reference immediately
+  //    lets the JS-side copy be collected during the build instead of after it.
+  //    (Dropping the binding is all we can do; there is no forced GC. It gives
+  //    the collector the option, which it did not have before.)
+  //
+  // 2. graphOptimizationLevel 'all' runs the extended layout and constant-fold
+  //    passes, which materialise fresh optimised weight tensors on top of the
+  //    copy just made. Kokoro is ONE non-autoregressive forward pass; those
+  //    passes buy far less here than they do for a model decoding frame by
+  //    frame, and they are paid at exactly the moment headroom is thinnest.
+  //    'basic' keeps the cheap always-safe rewrites and skips the ones that
+  //    duplicate weights. Output is numerically equivalent.
+  //
+  // Deliberately NOT touched: enableCpuMemArena / enableMemPattern. The arena
+  // guard was already measured as a no-op for Kokoro (592 vs 594 MB, 356.6 vs
+  // 354.7 MB) and adding it back would only cost inference locality.
+  const creating = ort.InferenceSession.create(modelBytes, {
+    executionProviders: ['wasm'],
+    graphOptimizationLevel: 'basic',
+  });
+  modelBytes = null;
   session = await withTimeout(
-    ort.InferenceSession.create(buffer, {
-      executionProviders: ['wasm'],
-      graphOptimizationLevel: 'all',
-    }),
+    creating,
     MODEL_TIMEOUT_MS,
     'Kokoro session initialization',
   );

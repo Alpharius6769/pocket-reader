@@ -606,7 +606,11 @@ test('one inference is capped well below the graph sequence axis', async () => {
   // arena-off run was the slower of the two at the small cap. Kokoro has no
   // autoregressive KV cache for an arena to ratchet, which is why the guard
   // Pocket needs does nothing here.
-  assert.doesNotMatch(worker, /enableCpuMemArena|enableMemPattern/,
+  // Scan CODE, not comments. The worker documents why the arena guard is absent
+  // and has to name it to do so; matching raw source would flag the explanation
+  // and push the next person to delete the reasoning instead of keeping it.
+  const workerCode = worker.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(workerCode, /enableCpuMemArena|enableMemPattern/,
     'a measured no-op must not ship as if it were a fix');
 });
 
