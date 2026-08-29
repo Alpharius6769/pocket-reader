@@ -1,4 +1,4 @@
-import { isMobileLikePlatform, KOKORO_VOICES } from './pocket_backend_policy.js?v=backend-v25';
+import { isMobileLikePlatform, KOKORO_VOICES } from './pocket_backend_policy.js?v=backend-v26';
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));

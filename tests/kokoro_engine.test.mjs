@@ -16,14 +16,19 @@ const policy = await import(
   new URL('../public/assets/js/pocket_backend_policy.js', import.meta.url).href
 );
 
-test('constrained devices route to Kokoro, capable ones keep Pocket', () => {
+// Superseded by the three-tier ladder in kitten_engine.test.mjs, which owns the
+// per-generation cases. What stays here are the invariants that are still true
+// regardless of tier count.
+test('constrained devices never get Pocket, and iOS never depends on RAM', () => {
   const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 Version/26.6 Mobile Safari/604.1';
   const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) Chrome/126 Mobile Safari/537.36';
   const DESKTOP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126 Safari/537.36';
 
   // Safari reports neither RAM nor model, so iOS must not depend on either.
-  const ios = policy.selectNarrationEngine({ userAgent: IPHONE, storage: null });
-  assert.equal(ios.engine, policy.KOKORO_ENGINE);
+  const ios = policy.selectNarrationEngine({ userAgent: IPHONE, storage: null,
+    screenWidth: 0, screenHeight: 0 });
+  assert.notEqual(ios.engine, policy.POCKET_ENGINE,
+    'an unidentifiable iPhone must never be handed the heaviest engine');
   assert.equal(ios.automatic, true);
 
   assert.equal(
@@ -35,9 +40,9 @@ test('constrained devices route to Kokoro, capable ones keep Pocket', () => {
   assert.equal(
     policy.selectNarrationEngine({ userAgent: DESKTOP, deviceMemory: 16, storage: null }).engine,
     policy.POCKET_ENGINE, 'desktop keeps Pocket');
-  assert.equal(
+  assert.notEqual(
     policy.selectNarrationEngine({ userAgent: DESKTOP, deviceMemory: 16, lowMemoryMode: true, storage: null }).engine,
-    policy.KOKORO_ENGINE, 'low-memory mode forces the light engine');
+    policy.POCKET_ENGINE, 'low-memory mode forces a lighter engine');
 });
 
 test('an explicit engine choice overrides automatic selection in both directions', () => {

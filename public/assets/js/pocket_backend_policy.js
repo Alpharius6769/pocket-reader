@@ -1165,6 +1165,10 @@ export function selectCalibratedBackend(wasm, webgpu, options = {}) {
 // iOS Safari, plus Android's deviceMemory where Chrome does report it.
 export const KOKORO_ENGINE = 'kokoro';
 export const POCKET_ENGINE = 'pocket';
+export const KITTEN_ENGINE = 'kitten';
+// Ordered lightest-first. Index position IS the tier, so anything that needs to
+// step a device down can do it without a lookup table.
+export const NARRATION_ENGINE_TIERS = Object.freeze([KITTEN_ENGINE, KOKORO_ENGINE, POCKET_ENGINE]);
 export const NARRATION_ENGINE_OVERRIDE_KEY = 'pr_narration_engine_override_v1';
 export const KOKORO_MODEL_REVISION = 'kokoro-82m-v1.0';
 
@@ -1181,6 +1185,56 @@ export const KOKORO_VOICES = Object.freeze([
 ]);
 export const KOKORO_DEFAULT_VOICE = 'af_heart';
 
+export const KITTEN_MODEL_REVISION = 'kitten-nano-v0.1';
+// KittenTTS publishes no quality grades, so none are invented here.
+export const KITTEN_VOICES = Object.freeze([
+  { id: 'expr-voice-3-f', label: 'Expr 3 - female, warm',   gender: 'female' },
+  { id: 'expr-voice-4-f', label: 'Expr 4 - female, bright', gender: 'female' },
+  { id: 'expr-voice-5-f', label: 'Expr 5 - female, soft',   gender: 'female' },
+  { id: 'expr-voice-2-f', label: 'Expr 2 - female, even',   gender: 'female' },
+  { id: 'expr-voice-3-m', label: 'Expr 3 - male, warm',     gender: 'male'   },
+  { id: 'expr-voice-4-m', label: 'Expr 4 - male, bright',   gender: 'male'   },
+  { id: 'expr-voice-5-m', label: 'Expr 5 - male, soft',     gender: 'male'   },
+  { id: 'expr-voice-2-m', label: 'Expr 2 - male, even',     gender: 'male'   },
+]);
+export const KITTEN_DEFAULT_VOICE = 'expr-voice-3-f';
+
+export function isKittenVoice(voiceId) {
+  const id = String(voiceId || '').toLowerCase().trim();
+  return KITTEN_VOICES.some((voice) => voice.id === id);
+}
+
+// The single place that answers "which voices may this engine use". Every
+// selector, default and validation path goes through here, so a voice id cannot
+// leak across engines: Kokoro's af_heart names a (510, 1, 256) table, Kitten's
+// expr-voice-3-f names one 256-float vector, and Pocket's are a different asset
+// family again. Handing one to the wrong worker is what previously resolved an
+// unknown id to a Pocket voice pack and hung for 60 s.
+export function voicesForEngine(engine) {
+  if (engine === KITTEN_ENGINE) return KITTEN_VOICES;
+  if (engine === KOKORO_ENGINE) return KOKORO_VOICES;
+  return [];   // Pocket manages its own voice packs elsewhere.
+}
+
+export function defaultVoiceForEngine(engine) {
+  if (engine === KITTEN_ENGINE) return KITTEN_DEFAULT_VOICE;
+  if (engine === KOKORO_ENGINE) return KOKORO_DEFAULT_VOICE;
+  return null;
+}
+
+export function isVoiceValidForEngine(engine, voiceId) {
+  const allowed = voicesForEngine(engine);
+  if (!allowed.length) return true;   // Pocket validates its own.
+  const id = String(voiceId || '').toLowerCase().trim();
+  return allowed.some((voice) => voice.id === id);
+}
+
+// Returns a voice that is definitely valid for the engine: the current one when
+// it belongs, otherwise that engine's default.
+export function coerceVoiceForEngine(engine, voiceId) {
+  return isVoiceValidForEngine(engine, voiceId) ? voiceId : defaultVoiceForEngine(engine);
+}
+
 export function isKokoroVoice(voiceId) {
   const id = String(voiceId || '').toLowerCase().trim();
   return KOKORO_VOICES.some((voice) => voice.id === id);
@@ -1189,7 +1243,7 @@ export function isKokoroVoice(voiceId) {
 export function readNarrationEngineOverride(storage = globalThis.localStorage) {
   try {
     const value = storage?.getItem(NARRATION_ENGINE_OVERRIDE_KEY);
-    return value === KOKORO_ENGINE || value === POCKET_ENGINE ? value : null;
+    return NARRATION_ENGINE_TIERS.includes(value) ? value : null;
   } catch (_) {
     return null;
   }
@@ -1197,7 +1251,7 @@ export function readNarrationEngineOverride(storage = globalThis.localStorage) {
 
 export function writeNarrationEngineOverride(storage = globalThis.localStorage, engine) {
   try {
-    if (engine === KOKORO_ENGINE || engine === POCKET_ENGINE) {
+    if (NARRATION_ENGINE_TIERS.includes(engine)) {
       storage?.setItem(NARRATION_ENGINE_OVERRIDE_KEY, engine);
       return engine;
     }
@@ -1212,35 +1266,113 @@ export function writeNarrationEngineOverride(storage = globalThis.localStorage, 
 // device who prefers Pocket's voice quality can have it, and a reader on a
 // capable device can pick Kokoro if they would rather have the lighter engine.
 // Returning the reason keeps the settings panel honest about why.
+// iOS device ladder, built from what the web platform ACTUALLY exposes.
+//
+// Intended mapping: iPhone 13 and older -> Kitten, 14/15 -> Kokoro, 16+ ->
+// Pocket. Safari reports neither RAM nor model, so this cannot be read directly.
+// Logical viewport size at devicePixelRatio 3 is the only signal that tracks
+// iPhone generation, because Apple changed display geometry as the hardware
+// moved. These are matched EXACTLY, not as ranges: a ">= 402 wide and >= 874
+// tall" rule reads naturally and is wrong, because it also swallows the iPhone
+// 15 Plus at 430x932 and promotes it two tiers.
+export function classifyIosNarrationTier(signals = {}) {
+  const w = Number(signals.screenWidth || 0);
+  const h = Number(signals.screenHeight || 0);
+  if (!w || !h) {
+    return { engine: KITTEN_ENGINE, confident: false,
+      reason: 'This browser did not report a screen size, so the lightest engine is the safe default.' };
+  }
+  const key = `${Math.min(w, h)}x${Math.max(w, h)}`;
+  const IOS_GEOMETRY = {
+    '402x874': { engine: POCKET_ENGINE, note: 'iPhone 16 Pro' },
+    '440x956': { engine: POCKET_ENGINE, note: 'iPhone 16 Pro Max' },
+    '393x852': { engine: KOKORO_ENGINE, note: 'iPhone 14 Pro / 15 / 16' },
+    '430x932': { engine: KOKORO_ENGINE, note: 'iPhone 14 Pro Max / 15 Plus / 16 Plus' },
+  };
+  const hit = IOS_GEOMETRY[key];
+  if (hit) {
+    return { engine: hit.engine, confident: true,
+      reason: `This screen size belongs to the ${hit.note} family.` };
+  }
+  // Everything else is iPhone 14 non-Pro or older. 390x844 is genuinely
+  // undecidable -- an iPhone 13 and an iPhone 14 are byte-identical to a
+  // browser -- and it resolves DOWN, because the 13 is the device that actually
+  // runs out of memory and guessing upward crashes the tab.
+  const ambiguous = key === '390x844' || key === '428x926';
+  return {
+    engine: KITTEN_ENGINE,
+    confident: !ambiguous,
+    reason: ambiguous
+      ? 'iPhone 13 and iPhone 14 look identical to a browser, so the lighter engine is used. You can change this below.'
+      : 'This screen size belongs to iPhone 13 mini or older.',
+  };
+}
+
+// Android ladder. Chrome DOES report deviceMemory here, so this can be direct.
+// Per the product rule, Android's floor is Kokoro rather than Kitten.
+export function classifyAndroidNarrationTier(signals = {}) {
+  const memoryGb = Number(signals.deviceMemory || 0);
+  const cores = Number(signals.hardwareConcurrency || 0);
+  if (memoryGb >= 6 && cores >= 8) {
+    return { engine: POCKET_ENGINE, confident: true,
+      reason: `This device reports ${memoryGb} GB of RAM and ${cores} CPU cores.` };
+  }
+  if (memoryGb >= 6 && cores > 0 && cores < 8) {
+    return { engine: KOKORO_ENGINE, confident: true,
+      reason: `This device has ${memoryGb} GB of RAM but only ${cores} CPU cores.` };
+  }
+  return { engine: KOKORO_ENGINE, confident: memoryGb > 0,
+    reason: memoryGb > 0
+      ? `This device reports ${memoryGb} GB of RAM.`
+      : 'This device did not report its memory, so the middle engine is used.' };
+}
+
 export function selectNarrationEngine(options = {}) {
   // Validate rather than trust: options.override is caller-supplied and a stored
   // value can be stale or hand-edited. An unrecognised string must fall through
   // to automatic selection, not become the engine name.
   const requested = options.override ?? readNarrationEngineOverride(options.storage);
-  if (requested === KOKORO_ENGINE || requested === POCKET_ENGINE) {
-    return { engine: requested, automatic: false, reason: 'Chosen in Settings.' };
+  if (NARRATION_ENGINE_TIERS.includes(requested)) {
+    return { engine: requested, automatic: false, confident: true, reason: 'Chosen in Settings.' };
   }
   const capability = options.capability || {};
   const platform = capability.platform || detectMobilePlatform(options.userAgent || '');
-  const memoryGb = Number(
-    options.deviceMemory ?? capability.deviceMemoryGb ?? 0,
-  );
+  const memoryGb = Number(options.deviceMemory ?? capability.deviceMemoryGb ?? 0);
+  const signals = {
+    screenWidth: options.screenWidth ?? globalThis.screen?.width ?? 0,
+    screenHeight: options.screenHeight ?? globalThis.screen?.height ?? 0,
+    deviceMemory: memoryGb,
+    hardwareConcurrency: options.hardwareConcurrency
+      ?? capability.hardwareConcurrency
+      ?? globalThis.navigator?.hardwareConcurrency ?? 0,
+  };
+
+  let picked;
   if (platform === 'ios') {
-    return {
-      engine: KOKORO_ENGINE,
-      automatic: true,
-      reason: 'iOS cannot report RAM or model, so the lighter engine is the safe default.',
-    };
+    picked = classifyIosNarrationTier(signals);
+  } else if (platform === 'android') {
+    picked = classifyAndroidNarrationTier(signals);
+  } else {
+    // Desktop. Plenty of headroom, and deviceMemory is frequently absent there,
+    // so absence must not be read as a constrained device.
+    picked = (memoryGb > 0 && memoryGb <= 4)
+      ? { engine: KOKORO_ENGINE, confident: true, reason: `This computer reports ${memoryGb} GB of RAM.` }
+      : { engine: POCKET_ENGINE, confident: true, reason: '' };
   }
-  if (memoryGb > 0 && memoryGb <= 4) {
-    return {
-      engine: KOKORO_ENGINE,
-      automatic: true,
-      reason: `This device reports ${memoryGb} GB of RAM.`,
-    };
-  }
+
+  // Low-memory mode outranks the ladder, but only ever steps DOWN -- it must not
+  // promote a device past what it can hold.
   if (options.lowMemoryMode === true || capability.lowMemoryMode === true) {
-    return { engine: KOKORO_ENGINE, automatic: true, reason: 'Low-memory mode is on.' };
+    const floor = platform === 'android' ? KOKORO_ENGINE : KITTEN_ENGINE;
+    if (NARRATION_ENGINE_TIERS.indexOf(floor) < NARRATION_ENGINE_TIERS.indexOf(picked.engine)) {
+      picked = { engine: floor, confident: true, reason: 'Low-memory mode is on.' };
+    }
   }
-  return { engine: POCKET_ENGINE, automatic: true, reason: '' };
+
+  return {
+    engine: picked.engine,
+    automatic: true,
+    confident: picked.confident !== false,
+    reason: picked.reason || '',
+  };
 }

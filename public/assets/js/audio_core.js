@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v17';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v19';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -45,7 +45,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v25';
+} from './pocket_backend_policy.js?v=backend-v26';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -1337,7 +1337,7 @@ async function _loadPocketEngine() {
         // resolves consistently from every static-app route.
         const workerScript = engine === 'kokoro'
           ? new URL('assets/js/kokoro_worker.js?v=kokoro-v12', document.baseURI).href
-          : new URL('assets/js/pocket_worker.js?v=pocket-worker-v63', document.baseURI).href;
+          : new URL('assets/js/pocket_worker.js?v=pocket-worker-v65', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
