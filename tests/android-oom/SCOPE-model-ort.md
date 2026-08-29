@@ -11,8 +11,8 @@ App-only footprint (Chrome's 52 MB renderer cost excluded), 4 GB device profile:
 |---|---|
 | idle, story open | 27 MB |
 | at "Preparing narration session..." | 133 MB |
-| peak during/after session build | 396 - 424 MB |
-| sustained while caching paragraphs | **298 - 424 MB (see Unknown 1)** |
+| peak during/after session build | 396 - 519 MB |
+| **sustained while caching, 2h+ plateau** | **465 - 477 MB** |
 | iPhone-class budget being tested against | 350 MB |
 
 The model (`model_q8f16.onnx`, 82 MB) by raw graph scan:
@@ -44,12 +44,17 @@ Only `model_q8f16.onnx` is hosted. Every other variant
 
 ## Unknown, and worth resolving BEFORE spending effort
 
-1. **Is the high number sustained or transient?** Runs have settled at 298 MB
-   and at 424 MB. The 298 MB runs followed an engine teardown/rebuild, so that
-   may be a degraded state rather than the real working set. This single fact
-   decides everything below: a transient spike and a permanently resident
-   ~290 MB engine call for different fixes. **Cost: ~30 min. Do this first.**
-   Take 3 clean runs on one story, no teardown, 10+ paragraphs each.
+1. ~~Is the high number sustained or transient?~~ **ANSWERED 2026-08-29 — it is
+   RESIDENT.** A 148-minute continuous run (Kokoro, af_heart, isolated, 634 of
+   703 paragraphs cached, ~3h of audio) peaked at **519 MB** during session
+   build, then sat on a **flat 465-477 MB plateau for over two hours**.
+
+   Two things follow. The earlier 298 MB readings were a degraded post-teardown
+   state, not the working set — the real one is ~470 MB, **120 MB over the
+   350 MB budget, sustained**. And the plateau is genuinely flat across 600+
+   paragraphs, so there is **no leak**: the engine is stable, just too large.
+   That kills any fix aimed at the transient and moves the target to resident
+   size (options A and C).
 
 2. **How much of the peak is ORT itself vs this model?** Build a session from a
    trivial ONNX model in the same worker and measure. That splits "the runtime
