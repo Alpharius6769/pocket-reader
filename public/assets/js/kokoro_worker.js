@@ -154,7 +154,7 @@ async function loadVocab() {
 async function loadModel() {
   status('Preparing narration model...');
   progress(30);
-  let modelBytes = await fetchBuffer(`${KOKORO_BASE}/model_q8f16.onnx`, 'Kokoro model');
+  const buffer = await fetchBuffer(`${KOKORO_BASE}/model_q8f16.onnx`, 'Kokoro model');
   progress(70);
   status('Preparing narration session...');
   // Declared so the main-thread silence watchdog does not mistake a long
@@ -164,39 +164,35 @@ async function loadModel() {
     phase: 'blocking', budgetMs: MODEL_TIMEOUT_MS,
   });
 
-  // Measured on a 4 GB device emulator, 2026-08-28 (tests/android-oom): the app
-  // sits at ~136 MB, then session creation adds +64 MB and +184 MB in two
-  // consecutive 250 ms samples, peaking near 400 MB. Steady-state synthesis is
-  // only ~298 MB, so this transient — not sustained use — is what an
-  // iPhone-class ~350 MB footprint budget kills, before one paragraph caches.
+  // MEASURED AND RULED OUT, 2026-08-28 (rig + traces in tests/android-oom).
   //
-  // Two contributors, addressed here:
+  // On a 4 GB emulator with an iOS-style footprint budget, and excluding
+  // Chrome's own 52 MB renderer cost, the app peaks near 400 MB right here:
+  // +64 MB then +184 MB in two consecutive 250 ms samples. Steady-state
+  // synthesis is only ~298-310 MB, so this transient is the whole problem —
+  // an iPhone-class ~350 MB budget kills the tab before one paragraph caches.
   //
-  // 1. We held the ~86 MB download in a `const` across the whole await while
-  //    ORT copied the same bytes into the WASM heap, so both copies were live
-  //    at once. Handing the bytes over and dropping our reference immediately
-  //    lets the JS-side copy be collected during the build instead of after it.
-  //    (Dropping the binding is all we can do; there is no forced GC. It gives
-  //    the collector the option, which it did not have before.)
+  // Two plausible causes were tried together and made no difference:
   //
-  // 2. graphOptimizationLevel 'all' runs the extended layout and constant-fold
-  //    passes, which materialise fresh optimised weight tensors on top of the
-  //    copy just made. Kokoro is ONE non-autoregressive forward pass; those
-  //    passes buy far less here than they do for a model decoding frame by
-  //    frame, and they are paid at exactly the moment headroom is thinnest.
-  //    'basic' keeps the cheap always-safe rewrites and skips the ones that
-  //    duplicate weights. Output is numerically equivalent.
+  //   a) holding the ~86 MB download in a binding across the await, alongside
+  //      the copy ORT makes in the WASM heap — released it before awaiting;
+  //   b) graphOptimizationLevel 'all' materialising fresh optimised weight
+  //      tensors on top of that copy — dropped to 'basic'.
   //
-  // Deliberately NOT touched: enableCpuMemArena / enableMemPattern. The arena
-  // guard was already measured as a no-op for Kokoro (592 vs 594 MB, 356.6 vs
-  // 354.7 MB) and adding it back would only cost inference locality.
-  const creating = ort.InferenceSession.create(modelBytes, {
-    executionProviders: ['wasm'],
-    graphOptimizationLevel: 'basic',
-  });
-  modelBytes = null;
+  // Peak before: 396, 400, 405 MB. Peak after: 373, 421 MB. The spread between
+  // runs is wider than the effect, so neither is where the memory goes, and
+  // 'basic' would have forgone real optimisations to buy nothing. Reverted.
+  //
+  // Still untested, and the better next suspect: model_q8f16.onnx carries int8
+  // weights, and ORT may dequantise them at session init for operators it
+  // cannot run quantised. ~86 MB of int8 expanded to float would account for
+  // the +184 MB far better than anything above. Testing that means changing the
+  // model or the ORT build, not these options.
   session = await withTimeout(
-    creating,
+    ort.InferenceSession.create(buffer, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+    }),
     MODEL_TIMEOUT_MS,
     'Kokoro session initialization',
   );

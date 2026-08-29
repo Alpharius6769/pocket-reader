@@ -96,6 +96,33 @@ The trace also shows the engine being torn down and rebuilt ~2 minutes in,
 spiking to 400 MB a **second** time. The spike is not a one-time risk at story
 open; every engine reload re-rolls it.
 
+## Hypotheses tested and ruled out
+
+Applied together, deployed, and measured on this rig (2026-08-29):
+
+  a) releasing the ~86 MB model download before awaiting session creation,
+     so the JS copy is not pinned alongside ORT's WASM-heap copy;
+  b) `graphOptimizationLevel` 'all' -> 'basic', so the extended passes do not
+     materialise fresh optimised weight tensors on top of that copy.
+
+| | peak app-only |
+|---|---|
+| before | 396, 400, 405 MB |
+| after  | 373, 421 MB |
+
+The run-to-run spread is wider than the effect. **Neither is where the memory
+goes**, and 'basic' would have forgone real optimisations for nothing, so both
+were reverted. `kokoro_worker.js loadModel()` keeps the measurement in a comment
+so the next person does not re-derive the same dead end.
+
+Better next suspect, untested: `model_q8f16.onnx` carries int8 weights, and ORT
+may dequantise them at session init for operators it cannot run quantised. ~86 MB
+of int8 expanded to float fits the +184 MB sample far better than either option
+above. Testing it means changing the model or the ORT build.
+
+Note the variance: single runs here are not conclusive. Take at least two, and
+treat anything under ~30 MB as noise.
+
 ## What this rig does NOT tell you
 
 Speed. Emulated x86 WASM inference ran ~1 paragraph per 3-5 minutes here, orders
