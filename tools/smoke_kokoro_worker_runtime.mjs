@@ -101,7 +101,7 @@ try {
 
   const result = await page.evaluate(async ({ appPath: base, voice, text }) => {
     const messages = [];
-    const worker = new Worker(`${base}/assets/js/kokoro_worker.js?v=kokoro-v11`, { type: 'module' });
+    const worker = new Worker(`${base}/assets/js/kokoro_worker.js?v=kokoro-v12`, { type: 'module' });
     const record = (data) => {
       if (data?.type === 'generate_done') messages.push({ type: 'generate_done', id: data.id });
       else messages.push(data);

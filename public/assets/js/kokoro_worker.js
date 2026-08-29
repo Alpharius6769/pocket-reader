@@ -46,28 +46,33 @@ const VOICE_ROWS = 510;
 
 // WHICH MODEL FILE, AND WHY THIS ONE.
 //
-// ONNX Runtime's WASM CPU backend does not implement float16. Every fp16 tensor
-// gets a Cast to fp32 inserted around it, which doubles the memory those weights
-// occupy and costs real time — a reported case had the inserted casts at 54% of
-// total inference.
+// model_quantized.onnx was tried here and REVERTED on measurement, 2026-08-29.
 //
-// This worker hardcodes executionProviders: ['wasm']. Kokoro never touches
-// WebGPU. So the `f16` in the old model_q8f16.onnx was not merely wasted, it was
-// actively harmful on the only backend we use: the f16 variants are built for
-// WebGPU and we had picked one for a CPU-only path. The 812 Cast nodes counted
-// in that graph were those insertions.
+// The theory was sound and the evidence for it was real: ORT's WASM CPU backend
+// does not implement float16, so every fp16 tensor gets a Cast to fp32 inserted
+// around it, and this worker is wasm-only (executionProviders: ['wasm'], never
+// WebGPU). model_q8f16.onnx is a WebGPU-oriented build, and its graph carries
+// 812 Cast and 1390 QuantizeLinear nodes against model_quantized.onnx's 452 and
+// 278 — with identical integer-op counts, so it really is the same int8
+// quantisation minus the fp16 machinery.
 //
-// model_quantized.onnx is the same int8 quantisation of the same operators —
-// MatMulInteger 148, ConvInteger 87, DynamicQuantizeLinear 139, identical in
-// both files — so there is no additional weight-precision loss. What differs is
-// QuantizeLinear 1390 -> 278 and Cast 812 -> 452: the fp16 conversion machinery
-// is gone. Input/output contract is byte-identical (input_ids [1,
-// sequence_length] int64, style [1,256] float, speed, waveform), so it is a
-// drop-in. Cost is +10 MB of download (82 -> 92.4 MB).
+// It did not help. Measured on the 4 GB rig (tests/android-oom), app-only:
 //
-// fp32 activations are MORE precise than fp16, so this is the rare case where
-// the quality-preserving choice and the memory choice are the same choice.
-const MODEL_FILE = 'model_quantized.onnx';
+//                        peak      plateau
+//   q8f16 (this file)   519 MB      459 MB
+//   quantized run A     587 MB      459 MB
+//   quantized run B     580 MB      465 MB
+//
+// Two clean runs, reproducible: +64 MB at peak, +3 MB at the plateau. Peak is
+// the number that gets a tab killed, so the swap made an OOM MORE likely while
+// costing +10 MB of download. Removing the casts saved time in the graph but
+// not memory, which says the resident cost lives somewhere else — the arena,
+// the LSTM/GRU working buffers, or ORT's own fixed session cost.
+//
+// model_quantized.onnx is still uploaded at kokoro/v1.0/ on B2, so re-testing
+// costs one line. Do not re-derive this from the graph counts alone; they are
+// persuasive and they were wrong.
+const MODEL_FILE = 'model_q8f16.onnx';
 
 const MODEL_TIMEOUT_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 90000;

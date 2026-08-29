@@ -115,7 +115,32 @@ artefact rather than a structural difference — worth confirming.
 
 ## Options
 
-### A. Swap to model_quantized.onnx — cheapest, highest expected value, do first
+### A. ~~Swap to model_quantized.onnx~~ — TRIED 2026-08-29, MEASURED WORSE, REVERTED
+
+Uploaded to B2, deployed, measured on the rig. App-only:
+
+| | peak | plateau median |
+|---|---|---|
+| q8f16 (restored) | 519 MB | 459 MB |
+| quantized run A | 587 MB | 459 MB |
+| quantized run B | 580 MB | 465 MB |
+
+Two clean runs: **+64 MB at peak, +3 MB at the plateau.** Peak is the number that
+gets a tab killed, so the swap made an OOM *more* likely, and cost +10 MB of
+download for it. Reverted.
+
+The fp16 reasoning was correct as far as it went — ORT's wasm CPU backend really
+cannot execute float16, the casts really are inserted, and the graph really does
+carry 812 of them against the alternative's 452. Removing them saved graph work
+but not memory. That is the useful result: **the resident cost is not the model's
+dtype**, so it lives in the arena, the LSTM/GRU working buffers, or ORT's own
+fixed session cost. Unknown 2 below is now the only lead worth pulling.
+
+The file remains on B2 at `kokoro/v1.0/model_quantized.onnx`, so re-testing costs
+one line. Do not re-derive this from graph counts alone — they were persuasive
+and they were wrong.
+
+### A2. Other prebuilt quantisations — now much less promising
 Download alternates from `onnx-community/Kokoro-82M-v1.0-ONNX`, upload to B2,
 point `KOKORO_BASE` at one, measure on the rig.
 

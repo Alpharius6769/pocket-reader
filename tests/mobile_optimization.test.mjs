@@ -183,22 +183,24 @@ test('the phonemizer gets a stream async-iterator where the engine lacks one', a
     'the polyfill must be installed before the phonemizer import');
 });
 
-test('Kokoro loads the CPU-appropriate model, not a WebGPU one', async () => {
+test('the measured-worse model swap stays reverted, with the numbers kept', async () => {
   const w = await read('public/assets/js/kokoro_worker.js');
   const audio = await read('public/assets/js/audio_core.js');
   const code = w.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
-  // ORT's WASM CPU backend does not implement float16: every fp16 tensor gets a
-  // Cast to fp32 around it, doubling the memory those weights occupy. This
-  // worker is wasm-only, so an f16 build is the wrong file for it.
-  assert.match(code, /executionProviders: \['wasm'\]/,
-    'the reasoning below only holds while this stays CPU-only');
-  assert.match(code, /const MODEL_FILE = 'model_quantized\.onnx';/);
-  assert.doesNotMatch(code, /model_q8f16|model_fp16|model_q4f16|model_uint8f16/,
-    'no f16 variant may be loaded on a wasm-only path');
-  assert.match(code, /fetchBuffer\(`\$\{KOKORO_BASE\}\/\$\{MODEL_FILE\}`/);
+  // model_quantized.onnx removes the fp16 cast machinery that ORT's wasm CPU
+  // backend cannot execute, which is a real and correct observation. It still
+  // measured +64 MB at peak over two clean runs, and peak is what gets a tab
+  // killed. So it is reverted, and the numbers stay in the file.
+  assert.match(code, /const MODEL_FILE = 'model_q8f16\.onnx';/);
+  assert.doesNotMatch(code, /const MODEL_FILE = 'model_quantized\.onnx';/);
+  assert.match(w, /REVERTED on measurement/);
+  assert.match(w, /quantized run A     587 MB/);
 
-  // A model revision changes the audio for the same (text, voice), and the
-  // cache key is documented to cover exactly that.
-  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';/);
+  // Same engine as before means the v2 renders are valid again; bumping would
+  // force a third full re-render for an identical render.
+  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov2';/);
+
+  // The reasoning above only holds while this stays a CPU-only path.
+  assert.match(code, /executionProviders: \['wasm'\]/);
 });

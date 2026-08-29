@@ -10,7 +10,7 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v103'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v104'\)/);
   assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v65'\)/);
 });
 
