@@ -34,9 +34,16 @@ test('constrained devices never get Pocket, and iOS never depends on RAM', () =>
   assert.equal(
     policy.selectNarrationEngine({ userAgent: ANDROID, deviceMemory: 4, storage: null }).engine,
     policy.KOKORO_ENGINE, 'a 4 GB Android must fall back');
+  // Cores are stated explicitly. Leaving them out let the selector fall back to
+  // globalThis.navigator.hardwareConcurrency, so this passed on a dev machine
+  // with 8+ cores and failed on CI's smaller runner -- the assertion was reading
+  // the host rather than the rule. Android needs 6 GB AND a good CPU for Pocket.
   assert.equal(
-    policy.selectNarrationEngine({ userAgent: ANDROID, deviceMemory: 8, storage: null }).engine,
-    policy.POCKET_ENGINE, 'a roomy Android keeps Pocket');
+    policy.selectNarrationEngine({ userAgent: ANDROID, deviceMemory: 8, hardwareConcurrency: 8, storage: null }).engine,
+    policy.POCKET_ENGINE, 'a roomy Android with a real CPU keeps Pocket');
+  assert.equal(
+    policy.selectNarrationEngine({ userAgent: ANDROID, deviceMemory: 8, hardwareConcurrency: 4, storage: null }).engine,
+    policy.KOKORO_ENGINE, 'RAM alone is not enough -- a weak CPU still drops a tier');
   assert.equal(
     policy.selectNarrationEngine({ userAgent: DESKTOP, deviceMemory: 16, storage: null }).engine,
     policy.POCKET_ENGINE, 'desktop keeps Pocket');
