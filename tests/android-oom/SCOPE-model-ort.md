@@ -61,9 +61,61 @@ Only `model_q8f16.onnx` is hosted. Every other variant
    costs X" from "the model costs Y" and decides between options A and B below.
    **Cost: ~1 hour.**
 
+## The headline finding (2026-08-29 research)
+
+**ONNX Runtime's WASM CPU backend does not support float16 at all.** Every fp16
+tensor gets a Cast to fp32 inserted around it, which doubles the memory those
+weights occupy and costs real time — one reported case had the inserted casts
+taking 54% of total inference time.
+
+`kokoro_worker.js` hardcodes `executionProviders: ['wasm']`. Kokoro never runs on
+WebGPU. So the `f16` half of `model_q8f16.onnx` is not just wasted, it is
+actively harmful on the only backend we use: **the f16 variants are built for
+WebGPU, and we picked one for a CPU-only path.** The 812 Cast nodes counted in
+the graph are those inserted conversions.
+
+### The variant table
+
+| file | size | fp16 | suitable for WASM CPU |
+|---|---|---|---|
+| model.onnx | 326 MB | no | yes, but 4x the download |
+| model_fp16.onnx | 163 MB | **yes** | no |
+| model_q4.onnx | 305 MB | no | int4, quality risk |
+| model_q4f16.onnx | 155 MB | **yes** | no |
+| **model_q8f16.onnx (shipping)** | 86 MB | **yes** | **no — current choice** |
+| **model_quantized.onnx** | **92.4 MB** | **no** | **yes — candidate** |
+| model_uint8.onnx | 177 MB | no | yes, but 2x the download |
+| model_uint8f16.onnx | 114 MB | **yes** | no |
+
+### Why `model_quantized.onnx` is the candidate
+
+Both files were downloaded and their graphs compared directly:
+
+| | q8f16 (shipping) | quantized (candidate) |
+|---|---|---|
+| file size | 82.0 MB | 88.1 MB |
+| MatMulInteger | 148 | **148** |
+| ConvInteger | 87 | **87** |
+| DynamicQuantizeLinear | 139 | **139** |
+| QuantizeLinear | 1390 | **278** |
+| Cast | 812 | **452** |
+
+The integer-op counts are **identical**, so it is the same int8 quantisation of
+the same operators — there is no additional weight-precision loss versus what
+already ships. What differs is ~1100 fewer QuantizeLinear and 360 fewer Cast
+nodes: the fp16 conversion machinery is gone. Cost is +6 MB of download.
+
+This is the rare case where the quality-preserving option and the memory option
+point the same way: fp32 activations are *more* precise than fp16, not less.
+
+**Not yet measured.** The prediction is lower resident memory and faster
+inference; it has to be run on the rig before it is believed. Note also that the
+raw graph scan counts byte strings, so the LSTM row (366 vs 150) may be a naming
+artefact rather than a structural difference — worth confirming.
+
 ## Options
 
-### A. Try a different prebuilt quantisation — cheapest, do first
+### A. Swap to model_quantized.onnx — cheapest, highest expected value, do first
 Download alternates from `onnx-community/Kokoro-82M-v1.0-ONNX`, upload to B2,
 point `KOKORO_BASE` at one, measure on the rig.
 
