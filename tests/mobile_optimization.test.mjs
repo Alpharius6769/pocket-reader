@@ -182,3 +182,23 @@ test('the phonemizer gets a stream async-iterator where the engine lacks one', a
   assert.ok(installAt !== -1 && importAt !== -1 && installAt < importAt,
     'the polyfill must be installed before the phonemizer import');
 });
+
+test('Kokoro loads the CPU-appropriate model, not a WebGPU one', async () => {
+  const w = await read('public/assets/js/kokoro_worker.js');
+  const audio = await read('public/assets/js/audio_core.js');
+  const code = w.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+  // ORT's WASM CPU backend does not implement float16: every fp16 tensor gets a
+  // Cast to fp32 around it, doubling the memory those weights occupy. This
+  // worker is wasm-only, so an f16 build is the wrong file for it.
+  assert.match(code, /executionProviders: \['wasm'\]/,
+    'the reasoning below only holds while this stays CPU-only');
+  assert.match(code, /const MODEL_FILE = 'model_quantized\.onnx';/);
+  assert.doesNotMatch(code, /model_q8f16|model_fp16|model_q4f16|model_uint8f16/,
+    'no f16 variant may be loaded on a wasm-only path');
+  assert.match(code, /fetchBuffer\(`\$\{KOKORO_BASE\}\/\$\{MODEL_FILE\}`/);
+
+  // A model revision changes the audio for the same (text, voice), and the
+  // cache key is documented to cover exactly that.
+  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';/);
+});

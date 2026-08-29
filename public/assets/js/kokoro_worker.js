@@ -44,6 +44,31 @@ const MAX_TOKENS = 512;
 const STYLE_DIM = 256;
 const VOICE_ROWS = 510;
 
+// WHICH MODEL FILE, AND WHY THIS ONE.
+//
+// ONNX Runtime's WASM CPU backend does not implement float16. Every fp16 tensor
+// gets a Cast to fp32 inserted around it, which doubles the memory those weights
+// occupy and costs real time — a reported case had the inserted casts at 54% of
+// total inference.
+//
+// This worker hardcodes executionProviders: ['wasm']. Kokoro never touches
+// WebGPU. So the `f16` in the old model_q8f16.onnx was not merely wasted, it was
+// actively harmful on the only backend we use: the f16 variants are built for
+// WebGPU and we had picked one for a CPU-only path. The 812 Cast nodes counted
+// in that graph were those insertions.
+//
+// model_quantized.onnx is the same int8 quantisation of the same operators —
+// MatMulInteger 148, ConvInteger 87, DynamicQuantizeLinear 139, identical in
+// both files — so there is no additional weight-precision loss. What differs is
+// QuantizeLinear 1390 -> 278 and Cast 812 -> 452: the fp16 conversion machinery
+// is gone. Input/output contract is byte-identical (input_ids [1,
+// sequence_length] int64, style [1,256] float, speed, waveform), so it is a
+// drop-in. Cost is +10 MB of download (82 -> 92.4 MB).
+//
+// fp32 activations are MORE precise than fp16, so this is the rare case where
+// the quality-preserving choice and the memory choice are the same choice.
+const MODEL_FILE = 'model_quantized.onnx';
+
 const MODEL_TIMEOUT_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 90000;
 
@@ -189,7 +214,7 @@ async function loadVocab() {
 async function loadModel() {
   status('Preparing narration model...');
   progress(30);
-  const buffer = await fetchBuffer(`${KOKORO_BASE}/model_q8f16.onnx`, 'Kokoro model');
+  const buffer = await fetchBuffer(`${KOKORO_BASE}/${MODEL_FILE}`, 'Kokoro model');
   progress(70);
   status('Preparing narration session...');
   // Declared so the main-thread silence watchdog does not mistake a long
@@ -218,11 +243,12 @@ async function loadModel() {
   // runs is wider than the effect, so neither is where the memory goes, and
   // 'basic' would have forgone real optimisations to buy nothing. Reverted.
   //
-  // Still untested, and the better next suspect: model_q8f16.onnx carries int8
-  // weights, and ORT may dequantise them at session init for operators it
-  // cannot run quantised. ~86 MB of int8 expanded to float would account for
-  // the +184 MB far better than anything above. Testing that means changing the
-  // model or the ORT build, not these options.
+  // RESOLVED — it was the fp16 half, not the int8 half. ORT's WASM CPU backend
+  // does not implement float16 at all, so every fp16 tensor was getting a Cast
+  // to fp32 around it, doubling the memory those weights occupy. The old
+  // model_q8f16.onnx is a WebGPU-oriented build and this worker is wasm-only.
+  // See MODEL_FILE above: the model now loaded is the same int8 quantisation
+  // without the fp16 conversion machinery.
   session = await withTimeout(
     ort.InferenceSession.create(buffer, {
       executionProviders: ['wasm'],

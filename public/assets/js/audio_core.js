@@ -141,7 +141,11 @@ const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // for the same (text, voice) changes: the chunk cap, the clause rejoin, the
 // phonemizer, or the model revision. v2 = text now goes through
 // normalizeForPocketTts (pronunciation overrides, contractions, [Ns] strip).
-const KOKORO_NARRATION_CACHE_VERSION = 'kokorov2';
+// v3 = model_q8f16.onnx -> model_quantized.onnx. Same int8 quantisation of the
+// same operators, so this should be imperceptible, but it IS a model revision
+// and the rule above says bump. It also guarantees the next render actually
+// runs the new model instead of replaying audio the old one produced.
+const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';
 // Identity-anchored voice pack subpath on B2 (see Back end/tools/build_anchored_pack_v2.py).
 // Every v2 emotion state shares a neutral identity anchor, so emotion switches keep
 // the same perceived speaker. Loader falls back to the legacy v1 files when a v2
@@ -1327,7 +1331,7 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const workerScript = engine === 'kokoro'
-          ? new URL('assets/js/kokoro_worker.js?v=kokoro-v10', document.baseURI).href
+          ? new URL('assets/js/kokoro_worker.js?v=kokoro-v11', document.baseURI).href
           : new URL('assets/js/pocket_worker.js?v=pocket-worker-v63', document.baseURI).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };

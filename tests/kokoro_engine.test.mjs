@@ -775,9 +775,14 @@ test('Kokoro applies the same pronunciation rules Pocket does', async () => {
   assert.match(stripLine, /^ {2}out = /,
     'the [Ns] strip must sit outside the keepClausePunctuation guard');
 
-  // The render changed, so cached Kokoro audio has to be invalidated.
+  // The render changed, so cached Kokoro audio has to be invalidated. Assert the
+  // version is at or past the bump this change required, not that it equals it:
+  // pinning the literal makes every LATER legitimate bump fail here, which
+  // pressures the next person to edit the test rather than the cache key.
   const audio = await read('public/assets/js/audio_core.js');
-  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov2';/);
+  const cacheVer = Number(audio.match(/const KOKORO_NARRATION_CACHE_VERSION = 'kokorov(\d+)';/)?.[1]);
+  assert.ok(Number.isFinite(cacheVer) && cacheVer >= 2,
+    `normalizeForPocketTts changed the render, so the Kokoro cache key must be at least v2; found v${cacheVer}`);
 });
 
 test('the Pocket worker recycle does not run on Kokoro', async () => {
