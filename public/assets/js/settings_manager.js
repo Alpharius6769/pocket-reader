@@ -12,9 +12,13 @@ import {
   isKokoroVoice,
   KOKORO_VOICES,
   KOKORO_DEFAULT_VOICE,
+  KITTEN_ENGINE,
+  NARRATION_ENGINE_TIERS,
+  voicesForEngine,
+  coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v26';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '212';
+export const NARRATION_SERVICE_WORKER_VERSION = '214';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1485,21 +1489,28 @@ window.syncNarrationControls = function syncNarrationControls() {
   const selector = document.getElementById('voice-selector');
   if (!selector) return;
 
-  if (engine === 'kokoro') {
-    const saved = window.userProfile?.settings?.kokoroVoice;
-    const chosen = isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
-    const group = (gender) => KOKORO_VOICES
+  // Kokoro AND Kitten both keep their lists in the shell policy, so both build
+  // here with no runtime at all. Pocket and Device genuinely need the runtime
+  // (voice registry, speechSynthesis), so those stay deferred.
+  const voices = voicesForEngine(engine);
+  if (voices.length) {
+    const savedKey = engine === KITTEN_ENGINE ? 'kittenVoice' : 'kokoroVoice';
+    const chosen = coerceVoiceForEngine(engine, window.userProfile?.settings?.[savedKey]);
+    const group = (gender) => voices
       .filter((voice) => voice.gender === gender)
       .map((voice) => `<option value="${_escapeSettingsHtml(voice.id)}"${voice.id === chosen ? ' selected' : ''}>`
-        + `${_escapeSettingsHtml(voice.label)} (${_escapeSettingsHtml(voice.grade)})</option>`)
+        + `${_escapeSettingsHtml(voice.label)}${voice.grade ? ` (${_escapeSettingsHtml(voice.grade)})` : ''}</option>`)
       .join('');
     const markup = `<optgroup label="Female voices">${group('female')}</optgroup>`
       + `<optgroup label="Male voices">${group('male')}</optgroup>`;
-    // Rebuild only when it is not already the Kokoro list, so re-entering the
-    // reader does not discard the user's current selection.
-    if (!selector.querySelector(`option[value="${chosen}"]`)) selector.innerHTML = markup;
+    // Rebuild when the list is not already THIS engine's. Checking only for the
+    // chosen id was enough with two engines and is not with three: two engines
+    // can both be missing an id while the list on screen belongs to neither.
+    const listIsCurrent = voices.every((v) => selector.querySelector(`option[value="${v.id}"]`))
+      && selector.querySelectorAll('option').length === voices.length;
+    if (!listIsCurrent) selector.innerHTML = markup;
     selector.value = chosen;
-    if (window.userProfile?.settings) window.userProfile.settings.kokoroVoice = chosen;
+    if (window.userProfile?.settings) window.userProfile.settings[savedKey] = chosen;
     return;
   }
 
@@ -1538,10 +1549,13 @@ export function renderNarrationEngineControls() {
   if (!host) return;
   const choice = _resolveEngineChoice();
   const override = readNarrationEngineOverride(localStorage) || '';
-  const voices = KOKORO_VOICES;
-  const saved = window.userProfile?.settings?.kokoroVoice;
-  const savedVoice = isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
   const usingWebSpeech = window.userProfile?.settings?.voiceEngine === 'webspeech';
+  // Voices come from the engine ACTUALLY resolved, never a fixed list. Reading
+  // KOKORO_VOICES unconditionally is how a Kitten device would be offered
+  // af_heart, which its worker cannot load.
+  const voices = voicesForEngine(choice.engine);
+  const savedKey = choice.engine === KITTEN_ENGINE ? 'kittenVoice' : 'kokoroVoice';
+  const savedVoice = coerceVoiceForEngine(choice.engine, window.userProfile?.settings?.[savedKey]);
 
   // Keep the single Voice Engine select in step, including labelling which
   // engine "Automatic" actually resolves to on THIS device -- the previous
@@ -1551,7 +1565,8 @@ export function renderNarrationEngineControls() {
   if (select) {
     const autoOption = select.querySelector('option[value="auto"]');
     if (autoOption) {
-      autoOption.textContent = `Automatic - ${choice.engine === 'kokoro' ? 'Kokoro' : 'Pocket TTS'} on this device`;
+      const ENGINE_LABELS = { kokoro: 'Kokoro', kitten: 'Kitten', pocket: 'Pocket TTS' };
+      autoOption.textContent = `Automatic - ${ENGINE_LABELS[choice.engine] || 'Pocket TTS'} on this device`;
     }
     const desired = usingWebSpeech ? 'webspeech' : (override || 'auto');
     if (select.value !== desired) select.value = desired;
@@ -1562,10 +1577,10 @@ export function renderNarrationEngineControls() {
 
   // Only the voice picker and the reason line live here now. The engine choice
   // itself moved into the Voice Engine select above.
-  const kokoroActive = !usingWebSpeech && choice.engine === 'kokoro';
+  const voicePickerActive = !usingWebSpeech && voices.length > 0;
   const voiceOptions = voices.map((voice) =>
     `<option value="${_escapeSettingsHtml(voice.id)}"${voice.id === savedVoice ? ' selected' : ''}>`
-    + `${_escapeSettingsHtml(voice.label)} (${_escapeSettingsHtml(voice.grade)})</option>`
+    + `${_escapeSettingsHtml(voice.label)}${voice.grade ? ` (${_escapeSettingsHtml(voice.grade)})` : ''}</option>`
   ).join('');
 
   const why = usingWebSpeech
@@ -1576,20 +1591,44 @@ export function renderNarrationEngineControls() {
           : 'Engine chosen manually.'
       }</p>`;
 
-  host.innerHTML = `${why}
-    <div id="kokoro-voice-row" style="display:${kokoroActive ? 'block' : 'none'};">
-      <label for="kokoro-voice-select" style="display:block;font-size:0.85rem;color:var(--text-muted);margin-bottom:4px;">Kokoro voice</label>
+  // Override warning. Shown only when the reader has moved UP the ladder --
+  // choosing a LIGHTER engine than detected is always safe and must not be nagged.
+  let warning = '';
+  if (!usingWebSpeech && override && !choice.automatic) {
+    const auto = selectNarrationEngine({ override: null, storage: null,
+      capability: window._pocketDeviceCapability || {},
+      userAgent: navigator.userAgent });
+    const rank = (e) => NARRATION_ENGINE_TIERS.indexOf(e);
+    if (rank(override) > rank(auto.engine)) {
+      const heavier = { kokoro: 'Kokoro', pocket: 'Pocket TTS' }[override] || override;
+      warning = '<p role="status" style="font-size:0.78rem;line-height:1.45;margin:2px 0 10px;'
+        + 'padding:8px 10px;border:1px solid var(--accent-amber,#c9a75c);border-radius:8px;'
+        + 'color:var(--text-main);"><b>Heads up:</b> ' + _escapeSettingsHtml(heavier)
+        + ' needs more memory than this device was measured to have spare. Narration'
+        + ' may stall or the tab may reload mid-story. Switch back to Automatic if that happens.</p>';
+    }
+  }
+
+  const engineName = { kokoro: 'Kokoro', kitten: 'Kitten' }[choice.engine] || '';
+  const voiceNote = choice.engine === 'kokoro'
+    ? "Letter grades are Kokoro's own quality ratings. Male voices top out at C+."
+    : 'KittenTTS publishes no quality grades, so none are shown.';
+  host.innerHTML = `${why}${warning}
+    <div id="kokoro-voice-row" style="display:${voicePickerActive ? 'block' : 'none'};">
+      <label for="kokoro-voice-select" style="display:block;font-size:0.85rem;color:var(--text-muted);margin-bottom:4px;">${_escapeSettingsHtml(engineName)} voice</label>
       <select id="kokoro-voice-select" class="settings-control" style="width:100%;">${voiceOptions}</select>
-      <p style="font-size:0.78rem;color:var(--text-muted);margin:6px 0 0;">Letter grades are Kokoro's own quality ratings. Male voices top out at C+.</p>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin:6px 0 0;">${_escapeSettingsHtml(voiceNote)}</p>
     </div>`;
 
   syncPocketOnlySettings();
 
   document.getElementById('kokoro-voice-select')?.addEventListener('change', (event) => {
     if (!window.userProfile?.settings) return;
-    window.userProfile.settings.kokoroVoice = event.target.value;
+    // Store under the ENGINE OWN key. One shared key would mean switching
+    // engines silently carried a voice id the other engine cannot load.
+    window.userProfile.settings[savedKey] = event.target.value;
     window.saveLocalData?.();
-    window.pocketNotify?.('Kokoro voice updated.');
+    window.pocketNotify?.(`${engineName} voice updated.`);
   });
 }
 window.renderNarrationEngineControls = renderNarrationEngineControls;

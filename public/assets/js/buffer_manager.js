@@ -31,7 +31,10 @@ try {
 // the literal 'pocket' silently disabled caching and Away Mode on exactly the
 // devices Kokoro was introduced to serve.
 function _isNeuralEngine(engine) {
-  return engine === 'pocket' || engine === 'kokoro';
+  // This module keeps its own copy. The last time an engine was missing from it,
+  // caching silently switched itself off for exactly the devices that engine was
+  // added to serve.
+  return engine === 'pocket' || engine === 'kokoro' || engine === 'kitten';
 }
 
 // The merged Voice Engine control also carries 'auto', which resolves to a

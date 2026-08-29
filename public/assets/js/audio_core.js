@@ -18,6 +18,12 @@ import {
   readNarrationEngineOverride,
   writeNarrationEngineOverride,
   isKokoroVoice,
+  isKittenVoice,
+  KITTEN_VOICES,
+  KITTEN_DEFAULT_VOICE,
+  KITTEN_ENGINE,
+  voicesForEngine,
+  coerceVoiceForEngine,
   KOKORO_VOICES,
   KOKORO_DEFAULT_VOICE,
   recommendedWasmThreadCount,
@@ -892,12 +898,19 @@ window.isKokoroVoice = isKokoroVoice;
 // Which voice id to hand the worker for the engine that is actually running.
 // A Pocket voice id means nothing to Kokoro and vice versa, so a stored voice
 // from the other engine must not leak across.
+window.KITTEN_VOICES = KITTEN_VOICES;
+window.KITTEN_DEFAULT_VOICE = KITTEN_DEFAULT_VOICE;
+window.isKittenVoice = isKittenVoice;
+window.voicesForEngine = voicesForEngine;
+
 window.resolveVoiceForEngine = function resolveVoiceForEngine(engine, voice) {
-  if (engine !== 'kokoro') return voice;
+  const allowed = voicesForEngine(engine);
+  if (!allowed.length) return voice;          // Pocket validates its own packs.
   const requested = String(voice || '').toLowerCase().trim();
-  if (isKokoroVoice(requested)) return requested;
-  const saved = window.userProfile?.settings?.kokoroVoice;
-  return isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
+  if (allowed.some((v) => v.id === requested)) return requested;
+  const settings = window.userProfile?.settings || {};
+  const saved = engine === KITTEN_ENGINE ? settings.kittenVoice : settings.kokoroVoice;
+  return coerceVoiceForEngine(engine, String(saved || '').toLowerCase().trim());
 };
 
 
@@ -1335,9 +1348,14 @@ async function _loadPocketEngine() {
         // A fixed absolute, versioned URL is essential for installed PWAs: a
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
-        const workerScript = engine === 'kokoro'
-          ? new URL('assets/js/kokoro_worker.js?v=kokoro-v12', document.baseURI).href
-          : new URL('assets/js/pocket_worker.js?v=pocket-worker-v65', document.baseURI).href;
+        const WORKER_SCRIPTS = {
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v12',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v1',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v65',
+        };
+        const workerScript = new URL(
+          WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
+        ).href;
         const worker = new Worker(workerScript, { type: 'module' });
         const workerObj = { id: i, worker: worker, activeTasks: 0, ready: false };
         ttsWorkers.push(workerObj);
@@ -4214,10 +4232,17 @@ let _selectedVoiceEngineControlValue = null;
 // null and the caller fell back to the device voice — the engine was selected,
 // listed, and never actually asked to speak.
 function _isNeuralEngine(engine) {
-  return engine === 'pocket' || engine === 'kokoro';
+  // Kitten belongs here for the same reason Kokoro does: every gate that guards
+  // the narration path reads this, and omitting the new tier would make it look
+  // like a device-speech engine to all of them.
+  return engine === 'pocket' || engine === 'kokoro' || engine === KITTEN_ENGINE;
 }
 
 function _defaultVoiceForEngine(engine) {
+  if (engine === KITTEN_ENGINE) {
+    const saved = window.userProfile?.settings?.kittenVoice;
+    return isKittenVoice(saved) ? saved : KITTEN_DEFAULT_VOICE;
+  }
   if (engine === 'kokoro') {
     const saved = window.userProfile?.settings?.kokoroVoice;
     return isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
@@ -4341,19 +4366,22 @@ window.onVoiceSelectionChange = function(newVoice) {
   // Kokoro voices are a separate namespace stored under their own setting.
   // Falling through to the Pocket path would canonicalise a Kokoro id against
   // the Pocket voice list and quietly rewrite it to donald_malone.
-  if (isKokoroVoice(newVoice)) {
+  const neuralEngine = isKittenVoice(newVoice) ? KITTEN_ENGINE
+    : (isKokoroVoice(newVoice) ? 'kokoro' : null);
+  if (neuralEngine) {
+    const savedKey = neuralEngine === KITTEN_ENGINE ? 'kittenVoice' : 'kokoroVoice';
+    const label = neuralEngine === KITTEN_ENGINE ? 'Kitten' : 'Kokoro';
     if (window.isPlaying) {
       window.virtueSpeak?.('Please pause the story first before changing the voice.', 4000);
       const sel = document.getElementById('voice-selector');
-      const saved = window.userProfile?.settings?.kokoroVoice;
-      if (sel) sel.value = isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
+      if (sel) sel.value = coerceVoiceForEngine(neuralEngine, window.userProfile?.settings?.[savedKey]);
       return;
     }
     if (!window.userProfile) window.userProfile = {};
     if (!window.userProfile.settings) window.userProfile.settings = {};
-    window.userProfile.settings.kokoroVoice = newVoice;
+    window.userProfile.settings[savedKey] = newVoice;
     window.saveLocalData?.();
-    window.pocketNotify?.('Kokoro voice updated.');
+    window.pocketNotify?.(`${label} voice updated.`);
     return;
   }
   if (window.isPlaying) {

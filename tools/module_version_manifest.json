@@ -4,12 +4,12 @@
     "sha256": "c03bf65b544fdb09"
   },
   "audio_core.js": {
-    "version": "audio-v106",
-    "sha256": "697c2ccb135216cd"
+    "version": "audio-v108",
+    "sha256": "e8d7a388a66d7ab7"
   },
   "buffer_manager.js": {
-    "version": "buffer-v67",
-    "sha256": "e9818e63f3a7a59b"
+    "version": "buffer-v69",
+    "sha256": "e7deaeb04c916b00"
   },
   "cinematic_ui.js": {
     "version": "cinematic-v8",
@@ -32,7 +32,7 @@
     "sha256": "452702fde47e0eab"
   },
   "engine_utils.js": {
-    "version": "sw-212",
+    "version": "sw-214",
     "sha256": "6cb549c31c281535"
   },
   "experience_coordinator.js": {
@@ -55,6 +55,10 @@
     "version": "hmofa-prefs-v2",
     "sha256": "f4c9755b6b44b491"
   },
+  "kitten_worker.js": {
+    "version": "kitten-v1",
+    "sha256": "222630821275dd4c"
+  },
   "kokoro_worker.js": {
     "version": "kokoro-v12",
     "sha256": "fb6dbbabef6e15d1"
@@ -64,15 +68,15 @@
     "sha256": "5e257d6c8df9422b"
   },
   "motion_lite.js": {
-    "version": "sw-212",
+    "version": "sw-214",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v57",
-    "sha256": "d78716cb67d2cbf9"
+    "version": "narration-loader-v58",
+    "sha256": "7e214ea9dd87d14d"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-212",
+    "version": "sw-214",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -100,8 +104,8 @@
     "sha256": "64d2523f44362796"
   },
   "settings_manager.js": {
-    "version": "settings-v111",
-    "sha256": "2320d33fed2bfece"
+    "version": "settings-v113",
+    "sha256": "219928d94be3248d"
   },
   "storage_core.js": {
     "version": "storage-v19",
@@ -120,15 +124,15 @@
     "sha256": "34a608981d57269a"
   },
   "ui_controller.js": {
-    "version": "ui-v151",
-    "sha256": "22014f60a84d4d1f"
+    "version": "ui-v152",
+    "sha256": "45a69870354e2b43"
   },
   "virtue_controller.js": {
     "version": "virtue-v20",
     "sha256": "fcdeed67dcc76cf6"
   },
   "sw.js": {
-    "version": "sw-212",
-    "sha256": "40181d9da1f02695"
+    "version": "sw-214",
+    "sha256": "d052bd72cf585f12"
   }
 }
