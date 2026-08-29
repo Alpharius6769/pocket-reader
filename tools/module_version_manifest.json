@@ -71,6 +71,10 @@
     "version": "narration-loader-v56",
     "sha256": "e45398e61515f3b2"
   },
+  "ort_memory_probe_worker.js": {
+    "version": "sw-208",
+    "sha256": "73b4f0dec5687477"
+  },
   "pocket_backend_policy.js": {
     "version": "backend-v25",
     "sha256": "1c3fa460d534fa2e"
