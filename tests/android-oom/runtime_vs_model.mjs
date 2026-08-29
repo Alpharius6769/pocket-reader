@@ -52,7 +52,8 @@ for (const m of await page.evaluate(() => window.__probe)) console.log('   ', JS
 
 const [, w] = marks[0], [, rt] = marks[1], [, tiny] = marks[2], [, kok] = marks[3];
 console.log('\n=== SPLIT ===');
-console.log(`  ORT runtime load        ${rt - w:+5d} MB`);
-console.log(`  ORT fixed session cost  ${tiny - rt:+5d} MB   <- paid for ANY model, even 69 bytes`);
-console.log(`  Kokoro marginal cost    ${kok - tiny:+5d} MB   <- what a smaller model could ever save`);
+const sgn = (n) => (n >= 0 ? '+' : '') + n;
+console.log(`  ORT runtime load        ${sgn(rt - w).padStart(5)} MB`);
+console.log(`  ORT fixed session cost  ${sgn(tiny - rt).padStart(5)} MB   <- paid for ANY model, even 69 bytes`);
+console.log(`  Kokoro marginal cost    ${sgn(kok - tiny).padStart(5)} MB   <- what a smaller model could ever save`);
 await b.close(); process.exit(0);

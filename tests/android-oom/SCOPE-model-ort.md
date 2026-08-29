@@ -56,62 +56,59 @@ Only `model_q8f16.onnx` is hosted. Every other variant
    That kills any fix aimed at the transient and moves the target to resident
    size (options A and C).
 
-2. **How much of the peak is ORT itself vs this model?** Build a session from a
-   trivial ONNX model in the same worker and measure. That splits "the runtime
-   costs X" from "the model costs Y" and decides between options A and B below.
-   **Cost: ~1 hour.**
+2. ~~How much of the peak is ORT itself vs this model?~~ **ANSWERED 2026-08-29.**
+   Measured directly with a 69-byte hand-built Identity model against the real
+   one, in the same worker, twice. App-only:
 
-## The headline finding (2026-08-29 research)
+   | stage | app-only | delta |
+   |---|---|---|
+   | worker constructed | 16 MB | |
+   | ORT runtime loaded, no session | 17 MB | **+1** |
+   | + session from the 69-byte model | 77 MB | **+60** |
+   | + session from the 82 MB Kokoro model | 352 MB | **+275** |
 
-**ONNX Runtime's WASM CPU backend does not support float16 at all.** Every fp16
-tensor gets a Cast to fp32 inserted around it, which doubles the memory those
-weights occupy and costs real time — one reported case had the inserted casts
-taking 54% of total inference time.
+   **The model is 82% of the cost.** ORT's fixed per-session allocation is ~60 MB
+   and its runtime instantiation is ~1 MB. This **contradicts** onnxruntime#18165
+   (a 2 KB model triggering ~300 MB) — that does not reproduce on ORT 1.27 here,
+   and the scoping written before this measurement leaned on it.
 
-`kokoro_worker.js` hardcodes `executionProviders: ['wasm']`. Kokoro never runs on
-WebGPU. So the `f16` half of `model_q8f16.onnx` is not just wasted, it is
-actively harmful on the only backend we use: **the f16 variants are built for
-WebGPU, and we picked one for a CPU-only path.** The 812 Cast nodes counted in
-the graph are those inserted conversions.
+   82 MB on disk becoming 275 MB resident is a 3.35x expansion, and that is the
+   number any future work has to attack.
 
-### The variant table
+## What this closes off
 
-| file | size | fp16 | suitable for WASM CPU |
+**A custom ORT build (option B) is dead.** Its entire addressable surface is the
+60 MB fixed cost, and realistically a fraction of that. It was the day-long
+option; it is now the least valuable one. Do not start it.
+
+**Swapping to another published Kokoro variant (option A) is dead too.** The
+expansion is float weight volume, not packaging, and no available export changes
+that:
+
+| | q8f16 (shipping) | quantized (tried) | uint8 |
 |---|---|---|---|
-| model.onnx | 326 MB | no | yes, but 4x the download |
-| model_fp16.onnx | 163 MB | **yes** | no |
-| model_q4.onnx | 305 MB | no | int4, quality risk |
-| model_q4f16.onnx | 155 MB | **yes** | no |
-| **model_q8f16.onnx (shipping)** | 86 MB | **yes** | **no — current choice** |
-| **model_quantized.onnx** | **92.4 MB** | **no** | **yes — candidate** |
-| model_uint8.onnx | 177 MB | no | yes, but 2x the download |
-| model_uint8f16.onnx | 114 MB | **yes** | no |
+| size | 82 MB | 88 MB | 169 MB |
+| MatMulInteger | 148 | 148 | **0** |
+| ConvInteger | 87 | 87 | **0** |
+| integer ops total | 235 | 235 | **0** |
 
-### Why `model_quantized.onnx` is the candidate
+The two int8 exports quantise **identically** — 235 operators out of thousands —
+which is why they measured the same. `model_uint8.onnx` quantises none of them
+and is twice the size. There is no variant on the shelf that quantises more of
+this network, so on-disk size will keep failing to predict resident size.
 
-Both files were downloaded and their graphs compared directly:
+## What is actually left
 
-| | q8f16 (shipping) | quantized (candidate) |
-|---|---|---|
-| file size | 82.0 MB | 88.1 MB |
-| MatMulInteger | 148 | **148** |
-| ConvInteger | 87 | **87** |
-| DynamicQuantizeLinear | 139 | **139** |
-| QuantizeLinear | 1390 | **278** |
-| Cast | 812 | **452** |
-
-The integer-op counts are **identical**, so it is the same int8 quantisation of
-the same operators — there is no additional weight-precision loss versus what
-already ships. What differs is ~1100 fewer QuantizeLinear and 360 fewer Cast
-nodes: the fp16 conversion machinery is gone. Cost is +6 MB of download.
-
-This is the rare case where the quality-preserving option and the memory option
-point the same way: fp32 activations are *more* precise than fp16, not less.
-
-**Not yet measured.** The prediction is lower resident memory and faster
-inference; it has to be run on the rig before it is believed. Note also that the
-raw graph scan counts byte strings, so the LSTM row (366 vs 150) may be a naming
-artefact rather than a structural difference — worth confirming.
+1. **Staged loading (option C).** Load and release encoder / duration predictor /
+   decoder around each inference so resident memory tracks the largest stage
+   rather than the sum. Still the highest ceiling, still model surgery plus a
+   worker protocol change, and it will cost per-paragraph latency on devices that
+   are already slow.
+2. **A different or smaller architecture.** Kokoro-82M's float remainder is what
+   it is; a genuinely smaller TTS model is a bigger decision than an optimisation.
+3. **Accept ~460 MB and mitigate.** The app already detects 4 GB devices and
+   recommends Away Mode. On an iPhone 13 (~400-450 MB threshold) that is the
+   honest position until 1 or 2 happens.
 
 ## Options
 
