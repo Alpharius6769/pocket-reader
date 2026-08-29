@@ -20,6 +20,9 @@ const settle = (ms) => new Promise(r => setTimeout(r, ms));
 const PROXY = 'https://pocket-reader-proxy.alpharius67.workers.dev';
 const TINY = `${PROXY}/models/diagnostics/tiny_identity.onnx`;
 const KOKORO = `${PROXY}/models/kokoro/v1.0/model_q8f16.onnx`;
+// Optional 5th stage: pass a model URL as argv[2] to measure any other model in
+// the same worker, after Kokoro, so both marginal costs come off one runtime.
+const EXTRA = process.argv[2] || null;
 
 const b = await chromium.connectOverCDP('http://127.0.0.1:9222');
 const page = b.contexts()[0].pages().find(p => p.url().includes('pocket-reader'));
@@ -47,6 +50,13 @@ await page.evaluate((u) => window.__w.postMessage({ cmd: 'create_session', url: 
 await settle(75000);
 await mark('4. + session from 82 MB Kokoro');
 
+let extraMark = null;
+if (EXTRA) {
+  await page.evaluate((u) => window.__w.postMessage({ cmd: 'create_session', url: u }), EXTRA);
+  await settle(45000);
+  extraMark = await mark('5. + session from EXTRA model');
+}
+
 console.log('\nworker messages:');
 for (const m of await page.evaluate(() => window.__probe)) console.log('   ', JSON.stringify(m));
 
@@ -56,4 +66,7 @@ const sgn = (n) => (n >= 0 ? '+' : '') + n;
 console.log(`  ORT runtime load        ${sgn(rt - w).padStart(5)} MB`);
 console.log(`  ORT fixed session cost  ${sgn(tiny - rt).padStart(5)} MB   <- paid for ANY model, even 69 bytes`);
 console.log(`  Kokoro marginal cost    ${sgn(kok - tiny).padStart(5)} MB   <- what a smaller model could ever save`);
+if (extraMark !== null) {
+  console.log(`  EXTRA marginal cost     ${sgn(extraMark - kok).padStart(5)} MB   <- ${EXTRA.split('/').pop()}`);
+}
 await b.close(); process.exit(0);

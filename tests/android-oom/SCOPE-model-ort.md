@@ -104,8 +104,39 @@ this network, so on-disk size will keep failing to predict resident size.
    rather than the sum. Still the highest ceiling, still model surgery plus a
    worker protocol change, and it will cost per-paragraph latency on devices that
    are already slow.
-2. **A different or smaller architecture.** Kokoro-82M's float remainder is what
-   it is; a genuinely smaller TTS model is a bigger decision than an optimisation.
+2. **A different or smaller architecture — MEASURED 2026-08-29, and it works.**
+   KittenTTS Nano 0.1 (15M params, Apache 2.0, `onnx-community/kitten-tts-nano-0.1-ONNX`)
+   was uploaded and put through the same probe, in the same worker, after Kokoro:
+
+   | model | on disk | marginal resident | session build |
+   |---|---|---|---|
+   | Kokoro-82M q8f16 | 82 MB | **+275 MB** | 1690 ms |
+   | KittenTTS Nano | 22.7 MB | **+23 MB** | 640 ms |
+
+   **12x less resident memory, 2.6x faster to build.** Projected total for a
+   Kitten-based engine is roughly 27 (app) + 5 (ORT runtime) + 60 (ORT fixed
+   session) + 23 = ~115 MB at session time, against Kokoro's ~352 MB. That is
+   under every iOS threshold in the table above, with room to spare.
+
+   Integration looks small, not a rewrite:
+   - `model_type` is `style_text_to_speech_2` — the same StyleTTS2 family Kokoro
+     belongs to.
+   - Input/output names are **identical**: `input_ids`, `style`, `speed`,
+     `waveform`.
+   - Phoneme vocabularies nearly agree: of 103 shared symbols, **101 carry the
+     same id**. Kitten's is a superset (175 vs 115). The existing espeak path
+     should drive it with a vocab swap, not a new pipeline.
+   - Repo layout mirrors Kokoro's: model + tokenizer.json + `voices/*.bin`
+     (8 voices, 1 KB each vs Kokoro's 0.5 MB).
+
+   **NOT measured, and it is the deciding question: quality.** 15M parameters
+   against Kokoro's 82M. No audio has been generated or listened to. A memory win
+   that makes the narrator worse is not a win, and this is a narration app.
+   Nothing here should be adopted on the strength of the memory number alone.
+
+   Also not measured: inference overhead. The +23 MB is session creation only.
+   Kokoro's plateau (459 MB) sat ~107 MB above its post-session figure (352 MB);
+   Kitten will add its own, presumably smaller, amount.
 3. **Accept ~460 MB and mitigate.** The app already detects 4 GB devices and
    recommends Away Mode. On an iPhone 13 (~400-450 MB threshold) that is the
    honest position until 1 or 2 happens.
