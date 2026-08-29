@@ -130,7 +130,11 @@ test('the engine is resolved from the shell, not from lazy-loaded audio_core', a
   assert.match(utils, /import \{\s*[\s\S]{0,120}selectNarrationEngine,/);
   assert.doesNotMatch(utils, /typeof window\.resolveNarrationEngineChoice === 'function'/,
     'must not depend on audio_core publishing a global');
-  assert.match(utils, /if \(choice\?\.engine === 'kokoro'\) return 'kokoro';/);
+  // Returns whatever the policy picked, validated against the known tiers.
+  // Naming one engine here made 'kitten' unreachable: the policy selected it,
+  // this returned 'pocket', and every gate downstream followed.
+  assert.match(utils, /NARRATION_ENGINE_TIERS\.includes\(choice\.engine\)/);
+  assert.match(utils, /return choice\.engine;/);
   // Decided once at boot and observable before narration is requested.
   assert.match(utils, /window\._narrationEngineDecision = decision;/);
   assert.match(utils, /Narration engine resolved at startup/);
@@ -142,14 +146,17 @@ test('the engine is resolved from the shell, not from lazy-loaded audio_core', a
 
 test('audio_core loads and routes the Kokoro worker', async () => {
   const audio = await read('public/assets/js/audio_core.js');
-  assert.match(audio, /if \(engine !== 'pocket' && engine !== 'kokoro'\) return false;/);
+  // Generalised: naming one engine here is what shipped Kitten selectable,
+  // routed, and dead - the loader refused it outright.
+  assert.match(audio, /if \(engine !== 'pocket' && !_isStyleTts2Engine\(engine\)\) return false;/);
+  assert.match(audio, /function _isStyleTts2Engine\(engine\) \{/);
   assert.match(audio, /kokoro_worker\.js\?v=kokoro-v\d+/);
   // The Pocket backend planner has nothing to decide for a single WASM graph.
-  assert.match(audio, /const backendPlan = engine === 'kokoro'/);
-  assert.match(audio, /engineLabel = engine === 'kokoro' \? 'Kokoro TTS' : 'Pocket TTS'/);
+  assert.match(audio, /const backendPlan = _isStyleTts2Engine\(engine\)/);
+  assert.match(audio, /const ENGINE_LOAD_LABELS = \{ kokoro: 'Kokoro TTS', kitten: 'Kitten TTS', pocket: 'Pocket TTS' \}/);
   // A voice id from the other engine must never be handed to a worker.
   assert.match(audio, /window\.resolveVoiceForEngine = function/);
-  assert.match(audio, /if \(engine === 'kokoro'\) return window\.resolveVoiceForEngine\('kokoro', voice\);/);
+  assert.match(audio, /if \(_isStyleTts2Engine\(engine\)\) return window\.resolveVoiceForEngine\(engine, voice\);/);
 });
 
 test('voice ids cannot leak across engines', async () => {
@@ -231,7 +238,9 @@ test('engine choice is one control, not two overlapping ones', async () => {
 
   // Both neural values collapse to the neural path, with the model recorded as
   // the narration override.
-  assert.match(audio, /if \(engineVal === 'auto' \|\| engineVal === 'kokoro' \|\| engineVal === 'pocket'\)/);
+  assert.match(audio, /engineVal === 'auto' \|\| engineVal === 'kokoro'/);
+  assert.match(audio, /engineVal === 'kitten' \|\| engineVal === 'pocket'/,
+    'kitten is a UI value too, or picking it falls through to the device voice');
   assert.match(audio, /writeNarrationEngineOverride\(localStorage, engineVal === 'auto' \? null : engineVal\)/);
 });
 
@@ -250,7 +259,7 @@ test('first-run detection resolves the narration engine, not just the backend', 
   assert.match(setup, /narrationEngine: narration\.engine,/);
   assert.match(setup, /narrationEngineReason: narration\.reason,/);
   // And it has to be visible in the summary the reader is shown.
-  assert.match(setup, /record\.narrationEngine === 'kokoro' \? 'Kokoro-82M' : 'Pocket TTS'/);
+  assert.match(setup, /SETUP_ENGINE_NAMES = \{ kokoro: 'Kokoro-82M', kitten: 'KittenTTS Nano', pocket: 'Pocket TTS' \}/);
 });
 
 // Reported from a live build: the reader page's own engine dropdown still
@@ -270,7 +279,10 @@ test('the reader voice list follows the engine that will actually run', async ()
   const audio = await read('public/assets/js/audio_core.js');
   // 'pocket' is the collapsed UI value; the running model may be Kokoro.
   assert.match(audio, /const neuralEngine = engineVal === 'pocket' \? _resolveActiveEngine\(\) : engineVal;/);
-  assert.match(audio, /if \(neuralEngine === 'kokoro'\) \{/);
+  // Keyed on the resolved engine having a shell-side list, so a third tier
+  // cannot be left showing the previous engine's voices.
+  assert.match(audio, /const neuralVoices = voicesForEngine\(neuralEngine\);/);
+  assert.match(audio, /if \(neuralVoices\.length\) \{/);
   // Grouped by gender like the Pocket list, with grades shown.
   assert.match(audio, /<optgroup label="Female voices">/);
   assert.match(audio, /byGender\('male'\)/);
@@ -442,10 +454,14 @@ test('cache queues never canonicalise a Kokoro voice against the Pocket list', a
   // donald_malone. Applied to a Kokoro id that silently queues an entire cache
   // job against a voice table Kokoro has no file for — every paragraph would
   // fail on a 404.
-  const occurrences = buffer.match(/if \(engine === 'kokoro'\)|if \(activeNeural === 'kokoro'\)/g) || [];
+  const occurrences = buffer.match(/if \(voicesForEngine\((engine|activeNeural)\)\.length\)/g) || [];
   assert.equal(occurrences.length, 2,
     'both the single-story queue and the Away Mode queue need the engine branch');
-  assert.match(buffer, /window\.resolveVoiceForEngine\s*\n?\s*\? window\.resolveVoiceForEngine\('kokoro', selected\)/);
+  // Imported from the policy, not read off window: audio_core publishes that
+  // global and is lazy-loaded, so it is absent exactly when a cache job starts
+  // cold.
+  assert.match(buffer, /^\s*voicesForEngine,$/m);
+  assert.match(buffer, /\? window\.resolveVoiceForEngine\((engine|activeNeural), selected\)/);
   // And the refusal message must describe the real gate, which is neural vs
   // device voice — not Pocket specifically.
   assert.doesNotMatch(buffer, /Away Mode caching requires Pocket TTS/);
@@ -480,7 +496,7 @@ test('no behavioural gate compares the resolved engine to the bare literal', asy
     // UI value mapping, not a behavioural gate.
     /const neuralEngine = engineVal === 'pocket' \? _resolveActiveEngine\(\) : engineVal;/,
     // The loadable-engine check, which names both explicitly.
-    /if \(engine !== 'pocket' && engine !== 'kokoro'\) return false;/,
+    /if \(engine !== 'pocket' && !_isStyleTts2Engine\(engine\)\) return false;/,
   ];
   for (const name of files) {
     let src = await read(`public/assets/js/${name}`);
@@ -758,8 +774,12 @@ test('the playback lookahead resolves its engine instead of assuming one', async
 test('Kokoro audio is cached under a render-shape version', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = '[a-z0-9]+';/);
-  assert.match(audio, /if \(engine === 'kokoro'\) return `#\$\{KOKORO_NARRATION_CACHE_VERSION\}`;/);
-  assert.match(audio, /if \(engine === 'kokoro'\) return \[_prosodyCacheTag\(engine\)\];/);
+  // Every StyleTTS2 engine carries a render tag. Returning '' for one of them
+  // meant its audio was keyed on position and voice alone - uninvalidatable,
+  // and able to collide with the other engine's renders.
+  assert.match(audio, /if \(_isStyleTts2Engine\(engine\)\) return `#\$\{NEURAL_CACHE_VERSIONS\[engine\]\}`;/);
+  assert.match(audio, /const KITTEN_NARRATION_CACHE_VERSION = '[a-z0-9]+';/);
+  assert.match(audio, /if \(_isStyleTts2Engine\(engine\)\) return \[_prosodyCacheTag\(engine\)\];/);
 });
 
 // The other door into the Pocket voice-pack path. _loadPocketEngine already

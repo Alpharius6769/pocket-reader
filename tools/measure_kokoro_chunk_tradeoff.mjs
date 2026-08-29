@@ -134,7 +134,7 @@ try {
     let reference = null;
 
     for (const cap of caps) {
-      const worker = new Worker(`${base}/assets/js/kokoro_worker.js?v=kokoro-v12`, { type: 'module' });
+      const worker = new Worker(`${base}/assets/js/kokoro_worker.js?v=kokoro-v15`, { type: 'module' });
       const waitFor = (types, timeoutMs) => new Promise((settle) => {
         const timer = setTimeout(() => settle({ type: 'timeout' }), timeoutMs);
         const onMessage = (e) => {

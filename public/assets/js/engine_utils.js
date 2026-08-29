@@ -3,6 +3,7 @@
 import {
   isMobileLikePlatform,
   selectNarrationEngine,
+  NARRATION_ENGINE_TIERS,
 } from './pocket_backend_policy.js?v=backend-v26';
 
 const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 2) : 2;
@@ -306,7 +307,14 @@ window._resolveActiveEngine = function _resolveActiveEngine() {
         lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
         storage: localStorage,
       });
-      if (choice?.engine === 'kokoro') return 'kokoro';
+      // Return whatever the policy picked, validated against the known tiers.
+      // Naming one engine here is what made 'kitten' unreachable: the policy
+      // selected it, this returned 'pocket', and every downstream gate then
+      // resolved a device onto an engine it had not chosen.
+      if (choice?.engine && choice.engine !== 'pocket'
+          && NARRATION_ENGINE_TIERS.includes(choice.engine)) {
+        return choice.engine;
+      }
     } catch (_) { /* any failure keeps the historical Pocket default */ }
   }
   return engine;

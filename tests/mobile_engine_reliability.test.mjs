@@ -832,7 +832,7 @@ test('choosing a neural engine clears the session failure flag', async () => {
   // they happen to reload.
   assert.match(
     audio,
-    /engineVal === 'auto' \|\| engineVal === 'kokoro' \|\| engineVal === 'pocket'\) \{[\s\S]{0,400}?window\._pocketNeuralEngineUnavailable = false;/,
+    /engineVal === 'auto' \|\| engineVal === 'kokoro'[\s\S]{0,600}?window\._pocketNeuralEngineUnavailable = false;/,
   );
 });
 

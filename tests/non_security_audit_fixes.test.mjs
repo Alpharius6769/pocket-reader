@@ -199,12 +199,16 @@ test('the story narration preset speaks the vocabulary the runtime accepts', asy
   // Presets already saved with the dead value still have to work.
   assert.match(audio, /const mode = raw === 'full' \? 'expressive' : raw;/);
   // And the voice list has to follow the engine that will actually speak.
-  assert.match(features, /engine === 'kokoro'\s*\n\s*\? KOKORO_VOICES\.map/);
+  // Any engine with a shell-side list uses it; only Pocket falls through to
+  // POCKET_VOICES. Naming Kokoro offered Pocket's voices to a Kitten reader.
+  assert.match(features, /const engineVoices = voicesForEngine\(engine\) \|\| \[\];/);
+  assert.match(features, /engineVoices\.length/);
   // From the shared policy, not window.KOKORO_VOICES: that global is published
   // by the lazy-loaded audio_core, so before narration had ever started the
   // Kokoro branch produced an empty list.
-  assert.match(features, /import \{ isMobileLikePlatform, KOKORO_VOICES \}/);
+  assert.match(features, /import \{ isMobileLikePlatform, KOKORO_VOICES, voicesForEngine \}/);
   assert.doesNotMatch(features, /window\.KOKORO_VOICES/);
+  assert.doesNotMatch(features, /window\.voicesForEngine/);
 });
 
 test('catalog refresh notifies through a global that exists', async () => {

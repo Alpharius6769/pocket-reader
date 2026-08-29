@@ -288,7 +288,8 @@ function resultLabel(record) {
   // The narration engine belongs in this line: on a constrained phone it is a
   // bigger factor than the backend, and without it the summary reported a
   // WebGPU/WASM decision while staying silent about which model would run.
-  const engine = record.narrationEngine === 'kokoro' ? 'Kokoro-82M' : 'Pocket TTS';
+  const SETUP_ENGINE_NAMES = { kokoro: 'Kokoro-82M', kitten: 'KittenTTS Nano', pocket: 'Pocket TTS' };
+  const engine = SETUP_ENGINE_NAMES[record.narrationEngine] || 'Pocket TTS';
   return `${platform} · ${engine} · ${backend} · ${support}`;
 }
 

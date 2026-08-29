@@ -9,16 +9,14 @@ import {
   selectNarrationEngine,
   readNarrationEngineOverride,
   writeNarrationEngineOverride,
-  isKokoroVoice,
   KOKORO_VOICES,
-  KOKORO_DEFAULT_VOICE,
   KITTEN_ENGINE,
   NARRATION_ENGINE_TIERS,
   voicesForEngine,
   coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v26';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '214';
+export const NARRATION_SERVICE_WORKER_VERSION = '218';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1417,7 +1415,12 @@ function _resolveEngineChoice() {
 function _describeNarrationEngine() {
   const choice = _resolveEngineChoice();
   if (!choice) return '<span style="color:var(--text-muted)">not resolved yet</span>';
-  const name = choice.engine === 'kokoro' ? 'Kokoro-82M (light)' : 'Pocket TTS';
+  const ENGINE_DISPLAY = {
+    kokoro: 'Kokoro-82M (light)',
+    kitten: 'KittenTTS Nano (lightest)',
+    pocket: 'Pocket TTS',
+  };
+  const name = ENGINE_DISPLAY[choice.engine] || 'Pocket TTS';
   const how = choice.automatic
     ? `<span style="color:var(--text-muted);font-size:0.9em;">auto — ${_escapeSettingsHtml(choice.reason || 'device default')}</span>`
     : '<span style="color:var(--accent-blue-text);font-size:0.9em;">chosen in Settings</span>';

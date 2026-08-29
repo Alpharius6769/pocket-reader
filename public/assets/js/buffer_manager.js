@@ -7,6 +7,7 @@ import {
   writePocketExpressiveChoice,
   detectMobilePlatform,
   isMobileLikePlatform,
+  voicesForEngine,
 } from './pocket_backend_policy.js?v=backend-v26';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
@@ -987,10 +988,14 @@ export const BufferManager = {
     // voice that engine has no file for, and every paragraph would have failed
     // on a 404 for a voice table that does not exist.
     let voice;
-    if (engine === 'kokoro') {
+    // Engine-aware for EVERY neural engine, not just Kokoro. The comment above
+    // describes what happens otherwise, and it applies verbatim to Kitten: the
+    // id is canonicalised against POCKET_VOICES, rewritten to donald_malone, and
+    // every paragraph 404s on a voice file that engine does not have.
+    if (voicesForEngine(engine).length) {
       const selected = document.getElementById('voice-selector')?.value;
       voice = window.resolveVoiceForEngine
-        ? window.resolveVoiceForEngine('kokoro', selected)
+        ? window.resolveVoiceForEngine(engine, selected)
         : (selected || '');
     } else {
       const defaultVoice = POCKET_DEFAULT_VOICE;
@@ -1237,10 +1242,10 @@ export const BufferManager = {
     // Kokoro id against POCKET_VOICES silently swaps it for donald_malone.
     const activeNeural = _resolveActiveEngine();
     let voice;
-    if (activeNeural === 'kokoro') {
+    if (voicesForEngine(activeNeural).length) {
       const selected = document.getElementById('voice-selector')?.value;
       voice = window.resolveVoiceForEngine
-        ? window.resolveVoiceForEngine('kokoro', selected)
+        ? window.resolveVoiceForEngine(activeNeural, selected)
         : (selected || '');
     } else {
       const defaultVoice = POCKET_DEFAULT_VOICE;

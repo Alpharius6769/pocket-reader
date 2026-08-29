@@ -28,8 +28,15 @@ const PHONEMIZER_URL = `${PROXY_BASE_URL}/models/kokoro/phonemizer/1.2.1/phonemi
 const ORT_BASE = `${PROXY_BASE_URL}/models/onnxruntime/1.27.0/`;
 
 const SAMPLE_RATE = 24000;
-// The exported graph fixes the sequence axis at 512. Longer phoneme runs are
-// split rather than truncated, so no audio is ever silently dropped.
+// Upper bound on tokens handed to one inference. Longer phoneme runs are split
+// rather than truncated, so no audio is ever silently dropped.
+//
+// INHERITED FROM KOKORO AND NOT MEASURED HERE. Kokoro's 512 comes from its voice
+// table having 510 rows, which its style lookup indexes by token count; Kitten
+// has no such table, so nothing about this number is derived from this model.
+// input_ids is [1, sequence_length] with a dynamic axis in both exports, so it
+// is a chosen cap rather than a graph limit. It is kept because a bound is worth
+// having, not because it is the right bound.
 const MAX_TOKENS = 512;
 // Kitten's style vector is 256 floats, one per voice - no per-length table.
 const STYLE_DIM = 256;
@@ -294,26 +301,21 @@ function clauseMarksFrom(text) {
 
 // How much audio ONE inference is allowed to produce.
 //
-// The graph's sequence axis tops out at 512, but filling it is what sets peak
-// memory. Kokoro is non-autoregressive: it materialises the entire utterance in
-// a single forward pass, and the vocoder's intermediates live at the 24 kHz
-// output rate, so activation memory tracks output LENGTH, not parameter count.
+// The mechanism carries over from Kokoro and is why a cap exists at all: both
+// engines are non-autoregressive, so the whole utterance is materialised in a
+// single forward pass and the vocoder's intermediates live at the 24 kHz output
+// rate. Activation memory therefore tracks output LENGTH, not parameter count,
+// and a smaller model does NOT automatically mean smaller activations.
 //
-// Measured in Chrome over identical paragraphs:
-// Swept over identical text, peak against cap:
-//   510 (the full axis) -> 592 MB      192 -> 355 MB
-//   256                 -> 440 MB      128 -> 355 MB
-// 192 is the knee: below it the peak stops falling, because what remains is not
-// the chunk any more. Engine init alone is ~250 MB of that floor.
+// THE NUMBERS ARE NOT MEASURED FOR THIS MODEL. Kokoro's sweep (510 -> 592 MB,
+// 256 -> 440 MB, 192 -> 355 MB, knee at 192) described an engine whose session
+// alone costs +275 MB resident; Kitten's costs +23 MB, so those figures cannot
+// be assumed to transfer and are deliberately not repeated here as if they did.
+// The caps below are Kokoro's, carried over as a conservative starting point.
 //
-// For contrast, Pocket measured on the same harness: 356 MB at init and 482 MB
-// at peak, i.e. only 69 MB of activations for the same 20 s, because it is
-// autoregressive and only ever holds one frame. Kokoro trades that bounded
-// activation cost for speed -- capping the chunk buys it back.
-// 192 is the constrained-device cap. A device that is NOT memory-constrained
-// can afford the 256 step (440 MB peak against 355 MB) and buys back inference
-// count and seam count for it, so the cap follows the device class the main
-// thread already reports rather than being one number for everything.
+// Re-measuring them for Kitten is a real task: tests/android-oom has the rig,
+// and maxChunkTokens is already overridable from the init message so a sweep
+// needs no code change.
 const CONSTRAINED_MAX_CHUNK_TOKENS = 192;
 const ROOMY_MAX_CHUNK_TOKENS = 256;
 let maxChunkTokens = CONSTRAINED_MAX_CHUNK_TOKENS;

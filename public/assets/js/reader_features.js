@@ -1,4 +1,4 @@
-import { isMobileLikePlatform, KOKORO_VOICES } from './pocket_backend_policy.js?v=backend-v26';
+import { isMobileLikePlatform, KOKORO_VOICES, voicesForEngine } from './pocket_backend_policy.js?v=backend-v26';
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -256,8 +256,18 @@ function _presetVoiceOptions(preset) {
   // lazy-loaded, so opening this dialog before narration had ever started gave
   // an empty voice list. POCKET_VOICES is a shell global (engine_utils), so it
   // is always present.
-  const options = engine === 'kokoro'
-    ? KOKORO_VOICES.map((voice) => ({ id: voice.id, label: `${voice.label} (${voice.grade})` }))
+  // Any engine with a shell-side list uses it; only Pocket falls through to
+  // POCKET_VOICES. Naming Kokoro here offered Pocket's voices to a Kitten
+  // reader, none of which its worker can load.
+  // Imported, not read off window: voicesForEngine is published there by
+  // audio_core, which is lazy-loaded, so the global is absent exactly when
+  // this dialog is opened before narration has ever started.
+  const engineVoices = voicesForEngine(engine) || [];
+  const options = engineVoices.length
+    ? engineVoices.map((voice) => ({
+        id: voice.id,
+        label: voice.grade ? `${voice.label} (${voice.grade})` : voice.label,
+      }))
     : (window.POCKET_VOICES || []).map((voice) => ({ id: voice, label: String(voice).replaceAll('_', ' ') }));
   return options
     .map(({ id, label }) => `<option value="${esc(id)}" ${preset.voice === id ? 'selected' : ''}>${esc(label)}</option>`)

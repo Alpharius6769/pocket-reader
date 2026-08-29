@@ -35,8 +35,15 @@ const PHONEMIZER_URL = `${PROXY_BASE_URL}/models/kokoro/phonemizer/1.2.1/phonemi
 const ORT_BASE = `${PROXY_BASE_URL}/models/onnxruntime/1.27.0/`;
 
 const SAMPLE_RATE = 24000;
-// The exported graph fixes the sequence axis at 512. Longer phoneme runs are
-// split rather than truncated, so no audio is ever silently dropped.
+// Longer phoneme runs are split rather than truncated, so no audio is ever
+// silently dropped.
+//
+// This said "the exported graph fixes the sequence axis at 512". It does not:
+// input_ids is [1, sequence_length] with a DYNAMIC dim_param, verified against
+// the shipped model. 512 comes from the voice table having 510 rows, which
+// styleForTokenCount indexes by token count -- so the real constraint is the
+// voice asset, not the graph. It matters because the wrong version of that
+// sentence makes freeDimensionOverrides look inapplicable when it is not.
 const MAX_TOKENS = 512;
 // Each voice .bin is (510, 1, 256) float32: one 256-wide style vector per
 // possible token length. Kokoro indexes it by the token count of THIS chunk,
