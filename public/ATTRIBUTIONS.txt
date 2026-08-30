@@ -14,7 +14,7 @@ below. Their licenses and obligations — notably OFL-1.1 bundled license texts,
 CC-BY-3.0 attribution for Game-Icons.net, and MPL-2.0 for pywebpush — continue
 to apply in full.
 
-Last reviewed: 2026-07-15.
+Last reviewed: 2026-08-30.
 
 ## Browser TTS and ML Runtime
 
@@ -66,6 +66,22 @@ Last reviewed: 2026-07-15.
 - Distribution note: source `.flac` references and converted `.safetensors`
   files are not stored in this source tree. The maintainer tool records source
   URLs and writes a runtime manifest for the uploaded B2/Cloudflare assets.
+
+### Kyutai Pocket TTS catalog voices (Alba, Jane, Charles, Michael)
+
+- Upstream: Kyutai Pocket TTS voice catalog
+- Sources:
+  - Alba: https://huggingface.co/kyutai/tts-voices/blob/main/alba-mackenna/casual.wav (CC BY 4.0, Alba MacKenna)
+  - Jane: https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p339_023_enhanced.wav (CC BY 4.0, VCTK p339)
+  - Charles: https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p254_023_enhanced.wav (CC BY 4.0, VCTK p254)
+  - Michael: https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p360_023_enhanced.wav (CC BY 4.0, VCTK p360)
+- Catalog: https://github.com/kyutai-labs/pocket-tts
+- Used as: Additional Pocket TTS narrator voices. Each has a single official
+  reference, so only the `_neutral` conditioning file is shipped.
+- Runtime asset names: `alba_neutral`, `jane_neutral`, `charles_neutral`,
+  `michael_neutral`.
+- Distribution note: converted `.safetensors` files live on B2 under `voices/v2/`
+  and are served through the Cloudflare Worker. Not stored in this source tree.
 
 ### Rayne (Personal Clone)
 

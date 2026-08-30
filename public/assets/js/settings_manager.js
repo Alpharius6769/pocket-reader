@@ -1,7 +1,7 @@
 // settings_manager.js — Worker detection, GPU-aware advanced settings, diagnostics
 import {
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v18';
+} from './tts_pronunciation_core.js?v=pron-v23';
 import {
   POCKET_MAX_CACHE_WORKERS,
   readPocketDeviceBackendPreference,
@@ -16,7 +16,7 @@ import {
   coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v26';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '220';
+export const NARRATION_SERVICE_WORKER_VERSION = '224';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;

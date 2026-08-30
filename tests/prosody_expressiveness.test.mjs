@@ -19,6 +19,7 @@ import {
 import {
   getPocketTuningPreset,
   POCKET_TTS_TUNING_PRESETS,
+  DEFAULT_POCKET_VOICE_SEED,
 } from '../public/assets/js/tts_pronunciation_core.js';
 
 const read = (p) => readFile(p, 'utf8');
@@ -204,6 +205,31 @@ test('Rayne is honestly declared as neutral-only', async () => {
     'Rayne must not claim emotions it has no reference audio for');
 });
 
+test('Kyutai catalog voices are wired as four official narrators, each neutral-only', async () => {
+  const source = await read('public/assets/js/engine_utils.js');
+  for (const id of ['alba', 'jane', 'charles', 'michael']) {
+    const block = source.match(new RegExp(`id: '${id}',[\\s\\S]*?\\n    \\}`))?.[0] || '';
+    assert.match(block, /availableEmotions: \['neutral'\]/,
+      `${id} must not claim emotion states Kyutai did not ship`);
+    assert.match(block, /gender: '(male|female)'/);
+  }
+  assert.match(source, /id: 'alba',[\s\S]*?gender: 'female'/);
+  assert.match(source, /id: 'jane',[\s\S]*?gender: 'female'/);
+  assert.match(source, /id: 'charles',[\s\S]*?gender: 'male'/);
+  assert.match(source, /id: 'michael',[\s\S]*?gender: 'male'/);
+});
+
+test('high-end Pocket TTS uses four LSD steps instead of the 1-step grain path', async () => {
+  const source = await read('public/assets/js/audio_core.js');
+  const config = source.slice(
+    source.indexOf('function _pocketTuningConfig'),
+    source.indexOf('function _pocketVoiceSeed'),
+  );
+  assert.match(config, /isPocketDeviceConstrained\?\.\(\) === true/);
+  assert.match(config, /lsdSteps = 4/);
+  assert.doesNotMatch(config, /isPocketDeviceMemorySafeMode/);
+});
+
 test('Donald Malone is the configured default voice across the engine', async () => {
   const engineUtils = await read('public/assets/js/engine_utils.js');
   assert.match(engineUtils, /window\.POCKET_DEFAULT_VOICE = 'donald_malone'/);
@@ -222,8 +248,9 @@ test('getPocketTuningPreset allows expressive temperature tuning without forced 
 
 test('temperature presets sit well above the old 0.70 ceiling', () => {
   assert.equal(POCKET_TTS_TUNING_PRESETS.stable.temperature, 0.70);
-  assert.equal(POCKET_TTS_TUNING_PRESETS.balanced.temperature, 0.82);
+  assert.equal(POCKET_TTS_TUNING_PRESETS.balanced.temperature, 0.86);
   assert.equal(POCKET_TTS_TUNING_PRESETS.expressive.temperature, 0.93);
+  assert.equal(POCKET_TTS_TUNING_PRESETS.balanced.lsdSteps, 4);
   assert.ok(POCKET_TTS_TUNING_PRESETS.expressive.temperature < 0.96,
     'must stay inside the worker clamp of 0.95');
 });
@@ -240,7 +267,7 @@ test('getPocketTuningPreset escalates with the emotion profile and never de-esca
 
   const balanced = getPocketTuningPreset('balanced', 'balanced');
   assert.equal(balanced.name, 'balanced');
-  assert.equal(balanced.temperature, 0.82);
+  assert.equal(balanced.temperature, 0.86);
 
   const keepHot = getPocketTuningPreset('expressive', 'neutral');
   assert.equal(keepHot.name, 'expressive');
@@ -267,8 +294,8 @@ test('per-emotion temperature tables are the sampling temps, not a ceiling on 0.
   const full = source.match(/const POCKET_FULL_TEMP_CAPS = \{[\s\S]*?\};/)?.[0] || '';
   const num = (block, key) => Number(block.match(new RegExp(`${key}:\\s*([0-9.]+)`))?.[1]);
 
-  assert.ok(num(balanced, 'happy') >= 0.86, `balanced happy ${num(balanced, 'happy')} is still near the old 0.74`);
-  assert.ok(num(balanced, 'surprised') >= 0.88, `balanced surprised ${num(balanced, 'surprised')} is still near the old 0.76`);
+  assert.ok(num(balanced, 'happy') >= 0.90, `balanced happy ${num(balanced, 'happy')} is still near the old 0.74`);
+  assert.ok(num(balanced, 'surprised') >= 0.92, `balanced surprised ${num(balanced, 'surprised')} is still near the old 0.76`);
   assert.ok(num(full, 'happy') >= 0.90, `full happy ${num(full, 'happy')} is still near the old 0.84`);
   assert.ok(num(full, 'anger') >= 0.94, `full anger ${num(full, 'anger')} is still near the old 0.88`);
   assert.ok(num(full, 'shout') <= 0.95, 'must stay inside the worker clamp');
@@ -277,7 +304,32 @@ test('per-emotion temperature tables are the sampling temps, not a ceiling on 0.
 
 test('hotter sampling busts the Pocket audio cache', async () => {
   const source = await read('public/assets/js/audio_core.js');
-  assert.match(source, /const POCKET_NARRATION_CACHE_VERSION = 'narrv19'/);
+  assert.match(source, /const POCKET_NARRATION_CACHE_VERSION = 'narrv20'/);
+});
+
+test('cache and live share one Pocket take: seed, token cap, pause, decode batch', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const worker = await read('public/assets/js/pocket_worker.js');
+
+  assert.equal(DEFAULT_POCKET_VOICE_SEED, 'pr-voice-1');
+  assert.match(audio, /function _pocketVoiceSeed\(/);
+  assert.match(audio, /return DEFAULT_POCKET_VOICE_SEED/);
+  assert.match(audio, /seed: voiceSeed/);
+  assert.match(audio, /tokenSoftCap: 120/);
+  assert.doesNotMatch(audio, /throughput \? 176/);
+  assert.doesNotMatch(audio, /throughput \? Math\.min\(POCKET_PARAGRAPH_PAUSE_SEC/);
+  assert.doesNotMatch(audio, /tt176/);
+
+  assert.doesNotMatch(worker, /opts\.throughputMode \? POCKET_THROUGHPUT_TOKEN_SOFT_CAP/);
+  assert.doesNotMatch(worker, /throughputBatch \? 48/);
+  assert.match(worker, /const normalChunkFrames = 12/);
+  assert.match(worker, /Number\(opts\.lsdSteps\)/);
+});
+
+test('emotion switches dwell long enough that adjacent paragraphs share a voice', async () => {
+  const source = await read('public/assets/js/audio_core.js');
+  const dwell = Number(source.match(/const EMOTION_PLAN_DWELL = (\d+)/)?.[1]);
+  assert.ok(dwell >= 4, `dwell ${dwell} still lets emotion flip every other paragraph`);
 });
 
 test('pocket worker implements Mulberry32 PRNG with paired Box-Muller Gaussian sampling', async () => {
@@ -295,6 +347,7 @@ test('pocket worker and audio core support structured voice seed anchoring', asy
   assert.match(worker, /const voiceSeedSuffix = explicitSeed != null \? \('\|s' \+ explicitSeed\) : '';/);
 
   const audio = await read('public/assets/js/audio_core.js');
-  assert.match(audio, /seed:\s*overrides\.seed/);
-  assert.match(audio, /voiceSeed:\s*overrides\.voiceSeed/);
+  assert.match(audio, /function _pocketVoiceSeed\(/);
+  assert.match(audio, /seed: voiceSeed/);
+  assert.match(audio, /voiceSeed,/);
 });

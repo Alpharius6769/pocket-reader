@@ -61,6 +61,10 @@ Notable license-sensitive items:
   selected Voice-Zero emotional pack is CC0 unless otherwise noted by
   Voice-Zero; converted voice states should keep source metadata in the asset
   bucket release notes.
+- Four additional Pocket TTS voices (Alba, Jane, Charles, Michael) come from
+  the Kyutai Pocket TTS catalog. Alba is CC BY 4.0 (Alba MacKenna). Jane,
+  Charles, and Michael are CC BY 4.0 VCTK enhanced references republished by
+  Kyutai. See ATTRIBUTIONS.md.
 - The frontend Lucide icon sprite is ISC licensed.
 - Literata frontend font is licensed under the SIL Open
   Font License 1.1; its full license text ships with the frontend assets.

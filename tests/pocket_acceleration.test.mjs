@@ -168,7 +168,7 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(audio, /wasmReferenceRtf: _pocketBackendRuntime\.wasmReferenceRtf/);
   // Full ?v= form on purpose: a bare version string is invisible to
   // check_module_versions.mjs, so this pin silently rotted past a bump.
-  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v68/);
+  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v72/);
   assert.match(worker, /wasmReferenceRtf/);
   assert.match(worker, /releaseAllSessions/);
   assert.match(worker, /wasm_rtf_sample/);
@@ -181,8 +181,9 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(buffer, /Threaded WASM/);
   assert.match(buffer, /_pocketThroughputCache = true/);
   assert.match(audio, /throughputMode/);
-  assert.match(audio, /tokenSoftCap/);
-  assert.match(worker, /POCKET_THROUGHPUT_TOKEN_SOFT_CAP/);
+  assert.match(audio, /tokenSoftCap: 120/);
+  assert.match(worker, /POCKET_THROUGHPUT_TOKEN_SOFT_CAP = 176/);
+  assert.doesNotMatch(worker, /opts\.throughputMode \? POCKET_THROUGHPUT_TOKEN_SOFT_CAP/);
   assert.match(worker, /POCKET_TOKEN_SOFT_CAP = 120/);
 });
 
@@ -213,10 +214,10 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
   assert.match(serviceWorker, /pocket-reader-core-v\d+/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v155/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v157/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
-  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v68/);
+  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v72/);
   assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v26/);
   assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v17/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);

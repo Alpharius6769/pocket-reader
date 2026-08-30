@@ -150,6 +150,68 @@ window.POCKET_VOICE_PACK = {
       availableEmotions: VOICE_ZERO_ALL_EMOTIONS,
       fallbackEmotions: baseFallbacks
     },
+    // Kyutai Pocket TTS catalog. Each is a single official reference, so
+    // emotion routing must land on neutral — the same contract as Rayne.
+    {
+      id: 'alba',
+      displayName: 'Alba',
+      gender: 'female',
+      accent: 'English',
+      recommended: true,
+      recommendedUse: 'Kyutai default female voice; professional acted narration.',
+      sourceName: 'Alba MacKenna',
+      sourceFolder: 'alba-mackenna',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/alba-mackenna/casual.wav',
+      originUrl: 'https://github.com/kyutai-labs/pocket-tts',
+      license: 'CC BY 4.0 via Kyutai TTS voices',
+      availableEmotions: ['neutral'],
+      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+    },
+    {
+      id: 'jane',
+      displayName: 'Jane',
+      gender: 'female',
+      accent: 'English',
+      recommended: true,
+      recommendedUse: 'Kyutai demo female voice; clean VCTK enhanced reference.',
+      sourceName: 'VCTK p339',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p339_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
+      availableEmotions: ['neutral'],
+      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+    },
+    {
+      id: 'charles',
+      displayName: 'Charles',
+      gender: 'male',
+      accent: 'English',
+      recommended: true,
+      recommendedUse: 'Kyutai catalog male voice; clean VCTK enhanced reference.',
+      sourceName: 'VCTK p254',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p254_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
+      availableEmotions: ['neutral'],
+      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+    },
+    {
+      id: 'michael',
+      displayName: 'Michael',
+      gender: 'male',
+      accent: 'English',
+      recommended: true,
+      recommendedUse: 'Kyutai catalog male voice; clean VCTK enhanced reference.',
+      sourceName: 'VCTK p360',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p360_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
+      availableEmotions: ['neutral'],
+      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+    },
     // Project-owned personal clone. Unlike the Voice-Zero six this has no
     // upstream: the reference material is maintainer-held and only the neutral
     // state has been built, so availableEmotions is the single entry and every

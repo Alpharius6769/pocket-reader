@@ -25,7 +25,7 @@
 // (which is every iPhone) had their Settings overrides, their per-story
 // overrides and the whole built-in ruleset silently discarded, and any inline
 // [2s] tag read out character by character.
-import { normalizeForPocketTts } from './tts_pronunciation_core.js?v=pron-v18';
+import { normalizeForPocketTts } from './tts_pronunciation_core.js?v=pron-v23';
 
 self.postMessage({ type: 'status', status: 'Worker Thread Started', state: 'idle' });
 

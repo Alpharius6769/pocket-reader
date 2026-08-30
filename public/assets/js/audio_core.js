@@ -3,9 +3,10 @@ import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   DEFAULT_POCKET_QUALITY_MODE,
+  DEFAULT_POCKET_VOICE_SEED,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v18';
+} from './tts_pronunciation_core.js?v=pron-v23';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -141,7 +142,7 @@ const POCKET_EMOTION_PATTERN = new RegExp(`_(${POCKET_ALL_EMOTIONS.join('|')})$`
 // change plays the wrong paragraph with nothing to detect it. Bump on any
 // change to how a paragraph is rendered as well, so cached audio re-renders
 // rather than mixing engines.
-const POCKET_NARRATION_CACHE_VERSION = 'narrv19';
+const POCKET_NARRATION_CACHE_VERSION = 'narrv20';
 const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // Kokoro's render-shape version. Bump whenever anything that changes the audio
 // for the same (text, voice) changes: the chunk cap, the clause rejoin, the
@@ -192,14 +193,14 @@ const POCKET_PAUSE_PROFILE_VERSION = 'pausev2';
 const POCKET_PARAGRAPH_PAUSE_SEC = 0.5;
 
 const POCKET_BALANCED_TEMP_CAPS = {
-  neutral: 0.80,
-  calm: 0.78,
-  sad: 0.84,
-  tired: 0.80,
-  worried: 0.88,
-  happy: 0.88,
-  surprised: 0.90,
-  frustrated: 0.90,
+  neutral: 0.84,
+  calm: 0.82,
+  sad: 0.88,
+  tired: 0.84,
+  worried: 0.91,
+  happy: 0.91,
+  surprised: 0.93,
+  frustrated: 0.93,
 };
 const POCKET_FULL_TEMP_CAPS = {
   neutral: 0.86,
@@ -362,9 +363,9 @@ function _detectPocketEmotion(text) {
 // paragraphs IN ORDER exactly once, then applies hysteresis so emotion switches
 // are rare, sustained, and — because the pass is deterministic — identical
 // across live playback, background caching, prefetch order, and re-listens.
-const EMOTION_PLAN_VERSION = 'plan-v2'; // v2: easier sustained switch-in for more expressive narration
-const EMOTION_PLAN_DWELL = 2;       // paragraphs to hold an emotion after switching
-const EMOTION_PLAN_QUIET_EXIT = 2;  // consecutive quiet paragraphs before neutral
+const EMOTION_PLAN_VERSION = 'plan-v3'; // v3: longer dwell so emotion switches are rarer
+const EMOTION_PLAN_DWELL = 4;       // paragraphs to hold an emotion after switching
+const EMOTION_PLAN_QUIET_EXIT = 3;  // consecutive quiet paragraphs before neutral
 const _emotionPlans = new Map();
 
 function _lookupChapterParagraphs(storyTitle, chapIdx) {
@@ -560,13 +561,30 @@ function _pocketTuningConfig() {
   const mode = _emotionMode();
   const preset = getPocketTuningPreset(_pocketTemperaturePresetName(), mode);
   const qualityMode = _pocketQualityMode();
+  const constrained = window.isPocketDeviceConstrained?.() === true;
+  let lsdSteps;
+  if (qualityMode === 'quality' || !constrained) {
+    // Pocket TTS is the high-end tier. Four LSD steps is Kyutai's quality
+    // sampler; grain from 1-step INT8 sampling is the thing listeners heard.
+    // LSD is compute, not resident model memory, so this keys off constrained
+    // rather than the iOS memory-safe session path.
+    lsdSteps = 4;
+  } else {
+    lsdSteps = 2;
+  }
   return {
     presetName: preset.name,
     temperature: preset.temperature,
     qualityMode,
-    lsdSteps: qualityMode === 'quality' ? 4 : (preset.lsdSteps || 1),
+    lsdSteps,
     allowBenchmarkQuality: qualityMode === 'quality',
   };
+}
+
+function _pocketVoiceSeed() {
+  const explicit = window.userProfile?.settings?.pocketVoiceSeed;
+  if (explicit != null && String(explicit).length > 0) return String(explicit);
+  return DEFAULT_POCKET_VOICE_SEED;
 }
 
 // ── Long-form prosody drift guard ───────────────────────────────────────────
@@ -742,6 +760,9 @@ function _buildPocketProsodyOpts(selectedVoice, overrides = {}) {
   const temperature      = overrides.temperature != null
     ? Number(overrides.temperature)
     : _artifactCappedTemperature(tuning.temperature, paragraphEmotion, retryLevel);
+  const voiceSeed        = overrides.voiceSeed != null
+    ? overrides.voiceSeed
+    : (overrides.seed != null ? overrides.seed : _pocketVoiceSeed());
 
   return {
     expressive,
@@ -750,7 +771,9 @@ function _buildPocketProsodyOpts(selectedVoice, overrides = {}) {
     pausePunctuation,
     pauseTags,
     pauseProfileVersion: POCKET_PAUSE_PROFILE_VERSION,
-    paragraphPauseSec: throughput ? Math.min(POCKET_PARAGRAPH_PAUSE_SEC, 0.15) : POCKET_PARAGRAPH_PAUSE_SEC,
+    // Cache jobs used to shorten this to 0.15s. Mixing those takes with live
+    // 0.50s pauses was a cadence jump every time playback crossed a cache miss.
+    paragraphPauseSec: POCKET_PARAGRAPH_PAUSE_SEC,
     chunkMode: wordsMode ? 'words' : 'sentence',
     minWords: Number(s.chunkMinWords) || 8,
     maxWords: Number(s.chunkMaxWords) || 40,
@@ -765,11 +788,12 @@ function _buildPocketProsodyOpts(selectedVoice, overrides = {}) {
     artifactGuardVersion: POCKET_ARTIFACT_GUARD_VERSION,
     retryLevel,
     throughputMode: throughput,
-    seed: overrides.seed != null ? overrides.seed : (overrides.voiceSeed != null ? overrides.voiceSeed : (s.pocketVoiceSeed || null)),
-    voiceSeed: overrides.voiceSeed != null ? overrides.voiceSeed : (overrides.seed != null ? overrides.seed : (s.pocketVoiceSeed || null)),
-    // Avoid large paragraph-wide transient tensors on iOS/constrained
-    // browsers. High-memory devices retain the 176-token cache fast path.
-    tokenSoftCap: window.isPocketDeviceMemorySafeMode?.() !== false ? 120 : (throughput ? 176 : 120),
+    seed: voiceSeed,
+    voiceSeed,
+    // Same cap for cache and live. The 176-token cache path re-chunked
+    // paragraphs, so each chunk's deterministic seed was a different take of
+    // the same line. 120 is the live value; cache now matches it.
+    tokenSoftCap: 120,
   };
 }
 
@@ -792,7 +816,7 @@ function _prosodyCacheTag(engine, throughputOverride = null) {
   if (engine !== 'pocket') return '';
   const s = window.userProfile?.settings || {};
   const wordsMode = s.chunkMode === 'words';
-  const throughput = throughputOverride == null ? _isPocketThroughputCache() : throughputOverride === true;
+  const tuning = _pocketTuningConfig();
   const parts = [
     POCKET_NARRATION_CACHE_VERSION,
     POCKET_CHUNKING_VERSION,
@@ -800,10 +824,11 @@ function _prosodyCacheTag(engine, throughputOverride = null) {
     s.expressiveProsody !== false ? 'ex' : 'nex',
     `m${_emotionMode()}`,
     `tp${_pocketTemperaturePresetName()}`,
-    `q${_pocketQualityMode()}`,
+    `q${tuning.qualityMode}`,
+    `lsd${tuning.lsdSteps}`,
     (s.pausePunctuation === true ? 'pp' : 'np'),
     s.pauseTags !== false ? 'pt' : 'nt',
-    throughput ? 'tt176' : 'ntt120',
+    'tok120',
     POCKET_PAUSE_PROFILE_VERSION,
     `pg${String(POCKET_PARAGRAPH_PAUSE_SEC).replace('.', '_')}`,
     POCKET_ARTIFACT_GUARD_VERSION,
@@ -819,6 +844,7 @@ function _prosodyCacheTag(engine, throughputOverride = null) {
     POCKET_CALIBRATION_VERSION,
     POCKET_ACCELERATION_VERSION,
     `wt${_pocketBackendRuntime.threadCount || 1}`,
+    `vs${_hashCachePart(_pocketVoiceSeed())}`,
     wordsMode ? `w${Number(s.chunkMinWords) || 8}-${Number(s.chunkMaxWords) || 40}` : 'sent',
     `pr${_pronunciationOverrideHash()}`,
   ];
@@ -826,17 +852,13 @@ function _prosodyCacheTag(engine, throughputOverride = null) {
 }
 window._prosodyCacheTag = _prosodyCacheTag;
 
-// Cache-key tags for BOTH render modes, current mode first. The background
-// cacher renders with the throughput tag (tt176) while live playback computes
-// the non-throughput tag (ntt120); with exact-key IndexedDB lookups, each side
-// was blind to audio the other had already rendered — playback re-synthesized
-// paragraphs that were sitting in the cache. Readers should try every variant.
+// Cache-key tags. Cache and live now share one render (same token cap, pause,
+// seed, LSD), so there is a single current tag. The throughputOverride
+// argument is kept so older callers do not throw; it no longer changes the key.
 function _prosodyCacheTagVariants(engine) {
   if (_isStyleTts2Engine(engine)) return [_prosodyCacheTag(engine)];
   if (engine !== 'pocket') return [''];
-  const current = _prosodyCacheTag(engine);
-  const flipped = _prosodyCacheTag(engine, !_isPocketThroughputCache());
-  return current === flipped ? [current] : [current, flipped];
+  return [_prosodyCacheTag(engine)];
 }
 window._prosodyCacheTagVariants = _prosodyCacheTagVariants;
 
@@ -1378,9 +1400,9 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v17',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v6',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v68',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v20',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v9',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v72',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -3495,7 +3517,7 @@ function _preferDirectMobileMediaPlayback() {
 // every paragraph already starts from silence after a paragraph pause, and it
 // buys a fade that actually works on the platform most users are on.
 let _lastSynthesizedVoiceAsset = null;
-const EMOTION_FADE_SEC = 0.12;
+const EMOTION_FADE_SEC = 0.18;
 
 function _onsetFadeSecFor(voiceAsset) {
   const switched = _lastSynthesizedVoiceAsset !== null && voiceAsset !== _lastSynthesizedVoiceAsset;
@@ -3510,8 +3532,8 @@ function _onsetFadeSecFor(voiceAsset) {
 // on an uncached paragraph and silently stalls narration. This runs only on
 // idle worker time while a paragraph is already playing, always yields to live
 // synthesis (which owns the worker), and no-ops when a full background cache
-// job is already filling ahead. It renders in the same (non-throughput) mode
-// live playback reads first, so a prefetched paragraph is an instant cache hit
+// job is already filling ahead. It renders with the same audio-affecting
+// opts live playback uses, so a prefetched paragraph is an instant cache hit
 // when the cursor reaches it — no CPU needed, which is exactly what a locked
 // iOS screen denies. Con (as flagged to the user): more eager synthesis =
 // more battery while playing uncached stretches.
@@ -3598,10 +3620,9 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
   // the background cacher (buffer_manager.js) passes the same ctx, so both
   // resolve the identical emotion → identical voice asset → identical cache key.
   const cleanVoice = resolveVoiceWithSentiment(engine, voice, text, { storyTitle: title, chapIdx, paraIdx });
-  // Try every render-mode cache key: the background cacher stores under the
-  // throughput tag while live playback computes the non-throughput tag, and
-  // both are valid renders of this paragraph. Exact-key misses here used to
-  // re-synthesize audio the cache job had already stored.
+  // Look up every remaining tag variant. Cache and live now share one render,
+  // so this is usually a single key; variants stay so a deploy that left an
+  // older tag in IndexedDB can still hit until narrv rotates it out.
   const cacheVoice = cleanVoice + (typeof _prosodyCacheTag === 'function' ? _prosodyCacheTag(engine) : '');
 
   const _playT0 = performance.now();

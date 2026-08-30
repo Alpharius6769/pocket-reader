@@ -4,7 +4,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v18';
+} from './tts_pronunciation_core.js?v=pron-v23';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -225,11 +225,16 @@ function resolveWorkerTuning(opts = {}) {
   const preset = getPocketTuningPreset(presetName, emotionMode);
   const qualityMode = opts.qualityMode === "quality" ? "quality" : DEFAULT_POCKET_QUALITY_MODE;
   const allowQualityLsd = qualityMode === "quality" && opts.allowBenchmarkQuality === true;
+  const requestedSteps = Number(opts.lsdSteps);
+  const presetSteps = Number(preset.lsdSteps) || DEFAULT_LSD_STEPS;
+  const steps = allowQualityLsd
+    ? BENCHMARK_QUALITY_LSD_STEPS
+    : (Number.isFinite(requestedSteps) && requestedSteps > 0 ? requestedSteps : presetSteps);
   return {
     temperaturePreset: preset.name,
     qualityMode,
     temperature: clampPocketTemperature(opts.temperature != null ? opts.temperature : preset.temperature),
-    lsdSteps: allowQualityLsd ? BENCHMARK_QUALITY_LSD_STEPS : DEFAULT_LSD_STEPS,
+    lsdSteps: Math.max(1, Math.min(BENCHMARK_QUALITY_LSD_STEPS, steps)),
   };
 }
 
@@ -245,7 +250,9 @@ const PAUSE_TAG_MAX = 30;
 // (from 110) 2026-07-17 so long paragraphs form fewer, more natural chunks;
 // kept modest on purpose — the cap also bounds continuous latent drift within a
 // chunk (raising it too far trades voice stability for fewer splits).
-// Throughput/cache mode may raise it further.
+// Cache used to raise this to 176, which re-chunked the paragraph and made
+// each chunk's deterministic seed a different take of the same line. The
+// constant stays named so it cannot silently return as a magic number.
 const POCKET_TOKEN_SOFT_CAP = 120;
 const POCKET_THROUGHPUT_TOKEN_SOFT_CAP = 176;
 
@@ -1509,7 +1516,7 @@ function splitIntoBestSentences(text, opts) {
   const requestedSoftCap = Number(opts.tokenSoftCap);
   const softCap = Number.isFinite(requestedSoftCap) && requestedSoftCap > 0
     ? requestedSoftCap
-    : (opts.throughputMode ? POCKET_THROUGHPUT_TOKEN_SOFT_CAP : POCKET_TOKEN_SOFT_CAP);
+    : POCKET_TOKEN_SOFT_CAP;
   const effectiveCap = Math.min(currentMaxTokenPerChunk, Math.max(40, softCap));
 
   const pushChunk = (chunkText, framesAfterEos) => {
@@ -3326,16 +3333,12 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
   const protectedBaseFlowTensors = new Set(Object.values(baseFlowState));
   let flowLmState = cloneState(baseFlowState);
 
-  // Cache jobs on the WASM path decode Mimi in 48-frame batches instead of 12:
-  // every decoder call round-trips ~16MB of conv state across the JS/WASM
-  // boundary, so 4x fewer calls is a direct win, and first-audio latency is
-  // irrelevant while background-caching. Verified equivalent on fp32
-  // (tools/verify_mimi_batch.py); int8 output differs only at dynamic-quant
-  // noise level, which decode-size variation already introduces today.
-  const throughputBatch = control.throughputMode === true
-    && currentBackend !== 'webgpu' && !control.streamSegments;
-  const firstChunkFrames = throughputBatch ? 48 : (currentBackend === 'webgpu' ? 1 : 3);
-  const normalChunkFrames = throughputBatch ? 48 : 12;
+  // Cache jobs used to decode Mimi in 48-frame batches. INT8 dynamic-quant
+  // noise depends on decode size, so those takes were a different grain than
+  // live 12-frame decodes of the same paragraph. Cache and live now share the
+  // live batch size; throughputMode must not change audio.
+  const firstChunkFrames = currentBackend === 'webgpu' ? 1 : 3;
+  const normalChunkFrames = 12;
   let isFirstAudioChunk = true;
   let totalTokenizationTime = 0;
   let totalTextConditioningTime = 0;

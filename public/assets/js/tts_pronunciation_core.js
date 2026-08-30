@@ -10,12 +10,15 @@ export const PRONUNCIATION_RULESET_VERSION = 'pron-v14'; // v14: Mulberry32 PRNG
 export const DEFAULT_POCKET_PLAYBACK_SPEED = 1.0;
 export const DEFAULT_POCKET_TEMPERATURE_PRESET = 'balanced';
 export const DEFAULT_POCKET_QUALITY_MODE = 'mobile';
+// Folded into every Pocket latent-noise seed so cache jobs and live playback
+// share one speaker identity. An explicit settings.pocketVoiceSeed still wins.
+export const DEFAULT_POCKET_VOICE_SEED = 'pr-voice-1';
 
 export const POCKET_TTS_TUNING_PRESETS = Object.freeze({
-  stable: { temperature: 0.70, lsdSteps: 1, label: 'Stable audiobook' },
-  balanced: { temperature: 0.82, lsdSteps: 1, label: 'Balanced audiobook' },
-  expressive: { temperature: 0.93, lsdSteps: 1, label: 'Full expression' },
-  quality: { temperature: 0.82, lsdSteps: 4, label: 'Benchmark quality' },
+  stable: { temperature: 0.70, lsdSteps: 4, label: 'Stable audiobook' },
+  balanced: { temperature: 0.86, lsdSteps: 4, label: 'Balanced audiobook' },
+  expressive: { temperature: 0.93, lsdSteps: 4, label: 'Full expression' },
+  quality: { temperature: 0.86, lsdSteps: 4, label: 'Benchmark quality' },
 });
 
 const PRESET_RANK = Object.freeze({ stable: 0, balanced: 1, quality: 1, expressive: 2 });
@@ -349,6 +352,7 @@ if (typeof window !== 'undefined') {
   window.DEFAULT_POCKET_PLAYBACK_SPEED = DEFAULT_POCKET_PLAYBACK_SPEED;
   window.DEFAULT_POCKET_TEMPERATURE_PRESET = DEFAULT_POCKET_TEMPERATURE_PRESET;
   window.DEFAULT_POCKET_QUALITY_MODE = DEFAULT_POCKET_QUALITY_MODE;
+  window.DEFAULT_POCKET_VOICE_SEED = DEFAULT_POCKET_VOICE_SEED;
   window.POCKET_TTS_TUNING_PRESETS = POCKET_TTS_TUNING_PRESETS;
   window.getPocketTuningPreset = getPocketTuningPreset;
   window.getBuiltInPronunciationRuleCount = getBuiltInPronunciationRuleCount;
