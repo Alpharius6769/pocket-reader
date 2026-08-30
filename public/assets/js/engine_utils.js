@@ -212,6 +212,66 @@ window.POCKET_VOICE_PACK = {
       availableEmotions: ['neutral'],
       fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
     },
+    {
+      id: 'george',
+      displayName: 'George',
+      gender: 'male',
+      accent: 'American, New England',
+      recommended: true,
+      recommendedUse: 'Kyutai catalog American male; clean VCTK enhanced reference.',
+      sourceName: 'VCTK p315',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p315_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
+      availableEmotions: ['neutral'],
+      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+    },
+    {
+      id: 'noah',
+      displayName: 'Noah',
+      gender: 'male',
+      accent: 'American, Florida',
+      recommended: true,
+      recommendedUse: 'Kyutai VCTK American male; clean enhanced reference.',
+      sourceName: 'VCTK p345',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p345_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
+      availableEmotions: ['neutral'],
+      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+    },
+    {
+      id: 'mary',
+      displayName: 'Mary',
+      gender: 'female',
+      accent: 'American, Indiana',
+      recommended: true,
+      recommendedUse: 'Kyutai catalog American female; clean VCTK enhanced reference.',
+      sourceName: 'VCTK p333',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p333_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
+      availableEmotions: ['neutral'],
+      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+    },
+    {
+      id: 'eve',
+      displayName: 'Eve',
+      gender: 'female',
+      accent: 'American, New Jersey',
+      recommended: true,
+      recommendedUse: 'Kyutai catalog American female; clean VCTK enhanced reference.',
+      sourceName: 'VCTK p361',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p361_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
+      availableEmotions: ['neutral'],
+      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+    },
     // Project-owned personal clone. Unlike the Voice-Zero six this has no
     // upstream: the reference material is maintainer-held and only the neutral
     // state has been built, so availableEmotions is the single entry and every

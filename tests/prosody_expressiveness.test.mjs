@@ -205,9 +205,9 @@ test('Rayne is honestly declared as neutral-only', async () => {
     'Rayne must not claim emotions it has no reference audio for');
 });
 
-test('Kyutai catalog voices are wired as four official narrators, each neutral-only', async () => {
+test('Kyutai catalog voices are wired as official narrators, each neutral-only', async () => {
   const source = await read('public/assets/js/engine_utils.js');
-  for (const id of ['alba', 'jane', 'charles', 'michael']) {
+  for (const id of ['alba', 'jane', 'charles', 'michael', 'george', 'noah', 'mary', 'eve']) {
     const block = source.match(new RegExp(`id: '${id}',[\\s\\S]*?\\n    \\}`))?.[0] || '';
     assert.match(block, /availableEmotions: \['neutral'\]/,
       `${id} must not claim emotion states Kyutai did not ship`);
@@ -217,6 +217,14 @@ test('Kyutai catalog voices are wired as four official narrators, each neutral-o
   assert.match(source, /id: 'jane',[\s\S]*?gender: 'female'/);
   assert.match(source, /id: 'charles',[\s\S]*?gender: 'male'/);
   assert.match(source, /id: 'michael',[\s\S]*?gender: 'male'/);
+  assert.match(source, /id: 'george',[\s\S]*?gender: 'male'/);
+  assert.match(source, /id: 'noah',[\s\S]*?gender: 'male'/);
+  assert.match(source, /id: 'mary',[\s\S]*?gender: 'female'/);
+  assert.match(source, /id: 'eve',[\s\S]*?gender: 'female'/);
+  assert.match(source, /id: 'george',[\s\S]*?accent: 'American, New England'/);
+  assert.match(source, /id: 'noah',[\s\S]*?accent: 'American, Florida'/);
+  assert.match(source, /id: 'mary',[\s\S]*?accent: 'American, Indiana'/);
+  assert.match(source, /id: 'eve',[\s\S]*?accent: 'American, New Jersey'/);
 });
 
 test('high-end Pocket TTS uses four LSD steps instead of the 1-step grain path', async () => {

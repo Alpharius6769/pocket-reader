@@ -108,6 +108,17 @@ def main():
         for ext in ["*.flac", "*.wav", "*.mp3", "*.ogg"]:
             audio_files.extend(input_path.glob(ext))
             audio_files.extend(input_path.glob(ext.upper()))
+        # Windows glob is case-insensitive, so "*.wav" and "*.WAV" each match
+        # the same files. Deduping keeps a directory convert from running twice.
+        seen = set()
+        unique = []
+        for file_path in audio_files:
+            key = str(file_path.resolve()).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(file_path)
+        audio_files = unique
 
     if not audio_files:
         print(f"No compatible audio files found in '{input_path}'.")
