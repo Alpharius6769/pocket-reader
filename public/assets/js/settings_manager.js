@@ -16,7 +16,7 @@ import {
   coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v26';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '226';
+export const NARRATION_SERVICE_WORKER_VERSION = '227';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1468,22 +1468,44 @@ window.onNarrationEngineSelect = function onNarrationEngineSelect(value) {
   if (window.__pocketNarrationRuntimeLoaded === true) {
     try { window.switchReaderVoiceEngine?.(choice, true); } catch (_) {}
   }
-  renderNarrationEngineControls();
+  // Rebuild the reader playbar list in the shell. Waiting for the deferred
+  // switchReaderVoiceEngine path left Pocket/Kokoro voices empty until the
+  // runtime happened to load and the reader was left and re-entered.
+  try { window.syncNarrationControls(); } catch (_) {}
   if (typeof window.refreshPerfPanel === 'function') {
     try { window.refreshPerfPanel(); } catch (_) {}
   }
   window.pocketNotify?.('Narration engine updated. The next paragraph uses it.');
 };
 
+function _fillWebSpeechVoiceSelector(selector) {
+  if (!selector || !('speechSynthesis' in window)) return;
+  const voices = window.speechSynthesis.getVoices();
+  const english = voices.filter((voice) => String(voice.lang || '').startsWith('en'));
+  const list = english.length ? english : voices;
+  const saved = window.userProfile?.settings?.webVoice || '';
+  selector.innerHTML = '';
+  list.forEach((voice) => {
+    const opt = document.createElement('option');
+    opt.value = voice.name;
+    opt.textContent = `${voice.name} (${voice.lang})`;
+    selector.appendChild(opt);
+  });
+  if (saved && Array.from(selector.options).some((option) => option.value === saved)) {
+    selector.value = saved;
+  } else if (selector.options.length && window.userProfile?.settings) {
+    window.userProfile.settings.webVoice = selector.value;
+  }
+}
+
 // Called on reader entry. Everything here is shell-only on purpose: the old
 // hook called refreshVoiceSelectorForEngine, a DEFERRED action, so simply
 // OPENING a story imported audio_core and buffer_manager to fill a dropdown —
 // pulling up the narration runtime (and its modal) with no story playing.
 //
-// Kokoro's voice list is just KOKORO_VOICES, which lives in the shell policy, so
-// it can be built here with no runtime at all. Pocket and Device genuinely need
-// the runtime (the Pocket voice registry, speechSynthesis), so those are left to
-// the deferred path and only run if it is ALREADY loaded.
+// Kokoro and Kitten lists live in the shell policy. Pocket's catalog lives on
+// engine_utils (renderPocketVoiceOptions). Device voices come from
+// speechSynthesis. None of those need the narration runtime.
 window.syncNarrationControls = function syncNarrationControls() {
   try { renderNarrationEngineControls(); } catch (_) {}
 
@@ -1492,9 +1514,6 @@ window.syncNarrationControls = function syncNarrationControls() {
   const selector = document.getElementById('voice-selector');
   if (!selector) return;
 
-  // Kokoro AND Kitten both keep their lists in the shell policy, so both build
-  // here with no runtime at all. Pocket and Device genuinely need the runtime
-  // (voice registry, speechSynthesis), so those stay deferred.
   const voices = voicesForEngine(engine);
   if (voices.length) {
     const savedKey = engine === KITTEN_ENGINE ? 'kittenVoice' : 'kokoroVoice';
@@ -1514,6 +1533,22 @@ window.syncNarrationControls = function syncNarrationControls() {
     if (!listIsCurrent) selector.innerHTML = markup;
     selector.value = chosen;
     if (window.userProfile?.settings) window.userProfile.settings[savedKey] = chosen;
+    return;
+  }
+
+  if (engine === 'pocket' && typeof window.renderPocketVoiceOptions === 'function') {
+    const saved = window.userProfile?.settings?.pocketVoice || window.POCKET_DEFAULT_VOICE;
+    const chosen = window.renderPocketVoiceOptions(selector, saved);
+    if (window.userProfile?.settings) window.userProfile.settings.pocketVoice = chosen;
+    return;
+  }
+
+  if (engine === 'webspeech' && 'speechSynthesis' in window) {
+    const fill = () => _fillWebSpeechVoiceSelector(selector);
+    if (!window.speechSynthesis.getVoices().length) {
+      window.speechSynthesis.addEventListener('voiceschanged', fill, { once: true });
+    }
+    fill();
     return;
   }
 

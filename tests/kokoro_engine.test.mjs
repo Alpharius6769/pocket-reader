@@ -442,8 +442,7 @@ test('opening a story rebuilds the voice list for the active engine', async () =
   // already on Kokoro.
   assert.match(audio, /window\.refreshVoiceSelectorForEngine = function/);
   // Superseded: the reader now calls the SHELL sync, because the deferred
-  // refresher imported the whole runtime just to fill a dropdown. The deferred
-  // one still exists for Pocket/Device, which genuinely need the runtime.
+  // refresher imported the whole runtime just to fill a dropdown.
   assert.match(ui, /viewId === 'reading-view' && typeof window\.syncNarrationControls === 'function'/);
   assert.match(loader, /'refreshVoiceSelectorForEngine',/);
 });
@@ -699,14 +698,26 @@ test('opening the reader does not drag in the narration runtime', async () => {
   assert.match(ui, /viewId === 'reading-view' && typeof window\.syncNarrationControls === 'function'/);
   assert.doesNotMatch(ui, /viewId === 'reading-view' && typeof window\.refreshVoiceSelectorForEngine/);
 
-  // Kokoro's list is buildable in the shell; Pocket/Device need the runtime and
-  // are only refreshed when it is already up.
+  // Kokoro/Kitten lists live in the shell policy. Pocket's catalog is a shell
+  // global (renderPocketVoiceOptions). Device voices come from speechSynthesis.
+  // None of those may wait for audio_core, or the playbar stays empty until
+  // the reader is left and re-entered after narration has started.
   assert.match(settings, /window\.syncNarrationControls = function/);
-  // Both neural engines keep their lists in the shell policy now, so the shell
-  // path is chosen by "does this engine have a list", not by its name.
   assert.match(settings, /const voices = voicesForEngine\(engine\);/);
   assert.match(settings, /if \(voices\.length\) \{/);
-  assert.match(settings, /if \(window\.__pocketNarrationRuntimeLoaded === true\)/);
+  assert.match(settings, /window\.renderPocketVoiceOptions/);
+  assert.match(settings, /function _fillWebSpeechVoiceSelector/);
+  assert.match(settings, /speechSynthesis\.addEventListener\('voiceschanged'/);
+  // Changing the engine on the playbar must rebuild the list immediately.
+  const handler = settings.slice(
+    settings.indexOf('window.onNarrationEngineSelect = function'),
+    settings.indexOf('function _fillWebSpeechVoiceSelector'),
+  );
+  assert.match(handler, /window\.syncNarrationControls\(\)/);
+  // populateReaderUI used to stamp pocketVoice onto #voice-selector, which
+  // blanks a Kokoro/Kitten list. The playbar list is owned by the shell sync.
+  assert.match(ui, /window\.syncNarrationControls\(\)/);
+  assert.doesNotMatch(ui, /el\('voice-selector'\)\.value = voice/);
 });
 
 // Eighth instance of the same slip, and the one that mattered most: not an

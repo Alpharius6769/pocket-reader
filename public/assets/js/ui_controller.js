@@ -449,8 +449,12 @@ export function populateReaderUI(storyObj, authorFallback) {
 
   const preset = libEntry?.narrationPreset || storyObj.narrationPreset || {};
   if (Object.keys(preset).length) storyObj.narrationPreset = { ...preset };
-  const voice = preset.voice || window.userProfile?.settings?.pocketVoice;
-  if (voice && el('voice-selector')) el('voice-selector').value = voice;
+  // The playbar list is owned by syncNarrationControls. Writing pocketVoice
+  // (or a story preset) onto a Kokoro/Kitten list leaves the closed <select>
+  // showing blank until the reader is left and re-entered.
+  if (typeof window.syncNarrationControls === 'function') {
+    try { window.syncNarrationControls(); } catch (_) {}
+  }
   // The story's narrationPreset.speed is applied by audio_core's
   // getEffectivePlaybackRate() when the next paragraph plays; there is no
   // slider or label to mirror it into.
@@ -1599,7 +1603,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=226', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=227', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

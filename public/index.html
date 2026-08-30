@@ -144,11 +144,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v26">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v17">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v124">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v126">
 <link rel="modulepreload" href="assets/js/library_manager.js?v=library-v40">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v8">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v16">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v158">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v160">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v8">
 
 <!-- ==========================================
@@ -165,7 +165,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.indexOf('/debug/') !== -1 || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=226', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=227', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -867,14 +867,22 @@ Playback-only modules remain deferred so they do not compete with first paint.
                 </select>
                 <select id="voice-selector" aria-label="Narrator voice" class="playback-dropdown pr-layout-053" onchange="if(window.onVoiceSelectionChange) window.onVoiceSelectionChange(this.value)">
                   <optgroup label="Male voices">
-                    <option value="donald_malone" selected>Donald Malone - American, Midwestern (Default & Recommended)</option>
+                    <option value="donald_malone" selected>Donald Malone - American, Midwestern (Recommended)</option>
                     <option value="bill_boerst">Bill Boerst - American (Recommended)</option>
                     <option value="jason_mayoff">Jason Mayoff - American</option>
+                    <option value="charles">Charles - English (Recommended)</option>
+                    <option value="michael">Michael - English (Recommended)</option>
+                    <option value="george">George - American, New England (Recommended)</option>
+                    <option value="noah">Noah - American, Florida (Recommended)</option>
                   </optgroup>
                   <optgroup label="Female voices">
                     <option value="kristin_hughes">Kristin Hughes - American, Iowa (Recommended)</option>
                     <option value="jodi_krangle_expressive">Jodi Krangle Expressive - American (Recommended)</option>
                     <option value="karen_savage">Karen Savage - American</option>
+                    <option value="alba">Alba - English (Recommended)</option>
+                    <option value="jane">Jane - English (Recommended)</option>
+                    <option value="mary">Mary - American, Indiana (Recommended)</option>
+                    <option value="eve">Eve - American, New Jersey (Recommended)</option>
                     <option value="rayne">Rayne (Personal Clone)</option>
                   </optgroup>
                 </select>
@@ -1535,10 +1543,10 @@ Playback-only modules remain deferred so they do not compete with first paint.
          itself is only downloaded when the masterlist view is opened. -->
     <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v7' type='module'></script>
     <script src='assets/js/device_setup.js?v=device-setup-v17' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v124' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v126' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v8' type='module'></script>
     <script src='assets/js/reader_features.js?v=features-v16' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v158' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v160' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v8' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v5' type='module'></script>
   </div>
