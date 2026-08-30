@@ -4,7 +4,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v15';
+} from './tts_pronunciation_core.js?v=pron-v18';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -125,22 +125,21 @@ const BASE_TEMP = getPocketTuningPreset(DEFAULT_POCKET_TEMPERATURE_PRESET).tempe
 // idea (kyutai-labs/pocket-tts#194) but uses only the two knobs this engine already
 // exposes with zero structural/perf change: sampling `temp` and an optional
 // `noiseClamp` on the gaussian latent (in units of std).
-// TAMED 2026-07-17: the old wide temp band ([0.56, 0.90]) plus per-emotion
-// noiseClamp swings shifted the perceived pitch/voice-character sentence to
-// sentence ("a much higher or lower pitched voice"). Narrowed to a gentle
-// [0.66, 0.76] band around neutral (0.70) and dropped ALL noiseClamp (the latent
-// clamp was the main character-shifter). Expression now comes from small temp
-// nudges + the EOS tail (eosBonus), not from pitch/character jumps.
+// 2026-07-17 tamed the band to [0.66, 0.76] AND dropped noiseClamp after the
+// clamp (not the temp) shifted perceived pitch sentence to sentence. 2026-08-30
+// opened the temp band back up — [0.80, 0.95] — because the tamed values plus
+// a 0.70 preset ceiling left even Expressive narration flat. noiseClamp stays
+// off; identity still comes from the voice reference, energy from temperature.
 // eosBonus: frames added to (or subtracted from) the post-EOS tail when
 // expressive mode is on. Negative = snap off sooner (high-energy emotions);
 // positive = let it settle (quiet/fearful emotions). Applied in pushChunk.
 const EMOTION_PROSODY = {
-  neutral:  { temp: 0.70, noiseClamp: null, eosBonus:  0 },
-  sadness:  { temp: 0.72, noiseClamp: null, eosBonus:  1 },
-  fear:     { temp: 0.80, noiseClamp: null, eosBonus:  1 },
-  joy:      { temp: 0.84, noiseClamp: null, eosBonus: -1 },
-  surprise: { temp: 0.86, noiseClamp: null, eosBonus: -1 },
-  anger:    { temp: 0.88, noiseClamp: null, eosBonus: -1 },
+  neutral:  { temp: 0.80, noiseClamp: null, eosBonus:  0 },
+  sadness:  { temp: 0.86, noiseClamp: null, eosBonus:  1 },
+  fear:     { temp: 0.90, noiseClamp: null, eosBonus:  1 },
+  joy:      { temp: 0.93, noiseClamp: null, eosBonus: -1 },
+  surprise: { temp: 0.94, noiseClamp: null, eosBonus: -1 },
+  anger:    { temp: 0.95, noiseClamp: null, eosBonus: -1 },
 };
 
 // ── PRNG & Gaussian Latent Generator (Mulberry32 + Box-Muller) ───────────────

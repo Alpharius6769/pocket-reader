@@ -12,11 +12,13 @@ export const DEFAULT_POCKET_TEMPERATURE_PRESET = 'balanced';
 export const DEFAULT_POCKET_QUALITY_MODE = 'mobile';
 
 export const POCKET_TTS_TUNING_PRESETS = Object.freeze({
-  stable: { temperature: 0.65, lsdSteps: 1, label: 'Stable audiobook' },
-  balanced: { temperature: 0.70, lsdSteps: 1, label: 'Balanced audiobook' },
-  expressive: { temperature: 0.88, lsdSteps: 1, label: 'Full expression' },
-  quality: { temperature: 0.70, lsdSteps: 4, label: 'Benchmark quality' },
+  stable: { temperature: 0.70, lsdSteps: 1, label: 'Stable audiobook' },
+  balanced: { temperature: 0.82, lsdSteps: 1, label: 'Balanced audiobook' },
+  expressive: { temperature: 0.93, lsdSteps: 1, label: 'Full expression' },
+  quality: { temperature: 0.82, lsdSteps: 4, label: 'Benchmark quality' },
 });
+
+const PRESET_RANK = Object.freeze({ stable: 0, balanced: 1, quality: 1, expressive: 2 });
 
 const MAX_USER_OVERRIDES = 200;
 
@@ -259,6 +261,20 @@ function applyWildcardHeteronyms(text) {
 export function getPocketTuningPreset(name, emotionMode = 'neutral') {
   let key = String(name || DEFAULT_POCKET_TEMPERATURE_PRESET).toLowerCase();
   if (!Object.prototype.hasOwnProperty.call(POCKET_TTS_TUNING_PRESETS, key)) key = DEFAULT_POCKET_TEMPERATURE_PRESET;
+
+  // The emotion profile is the user's expressiveness control. This argument
+  // used to be ignored, so Settings → Expressive still sampled at balanced
+  // 0.70 and the voices stayed flat. Escalate the preset to match the
+  // profile; never de-escalate an explicit hotter choice, and leave the
+  // quality LSD-4 path on its own temperature.
+  const mode = emotionMode === 'full' ? 'expressive' : String(emotionMode || 'neutral');
+  const modeKey = mode === 'expressive' ? 'expressive'
+    : mode === 'balanced' ? 'balanced'
+    : null;
+  if (modeKey && key !== 'quality' && (PRESET_RANK[key] ?? 1) < (PRESET_RANK[modeKey] ?? 1)) {
+    key = modeKey;
+  }
+
   return { name: key, ...POCKET_TTS_TUNING_PRESETS[key] };
 }
 

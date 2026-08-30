@@ -4,8 +4,8 @@
     "sha256": "c03bf65b544fdb09"
   },
   "audio_core.js": {
-    "version": "audio-v112",
-    "sha256": "07e294fe027e328a"
+    "version": "audio-v115",
+    "sha256": "3e1d86964d915c26"
   },
   "buffer_manager.js": {
     "version": "buffer-v71",
@@ -32,7 +32,7 @@
     "sha256": "452702fde47e0eab"
   },
   "engine_utils.js": {
-    "version": "sw-218",
+    "version": "sw-220",
     "sha256": "7eb4372f52bf60af"
   },
   "experience_coordinator.js": {
@@ -56,27 +56,27 @@
     "sha256": "f4c9755b6b44b491"
   },
   "kitten_worker.js": {
-    "version": "kitten-v4",
-    "sha256": "59946744ec011190"
+    "version": "kitten-v6",
+    "sha256": "7c2833a294a65cf7"
   },
   "kokoro_worker.js": {
-    "version": "kokoro-v15",
-    "sha256": "5b8a4968adb11c0b"
+    "version": "kokoro-v17",
+    "sha256": "d191ad94e8a4fa47"
   },
   "library_manager.js": {
-    "version": "library-v35",
-    "sha256": "5e257d6c8df9422b"
+    "version": "library-v37",
+    "sha256": "b841b9c93858ed1d"
   },
   "motion_lite.js": {
-    "version": "sw-218",
+    "version": "sw-220",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v60",
-    "sha256": "a0726c6f043eff72"
+    "version": "narration-loader-v62",
+    "sha256": "ff377e536b244eda"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-218",
+    "version": "sw-220",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -92,8 +92,8 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v65",
-    "sha256": "a644dd9db58aa3b9"
+    "version": "pocket-worker-v68",
+    "sha256": "2b094e370f581c06"
   },
   "profile_merge.js": {
     "version": "merge-v7",
@@ -104,8 +104,8 @@
     "sha256": "83bebca9ff67745b"
   },
   "settings_manager.js": {
-    "version": "settings-v118",
-    "sha256": "3b4f3bf0dcf33721"
+    "version": "settings-v120",
+    "sha256": "d00f2f1addd9d1b6"
   },
   "storage_core.js": {
     "version": "storage-v19",
@@ -120,19 +120,19 @@
     "sha256": "e9a407cab1ab35b6"
   },
   "tts_pronunciation_core.js": {
-    "version": "pron-v15",
-    "sha256": "34a608981d57269a"
+    "version": "pron-v18",
+    "sha256": "854a886f9eaf4242"
   },
   "ui_controller.js": {
-    "version": "ui-v154",
-    "sha256": "250833687cbd4205"
+    "version": "ui-v155",
+    "sha256": "c72bcdd6f16c3e13"
   },
   "virtue_controller.js": {
     "version": "virtue-v20",
     "sha256": "fcdeed67dcc76cf6"
   },
   "sw.js": {
-    "version": "sw-218",
-    "sha256": "12f11c6cfdc61334"
+    "version": "sw-220",
+    "sha256": "d552865fcdbcb4b1"
   }
 }

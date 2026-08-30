@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v15';
+} from './tts_pronunciation_core.js?v=pron-v18';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -141,7 +141,7 @@ const POCKET_EMOTION_PATTERN = new RegExp(`_(${POCKET_ALL_EMOTIONS.join('|')})$`
 // change plays the wrong paragraph with nothing to detect it. Bump on any
 // change to how a paragraph is rendered as well, so cached audio re-renders
 // rather than mixing engines.
-const POCKET_NARRATION_CACHE_VERSION = 'narrv18';
+const POCKET_NARRATION_CACHE_VERSION = 'narrv19';
 const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // Kokoro's render-shape version. Bump whenever anything that changes the audio
 // for the same (text, voice) changes: the chunk cap, the clause rejoin, the
@@ -192,29 +192,29 @@ const POCKET_PAUSE_PROFILE_VERSION = 'pausev2';
 const POCKET_PARAGRAPH_PAUSE_SEC = 0.5;
 
 const POCKET_BALANCED_TEMP_CAPS = {
-  neutral: 0.70,
-  calm: 0.70,
-  sad: 0.72,
-  tired: 0.70,
-  worried: 0.74,
-  happy: 0.74,
-  surprised: 0.76,
-  frustrated: 0.76,
+  neutral: 0.80,
+  calm: 0.78,
+  sad: 0.84,
+  tired: 0.80,
+  worried: 0.88,
+  happy: 0.88,
+  surprised: 0.90,
+  frustrated: 0.90,
 };
 const POCKET_FULL_TEMP_CAPS = {
-  neutral: 0.72,
-  calm: 0.70,
-  sad: 0.74,
-  tired: 0.72,
-  confused: 0.80,
-  worried: 0.82,
-  happy: 0.84,
-  enthused: 0.85,
-  surprised: 0.86,
-  frustrated: 0.86,
-  excited: 0.88,
-  anger: 0.88,
-  shout: 0.90,
+  neutral: 0.86,
+  calm: 0.82,
+  sad: 0.88,
+  tired: 0.86,
+  confused: 0.90,
+  worried: 0.92,
+  happy: 0.93,
+  enthused: 0.94,
+  surprised: 0.94,
+  frustrated: 0.94,
+  excited: 0.95,
+  anger: 0.95,
+  shout: 0.95,
 };
 function _normalizeVoice(engine, voice) {
   if (engine !== 'pocket') return voice || '';
@@ -649,9 +649,17 @@ function _artifactCappedTemperature(baseTemperature, emotion, retryLevel = 0) {
   const caps = _effectiveProsodyTier() === 'full'
     ? POCKET_FULL_TEMP_CAPS
     : POCKET_BALANCED_TEMP_CAPS;
-  const cap = caps[emotion] || caps.neutral || baseTemperature;
-  const capped = Math.min(Number(baseTemperature) || cap, cap);
-  return Number(Math.max(0.5, capped - (retryLevel ? 0.06 : 0)).toFixed(2));
+  const intended = Number(caps[emotion] || caps.neutral);
+  const base = Number(baseTemperature);
+  // The cap table is the per-emotion sampling temperature, not a ceiling on
+  // the preset. min(preset, cap) flattened every paragraph to 0.70 whenever
+  // the default balanced preset sat below every cap — which is why Expressive
+  // in Settings still sounded like Neutral. A missing table entry falls back
+  // to the preset; the worker still clamps to [0.5, 0.95].
+  const chosen = Number.isFinite(intended)
+    ? intended
+    : (Number.isFinite(base) ? base : 0.82);
+  return Number(Math.max(0.5, Math.min(0.95, chosen - (retryLevel ? 0.06 : 0))).toFixed(2));
 }
 
 // The route carries the engine it was resolved FOR, because everything
@@ -1370,9 +1378,9 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v15',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v4',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v65',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v17',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v6',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v68',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,

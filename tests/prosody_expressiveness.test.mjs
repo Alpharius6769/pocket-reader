@@ -16,6 +16,10 @@ import {
   resolvePocketExpressiveProsody,
   POCKET_PROSODY_TIERS,
 } from '../public/assets/js/pocket_backend_policy.js';
+import {
+  getPocketTuningPreset,
+  POCKET_TTS_TUNING_PRESETS,
+} from '../public/assets/js/tts_pronunciation_core.js';
 
 const read = (p) => readFile(p, 'utf8');
 const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
@@ -214,6 +218,66 @@ test('Donald Malone is the configured default voice across the engine', async ()
 test('getPocketTuningPreset allows expressive temperature tuning without forced fallback', async () => {
   const ttsCore = await read('public/assets/js/tts_pronunciation_core.js');
   assert.doesNotMatch(ttsCore, /if \(key === 'expressive'\) key = DEFAULT_POCKET_TEMPERATURE_PRESET;/);
+});
+
+test('temperature presets sit well above the old 0.70 ceiling', () => {
+  assert.equal(POCKET_TTS_TUNING_PRESETS.stable.temperature, 0.70);
+  assert.equal(POCKET_TTS_TUNING_PRESETS.balanced.temperature, 0.82);
+  assert.equal(POCKET_TTS_TUNING_PRESETS.expressive.temperature, 0.93);
+  assert.ok(POCKET_TTS_TUNING_PRESETS.expressive.temperature < 0.96,
+    'must stay inside the worker clamp of 0.95');
+});
+
+test('getPocketTuningPreset escalates with the emotion profile and never de-escalates', () => {
+  // Settings → Expressive used to leave pocketTemperaturePreset at balanced,
+  // so this function returned 0.70 and the voices stayed flat.
+  const expressive = getPocketTuningPreset('balanced', 'expressive');
+  assert.equal(expressive.name, 'expressive');
+  assert.equal(expressive.temperature, 0.93);
+
+  const fullAlias = getPocketTuningPreset('balanced', 'full');
+  assert.equal(fullAlias.name, 'expressive');
+
+  const balanced = getPocketTuningPreset('balanced', 'balanced');
+  assert.equal(balanced.name, 'balanced');
+  assert.equal(balanced.temperature, 0.82);
+
+  const keepHot = getPocketTuningPreset('expressive', 'neutral');
+  assert.equal(keepHot.name, 'expressive');
+  assert.equal(keepHot.temperature, 0.93);
+
+  const keepStable = getPocketTuningPreset('stable', 'neutral');
+  assert.equal(keepStable.name, 'stable');
+  assert.equal(keepStable.temperature, 0.70);
+
+  const quality = getPocketTuningPreset('quality', 'expressive');
+  assert.equal(quality.name, 'quality');
+  assert.equal(quality.lsdSteps, 4);
+});
+
+test('per-emotion temperature tables are the sampling temps, not a ceiling on 0.70', async () => {
+  const source = await read('public/assets/js/audio_core.js');
+  // The old min(preset, cap) flattened every paragraph whenever the default
+  // balanced preset sat below every cap.
+  assert.doesNotMatch(source, /Math\.min\(Number\(baseTemperature\) \|\| cap, cap\)/);
+  assert.match(source, /const intended = Number\(caps\[emotion\] \|\| caps\.neutral\)/);
+  assert.match(source, /const chosen = Number\.isFinite\(intended\)/);
+
+  const balanced = source.match(/const POCKET_BALANCED_TEMP_CAPS = \{[\s\S]*?\};/)?.[0] || '';
+  const full = source.match(/const POCKET_FULL_TEMP_CAPS = \{[\s\S]*?\};/)?.[0] || '';
+  const num = (block, key) => Number(block.match(new RegExp(`${key}:\\s*([0-9.]+)`))?.[1]);
+
+  assert.ok(num(balanced, 'happy') >= 0.86, `balanced happy ${num(balanced, 'happy')} is still near the old 0.74`);
+  assert.ok(num(balanced, 'surprised') >= 0.88, `balanced surprised ${num(balanced, 'surprised')} is still near the old 0.76`);
+  assert.ok(num(full, 'happy') >= 0.90, `full happy ${num(full, 'happy')} is still near the old 0.84`);
+  assert.ok(num(full, 'anger') >= 0.94, `full anger ${num(full, 'anger')} is still near the old 0.88`);
+  assert.ok(num(full, 'shout') <= 0.95, 'must stay inside the worker clamp');
+  assert.ok(num(full, 'happy') > num(balanced, 'happy'), 'expressive profile must run hotter than balanced');
+});
+
+test('hotter sampling busts the Pocket audio cache', async () => {
+  const source = await read('public/assets/js/audio_core.js');
+  assert.match(source, /const POCKET_NARRATION_CACHE_VERSION = 'narrv19'/);
 });
 
 test('pocket worker implements Mulberry32 PRNG with paired Box-Muller Gaussian sampling', async () => {

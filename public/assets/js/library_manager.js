@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v15';
+} from './tts_pronunciation_core.js?v=pron-v18';
 import { profileHash, storyKeyFor, mergeClockedMap } from './profile_merge.js?v=merge-v7';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
