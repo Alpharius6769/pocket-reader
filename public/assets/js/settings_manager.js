@@ -16,7 +16,7 @@ import {
   coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v26';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '227';
+export const NARRATION_SERVICE_WORKER_VERSION = '229';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -352,6 +352,17 @@ function detectWorkerCount() {
   return Math.max(2, Math.min(HARD_CAP_WORKERS, cores));
 }
 
+// Stored voiceEngine is 'pocket' for EVERY neural engine (Kitten, Kokoro, and
+// Pocket TTS) and 'webspeech' for the device voice. The dropdown value is a
+// different namespace: auto / kitten / kokoro / pocket / webspeech. Treating
+// the stored flag as a dropdown value is what made an iPhone 13 on Kitten
+// open Settings already sitting on "Pocket TTS", then wrote a Pocket override
+// through switchReaderVoiceEngine and left the reader playbar behind.
+function _voiceEngineControlValue(settings = window.userProfile?.settings) {
+  if (settings?.voiceEngine === 'webspeech') return 'webspeech';
+  return readNarrationEngineOverride(localStorage) || 'auto';
+}
+
 // ── initSettingsUI — populate all controls from saved settings ───────────────
 export function initSettingsUI() {
   if (!window.userProfile || !window.userProfile.settings) return;
@@ -359,23 +370,19 @@ export function initSettingsUI() {
   const el = (id) => document.getElementById(id);
 
 
-  // Default missing/invalid engines to Pocket TTS. Explicit saved choices,
-  // including Web Speech, are still respected here.
+  // Default missing/invalid engines to the neural path. Explicit saved choices,
+  // including Web Speech, are still respected here. 'kitten' / 'kokoro' are
+  // not stored in this field — they live in the device-local override.
   if (!settings.voiceEngine || !['pocket', 'webspeech'].includes(settings.voiceEngine)) {
     settings.voiceEngine = 'pocket';
     if (typeof window.saveLocalData === 'function') window.saveLocalData();
-  }
-  // Fully synchronize engine state (worker scripts, voice selector options) with
-  // the saved setting. Silent=true prevents recaching on every page load.
-  if (window.__pocketNarrationRuntimeLoaded === true
-      && typeof window.switchReaderVoiceEngine === 'function') {
-    window.switchReaderVoiceEngine(settings.voiceEngine, true);
   }
 
   // Standard settings
   settings.companion = _normalizeCompanionValue(settings.companion);
   if (el('companion-select'))                               el('companion-select').value = settings.companion;
-  if (el('voice-engine-select') && settings.voiceEngine)   el('voice-engine-select').value = settings.voiceEngine;
+  _syncEngineSelects(_voiceEngineControlValue(settings));
+  try { renderNarrationEngineControls(); } catch (_) {}
   // Backend choice is hardware-specific and must never follow an account to a
   // different phone or computer. Remove the legacy synced field and render the
   // device-local override instead.
@@ -1407,6 +1414,8 @@ function _resolveEngineChoice() {
     capability: window._pocketDeviceCapability,
     userAgent: navigator.userAgent || '',
     deviceMemory: Number(navigator.deviceMemory || 0),
+    screenWidth: Number(window.screen?.width || 0),
+    screenHeight: Number(window.screen?.height || 0),
     lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
     storage: localStorage,
   });
@@ -1444,8 +1453,11 @@ function _describeNarrationEngine() {
 function _syncEngineSelects(controlValue) {
   for (const id of ['voice-engine-select', 'reader-engine-select']) {
     const el = document.getElementById(id);
-    // Assigning .value does not fire a change event, so this cannot re-enter.
-    if (el && el.value !== controlValue) el.value = controlValue;
+    // Always assign. Skipping when el.value already matches leaves iOS Safari
+    // showing the previous label on a select that was hidden (the reader
+    // playbar while Settings is open). Assigning .value does not fire change,
+    // so this cannot re-enter the handler.
+    if (el) el.value = controlValue;
   }
 }
 
@@ -1468,6 +1480,10 @@ window.onNarrationEngineSelect = function onNarrationEngineSelect(value) {
   if (window.__pocketNarrationRuntimeLoaded === true) {
     try { window.switchReaderVoiceEngine?.(choice, true); } catch (_) {}
   }
+  // Re-apply after the runtime path: switchReaderVoiceEngine used to collapse
+  // the UI value to stored 'pocket' and leave the reader playbar on Pocket TTS
+  // after the reader picked Kitten in Settings.
+  _syncEngineSelects(choice);
   // Rebuild the reader playbar list in the shell. Waiting for the deferred
   // switchReaderVoiceEngine path left Pocket/Kokoro voices empty until the
   // runtime happened to load and the reader was left and re-entered.
@@ -1598,16 +1614,25 @@ export function renderNarrationEngineControls() {
   // Keep the single Voice Engine select in step, including labelling which
   // engine "Automatic" actually resolves to on THIS device -- the previous
   // wording said "Pocket on this device" everywhere because it was reading a
-  // default rather than the real decision.
+  // default rather than the real decision. The label must use the AUTOMATIC
+  // pick, not `choice.engine`: once a reader overrides to Pocket, `choice`
+  // is Pocket and the Automatic option would then claim Pocket is the default.
+  const autoPick = selectNarrationEngine({
+    override: null,
+    storage: null,
+    capability: window._pocketDeviceCapability || {},
+    userAgent: navigator.userAgent || '',
+    screenWidth: Number(window.screen?.width || 0),
+    screenHeight: Number(window.screen?.height || 0),
+  });
   const select = document.getElementById('voice-engine-select');
   if (select) {
     const autoOption = select.querySelector('option[value="auto"]');
     if (autoOption) {
       const ENGINE_LABELS = { kokoro: 'Kokoro', kitten: 'Kitten', pocket: 'Pocket TTS' };
-      autoOption.textContent = `Automatic - ${ENGINE_LABELS[choice.engine] || 'Pocket TTS'} on this device`;
+      autoOption.textContent = `Automatic - ${ENGINE_LABELS[autoPick.engine] || ENGINE_LABELS[choice.engine] || 'Pocket TTS'} on this device`;
     }
-    const desired = usingWebSpeech ? 'webspeech' : (override || 'auto');
-    if (select.value !== desired) select.value = desired;
+    const desired = _voiceEngineControlValue();
     // The reader playbar shows the same preference and is a different element,
     // so it has to be reconciled from the same source of truth.
     _syncEngineSelects(desired);
@@ -1633,9 +1658,7 @@ export function renderNarrationEngineControls() {
   // choosing a LIGHTER engine than detected is always safe and must not be nagged.
   let warning = '';
   if (!usingWebSpeech && override && !choice.automatic) {
-    const auto = selectNarrationEngine({ override: null, storage: null,
-      capability: window._pocketDeviceCapability || {},
-      userAgent: navigator.userAgent });
+    const auto = autoPick;
     const rank = (e) => NARRATION_ENGINE_TIERS.indexOf(e);
     if (rank(override) > rank(auto.engine)) {
       const heavier = { kokoro: 'Kokoro', pocket: 'Pocket TTS' }[override] || override;
@@ -1714,7 +1737,7 @@ export async function refreshPerfPanel() {
   }
   p.innerHTML = `<ul style="font-size:0.85rem;padding-left:20px;color:var(--text-main);line-height:1.6;">
     <li><b>Neural Engine:</b> ${isNeural
-      ? `<span style="color:var(--accent-green);">Active (${_escapeSettingsHtml(_resolveEngineChoice()?.engine === 'kokoro' ? 'Kokoro-82M' : 'Pocket TTS')})</span>`
+      ? `<span style="color:var(--accent-green);">Active (${_escapeSettingsHtml({ kokoro: 'Kokoro-82M', kitten: 'KittenTTS Nano', pocket: 'Pocket TTS' }[_resolveEngineChoice()?.engine] || 'Pocket TTS')})</span>`
       : 'Inactive'}</li>
     <li><b>Engine State:</b> ${typeof window._neuralState === 'function' ? window._neuralState() : 'idle (loading...)'}</li>
     ${pocketRows}

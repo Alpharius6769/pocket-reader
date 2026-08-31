@@ -152,3 +152,41 @@ test('overriding UPWARD warns; overriding downward does not nag', async () => {
   assert.match(settings, /Heads up:/);
   assert.match(settings, /may stall or the tab may reload/);
 });
+
+test('Settings does not treat stored neural "pocket" as a Pocket TTS selection', async () => {
+  // iPhone 13 field report: detection ran Kitten, but Narration & Playback
+  // showed Pocket TTS, and picking Kitten there did not update the reader.
+  // Cause: settings.voiceEngine is 'pocket' for EVERY neural engine, and
+  // initSettingsUI both wrote that into the dropdown and called
+  // switchReaderVoiceEngine('pocket'), which persisted a Pocket override.
+  const settings = await read('public/assets/js/settings_manager.js');
+  const audio = await read('public/assets/js/audio_core.js');
+  const init = settings.slice(
+    settings.indexOf('export function initSettingsUI()'),
+    settings.indexOf('window.initSettingsUI = initSettingsUI;'),
+  );
+  assert.doesNotMatch(init, /switchReaderVoiceEngine\(settings\.voiceEngine/,
+    'opening Settings must not persist the collapsed neural flag as Pocket TTS');
+  assert.doesNotMatch(init, /el\('voice-engine-select'\)\.value = settings\.voiceEngine/,
+    'the dropdown is auto/kitten/kokoro/pocket, not the stored neural flag');
+  assert.match(init, /_syncEngineSelects\(_voiceEngineControlValue\(settings\)\)/);
+  assert.match(settings, /function _voiceEngineControlValue\(/);
+  assert.match(settings, /readNarrationEngineOverride\(localStorage\) \|\| 'auto'/);
+
+  // Switching Kitten in Settings must land on the reader playbar too.
+  const handler = settings.slice(
+    settings.indexOf('window.onNarrationEngineSelect = function'),
+    settings.indexOf('function _fillWebSpeechVoiceSelector'),
+  );
+  assert.match(handler, /_syncEngineSelects\(choice\)/);
+  assert.match(handler, /window\.syncNarrationControls\(\)/);
+  assert.match(handler, /writeNarrationEngineOverride\(localStorage, choice === 'auto' \? null : choice\)/);
+
+  // A deferred retry used to pass the collapsed 'pocket' value, wiping Kitten.
+  assert.match(audio, /setTimeout\(\(\) => switchReaderVoiceEngine\(controlValue, silent\)/);
+  assert.doesNotMatch(audio, /setTimeout\(\(\) => switchReaderVoiceEngine\(engineVal, silent\)/);
+
+  // The diagnostics line collapsed Kitten into "Pocket TTS".
+  assert.match(settings, /kitten: 'KittenTTS Nano'/);
+  assert.doesNotMatch(settings, /engine === 'kokoro' \? 'Kokoro-82M' : 'Pocket TTS'/);
+});

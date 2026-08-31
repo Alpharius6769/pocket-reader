@@ -4300,14 +4300,22 @@ function _defaultVoiceForEngine(engine) {
   return engine === 'pocket' ? POCKET_DEFAULT_VOICE : '';
 }
 
+function _voiceEngineControlValue() {
+  // settings.voiceEngine is 'pocket' for Kitten, Kokoro, AND Pocket TTS.
+  // The control value is the override (or 'auto') so a Kitten device is not
+  // shown — or persisted — as Pocket TTS.
+  if (window.userProfile?.settings?.voiceEngine === 'webspeech') return 'webspeech';
+  return readNarrationEngineOverride(localStorage) || 'auto';
+}
+
 export function switchReaderVoiceEngine(engineVal, silent = false) {
   if (!engineVal) {
-    engineVal = window.userProfile?.settings?.voiceEngine || 'pocket';
+    engineVal = _voiceEngineControlValue();
   }
   // The single Voice Engine control now carries the neural choice too, because
   // a separate "Narration engine" select said an overlapping thing and left the
-  // reader guessing which one won. 'auto' / 'kokoro' are UI values: both run
-  // the neural path, and which model that means is the narration override.
+  // reader guessing which one won. 'auto' / 'kokoro' / 'kitten' are UI values:
+  // they run the neural path, and which model that means is the narration override.
   if (engineVal === 'auto' || engineVal === 'kokoro'
       || engineVal === 'kitten' || engineVal === 'pocket') {
     writeNarrationEngineOverride(localStorage, engineVal === 'auto' ? null : engineVal);
@@ -4324,16 +4332,19 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
     _selectedVoiceEngineControlValue = 'webspeech';
   }
   if (engineVal !== 'pocket' && engineVal !== 'webspeech') engineVal = 'pocket';
+  const controlValue = _selectedVoiceEngineControlValue || engineVal;
   if (!document.getElementById('voice-selector')) {
-    // If DOM elements aren't ready yet, defer execution to guarantee perfect dropdown synchronization
-    setTimeout(() => switchReaderVoiceEngine(engineVal, silent), 50);
+    // Retry with the UI value, not the collapsed 'pocket' neural flag.
+    // Passing the collapsed value wrote a Pocket override and a Kitten
+    // selection then vanished on the next tick.
+    setTimeout(() => switchReaderVoiceEngine(controlValue, silent), 50);
     return;
   }
 
   if (window.isPlaying && !silent) {
     if (window.virtueSpeak) window.virtueSpeak("Please pause the story first before changing the voice engine.", 4000);
     else window.pocketNotify?.("Pause the story first, then switch the voice engine.", 4000);
-    const prev = window.userProfile?.settings?.voiceEngine || 'pocket';
+    const prev = _voiceEngineControlValue();
     const globalSel = document.getElementById('voice-engine-select');
     if (globalSel) globalSel.value = prev;
     const playbarSel = document.getElementById('reader-engine-select');
@@ -4346,7 +4357,6 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   if (!window.userProfile.settings) window.userProfile.settings = {};
   window.userProfile.settings.voiceEngine = engineVal;
 
-  const controlValue = _selectedVoiceEngineControlValue || engineVal;
   const globalSel = document.getElementById('voice-engine-select');
   if (globalSel) globalSel.value = controlValue;
   const playbarSel = document.getElementById('reader-engine-select');
@@ -4496,11 +4506,7 @@ window.switchReaderVoiceEngine = switchReaderVoiceEngine;
 // voice dropdown. Re-running the same engine resolution on story load fixes it
 // without duplicating the list-building logic.
 window.refreshVoiceSelectorForEngine = function refreshVoiceSelectorForEngine() {
-  const stored = window.userProfile?.settings?.voiceEngine || 'pocket';
-  const control = stored === 'webspeech'
-    ? 'webspeech'
-    : (readNarrationEngineOverride(localStorage) || 'auto');
-  try { switchReaderVoiceEngine(control, true); } catch (_) {}
+  try { switchReaderVoiceEngine(_voiceEngineControlValue(), true); } catch (_) {}
 };
 
 function _populateWebSpeechVoices(selectEl, voices) {

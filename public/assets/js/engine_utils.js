@@ -426,6 +426,8 @@ window._resolveActiveEngine = function _resolveActiveEngine() {
         capability: window._pocketDeviceCapability,
         userAgent: navigator.userAgent || '',
         deviceMemory: Number(navigator.deviceMemory || 0),
+        screenWidth: Number(window.screen?.width || 0),
+        screenHeight: Number(window.screen?.height || 0),
         lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
         storage: localStorage,
       });
@@ -451,6 +453,8 @@ window.getNarrationEngineDecision = function getNarrationEngineDecision() {
       capability: window._pocketDeviceCapability,
       userAgent: navigator.userAgent || '',
       deviceMemory: Number(navigator.deviceMemory || 0),
+      screenWidth: Number(window.screen?.width || 0),
+      screenHeight: Number(window.screen?.height || 0),
       lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
       storage: localStorage,
     });

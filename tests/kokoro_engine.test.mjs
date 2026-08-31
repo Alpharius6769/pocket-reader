@@ -249,7 +249,7 @@ test('Automatic is labelled with the engine actually detected for this device', 
   // Previously hardcoded to Pocket, so it read "Pocket on this device" even on
   // hardware routed to Kokoro.
   assert.match(settings, /const ENGINE_LABELS = \{ kokoro: 'Kokoro', kitten: 'Kitten', pocket: 'Pocket TTS' \}/);
-  assert.match(settings, /ENGINE_LABELS\[choice\.engine\]/);
+  assert.match(settings, /ENGINE_LABELS\[autoPick\.engine\]/);
   assert.match(settings, /Detected: \$\{_escapeSettingsHtml\(choice\.reason/);
 });
 
@@ -681,8 +681,10 @@ test('both engine selects share one handler and stay in sync', async () => {
   // Assigning .value must not re-enter the change handler, so the sync writer
   // must set .value directly and never dispatch an event or call the handler.
   const syncFn = settings.slice(settings.indexOf('function _syncEngineSelects'));
-  const syncBody = syncFn.slice(0, syncFn.indexOf('\n}'));
+  const syncBody = syncFn.slice(0, syncFn.indexOf('window.onNarrationEngineSelect'));
   assert.match(syncBody, /el\.value = controlValue/);
+  assert.doesNotMatch(syncBody, /el\.value !== controlValue/,
+    'skipping an already-matching value leaves iOS showing the stale hidden-select label');
   assert.doesNotMatch(syncBody, /dispatchEvent|onNarrationEngineSelect\(/,
     're-entering the handler from the sync writer would loop the two selects');
 });
