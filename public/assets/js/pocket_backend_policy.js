@@ -1186,17 +1186,27 @@ export const KOKORO_VOICES = Object.freeze([
 export const KOKORO_DEFAULT_VOICE = 'af_heart';
 
 export const KITTEN_MODEL_REVISION = 'kitten-nano-v0.1';
-// KittenTTS publishes no quality grades, so none are invented here.
+// KittenTTS publishes no quality grades, so none are invented here. Trimmed to
+// three per gender to match Kokoro and Pocket: the expr-voice-2 pair came last
+// in the upstream preference order and was the pair carrying no distinct
+// character of its own next to 3, 4 and 5. Both remain in B2 -- this is a
+// picker decision, not a deletion -- so restoring one is a one-line change.
 export const KITTEN_VOICES = Object.freeze([
   { id: 'expr-voice-3-f', label: 'Expr 3 - female, warm',   gender: 'female' },
   { id: 'expr-voice-4-f', label: 'Expr 4 - female, bright', gender: 'female' },
   { id: 'expr-voice-5-f', label: 'Expr 5 - female, soft',   gender: 'female' },
-  { id: 'expr-voice-2-f', label: 'Expr 2 - female, even',   gender: 'female' },
   { id: 'expr-voice-3-m', label: 'Expr 3 - male, warm',     gender: 'male'   },
   { id: 'expr-voice-4-m', label: 'Expr 4 - male, bright',   gender: 'male'   },
   { id: 'expr-voice-5-m', label: 'Expr 5 - male, soft',     gender: 'male'   },
-  { id: 'expr-voice-2-m', label: 'Expr 2 - male, even',     gender: 'male'   },
 ]);
+
+// Retired from the picker but still valid assets. A stored setting naming one
+// must resolve to a live voice rather than reaching the worker as an unknown
+// id, which is the failure that hangs synthesis for 60 seconds.
+export const KITTEN_RETIRED_VOICES = Object.freeze({
+  'expr-voice-2-f': 'expr-voice-3-f',
+  'expr-voice-2-m': 'expr-voice-3-m',
+});
 export const KITTEN_DEFAULT_VOICE = 'expr-voice-3-f';
 
 export function isKittenVoice(voiceId) {
@@ -1231,8 +1241,17 @@ export function isVoiceValidForEngine(engine, voiceId) {
 
 // Returns a voice that is definitely valid for the engine: the current one when
 // it belongs, otherwise that engine's default.
+export function migrateRetiredVoice(engine, voiceId) {
+  if (engine !== KITTEN_ENGINE) return voiceId;
+  return KITTEN_RETIRED_VOICES[String(voiceId || '').toLowerCase().trim()] || voiceId;
+}
+
 export function coerceVoiceForEngine(engine, voiceId) {
-  return isVoiceValidForEngine(engine, voiceId) ? voiceId : defaultVoiceForEngine(engine);
+  // Try the retirement map before falling back to the engine default: a reader
+  // who picked expr-voice-2-f should land on its nearest surviving sibling, not
+  // be silently reset to whatever the engine happens to default to.
+  const migrated = migrateRetiredVoice(engine, voiceId);
+  return isVoiceValidForEngine(engine, migrated) ? migrated : defaultVoiceForEngine(engine);
 }
 
 export function isKokoroVoice(voiceId) {

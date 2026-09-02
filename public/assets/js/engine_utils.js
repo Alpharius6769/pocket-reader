@@ -4,7 +4,7 @@ import {
   isMobileLikePlatform,
   selectNarrationEngine,
   NARRATION_ENGINE_TIERS,
-} from './pocket_backend_policy.js?v=backend-v29';
+} from './pocket_backend_policy.js?v=backend-v31';
 
 const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 2) : 2;
 // Routed through the shared platform helper so a stock iPad — which reports a
@@ -17,14 +17,19 @@ window.HARD_CAP_WORKERS   = _isMobileDevice ? 1 : Math.min(4, Math.max(1, Math.f
 window.MANUAL_CAP_WORKERS = _isMobileDevice ? 2 : Math.min(8, Math.max(1, Math.floor(_prLogicalCores * 0.75)));
 window.DEFAULT_MAX_WORKERS = window.HARD_CAP_WORKERS;
 
-const VOICE_ZERO_PRIMARY_EMOTIONS = ['neutral', 'calm', 'happy', 'sad', 'worried', 'surprised', 'tired', 'frustrated'];
-const VOICE_ZERO_GATED_EMOTIONS = ['anger', 'excited', 'enthused', 'shout'];
-const VOICE_ZERO_EXTRA_EMOTIONS = ['confused'];
-const VOICE_ZERO_ALL_EMOTIONS = [...VOICE_ZERO_PRIMARY_EMOTIONS, ...VOICE_ZERO_GATED_EMOTIONS, ...VOICE_ZERO_EXTRA_EMOTIONS];
+// The emotion vocabulary the narration router can ask for. Kept as the full
+// space even though every shipped voice is currently a single neutral
+// reference: the router picks an emotion from the prose either way, and the
+// per-voice fallback map is what decides where that lands. Shrinking this to
+// ['neutral'] would delete the routing, not simplify it.
+const POCKET_PRIMARY_EMOTIONS = ['neutral', 'calm', 'happy', 'sad', 'worried', 'surprised', 'tired', 'frustrated'];
+const POCKET_GATED_EMOTIONS = ['anger', 'excited', 'enthused', 'shout'];
+const POCKET_EXTRA_EMOTIONS = ['confused'];
+const POCKET_ALL_EMOTIONS = [...POCKET_PRIMARY_EMOTIONS, ...POCKET_GATED_EMOTIONS, ...POCKET_EXTRA_EMOTIONS];
 
-const VOICE_ZERO_BASE_URL = 'https://github.com/OwenTyme/voice-zero';
-const VOICE_ZERO_EMOTION_URL = `${VOICE_ZERO_BASE_URL}/tree/main/voices-emotion`;
-
+// The general emotion fallback graph: where each state degrades to when a voice
+// has no reference built for it. Unused while every voice is neutral-only, and
+// kept because it is the contract a multi-state voice would rejoin.
 const baseFallbacks = {
   neutral: 'neutral',
   calm: 'neutral',
@@ -41,206 +46,59 @@ const baseFallbacks = {
   shout: 'surprised'
 };
 
-// Rayne has one built state, so every emotion the router picks must land on
-// neutral rather than on a state with no file behind it.
-const RAYNE_NEUTRAL_ONLY_FALLBACKS = Object.freeze(
-  Object.fromEntries(VOICE_ZERO_ALL_EMOTIONS.map((emotion) => [emotion, 'neutral'])),
+// Every Kyutai voice is a single official reference recording, so an emotion
+// the router picks must land on neutral rather than on a state with no file
+// behind it. Requesting a missing state is what makes the worker fetch a 404
+// and stall, so this is a correctness contract, not a nicety.
+const NEUTRAL_ONLY_FALLBACKS = Object.freeze(
+  Object.fromEntries(POCKET_ALL_EMOTIONS.map((emotion) => [emotion, 'neutral'])),
 );
 
-window.POCKET_DEFAULT_VOICE = 'donald_malone';
+// Three male and three female, all from Kyutai's own catalog.
+//
+// What was removed and why: the six Voice-Zero voices and the personal Rayne
+// clone are gone at the product's request. Worth recording honestly, because it
+// is not free -- the Voice-Zero six were the ONLY voices with real multi-state
+// emotion references built in B2 (donald_malone_happy, _sad, _anger and friends
+// all resolve; alba_happy does not). With them gone, expressiveness has to come
+// from synthesis-time control rather than from swapping reference packs, which
+// is the only approach that could ever have worked across Kokoro and Kitten
+// anyway: Kokoro indexes a (510, 1, 256) style table by token count and Kitten
+// carries one 256-float vector, and neither has an emotion axis to swap.
+//
+// The accent spread is deliberate: one English and two American per gender, so
+// a listener has a real choice rather than three takes on the same voice.
+// Kyutai's `jane` and `michael` were the two dropped -- both English VCTK reads
+// that duplicated Alba's and Charles's accent with weaker provenance, and
+// `michael` additionally collided by display name with Kokoro's am_michael,
+// which would have put two different "Michael" voices in one picker.
+window.POCKET_DEFAULT_VOICE = 'alba';
 window.POCKET_DEFAULT_EMOTION = 'neutral';
 window.POCKET_VOICE_PACK = {
-  id: 'voice-zero-emotional-v1',
-  title: 'Voice-Zero Emotional Pack',
-  sourceRepository: VOICE_ZERO_BASE_URL,
-  license: 'CC0 unless otherwise noted by Voice-Zero',
+  id: 'kyutai-curated-v1',
+  title: 'Kyutai Pocket TTS Voices',
+  sourceRepository: 'https://github.com/kyutai-labs/pocket-tts',
+  license: 'CC BY 4.0 via Kyutai TTS voices',
   defaultVoice: window.POCKET_DEFAULT_VOICE,
   defaultEmotion: window.POCKET_DEFAULT_EMOTION,
-  primaryEmotions: VOICE_ZERO_PRIMARY_EMOTIONS,
-  gatedEmotions: VOICE_ZERO_GATED_EMOTIONS,
-  extraEmotions: VOICE_ZERO_EXTRA_EMOTIONS,
+  primaryEmotions: POCKET_PRIMARY_EMOTIONS,
+  gatedEmotions: POCKET_GATED_EMOTIONS,
+  extraEmotions: POCKET_EXTRA_EMOTIONS,
   voices: [
-    {
-      id: 'donald_malone',
-      displayName: 'Donald Malone',
-      gender: 'male',
-      accent: 'American, Midwestern',
-      recommended: true,
-      recommendedUse: 'Default male narrator; calm long-form narration and broad emotional coverage.',
-      sourceName: 'Donald Malone',
-      sourceFolder: 'donald_malone',
-      sourceUrl: `${VOICE_ZERO_EMOTION_URL}/donald_malone`,
-      originUrl: 'https://librivox.org/short-poetry-collection-204-by-various/',
-      license: 'CC0 via Voice-Zero',
-      availableEmotions: VOICE_ZERO_ALL_EMOTIONS,
-      fallbackEmotions: baseFallbacks
-    },
-    {
-      id: 'bill_boerst',
-      displayName: 'Bill Boerst',
-      gender: 'male',
-      accent: 'American',
-      recommended: true,
-      recommendedUse: 'Warm alternate male voice for narration and dialogue-heavy stories.',
-      sourceName: 'Bill Boerst',
-      sourceFolder: 'bill_boerst',
-      sourceUrl: `${VOICE_ZERO_EMOTION_URL}/bill_boerst`,
-      originUrl: 'https://librivox.org/',
-      license: 'CC0 via Voice-Zero',
-      availableEmotions: VOICE_ZERO_ALL_EMOTIONS,
-      fallbackEmotions: baseFallbacks
-    },
-    {
-      id: 'jason_mayoff',
-      displayName: 'Jason Mayoff',
-      gender: 'male',
-      accent: 'American',
-      recommended: false,
-      recommendedUse: 'Clear, serious male voice for tense scenes and grounded narration.',
-      sourceName: 'Jason Mayoff',
-      sourceFolder: 'jason_mayoff',
-      sourceUrl: `${VOICE_ZERO_EMOTION_URL}/jason_mayoff`,
-      originUrl: 'https://librivox.org/',
-      license: 'CC0 via Voice-Zero',
-      availableEmotions: VOICE_ZERO_ALL_EMOTIONS,
-      fallbackEmotions: baseFallbacks
-    },
-    {
-      id: 'kristin_hughes',
-      displayName: 'Kristin Hughes',
-      gender: 'female',
-      accent: 'American, Iowa',
-      recommended: true,
-      recommendedUse: 'Default female narrator; clean long-form tone and stable emotion references.',
-      sourceName: 'Kristin Hughes',
-      sourceFolder: 'kristin_hughes',
-      sourceUrl: `${VOICE_ZERO_EMOTION_URL}/kristin_hughes`,
-      originUrl: 'https://librivox.org/',
-      license: 'CC0 via Voice-Zero',
-      availableEmotions: VOICE_ZERO_ALL_EMOTIONS,
-      fallbackEmotions: baseFallbacks
-    },
-    {
-      id: 'jodi_krangle_expressive',
-      displayName: 'Jodi Krangle Expressive',
-      gender: 'female',
-      accent: 'American',
-      recommended: true,
-      recommendedUse: 'Expressive female voice for dialogue, companion lines, and emotional passages.',
-      sourceName: 'Jodi Krangle',
-      sourceFolder: 'jodi_krangle-expressive',
-      sourceUrl: `${VOICE_ZERO_EMOTION_URL}/jodi_krangle-expressive`,
-      originUrl: 'https://librivox.org/short-science-fiction-collection-vol-002/',
-      license: 'CC0 via Voice-Zero',
-      availableEmotions: VOICE_ZERO_ALL_EMOTIONS,
-      fallbackEmotions: baseFallbacks
-    },
-    {
-      id: 'karen_savage',
-      displayName: 'Karen Savage',
-      gender: 'female',
-      accent: 'American',
-      recommended: false,
-      recommendedUse: 'Polished female narrator for steady audiobook-style delivery.',
-      sourceName: 'Karen Savage',
-      sourceFolder: 'karen_savage',
-      sourceUrl: `${VOICE_ZERO_EMOTION_URL}/karen_savage`,
-      originUrl: 'https://librivox.org/',
-      license: 'CC0 via Voice-Zero',
-      availableEmotions: VOICE_ZERO_ALL_EMOTIONS,
-      fallbackEmotions: baseFallbacks
-    },
-    // Kyutai Pocket TTS catalog. Each is a single official reference, so
-    // emotion routing must land on neutral — the same contract as Rayne.
     {
       id: 'alba',
       displayName: 'Alba',
       gender: 'female',
       accent: 'English',
       recommended: true,
-      recommendedUse: 'Kyutai default female voice; professional acted narration.',
+      recommendedUse: 'Default narrator; professional acted delivery and the steadiest over long chapters.',
       sourceName: 'Alba MacKenna',
       sourceFolder: 'alba-mackenna',
       sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/alba-mackenna/casual.wav',
       originUrl: 'https://github.com/kyutai-labs/pocket-tts',
       license: 'CC BY 4.0 via Kyutai TTS voices',
       availableEmotions: ['neutral'],
-      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
-    },
-    {
-      id: 'jane',
-      displayName: 'Jane',
-      gender: 'female',
-      accent: 'English',
-      recommended: true,
-      recommendedUse: 'Kyutai demo female voice; clean VCTK enhanced reference.',
-      sourceName: 'VCTK p339',
-      sourceFolder: 'vctk',
-      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p339_023_enhanced.wav',
-      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
-      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
-    },
-    {
-      id: 'charles',
-      displayName: 'Charles',
-      gender: 'male',
-      accent: 'English',
-      recommended: true,
-      recommendedUse: 'Kyutai catalog male voice; clean VCTK enhanced reference.',
-      sourceName: 'VCTK p254',
-      sourceFolder: 'vctk',
-      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p254_023_enhanced.wav',
-      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
-      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
-    },
-    {
-      id: 'michael',
-      displayName: 'Michael',
-      gender: 'male',
-      accent: 'English',
-      recommended: true,
-      recommendedUse: 'Kyutai catalog male voice; clean VCTK enhanced reference.',
-      sourceName: 'VCTK p360',
-      sourceFolder: 'vctk',
-      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p360_023_enhanced.wav',
-      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
-      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
-    },
-    {
-      id: 'george',
-      displayName: 'George',
-      gender: 'male',
-      accent: 'American, New England',
-      recommended: true,
-      recommendedUse: 'Kyutai catalog American male; clean VCTK enhanced reference.',
-      sourceName: 'VCTK p315',
-      sourceFolder: 'vctk',
-      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p315_023_enhanced.wav',
-      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
-      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
-    },
-    {
-      id: 'noah',
-      displayName: 'Noah',
-      gender: 'male',
-      accent: 'American, Florida',
-      recommended: true,
-      recommendedUse: 'Kyutai VCTK American male; clean enhanced reference.',
-      sourceName: 'VCTK p345',
-      sourceFolder: 'vctk',
-      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p345_023_enhanced.wav',
-      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
-      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
     },
     {
       id: 'mary',
@@ -248,14 +106,14 @@ window.POCKET_VOICE_PACK = {
       gender: 'female',
       accent: 'American, Indiana',
       recommended: true,
-      recommendedUse: 'Kyutai catalog American female; clean VCTK enhanced reference.',
+      recommendedUse: 'American female narrator; clean midwestern read.',
       sourceName: 'VCTK p333',
       sourceFolder: 'vctk',
       sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p333_023_enhanced.wav',
       originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
       license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
       availableEmotions: ['neutral'],
-      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
     },
     {
       id: 'eve',
@@ -263,59 +121,124 @@ window.POCKET_VOICE_PACK = {
       gender: 'female',
       accent: 'American, New Jersey',
       recommended: true,
-      recommendedUse: 'Kyutai catalog American female; clean VCTK enhanced reference.',
+      recommendedUse: 'American female narrator; brighter east-coast read.',
       sourceName: 'VCTK p361',
       sourceFolder: 'vctk',
       sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p361_023_enhanced.wav',
       originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
       license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
       availableEmotions: ['neutral'],
-      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
     },
-    // Project-owned personal clone. Unlike the Voice-Zero six this has no
-    // upstream: the reference material is maintainer-held and only the neutral
-    // state has been built, so availableEmotions is the single entry and every
-    // routed emotion resolves back to it. Two things were wrong here:
-    // sourceUrl held a local directory path in a field that is a URL
-    // everywhere else, and the full baseFallbacks map implied emotion states
-    // that do not exist. RAYNE_NEUTRAL_ONLY_FALLBACKS says the true thing.
     {
-      id: 'rayne',
-      displayName: 'Rayne (Personal)',
-      gender: 'female',
-      accent: 'Personal Clone',
-      recommended: false,
-      recommendedUse: 'Custom user-cloned voice. Neutral delivery only.',
-      sourceName: 'Rayne',
-      sourceFolder: 'rayne',
-      sourceUrl: null,
-      originUrl: null,
-      license: 'Project-owned (see ATTRIBUTIONS.md)',
+      id: 'charles',
+      displayName: 'Charles',
+      gender: 'male',
+      accent: 'English',
+      recommended: true,
+      recommendedUse: 'Default male narrator; measured English read.',
+      sourceName: 'VCTK p254',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p254_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
       availableEmotions: ['neutral'],
-      fallbackEmotions: RAYNE_NEUTRAL_ONLY_FALLBACKS
+      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
+    },
+    {
+      id: 'george',
+      displayName: 'George',
+      gender: 'male',
+      accent: 'American, New England',
+      recommended: true,
+      recommendedUse: 'American male narrator; warmer new-england read.',
+      sourceName: 'VCTK p315',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p315_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
+      availableEmotions: ['neutral'],
+      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
+    },
+    {
+      id: 'noah',
+      displayName: 'Noah',
+      gender: 'male',
+      accent: 'American, Florida',
+      recommended: true,
+      recommendedUse: 'American male narrator; younger southern read.',
+      sourceName: 'VCTK p345',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p345_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
+      availableEmotions: ['neutral'],
+      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
     }
   ]
 };
 
+// Voices retired from the picker. Kept ONLY so a stored setting naming one can
+// be recognised as retired and migrated to a live voice, rather than being
+// handed to the worker as an unknown id -- which is what previously resolved to
+// a Pocket voice pack that does not exist and hung for 60 s on every attempt.
+window.POCKET_RETIRED_VOICES = Object.freeze([
+  'donald_malone', 'bill_boerst', 'jason_mayoff',
+  'kristin_hughes', 'jodi_krangle_expressive', 'karen_savage',
+  'jane', 'michael', 'rayne',
+]);
+
 window.POCKET_VOICES = window.POCKET_VOICE_PACK.voices.map((voice) => voice.id);
+// Every alias resolves to a voice that EXISTS. This map used to point the older
+// nicknames at the Voice-Zero six, and leaving it that way through their removal
+// would have been the worst possible outcome: canonicalPocketVoice returns an
+// alias hit directly, so `rob` would have resolved to a retired id, reached the
+// worker as an unknown voice, and hung for 60 s -- the exact failure the voice
+// contract exists to prevent. A stale alias is worse than no alias.
+//
+// Retired ids are aliased too, so a reader whose stored setting names a removed
+// voice is migrated to the closest LIVE one of the same gender rather than
+// having everyone silently collapse onto the default.
 window.POCKET_VOICE_ALIASES = {
-  rob: 'donald_malone',
-  dan: 'bill_boerst',
-  caden: 'bill_boerst',
-  dave: 'jason_mayoff',
-  ian: 'jason_mayoff',
-  jodi: 'jodi_krangle_expressive',
-  'jodi_krangle-expressive': 'jodi_krangle_expressive',
-  reeses: 'karen_savage',
-  stephanie: 'kristin_hughes',
-  vd: 'kristin_hughes',
-  christine: 'karen_savage'
+  // Legacy nicknames.
+  rob: 'charles',
+  dan: 'george',
+  caden: 'george',
+  dave: 'noah',
+  ian: 'noah',
+  jodi: 'alba',
+  'jodi_krangle-expressive': 'alba',
+  reeses: 'eve',
+  stephanie: 'mary',
+  vd: 'mary',
+  christine: 'eve',
+  // Retired Voice-Zero voices, migrated by gender.
+  donald_malone: 'charles',
+  bill_boerst: 'george',
+  jason_mayoff: 'noah',
+  kristin_hughes: 'mary',
+  jodi_krangle_expressive: 'alba',
+  karen_savage: 'eve',
+  // Retired Kyutai duplicates and the personal clone.
+  jane: 'alba',
+  michael: 'charles',
+  rayne: 'alba'
 };
 window.POCKET_VOICE_ASSET_IDS = [];
 window.POCKET_VOICE_PACK.voices.forEach((voice) => {
-  (voice.availableEmotions || VOICE_ZERO_ALL_EMOTIONS).forEach((emotion) => {
+  (voice.availableEmotions || POCKET_ALL_EMOTIONS).forEach((emotion) => {
     window.POCKET_VOICE_ASSET_IDS.push(`${voice.id}_${emotion}`);
   });
+});
+
+// Guard rather than trust. The map above is hand-maintained and its whole job
+// is to never emit a dead id, so a future edit that reintroduces one should
+// fail loudly here instead of silently at the worker 60 seconds later.
+Object.entries(window.POCKET_VOICE_ALIASES).forEach(([from, to]) => {
+  if (!window.POCKET_VOICES.includes(to)) {
+    console.error(`Pocket voice alias ${from} -> ${to} names a voice that does not exist.`);
+    delete window.POCKET_VOICE_ALIASES[from];
+  }
 });
 
 function _cleanPocketToken(value) {
@@ -329,8 +252,11 @@ function _voiceById(id) {
 window.canonicalPocketVoice = function canonicalPocketVoice(voiceName) {
   const token = _cleanPocketToken(voiceName || window.POCKET_DEFAULT_VOICE);
   if (window.POCKET_VOICE_ASSET_IDS.includes(token)) return token;
+  // Belt and braces with the startup guard above: an alias is only honoured
+  // when it names a live voice, so no path can return an id the worker cannot
+  // load however the map is edited later.
   const alias = window.POCKET_VOICE_ALIASES[token];
-  if (alias) return alias;
+  if (alias && window.POCKET_VOICES.includes(alias)) return alias;
   if (window.POCKET_VOICES.includes(token)) return token;
   const assetMatch = token.match(/^(.+)_(neutral|calm|happy|sad|worried|surprised|tired|frustrated|anger|excited|enthused|shout|confused)$/);
   if (assetMatch) {

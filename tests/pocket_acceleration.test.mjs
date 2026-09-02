@@ -168,7 +168,7 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(audio, /wasmReferenceRtf: _pocketBackendRuntime\.wasmReferenceRtf/);
   // Full ?v= form on purpose: a bare version string is invisible to
   // check_module_versions.mjs, so this pin silently rotted past a bump.
-  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v74/);
+  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v75/);
   assert.match(worker, /wasmReferenceRtf/);
   assert.match(worker, /releaseAllSessions/);
   assert.match(worker, /wasm_rtf_sample/);
@@ -214,12 +214,12 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
   assert.match(serviceWorker, /pocket-reader-core-v\d+/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v165/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v167/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
-  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v74/);
-  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v29/);
-  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v20/);
+  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v75/);
+  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v31/);
+  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v21/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
   const shell = await read('public/index.html');
   const swRevision = serviceWorker.match(/pocket-reader-core-v(\d+)/)?.[1];

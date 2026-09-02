@@ -29,13 +29,17 @@ test('fast-narration reload saves the real active view, once', async () => {
   assert.match(buffer, /if \(!sessionStorage\.getItem\('POCKET_PRE-RELOAD_VIEW'\)\)/);
 });
 
-test('voice migration targets the real old default and uses a fresh flag', async () => {
+test('retired voices migrate by alias, not by one-shot localStorage flags', async () => {
   const library = await read('public/assets/js/library_manager.js');
-  // The previous default was rayne; migrate to donald_malone (the default
-  // voice), gated by a NEW flag so already-run clients migrate cleanly.
-  assert.match(library, /settings\.pocketVoice === 'rayne'/);
-  assert.match(library, /pr_voice_migrated_to_donald_malone_v3/);
-  assert.match(library, /settings\.pocketVoice = 'donald_malone'/);
+  // The bespoke rayne -> donald_malone migration is gone, and was deliberately
+  // not replaced with donald_malone -> alba. A chain of one-shot migrations,
+  // each gated on its own flag, only ever reaches a reader who happened to
+  // launch the app inside that release window; anyone who did not is stranded
+  // on a dead id forever. POCKET_VOICE_ALIASES runs on every load instead.
+  assert.doesNotMatch(library, /pr_voice_migrated_to_donald_malone_v3/);
+  assert.doesNotMatch(library, /settings\.pocketVoice = 'donald_malone'/);
+  assert.match(library, /canonicalPocketVoice/,
+    'the per-load alias resolver is what replaces the one-shot migration');
 });
 
 test('silent (preventNavigate) loads never navigate, overlay, or alert', async () => {

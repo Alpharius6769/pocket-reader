@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v21';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v22';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -52,7 +52,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v29';
+} from './pocket_backend_policy.js?v=backend-v31';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -123,7 +123,7 @@ function _setNeuralState(nextState) {
 
 // ── Voice lists and normalization layer ──────────────────────────────────────
 const POCKET_VOICES = window.POCKET_VOICES || [];
-const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'donald_malone';
+const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'alba';
 const POCKET_SAFE_EMOTIONS = ['neutral', 'calm', 'happy', 'sad', 'worried', 'surprised', 'tired', 'frustrated'];
 const POCKET_GATED_EMOTIONS = ['anger', 'excited', 'enthused', 'shout'];
 const POCKET_ALL_EMOTIONS = [...POCKET_SAFE_EMOTIONS, ...POCKET_GATED_EMOTIONS, 'confused'];
@@ -1402,7 +1402,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v20',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v9',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v74',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v75',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,

@@ -1,5 +1,5 @@
 import { animate, stagger } from './motion_lite.js';
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v29';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v31';
 import {
   DEFAULT_POCKET_PLAYBACK_SPEED,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -193,19 +193,17 @@ function normalizeCompanionSetting(profile) {
 function normalizePocketVoiceSetting(profile) {
   const settings = profile?.settings;
   if (!settings || typeof settings !== 'object') return;
-  const defaultVoice = window.POCKET_DEFAULT_VOICE || 'donald_malone';
+  const defaultVoice = window.POCKET_DEFAULT_VOICE || 'alba';
   const voices = window.POCKET_VOICES || [];
-  // One-time migration to the default voice (donald_malone). The previous default
-  // was 'rayne', and normalizePocketVoiceSetting always writes the
-  // resolved default back into settings.pocketVoice. Only migrate profiles that are still on that old
-  // default (never a voice the user deliberately picked). Gated by
-  // 'pr_voice_migrated_to_donald_malone_v3' on first run.
-  if ((settings.pocketVoice === 'rayne' || !settings.pocketVoice)
-      && typeof localStorage !== 'undefined'
-      && !localStorage.getItem('pr_voice_migrated_to_donald_malone_v3')) {
-    settings.pocketVoice = 'donald_malone';
-    localStorage.setItem('pr_voice_migrated_to_donald_malone_v3', 'true');
-  }
+  // The bespoke 'rayne' -> 'donald_malone' migration that used to sit here is
+  // gone, and deliberately not replaced with a 'donald_malone' -> 'alba' one.
+  // Both of those voices are retired now, and a chain of one-shot migrations
+  // gated on their own localStorage flags only works for a reader who launched
+  // the app during each window. POCKET_VOICE_ALIASES maps every retired id to a
+  // live voice of the same gender, and canonicalPocketVoice() below runs it on
+  // every load, so a profile parked on any retired voice -- for however long --
+  // lands somewhere sensible rather than on whatever the default happens to be.
+
   const canonical = typeof window.canonicalPocketVoice === 'function'
     ? window.canonicalPocketVoice(settings.pocketVoice || defaultVoice)
     : String(settings.pocketVoice || defaultVoice).toLowerCase().trim();
@@ -454,7 +452,7 @@ function _defaultProfile() {
     displayName: "Guest Reader",
     settings: {
       voiceEngine: "pocket",
-      pocketVoice: window.POCKET_DEFAULT_VOICE || "donald_malone",
+      pocketVoice: window.POCKET_DEFAULT_VOICE || "alba",
       speed: DEFAULT_POCKET_PLAYBACK_SPEED,
       expressiveProsody: true,
       pausePunctuation: true,

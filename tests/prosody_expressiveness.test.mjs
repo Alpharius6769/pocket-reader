@@ -195,36 +195,82 @@ test('the emotion detector is inspectable from outside the module', async () => 
   assert.match(source, /window\.inspectPocketEmotion\s*=/);
 });
 
-test('Rayne is honestly declared as neutral-only', async () => {
-  // Only rayne_neutral.safetensors exists in B2; every other voice has 13
-  // references. Declaring emotions Rayne does not have would resolve to asset
-  // IDs that 404 rather than making it expressive.
-  const source = await read('public/assets/js/engine_utils.js');
-  const rayne = source.match(/id: 'rayne',[\s\S]*?\}/)?.[0] || '';
-  assert.match(rayne, /availableEmotions: \['neutral'\]/,
-    'Rayne must not claim emotions it has no reference audio for');
+test('the retired voices are gone from every surface, not just the picker', async () => {
+  // Voice-Zero and the personal clone were removed at the product's request.
+  // A leftover mention in a shipped list is not cosmetic: an id that reaches
+  // the worker without a voice pack behind it hangs synthesis for 60 seconds.
+  const engineUtils = await read('public/assets/js/engine_utils.js');
+  const shell = await read('public/index.html');
+  const retired = ['donald_malone', 'bill_boerst', 'jason_mayoff',
+                   'kristin_hughes', 'jodi_krangle_expressive', 'karen_savage', 'rayne'];
+  const pack = engineUtils.slice(
+    engineUtils.indexOf('window.POCKET_VOICE_PACK = {'),
+    engineUtils.indexOf('window.POCKET_RETIRED_VOICES'),
+  );
+  for (const id of retired) {
+    assert.doesNotMatch(pack, new RegExp(`id: '${id}'`), `${id} must not be a shipped voice`);
+    assert.doesNotMatch(shell, new RegExp(`<option value="${id}"`), `${id} must not be selectable`);
+  }
 });
 
-test('Kyutai catalog voices are wired as official narrators, each neutral-only', async () => {
+test('Pocket ships three female and three male Kyutai voices, each neutral-only', async () => {
   const source = await read('public/assets/js/engine_utils.js');
-  for (const id of ['alba', 'jane', 'charles', 'michael', 'george', 'noah', 'mary', 'eve']) {
-    const block = source.match(new RegExp(`id: '${id}',[\\s\\S]*?\\n    \\}`))?.[0] || '';
+  const expected = {
+    alba: ['female', 'English'],
+    mary: ['female', 'American, Indiana'],
+    eve: ['female', 'American, New Jersey'],
+    charles: ['male', 'English'],
+    george: ['male', 'American, New England'],
+    noah: ['male', 'American, Florida'],
+  };
+  const pack = source.slice(
+    source.indexOf('window.POCKET_VOICE_PACK = {'),
+    source.indexOf('window.POCKET_RETIRED_VOICES'),
+  );
+  const ids = [...pack.matchAll(/id: '([a-z_]+)'/g)].map((m) => m[1]);
+  assert.deepEqual(ids.sort(), Object.keys(expected).sort(), 'exactly the curated six');
+
+  for (const [id, [gender, accent]] of Object.entries(expected)) {
+    const block = pack.match(new RegExp(`id: '${id}',[\\s\\S]*?\\n    \\}`))?.[0] || '';
     assert.match(block, /availableEmotions: \['neutral'\]/,
       `${id} must not claim emotion states Kyutai did not ship`);
-    assert.match(block, /gender: '(male|female)'/);
+    assert.match(block, new RegExp(`gender: '${gender}'`));
+    assert.match(block, new RegExp(`accent: '${accent}'`));
   }
-  assert.match(source, /id: 'alba',[\s\S]*?gender: 'female'/);
-  assert.match(source, /id: 'jane',[\s\S]*?gender: 'female'/);
-  assert.match(source, /id: 'charles',[\s\S]*?gender: 'male'/);
-  assert.match(source, /id: 'michael',[\s\S]*?gender: 'male'/);
-  assert.match(source, /id: 'george',[\s\S]*?gender: 'male'/);
-  assert.match(source, /id: 'noah',[\s\S]*?gender: 'male'/);
-  assert.match(source, /id: 'mary',[\s\S]*?gender: 'female'/);
-  assert.match(source, /id: 'eve',[\s\S]*?gender: 'female'/);
-  assert.match(source, /id: 'george',[\s\S]*?accent: 'American, New England'/);
-  assert.match(source, /id: 'noah',[\s\S]*?accent: 'American, Florida'/);
-  assert.match(source, /id: 'mary',[\s\S]*?accent: 'American, Indiana'/);
-  assert.match(source, /id: 'eve',[\s\S]*?accent: 'American, New Jersey'/);
+  const genders = [...pack.matchAll(/gender: '(male|female)'/g)].map((m) => m[1]);
+  assert.equal(genders.filter((g) => g === 'female').length, 3);
+  assert.equal(genders.filter((g) => g === 'male').length, 3);
+});
+
+test('every retired voice migrates to a LIVE voice of the same gender', async () => {
+  // The alias map used to point the old nicknames at the Voice-Zero six.
+  // Leaving it that way through their removal would have been worse than
+  // deleting it: canonicalPocketVoice returns an alias hit directly, so the
+  // lookup would have produced a retired id and stalled the worker.
+  const source = await read('public/assets/js/engine_utils.js');
+  const aliases = source.slice(
+    source.indexOf('window.POCKET_VOICE_ALIASES = {'),
+    source.indexOf('window.POCKET_VOICE_ASSET_IDS = []'),
+  );
+  const female = ['alba', 'mary', 'eve'];
+  const male = ['charles', 'george', 'noah'];
+  const live = [...female, ...male];
+  const pairs = [...aliases.matchAll(/([a-z_'-]+):\s*'([a-z_]+)'/g)]
+    .map((m) => [m[1].replace(/'/g, ''), m[2]]);
+  assert.ok(pairs.length >= 15, 'every retired id needs an alias, not just the nicknames');
+  for (const [from, to] of pairs) {
+    assert.ok(live.includes(to), `alias ${from} -> ${to} must name a live voice`);
+  }
+  const by = Object.fromEntries(pairs);
+  for (const id of ['kristin_hughes', 'jodi_krangle_expressive', 'karen_savage', 'jane', 'rayne']) {
+    assert.ok(female.includes(by[id]), `${id} was female and must stay female (got ${by[id]})`);
+  }
+  for (const id of ['donald_malone', 'bill_boerst', 'jason_mayoff', 'michael']) {
+    assert.ok(male.includes(by[id]), `${id} was male and must stay male (got ${by[id]})`);
+  }
+  // And the resolver refuses an alias that does not name a live voice, however
+  // the map is edited later.
+  assert.match(source, /if \(alias && window\.POCKET_VOICES\.includes\(alias\)\) return alias;/);
 });
 
 test('high-end Pocket TTS uses four LSD steps instead of the 1-step grain path', async () => {
@@ -238,15 +284,24 @@ test('high-end Pocket TTS uses four LSD steps instead of the 1-step grain path',
   assert.doesNotMatch(config, /isPocketDeviceMemorySafeMode/);
 });
 
-test('Donald Malone is the configured default voice across the engine', async () => {
+test('Alba is the configured default voice across the engine', async () => {
+  // Every module-load fallback has to name a voice that still exists. These
+  // literals are what run before engine_utils has set window.POCKET_DEFAULT_VOICE,
+  // so one left on a retired id is a real 60-second worker stall, not a typo.
   const engineUtils = await read('public/assets/js/engine_utils.js');
-  assert.match(engineUtils, /window\.POCKET_DEFAULT_VOICE = 'donald_malone'/);
+  assert.match(engineUtils, /window\.POCKET_DEFAULT_VOICE = 'alba'/);
 
-  const audioCore = await read('public/assets/js/audio_core.js');
-  assert.match(audioCore, /const POCKET_DEFAULT_VOICE = window\.POCKET_DEFAULT_VOICE \|\| 'donald_malone'/);
+  for (const rel of ['public/assets/js/audio_core.js', 'public/assets/js/buffer_manager.js']) {
+    assert.match(await read(rel), /const POCKET_DEFAULT_VOICE = window\.POCKET_DEFAULT_VOICE \|\| 'alba'/, rel);
+  }
 
   const library = await read('public/assets/js/library_manager.js');
-  assert.match(library, /const defaultVoice = window\.POCKET_DEFAULT_VOICE \|\| 'donald_malone'/);
+  assert.match(library, /const defaultVoice = window\.POCKET_DEFAULT_VOICE \|\| 'alba'/);
+  assert.match(library, /pocketVoice: window\.POCKET_DEFAULT_VOICE \|\| "alba"/);
+
+  const ui = await read('public/assets/js/ui_controller.js');
+  assert.match(ui, /narratorPref === 'Male' \? 'charles' : 'alba'/,
+    'the narrator gender preference must pick from the live catalog');
 });
 
 test('getPocketTuningPreset allows expressive temperature tuning without forced fallback', async () => {
