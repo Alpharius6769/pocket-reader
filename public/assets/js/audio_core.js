@@ -25,6 +25,7 @@ import {
   KITTEN_ENGINE,
   voicesForEngine,
   coerceVoiceForEngine,
+  NARRATION_ENGINE_TIERS,
   KOKORO_VOICES,
   KOKORO_DEFAULT_VOICE,
   recommendedWasmThreadCount,
@@ -1827,7 +1828,7 @@ async function _loadPocketEngine() {
       _engineReadyResolve();
       _engineReadyResolve = null;
     }
-    _fallbackToWebSpeech();
+    _degradeNarrationEngine(engineLabel, e);
   } finally {
     clearTimeout(engineLoadTimerId);
     _setPlayBtnLoading(false);
@@ -1837,6 +1838,73 @@ async function _loadPocketEngine() {
   _pocketInitializationMs = Math.round(performance.now() - initializationStartedAt);
   return neuralState === 'ready';
 }
+
+// A failed engine steps DOWN the ladder before it gives up on neural narration
+// altogether.
+//
+// This used to go straight from any neural engine to the device voice. The
+// three tiers exist precisely because devices differ in what they can hold, so
+// jumping the whole ladder threw away the two answers most likely to work: a
+// phone that cannot sustain Pocket over a long session -- thermally, or once
+// other tabs have taken the memory -- can almost always still run Kokoro, and
+// nearly anything can run Kitten. Trading a neural voice for a robotic one on
+// the first worker death is the single biggest quality cliff in the app, and it
+// is at its most likely hours into a session, which is exactly when a reader is
+// least willing to lose the narrator.
+//
+// In memory only, like _fallbackToWebSpeech: the reader's saved preference is
+// never rewritten, and a reload retries their real choice from the top.
+const _failedNarrationEngines = new Set();
+window._failedNarrationEngines = _failedNarrationEngines;
+
+function _nextNarrationTierDown(engine) {
+  const index = NARRATION_ENGINE_TIERS.indexOf(engine);
+  if (index <= 0) return null;   // unknown, or already the lightest tier
+  for (let next = index - 1; next >= 0; next -= 1) {
+    const candidate = NARRATION_ENGINE_TIERS[next];
+    if (!_failedNarrationEngines.has(candidate)) return candidate;
+  }
+  return null;
+}
+
+function _degradeNarrationEngine(engineLabel, error) {
+  const failed = _resolveActiveEngine();
+  _failedNarrationEngines.add(failed);
+  const nextEngine = _nextNarrationTierDown(failed);
+  if (!nextEngine) {
+    // Nothing lighter left to try. The device voice is the honest answer now.
+    _fallbackToWebSpeech();
+    return false;
+  }
+  window.Diagnostics?.log?.('WARN', 'Narration engine failed; stepping down a tier', {
+    failed,
+    nextEngine,
+    reason: error?.message || String(error || ''),
+    alreadyFailed: [..._failedNarrationEngines],
+  });
+  // Reflect it in the controls WITHOUT persisting, so the reader can see which
+  // engine is actually speaking and still finds their own choice next launch.
+  for (const id of ['voice-engine-select', 'reader-engine-select']) {
+    const select = document.getElementById(id);
+    if (select && [...select.options].some((option) => option.value === nextEngine)) {
+      select.value = nextEngine;
+    }
+  }
+  window._pocketRuntimeEngineOverride = nextEngine;
+  window.pocketNotify?.(
+    `${engineLabel} could not start on this device. Switching to ${nextEngine} narration.`,
+  );
+  // The voice must move with the engine. A voice id from the failed engine
+  // handed to the next one is an unknown id at the worker, which stalls for 60 s
+  // rather than failing -- the same contract the retired-voice aliases protect.
+  try {
+    const current = document.getElementById('voice-selector')?.value;
+    const coerced = coerceVoiceForEngine(nextEngine, current);
+    if (coerced && coerced !== current) window.refreshVoiceSelectorForEngine?.(nextEngine);
+  } catch (_) { /* the selector is cosmetic here; the engine switch is what matters */ }
+  return true;
+}
+window._degradeNarrationEngine = _degradeNarrationEngine;
 
 // A neural engine that fails to load must not rewrite the reader's saved
 // preference, and it must not silence the fallback it just promised.
@@ -4323,6 +4391,20 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
     // session-only 'this engine could not load' flag rather than resolving
     // straight back to the device voice and looking like the control is dead.
     window._pocketNeuralEngineUnavailable = false;
+    // Same reasoning for the automatic tier step-down: an explicit choice must
+    // beat it, or the control looks dead to the one reader who disagreed with
+    // it. Clearing the failed set means the chosen engine gets a real retry.
+    //
+    // Gated on `silent` because this function is ALSO the plumbing:
+    // refreshVoiceSelectorForEngine calls it with silent=true just to rebuild
+    // the voice list. Clearing unconditionally made the degrade path undo
+    // itself -- it set the override, refreshed the selector to match, and that
+    // refresh re-entered here and wiped the override it had just set. The
+    // step-down looked like it worked (the notice fired) and changed nothing.
+    if (!silent) {
+      window._pocketRuntimeEngineOverride = null;
+      window._failedNarrationEngines?.clear?.();
+    }
     // Swapping the model set invalidates the running worker and its voice
     // registry; it is rebuilt on the next request.
     try { _resetPocketEngineForBackend(); } catch (_) {}

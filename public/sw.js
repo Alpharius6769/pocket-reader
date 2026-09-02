@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v238';
+var CACHE_NAME = 'pocket-reader-core-v242';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -121,7 +121,7 @@ var OPTIONAL_ASSETS = [
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
     'assets/js/buffer_manager.js?v=buffer-v75',
-    'assets/js/audio_core.js?v=audio-v129',
+    'assets/js/audio_core.js?v=audio-v134',
     'assets/js/pocket_worker.js?v=pocket-worker-v75',
     'assets/js/kokoro_worker.js?v=kokoro-v23',
     'assets/js/kitten_worker.js?v=kitten-v12',
@@ -141,20 +141,20 @@ var CORE_ASSETS = [
     'assets/js/experience_coordinator.js?v=experience-v6',
     'assets/js/virtue_controller.js?v=virtue-v23',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v168',
+    'assets/js/ui_controller.js?v=ui-v170',
     'assets/js/supabase_bridge.js?v=supabase-v8',
     'assets/js/profile_merge.js?v=merge-v7',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v21',
     'assets/js/device_benchmark_worker.js?v=device-bench-v1',
     'assets/js/memory_headroom_worker.js?v=memory-probe-v1',
-    'assets/js/settings_manager.js?v=settings-v134',
-    'assets/js/library_manager.js?v=library-v44',
+    'assets/js/settings_manager.js?v=settings-v136',
+    'assets/js/library_manager.js?v=library-v46',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v7',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v1',
     'assets/js/hmofa_community.js?v=hmofa-community-v2',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v2',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v70',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v73',
     'assets/js/storage_core.js?v=storage-v22',
     'assets/js/sync_core.js?v=sync-v18',
     'assets/js/cinematic_ui.js?v=cinematic-v8',

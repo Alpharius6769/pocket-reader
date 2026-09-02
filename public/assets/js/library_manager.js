@@ -73,6 +73,10 @@ window.resolveEngineDowngradeRecovery = function resolveEngineDowngradeRecovery(
   window.userProfile.settings.voiceEngine = 'pocket';
   window.userProfile.settings._engineManuallySet = true;
   window._pocketNeuralEngineUnavailable = false;
+  // Recovery must also lift the automatic tier step-down, or 'Neural
+  // narration restored.' would restore a tier the reader never picked.
+  window._pocketRuntimeEngineOverride = null;
+  window._failedNarrationEngines?.clear?.();
   window.saveLocalData?.();
   window.renderNarrationEngineControls?.();
   try { window.refreshVoiceSelectorForEngine?.(); } catch (_) {}

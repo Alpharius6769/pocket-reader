@@ -323,6 +323,13 @@ window._resolveActiveEngine = function _resolveActiveEngine() {
   // memory instead: a reload retries the engine, and choosing one in Settings
   // clears it at once.
   if (window._pocketNeuralEngineUnavailable === true) return 'webspeech';
+  // A tier this page has already failed to start is not a candidate again.
+  // _degradeNarrationEngine sets this after an engine fails to load, so the
+  // session keeps NEURAL narration one rung down instead of dropping to the
+  // device voice. In memory only: a reload retries the reader's real choice.
+  if (NARRATION_ENGINE_TIERS.includes(window._pocketRuntimeEngineOverride)) {
+    return window._pocketRuntimeEngineOverride;
+  }
   let engine = window.userProfile?.settings?.voiceEngine;
   if (!engine) {
     try {
