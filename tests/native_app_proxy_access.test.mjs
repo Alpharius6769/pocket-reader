@@ -222,3 +222,59 @@ test('the injector refuses to write into the published source tree', async () =>
   assert.match(source, /path\.resolve\('public'\)/);
   assert.match(source, /resolved\.startsWith\(forbidden \+ path\.sep\)/);
 });
+
+// --- CORS grants that mean nothing -----------------------------------------
+
+test('a request with no Origin gets no CORS grant at all', async () => {
+  // "null" is a real origin: sandboxed iframes, data: URLs and some file: pages
+  // report exactly that string, so Access-Control-Allow-Origin: null grants
+  // read access to those contexts rather than denying everyone. A request that
+  // carries no Origin is not a browser CORS request, so it gets no grant.
+  const stub = stubFetch(new Uint8Array([1, 2, 3, 4]), { 'Content-Type': 'application/octet-stream' });
+  try {
+    const response = await worker.fetch(new Request(PROXY + MODEL_PATH), {}, ctx);
+    assert.equal(response.status, 200, 'origin-less callers must still be served');
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), null,
+      'no Origin means no Access-Control-Allow-Origin header');
+    assert.equal(await response.arrayBuffer().then((b) => b.byteLength), 4,
+      'the body must survive the header rewrite');
+  } finally {
+    stub.restore();
+  }
+});
+
+test('stripping the grant does not disturb the origins that have one', async () => {
+  const stub = stubFetch(new Uint8Array([1, 2, 3, 4]), { 'Content-Type': 'application/octet-stream' });
+  try {
+    for (const origin of [WEB_ORIGIN, ...NATIVE_ORIGINS]) {
+      const response = await worker.fetch(
+        new Request(PROXY + MODEL_PATH, { headers: { Origin: origin } }), {}, ctx);
+      assert.equal(response.headers.get('Access-Control-Allow-Origin'), origin,
+        `${origin} must still be reflected by name`);
+    }
+  } finally {
+    stub.restore();
+  }
+});
+
+test('the origin-less refusals stay refusals, just without the empty grant', async () => {
+  const stub = stubFetch();
+  try {
+    for (const route of ['/api/health', '/catalog-api/community-snapshot']) {
+      const response = await worker.fetch(new Request(PROXY + route), {}, ctx);
+      assert.equal(response.status, 403);
+      assert.equal(response.headers.get('Access-Control-Allow-Origin'), null);
+    }
+    assert.equal(stub.seen.length, 0);
+  } finally {
+    stub.restore();
+  }
+});
+
+test('the scheduled handler still exists after the fetch wrapper was added', async () => {
+  // fetch was renamed and delegated to; scheduled sits on the same object and
+  // must not have been lost in the restructure.
+  assert.equal(typeof worker.scheduled, 'function');
+  assert.equal(typeof worker.fetch, 'function');
+  assert.equal(typeof worker.handleFetch, 'function');
+});

@@ -372,6 +372,11 @@ export const Diagnostics = {
 
     // 9. LocalStorage
     await timedTest('LocalStorage', () => {
+      // Deliberately the RAW API, not the prLocal facade. This test exists to
+      // report whether storage actually works, so it has to see the real
+      // SecurityError or QuotaExceededError rather than a swallowed one --
+      // "QuotaExceededError" tells the reader what to do, "write-read mismatch"
+      // does not.
       localStorage.setItem('_diag_test', '1');
       if (localStorage.getItem('_diag_test') !== '1') throw new Error('write-read mismatch');
       localStorage.removeItem('_diag_test');

@@ -517,7 +517,7 @@ test('the cache handoff keeps a visible surface from tap through to outcome', as
   // The formerly silent branch must no longer be a bare return.
   assert.doesNotMatch(
     buffer,
-    /\} else \{\s*sessionStorage\.removeItem\(FAST_NARRATION_RESUME_KEY\);\s*\}\s*return;/,
+    /\} else \{\s*prSession\.removeItem\(FAST_NARRATION_RESUME_KEY\);\s*\}\s*return;/,
     'storyLoaded === false must not return silently',
   );
 

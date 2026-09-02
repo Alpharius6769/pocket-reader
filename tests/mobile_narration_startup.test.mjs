@@ -10,8 +10,8 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v136'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v76'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v138'\)/);
+  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v78'\)/);
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
@@ -61,7 +61,7 @@ test('post-isolation mobile resume requires a fresh user gesture', async () => {
   assert.match(buffer, /preparePocketMobileMediaSession\?\.\(\)/);
   const readyBranch = resume.slice(resume.indexOf('if (storyLoaded)'));
   const gestureAt = readyBranch.indexOf('window.togglePlayState?.()');
-  const removeAt = readyBranch.indexOf('sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY)', gestureAt);
+  const removeAt = readyBranch.indexOf('prSession.removeItem(FAST_NARRATION_RESUME_KEY)', gestureAt);
   assert.ok(
     gestureAt >= 0 && removeAt > gestureAt,
     'resume intent must survive until the post-reload user gesture completes',
@@ -95,8 +95,8 @@ test('a narration-resume fix advances the immutable module and service-worker re
     read('public/sw.js'),
     read('public/index.html'),
   ]);
-  assert.match(loader, /buffer_manager\.js\?v=buffer-v76/);
-  assert.match(worker, /buffer_manager\.js\?v=buffer-v76/);
+  assert.match(loader, /buffer_manager\.js\?v=buffer-v78/);
+  assert.match(worker, /buffer_manager\.js\?v=buffer-v78/);
   assert.match(worker, /pocket-reader-core-v\d+/);
   // Derived, not pinned: the shell must register whatever revision the service
   // worker actually ships. Hardcoding the number here only forced a mechanical

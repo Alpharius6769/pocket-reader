@@ -9,6 +9,7 @@ import {
   isMobileLikePlatform,
   voicesForEngine,
 } from './pocket_backend_policy.js?v=backend-v33';
+import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
 const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'alba';
@@ -284,14 +285,14 @@ function _requestFastNarrationReload(mode, action = 'cache') {
   // If ?tts_fast=1 is already present but isolation still failed, retry once
   // with a cache-busting query so the service worker re-applies COOP/COEP.
   if (_fastNarrationRequested()) {
-    if (sessionStorage.getItem(FAST_NARRATION_RETRY_KEY) === '1') return false;
-    sessionStorage.setItem(FAST_NARRATION_RETRY_KEY, '1');
+    if (prSession.getItem(FAST_NARRATION_RETRY_KEY) === '1') return false;
+    prSession.setItem(FAST_NARRATION_RETRY_KEY, '1');
   } else {
-    sessionStorage.removeItem(FAST_NARRATION_RETRY_KEY);
+    prSession.removeItem(FAST_NARRATION_RETRY_KEY);
   }
 
-  if (!sessionStorage.getItem(FAST_NARRATION_RESUME_KEY)) {
-    sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
+  if (!prSession.getItem(FAST_NARRATION_RESUME_KEY)) {
+    prSession.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
       title: window.currentStory.title,
       storyRef,
       loadRef,
@@ -313,7 +314,7 @@ function _requestFastNarrationReload(mode, action = 'cache') {
       if (!existing.storySnapshot) existing.storySnapshot = storySnapshot;
       sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify(existing));
     } catch (_) {
-        sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
+        prSession.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
           title: window.currentStory.title,
           storyRef,
           loadRef,
@@ -331,9 +332,9 @@ function _requestFastNarrationReload(mode, action = 'cache') {
   // an isolation-retry re-enters this function AFTER the reload has landed on
   // Home, so only record the view if one is not already stashed for this
   // reload chain — otherwise the retry would overwrite the real view with Home.
-  if (!sessionStorage.getItem('POCKET_PRE-RELOAD_VIEW')) {
+  if (!prSession.getItem('POCKET_PRE-RELOAD_VIEW')) {
     const activeView = document.querySelector('.view.active-view')?.id || 'home-view';
-    sessionStorage.setItem('POCKET_PRE-RELOAD_VIEW', activeView);
+    prSession.setItem('POCKET_PRE-RELOAD_VIEW', activeView);
   }
   const target = new URL(window.location.href);
   target.searchParams.set(FAST_NARRATION_PARAM, '1');
@@ -349,7 +350,7 @@ function _requestFastNarrationReload(mode, action = 'cache') {
     .then((reg) => reg?.active?.postMessage?.({ type: 'claim-clients' }))
     .catch(() => null)
     .finally(() => {
-      if (navigator.serviceWorker?.controller || sessionStorage.getItem(FAST_NARRATION_RETRY_KEY) === '1') {
+      if (navigator.serviceWorker?.controller || prSession.getItem(FAST_NARRATION_RETRY_KEY) === '1') {
         go();
         return;
       }
@@ -421,13 +422,13 @@ function _awaitMobileNarrationGesture(action = 'cache') {
 
 async function _resumeFastNarrationCache() {
   if (!_fastNarrationRequested()) return;
-  const raw = sessionStorage.getItem(FAST_NARRATION_RESUME_KEY);
+  const raw = prSession.getItem(FAST_NARRATION_RESUME_KEY);
   if (!raw) return;
 
   let resume;
   try { resume = JSON.parse(raw); } catch (_) { resume = null; }
   if (!resume?.title || Date.now() - Number(resume.requestedAt || 0) > 120000) {
-    sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
+    prSession.removeItem(FAST_NARRATION_RESUME_KEY);
     return;
   }
 
@@ -498,14 +499,14 @@ async function _resumeFastNarrationCache() {
         });
       }
       // Isolation still missing after first reload — try one hard retry.
-      if (!_isolationReady() && sessionStorage.getItem(FAST_NARRATION_RETRY_KEY) !== '1') {
+      if (!_isolationReady() && prSession.getItem(FAST_NARRATION_RETRY_KEY) !== '1') {
         window.currentStory = window.currentStory || { title: resume.title, storyKey: targetRef };
         if (!window.currentStory.title) window.currentStory.title = resume.title;
         if (_requestFastNarrationReload(resume.mode || 'Normal', resume.action || 'cache')) return;
       }
       if (Array.isArray(resume.awayQueue) && resume.awayQueue.length) {
         window.precacheQueue = [...resume.awayQueue];
-        localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
+        prLocal.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
       }
       // The user already made the cache decision (that is why we reloaded into
       // the isolated session). Suppress the cache-decision modal during this
@@ -528,8 +529,8 @@ async function _resumeFastNarrationCache() {
         }
       } catch (error) {
         console.error('[PocketTTS] Story restore failed:', error);
-        sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
-        sessionStorage.removeItem(FAST_NARRATION_RETRY_KEY);
+        prSession.removeItem(FAST_NARRATION_RESUME_KEY);
+        prSession.removeItem(FAST_NARRATION_RETRY_KEY);
         window._pocketSuppressCacheDecision = false;
         window.closeCacheModal?.();
         window.hideLoadingOverlay?.();
@@ -545,9 +546,9 @@ async function _resumeFastNarrationCache() {
       }
       window.closeCacheModal?.();
       window.hideLoadingOverlay?.();
-      const savedView = sessionStorage.getItem('POCKET_PRE-RELOAD_VIEW');
+      const savedView = prSession.getItem('POCKET_PRE-RELOAD_VIEW');
       if (savedView) {
-        sessionStorage.removeItem('POCKET_PRE-RELOAD_VIEW');
+        prSession.removeItem('POCKET_PRE-RELOAD_VIEW');
         window._pocketViewRestored = true;
         for (let i = 0; i < 20; i++) {
           if (typeof window.showView === 'function') break;
@@ -568,7 +569,7 @@ async function _resumeFastNarrationCache() {
           controller: !!navigator.serviceWorker?.controller,
         });
       } else {
-        sessionStorage.removeItem(FAST_NARRATION_RETRY_KEY);
+        prSession.removeItem(FAST_NARRATION_RETRY_KEY);
       }
       // Only start caching if loadStory actually restored the story. If it
       // failed (e.g. an uploaded story whose chapters could not be found, which
@@ -581,7 +582,7 @@ async function _resumeFastNarrationCache() {
         && Array.isArray(window.currentStory.chapters)
         && window.currentStory.chapters.length > 0;
       if (storyLoaded) {
-        sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
+        prSession.removeItem(FAST_NARRATION_RESUME_KEY);
         if (resume.action === 'playback') {
           window.togglePlayState?.();
         } else if (resume.mode === 'Permanent' && Array.isArray(window.precacheQueue) && window.precacheQueue.length) {
@@ -591,7 +592,7 @@ async function _resumeFastNarrationCache() {
         }
       } else {
         // Previously a bare return: no modal, no message, nothing on screen.
-        sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
+        prSession.removeItem(FAST_NARRATION_RESUME_KEY);
         _surfaceCacheHandoffState(
           'Caching could not start',
           'The story text did not finish loading, so there was nothing to cache. Open the story and try again.',
@@ -605,8 +606,8 @@ async function _resumeFastNarrationCache() {
   }
   window.closeCacheModal?.();
   window.hideLoadingOverlay?.();
-  sessionStorage.removeItem(FAST_NARRATION_RESUME_KEY);
-  sessionStorage.removeItem(FAST_NARRATION_RETRY_KEY);
+  prSession.removeItem(FAST_NARRATION_RESUME_KEY);
+  prSession.removeItem(FAST_NARRATION_RETRY_KEY);
   _surfaceCacheHandoffState(
     'Caching could not start',
     'Preparing the story timed out. Open it again and retry caching.',
@@ -1163,7 +1164,7 @@ export const BufferManager = {
     }
     if (!window.precacheQueue.includes(stableRef)) {
       window.precacheQueue.push(stableRef);
-      localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
+      prLocal.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
       if (typeof window.triggerVirtue === 'function') {
         window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
         window.virtueSpeak(`${story.title} is queued. Start Away Mode from the Library button when you are ready.`, 3500);
@@ -1204,7 +1205,7 @@ export const BufferManager = {
       const firstStory = window.findLibraryStoryByRef?.(firstRef);
       window.currentStory = window.currentStory || firstStory || { title: 'Queued story', storyKey: firstRef };
       if (!window.currentStory.title) window.currentStory.title = firstStory?.title || 'Queued story';
-      sessionStorage.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
+      prSession.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
         title: window.currentStory.title,
         mode: 'Permanent',
         awayQueue: [...window.precacheQueue],
@@ -2291,7 +2292,7 @@ window.removeStoryFromAwayQueue = function(refEncoded) {
   const ref = decodeURIComponent(refEncoded);
   if (!Array.isArray(window.precacheQueue)) window.precacheQueue = [];
   window.precacheQueue = window.precacheQueue.filter(item => item !== ref);
-  localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
+  prLocal.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
   const badge = document.getElementById('precache-count');
   if (badge) badge.innerText = `${window.precacheQueue.length} queued`;
   const btn = document.getElementById('start-precache-btn');

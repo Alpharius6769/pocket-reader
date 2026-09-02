@@ -1,4 +1,5 @@
 import { animate } from './motion_lite.js';
+import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 // Heavy containers that are fully rebuilt every time their view is entered.
 // showView() calls the rebuilder below for each of these, so emptying them on
@@ -1049,19 +1050,19 @@ function _isIOS() {
 function _shouldShowPWABanner() {
   if (_isPWA())   return false;   // already installed
   if (!_isMobile()) return false; // desktop — not needed
-  if (localStorage.getItem('pwaBannerDismissed') === 'true') return false;
-  if (localStorage.getItem('pr_device_profile_handoff_v1') === 'pending') return false;
+  if (prLocal.getItem('pwaBannerDismissed') === 'true') return false;
+  if (prLocal.getItem('pr_device_profile_handoff_v1') === 'pending') return false;
   // Let a brand-new user finish the account-creation wizard first; the banner
   // is re-triggered by completeFirstTimeSetup/skipFirstTimeSetup so it never
   // competes with the setup modal (Issue 4).
-  if (localStorage.getItem('pr_setup_complete') !== 'true') return false;
+  if (prLocal.getItem('pr_setup_complete') !== 'true') return false;
   return true;
 }
 
 // The way back from "Don't show again". Reachable from Settings; without a
 // caller the permanent dismissal was a one-way door.
 window.showIOSInstallPrompt = function() {
-  localStorage.removeItem('pwaBannerDismissed');
+  prLocal.removeItem('pwaBannerDismissed');
   _showPWABanner();
   // _shouldShowPWABanner() also refuses when the app is already installed or
   // the device is a desktop, so say why rather than looking like a dead button.
@@ -1141,7 +1142,7 @@ window.closePWASession = () => {
 
 // Permanently dismiss — never shows again on this device/browser
 window.dismissPWAPermanently = () => {
-  localStorage.setItem('pwaBannerDismissed', 'true');
+  prLocal.setItem('pwaBannerDismissed', 'true');
   const b = document.getElementById('pwa-install-banner');
   if (b) b.style.display = 'none';
   _syncPWABannerInset();
@@ -1603,7 +1604,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=244', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=246', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)
@@ -1722,7 +1723,7 @@ function _restoreSetupDraft() {
 window.restoreSetupDraft = _restoreSetupDraft;
 
 function _restoreSetupAccountState() {
-  if (localStorage.getItem('pr_setup_complete') === 'true' && localStorage.getItem(DEVICE_PROFILE_HANDOFF_KEY) !== 'pending') return false;
+  if (prLocal.getItem('pr_setup_complete') === 'true' && prLocal.getItem(DEVICE_PROFILE_HANDOFF_KEY) !== 'pending') return false;
   try {
     const auth = JSON.parse(localStorage.getItem(SETUP_AUTH_STORAGE_KEY) || 'null');
     if (!auth?.email) return false;
@@ -1741,7 +1742,7 @@ function _restoreSetupAccountState() {
 }
 
 function _restoreFirstTimeSetupState() {
-  if (localStorage.getItem('pr_setup_complete') === 'true' && localStorage.getItem(DEVICE_PROFILE_HANDOFF_KEY) !== 'pending') return;
+  if (prLocal.getItem('pr_setup_complete') === 'true' && prLocal.getItem(DEVICE_PROFILE_HANDOFF_KEY) !== 'pending') return;
   _restoreSetupDraft();
   _restoreSetupAccountState();
 }
@@ -1758,7 +1759,7 @@ setTimeout(_restoreFirstTimeSetupState, 1200);
 function _deferCloudLoginOutsideFastNarration(action) {
   const url = new URL(window.location.href);
   if (url.searchParams.get('tts_fast') !== '1') return false;
-  sessionStorage.setItem('pr_resume_cloud_login_v1', action);
+  prSession.setItem('pr_resume_cloud_login_v1', action);
   url.searchParams.delete('tts_fast');
   window.location.replace(url.href);
   return true;
@@ -1909,22 +1910,22 @@ window.completeFirstTimeSetup = () => {
 
   // Verify active authentication state so newly logged-in accounts (via Google OAuth or email)
   // are properly attached and synchronized before completing onboarding.
-  const sessionOwner = localStorage.getItem('pr_profile_owner');
+  const sessionOwner = prLocal.getItem('pr_profile_owner');
   if ((sessionOwner && sessionOwner !== 'Guest Reader') || p.cloudEmail || p.isLoggedIn) {
     const activeEmail = p.cloudEmail || sessionOwner;
     if (activeEmail && activeEmail !== 'Guest Reader') {
-      localStorage.setItem('pr_profile_owner', activeEmail);
+      prLocal.setItem('pr_profile_owner', activeEmail);
       p.isLoggedIn = true;
       p.cloudEmail = activeEmail;
       window._cloudPushAllowed = true;
     }
   }
 
-  localStorage.setItem('pr_setup_complete', 'true');
-  localStorage.removeItem(DEVICE_PROFILE_HANDOFF_KEY);
+  prLocal.setItem('pr_setup_complete', 'true');
+  prLocal.removeItem(DEVICE_PROFILE_HANDOFF_KEY);
   document.documentElement.classList.add('pr-setup-complete');
-  localStorage.removeItem(SETUP_DRAFT_STORAGE_KEY);
-  localStorage.removeItem(SETUP_AUTH_STORAGE_KEY);
+  prLocal.removeItem(SETUP_DRAFT_STORAGE_KEY);
+  prLocal.removeItem(SETUP_AUTH_STORAGE_KEY);
   if (p.isLoggedIn && typeof window.queueCloudSync === 'function') {
     window.queueCloudSync('onboarding-complete', { immediate: true });
     window.flushCloudSync?.();
@@ -1958,10 +1959,10 @@ window.skipFirstTimeSetup = () => {
   if (p.settings.theme === undefined) p.settings.theme = 'slate';
   if (p.settings.touchTargetSize === undefined) p.settings.touchTargetSize = false;
   if (typeof window.saveLocalData === 'function') window.saveLocalData();
-  localStorage.setItem('pr_setup_complete', 'true');
-  localStorage.removeItem(DEVICE_PROFILE_HANDOFF_KEY);
+  prLocal.setItem('pr_setup_complete', 'true');
+  prLocal.removeItem(DEVICE_PROFILE_HANDOFF_KEY);
   document.documentElement.classList.add('pr-setup-complete');
-  localStorage.removeItem(SETUP_DRAFT_STORAGE_KEY);
+  prLocal.removeItem(SETUP_DRAFT_STORAGE_KEY);
   const modal = document.getElementById('first-time-setup-modal');
   if (modal) {
     window.deactivatePocketModal?.(modal);
@@ -2039,7 +2040,7 @@ window.renderProfileExtras = function() {
   if (p.avatar) { const a = document.getElementById('profile-avatar-img'); if (a) a.src = p.avatar; }
 
   // Auto-sync isLoggedIn flag if session owner matches
-  const owner = localStorage.getItem('pr_profile_owner');
+  const owner = prLocal.getItem('pr_profile_owner');
   if (owner && owner !== 'Guest Reader' && (!p.isLoggedIn || !p.cloudEmail)) {
     p.isLoggedIn = true;
     p.cloudEmail = owner;
@@ -2150,12 +2151,12 @@ window.triggerCloudLogin = async function() {
 };
 
 async function _resumeDeferredCloudLogin() {
-  const action = sessionStorage.getItem('pr_resume_cloud_login_v1');
+  const action = prSession.getItem('pr_resume_cloud_login_v1');
   if (!action || new URL(window.location.href).searchParams.get('tts_fast') === '1') return;
   const startedAt = Date.now();
   while (Date.now() - startedAt < 30000) {
     if (typeof window.pocketCloud?.login === 'function') {
-      sessionStorage.removeItem('pr_resume_cloud_login_v1');
+      prSession.removeItem('pr_resume_cloud_login_v1');
       if (action === 'setup') await window._setupCloudLogin?.();
       else await window.triggerCloudLogin?.();
       return;

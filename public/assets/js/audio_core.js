@@ -58,6 +58,7 @@ import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
 } from './pocket_performance_policy.js?v=performance-v2';
+import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 window.isPlaying = false;
 window.currentAudio = null;
@@ -503,7 +504,7 @@ const _resolveActiveEngine = window._resolveActiveEngine;
 
 // Auto-recovery: Clear cached neural voice assets once before engine loads
 async function _clearCorruptedCacheOnce() {
-  if (localStorage.getItem('pr_cache_cleared_v4')) return;
+  if (prLocal.getItem('pr_cache_cleared_v4')) return;
   if ('caches' in window) {
     try {
       await caches.delete('pocket-voices');

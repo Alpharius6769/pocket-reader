@@ -1,5 +1,6 @@
 import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v33';
 import { storyKeyFor } from './profile_merge.js?v=merge-v7';
+import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 const PROFILE_SCHEMA_VERSION = 3;
 const DEVICE_SETTING_KEYS = new Set([
@@ -45,10 +46,10 @@ function randomId(prefix) {
 }
 
 export function getDeviceId() {
-  let id = localStorage.getItem('pr_device_id');
+  let id = prLocal.getItem('pr_device_id');
   if (!id) {
     id = randomId('device');
-    localStorage.setItem('pr_device_id', id);
+    prLocal.setItem('pr_device_id', id);
   }
   return id;
 }
@@ -278,7 +279,7 @@ window.applyCanonicalProfile = applyCanonicalProfile;
 
 async function saveOutbox(payload) {
   if (typeof window._saveSyncOutbox === 'function') return window._saveSyncOutbox(payload);
-  localStorage.setItem('pr_sync_outbox', JSON.stringify(payload));
+  prLocal.setItem('pr_sync_outbox', JSON.stringify(payload));
 }
 
 async function loadOutbox() {
@@ -288,7 +289,7 @@ async function loadOutbox() {
 
 async function clearOutbox() {
   if (typeof window._clearSyncOutbox === 'function') return window._clearSyncOutbox();
-  localStorage.removeItem('pr_sync_outbox');
+  prLocal.removeItem('pr_sync_outbox');
 }
 
 function publishState() {
@@ -372,16 +373,16 @@ export async function pullCloudProfileOnStartup() {
   if (typeof window.pocketCloud?.getCurrentUser !== 'function') return null;
   // Supabase owns the authenticated browser session. This device-local preference
   // only controls whether Pocket Reader resumes that session automatically.
-  if (localStorage.getItem('pr_remember_login') === 'false') return null;
+  if (prLocal.getItem('pr_remember_login') === 'false') return null;
   const email = await window.pocketCloud.getCurrentUser();
   if (!email) return null;
-  const owner = localStorage.getItem('pr_profile_owner') || '';
+  const owner = prLocal.getItem('pr_profile_owner') || '';
   if (owner && owner !== email && owner !== 'Guest Reader') {
     if (typeof window.resetLocalProfile === 'function') await window.resetLocalProfile({ preserveSetup: true });
     location.reload();
     return null;
   }
-  localStorage.setItem('pr_profile_owner', email);
+  prLocal.setItem('pr_profile_owner', email);
   window.userProfile = normalizeProfileV3(window.userProfile);
   window.userProfile.isLoggedIn = true;
   window.userProfile.cloudEmail = email;
@@ -405,5 +406,5 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden && window._cloudPushAllowed) queueCloudSync('visibility-checkpoint', { immediate: true });
   else if (SYNC_STATE.pending) flushCloudSync();
 });
-SYNC_STATE.lastSyncedAt = Number(localStorage.getItem('pr_last_synced_at')) || 0;
+SYNC_STATE.lastSyncedAt = Number(prLocal.getItem('pr_last_synced_at')) || 0;
 publishState();

@@ -7,6 +7,7 @@ import {
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
 } from './tts_pronunciation_core.js?v=pron-v23';
 import { profileHash, storyKeyFor, mergeClockedMap } from './profile_merge.js?v=merge-v7';
+import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
 window._ACH_ICONS = {
@@ -744,9 +745,9 @@ export async function loadLocalData() {
 
   } catch (e) {
     console.error("Failed to load local data:", e);
-    localStorage.removeItem('pocketReaderData');
+    prLocal.removeItem('pocketReaderData');
     // Even after a load failure, still show the setup modal for new users
-    if (localStorage.getItem('pr_setup_complete') !== 'true') {
+    if (prLocal.getItem('pr_setup_complete') !== 'true') {
       const modal = document.getElementById('first-time-setup-modal');
       if (modal) modal.style.display = 'flex';
     }
@@ -1009,7 +1010,7 @@ export async function checkCloudSyncOnStartup() {
       // belongs to. If a DIFFERENT account is now logged in, never merge the
       // previous user's data into it — wipe local state and reboot so the new
       // user starts from their own cloud profile plus the curated defaults.
-      const owner = localStorage.getItem('pr_profile_owner') || '';
+      const owner = prLocal.getItem('pr_profile_owner') || '';
       if (owner && owner !== userEmail) {
         console.warn("[CloudSync] Logged-in account changed (was", owner, ") — resetting local profile.");
         if (typeof window.resetLocalProfile === 'function') {
@@ -1018,7 +1019,7 @@ export async function checkCloudSyncOnStartup() {
         location.reload();
         return;
       }
-      localStorage.setItem('pr_profile_owner', userEmail);
+      prLocal.setItem('pr_profile_owner', userEmail);
 
       window.userProfile.isLoggedIn = true;
       window.userProfile.cloudEmail = userEmail;
@@ -1077,9 +1078,9 @@ export function clearTextCache() {
       "WARNING: This will permanently wipe your entire library, bookmarks, reading progress, custom settings, and all earned achievement progress. This action CANNOT be undone.\n\nAre you absolutely sure you want to proceed and delete all your local data?"
     )
   ) {
-    localStorage.removeItem('pocketReaderData');
-    localStorage.removeItem('pr_setup_complete');
-    localStorage.removeItem('pr_profile_owner');
+    prLocal.removeItem('pocketReaderData');
+    prLocal.removeItem('pr_setup_complete');
+    prLocal.removeItem('pr_profile_owner');
     window.userProfile = {
       displayName: "Guest Reader",
       library: [],

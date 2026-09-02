@@ -26,7 +26,7 @@ test('fast-narration reload saves the real active view, once', async () => {
   assert.doesNotMatch(buffer, /querySelector\('\.view\.active'\)/);
   // The saved view must be preserved across an isolation-retry reload (which
   // re-enters after landing on Home) rather than overwritten.
-  assert.match(buffer, /if \(!sessionStorage\.getItem\('POCKET_PRE-RELOAD_VIEW'\)\)/);
+  assert.match(buffer, /if \(!prSession\.getItem\('POCKET_PRE-RELOAD_VIEW'\)\)/);
 });
 
 test('retired voices migrate by alias, not by one-shot localStorage flags', async () => {

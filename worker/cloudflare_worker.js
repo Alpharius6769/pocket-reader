@@ -221,8 +221,35 @@ function finalizeModelResponse(response, corsOrigin, edgeCacheStatus) {
   return result;
 }
 
-export default {
+// "null" is a real origin, not a placeholder for "none".
+//
+// Every response below falls back to `corsOrigin = ... || "null"` when there is
+// nothing to reflect, and then sends it. But a sandboxed iframe, a data: URL and
+// some file: pages all report their origin AS the string "null", so
+// `Access-Control-Allow-Origin: null` grants read access to exactly those
+// contexts instead of denying everyone. On /models/ that is public open-weights
+// files, so the cost is hotlinked bandwidth rather than exposure -- but a
+// request carrying no Origin at all is not a browser CORS request in the first
+// place, and answering it with a CORS grant is meaningless at best.
+//
+// Non-browser callers (curl, the backend hop) ignore CORS headers entirely, so
+// dropping the header costs them nothing and closes the sandboxed-iframe case.
+// Requests that DO carry an Origin are untouched: a disallowed one is already
+// refused earlier, and an allowed one is reflected by name.
+function withoutMeaninglessCorsGrant(request, response) {
+  if (request.headers.get("Origin")) return response;
+  if (response.headers.get("Access-Control-Allow-Origin") !== "null") return response;
+  const cleaned = new Response(response.body, response);
+  cleaned.headers.delete("Access-Control-Allow-Origin");
+  return cleaned;
+}
+
+const handlers = {
   async fetch(request, env, ctx) {
+    return withoutMeaninglessCorsGrant(request, await handlers.handleFetch(request, env, ctx));
+  },
+
+  async handleFetch(request, env, ctx) {
     const url = new URL(request.url);
     const allowedOrigin = resolveAllowedOrigin(request, env);
     const requestOrigin = request.headers.get("Origin") || "";
@@ -689,3 +716,5 @@ export default {
     })());
   },
 };
+
+export default handlers;
