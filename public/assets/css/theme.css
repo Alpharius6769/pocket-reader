@@ -1455,6 +1455,14 @@ input[type="radio"] {
   line-height: 1.4;
 }
 
+/* The step body is ONE flex item. Without this every <strong> inside a step
+   becomes its own flex item, and the sentence is spread across the row with
+   the emphasised words visually out of order. */
+.pwa-step-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .pwa-step-num {
   background: rgba(160,100,255,0.35);
   border-radius: 50%;

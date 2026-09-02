@@ -1073,16 +1073,85 @@ window.showIOSInstallPrompt = function() {
   }
 };
 
+// iOS 26 moved the Share button. Safari's toolbar no longer shows one directly:
+// it is behind the "..." button to the right of the address bar, and the old
+// instruction ("tap Share at the bottom of the screen") sends the reader looking
+// for a control that is not there. iOS 18 and earlier still have the direct
+// button, and plenty of devices are still on those, so the steps are chosen
+// rather than rewritten for whichever version is newest.
+//
+// The version is read from the UA because Safari exposes nothing better. Two
+// patterns, because they fail on different devices:
+//   - "CPU iPhone OS 26_0 like Mac OS X"  -> iPhone, and iPad in mobile mode
+//   - "Version/26.0 Safari/..."           -> iPad requesting the desktop site,
+//     which reports a Macintosh UA with no OS token at all. Safari's major
+//     version has tracked the iOS major version since 18, so it stands in.
+// Neither matching returns 0, and the caller shows steps that work either way
+// rather than guessing.
+function _iosMajorVersion() {
+  const ua = navigator.userAgent || '';
+  const os = ua.match(/(?:iPhone )?OS (\d+)[_.]/);
+  if (os) return Number(os[1]) || 0;
+  const safari = ua.match(/Version\/(\d+)[._]/);
+  if (safari && /Safari/.test(ua)) return Number(safari[1]) || 0;
+  return 0;
+}
+
+// Every path ends on the same warning, and it is the one that actually decides
+// whether the install is worth anything. iOS 26 added an "Open as Web App"
+// toggle to the Add to Home Screen dialog. Left on, the reader gets a real
+// standalone app. Switched off, they get a bookmark that opens in a Safari tab
+// -- which silently costs them every single thing this banner promised:
+// background audio, lock-screen controls, and freedom from tab reloads. It
+// still lands on the Home Screen with the right icon, so it LOOKS installed.
+function _webAppToggleStep(number) {
+  return `<div class="pwa-ios-step"><span class="pwa-step-num">${number}</span><span class="pwa-step-text">`
+    + `Leave <strong>"Open as Web App"</strong> switched <strong>on</strong>, then tap <strong>Add</strong>`
+    + `</span></div>`;
+}
+
+function _iosInstallSteps() {
+  const version = _iosMajorVersion();
+  const open = `<div class="pwa-ios-step"><span class="pwa-step-num">1</span><span class="pwa-step-text">Open this page in <strong>Safari</strong></span></div>`;
+
+  // iOS 26+: Share lives behind the "..." menu beside the address bar.
+  if (version >= 26) {
+    return open
+      + `<div class="pwa-ios-step"><span class="pwa-step-num">2</span><span class="pwa-step-text">`
+      + `Tap the <strong>⋯</strong> button to the right of the address bar, then tap <strong>Share</strong></span></div>`
+      + `<div class="pwa-ios-step"><span class="pwa-step-num">3</span><span class="pwa-step-text">`
+      + `Scroll down and tap <strong>"Add to Home Screen"</strong></span></div>`
+      + _webAppToggleStep(4);
+  }
+
+  // iOS 18 and earlier: a Share button sits in the toolbar directly. Described
+  // by its icon and not its position -- it is at the bottom on an iPhone and
+  // the top right on an iPad, and naming one of those is wrong for the other.
+  if (version > 0) {
+    return open
+      + `<div class="pwa-ios-step"><span class="pwa-step-num">2</span><span class="pwa-step-text">`
+      + `Tap the <strong>Share</strong> button — the square with an arrow pointing up</span></div>`
+      + `<div class="pwa-ios-step"><span class="pwa-step-num">3</span><span class="pwa-step-text">`
+      + `Scroll down and tap <strong>"Add to Home Screen"</strong>, then tap <strong>Add</strong></span></div>`;
+  }
+
+  // Version unknown. Cover both layouts in one step rather than pick wrong.
+  return open
+    + `<div class="pwa-ios-step"><span class="pwa-step-num">2</span><span class="pwa-step-text">`
+    + `Tap <strong>Share</strong> — the square with an arrow pointing up. On newer iPhones it is `
+    + `behind the <strong>⋯</strong> button beside the address bar</span></div>`
+    + `<div class="pwa-ios-step"><span class="pwa-step-num">3</span><span class="pwa-step-text">`
+    + `Scroll down and tap <strong>"Add to Home Screen"</strong></span></div>`
+    + _webAppToggleStep(4)
+    + `<div class="pwa-ios-step"><span class="pwa-step-num">!</span><span class="pwa-step-text">`
+    + `If you do not see that switch, just tap <strong>Add</strong> — older versions of iOS install it as an app anyway</span></div>`;
+}
+
 function _buildBannerAction() {
   const el = document.getElementById('pwa-banner-action');
   if (!el) return;
   if (_isIOS()) {
-    el.innerHTML =
-      `<div class="pwa-ios-steps">` +
-      `<div class="pwa-ios-step"><span class="pwa-step-num">1</span>Open this page in <strong>Safari</strong></div>` +
-      `<div class="pwa-ios-step"><span class="pwa-step-num">2</span>Tap the <strong>Share ↑</strong> button at the bottom of the screen</div>` +
-      `<div class="pwa-ios-step"><span class="pwa-step-num">3</span>Scroll down and tap <strong>"Add to Home Screen"</strong>, then tap <strong>Add</strong></div>` +
-      `</div>`;
+    el.innerHTML = `<div class="pwa-ios-steps">` + _iosInstallSteps() + `</div>`;
   } else if (_pwaDeferred) {
     el.innerHTML =
       `<button class="pr-btn-primary pwa-install-btn-main" onclick="window.installPWA()">` +
@@ -1604,7 +1673,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=246', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=248', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)
