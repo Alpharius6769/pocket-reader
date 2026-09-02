@@ -1,5 +1,5 @@
 import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v33';
-import { storyKeyFor } from './profile_merge.js?v=merge-v7';
+import { storyKeyFor } from './profile_merge.js?v=merge-v10';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 const PROFILE_SCHEMA_VERSION = 3;

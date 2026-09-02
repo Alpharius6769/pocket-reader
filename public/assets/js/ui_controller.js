@@ -349,9 +349,14 @@ export function renderBookmarksTab() {
   sorted.forEach((bm) => {
     const dateStr = new Date(bm.ts).toLocaleDateString();
     const timeStr = new Date(bm.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // UNQUOTED in the handler below, so these are JavaScript source rather than
+    // data and no amount of HTML escaping reaches them. A restored backup can
+    // put a string here; coercion is what makes that inert.
+    const chapIdx = Number(bm.c) || 0;
+    const paraIdx = Number(bm.p) || 0;
 
     html += `<li style="background:var(--bg-mid);border:1px solid var(--border-color);border-radius:6px;padding:10px;cursor:pointer;" 
- onclick="window.jumpToBookmark(${bm.c},${bm.p})"><div style="font-size:0.8rem;color:var(--accent-blue-text);margin-bottom:4px;font-weight:bold;">Chapter ${bm.c + 1} · ${dateStr}, ${timeStr}</div><div style="font-size:0.85rem;color:var(--text-main);font-style:italic;">"${_escapeHtml(bm.t)}"</div></li>`;
+ onclick="window.jumpToBookmark(${chapIdx},${paraIdx})"><div style="font-size:0.8rem;color:var(--accent-blue-text);margin-bottom:4px;font-weight:bold;">Chapter ${chapIdx + 1} · ${dateStr}, ${timeStr}</div><div style="font-size:0.85rem;color:var(--text-main);font-style:italic;">"${_escapeHtml(bm.t)}"</div></li>`;
   });
 
   html += '</ul>';
@@ -1673,7 +1678,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=248', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=250', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

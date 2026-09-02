@@ -112,7 +112,19 @@ function normalizeBookmarks(bookmarks) {
   for (const item of Array.isArray(bookmarks) ? bookmarks : []) {
     if (!isPlainObject(item)) continue;
     const stamp = asInt(item.updatedAt ?? item.ts, nowMs(), 0);
-    out.push({ ...item, id: String(item.id ?? `b_${item.c ?? 0}_${item.p ?? 0}_${stamp}`), updatedAt: stamp });
+    // c and p are chapter and paragraph indices, and they reach inline click
+    // handlers in an UNQUOTED position -- i.e. as JavaScript source. A restored
+    // backup or a synced row can carry anything, so they are coerced here as
+    // well as at the sink: a string that survives to the markup is executable.
+    const chapter = asInt(item.c, 0, 0);
+    const paragraph = asInt(item.p, 0, 0);
+    out.push({
+      ...item,
+      c: chapter,
+      p: paragraph,
+      id: String(item.id ?? `b_${chapter}_${paragraph}_${stamp}`),
+      updatedAt: stamp,
+    });
   }
   return out.slice(-100);
 }

@@ -14,7 +14,7 @@
  * The publishable key below is designed to ship in frontend JS. Access is
  * enforced by Row Level Security, not by key secrecy.
  */
-import { mergeProfile, normalizeProfile } from './profile_merge.js?v=merge-v7';
+import { mergeProfile, normalizeProfile } from './profile_merge.js?v=merge-v10';
 
 const SUPABASE_URL = 'https://dctjxeqjtctyvvrdlcxo.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KUGiCZjxfxQb2eQwOTQO0A_MY8ihwur';

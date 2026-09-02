@@ -6,7 +6,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
 } from './tts_pronunciation_core.js?v=pron-v23';
-import { profileHash, storyKeyFor, mergeClockedMap } from './profile_merge.js?v=merge-v7';
+import { profileHash, storyKeyFor, mergeClockedMap } from './profile_merge.js?v=merge-v10';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
@@ -1907,12 +1907,17 @@ export function updateBookmarksFolder() {
       const bookmarkId = encodeURIComponent(bm.id || '').replace(/'/g, '%27');
       const storyKey = encodeURIComponent(bm.storyKey || '').replace(/'/g, '%27');
       const escapedTitle = _escapeHtml(bm.storyTitle || '');
-      html += `<div class="bookmark-item" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.openLibraryBookmark(decodeURIComponent('${safeStoryRef}'), ${bm.c}, ${bm.p})">
+      // Emitted UNQUOTED into the handlers below, so these are JavaScript
+      // source, not data -- escaping does not reach them and a string here is
+      // executable. Coerced rather than escaped for that reason.
+      const chapIdx = Number(bm.c) || 0;
+      const paraIdx = Number(bm.p) || 0;
+      html += `<div class="bookmark-item" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="window.openLibraryBookmark(decodeURIComponent('${safeStoryRef}'), ${chapIdx}, ${paraIdx})">
         <div>
-          <div style="font-size:0.8rem;color:var(--accent-blue-text);font-weight:bold;">${escapedTitle} - Ch ${bm.c + 1} (${dateStr})</div>
+          <div style="font-size:0.8rem;color:var(--accent-blue-text);font-weight:bold;">${escapedTitle} - Ch ${chapIdx + 1} (${dateStr})</div>
           <div style="font-size:0.85rem;color:var(--text-main);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">"${bmText}"</div>
         </div>
-        <div class="row-actions"><button class="icon-btn" title="Edit bookmark details" aria-label="Edit bookmark details" onclick="event.stopPropagation(); window.editBookmarkDetails(decodeURIComponent('${storyKey}'), decodeURIComponent('${bookmarkId}'))">${window.prIcon?.('edit-3') || 'Edit'}</button><button class="bookmark-delete-btn" onclick="event.stopPropagation(); window.deleteBookmark(decodeURIComponent('${safeStoryRef}'), ${bm.c}, ${bm.p})">X</button></div>
+        <div class="row-actions"><button class="icon-btn" title="Edit bookmark details" aria-label="Edit bookmark details" onclick="event.stopPropagation(); window.editBookmarkDetails(decodeURIComponent('${storyKey}'), decodeURIComponent('${bookmarkId}'))">${window.prIcon?.('edit-3') || 'Edit'}</button><button class="bookmark-delete-btn" onclick="event.stopPropagation(); window.deleteBookmark(decodeURIComponent('${safeStoryRef}'), ${chapIdx}, ${paraIdx})">X</button></div>
       </div>`;
     });
     listEl.innerHTML = html;
