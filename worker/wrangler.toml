@@ -36,6 +36,15 @@ CHAPTER_SYNC_URL = "https://alpharius6769-pocket-reader.hf.space/api/sync/chapte
 #   The Worker also accepts WORKER_PROXY_TOKEN as an alias so the Space secret
 #   and the Worker secret can share a name. Header: X-Pocket-Proxy-Key.
 #   Do not rename a production secret that is already set.
+# - APP_PROXY_TOKEN: (Optional) The packaged Capacitor build's own credential,
+#   sent in the same X-Pocket-Proxy-Key header. Unset means inert: the app-key
+#   path authorises nobody, which is the correct state until an APK is actually
+#   cut. It is deliberately NOT PROXY_AUTH_TOKEN -- this value ships inside an
+#   installable binary, so it is extractable and is a cost barrier rather than a
+#   secret. Keeping it separate means a leak is rotated here alone and never
+#   confers the backend hop's identity. Inject the matching value into the
+#   COPIED build assets with tools/inject_native_app_key.mjs after `npx cap
+#   sync`; it must never be committed to public/, which GitHub Pages publishes.
 
 [triggers]
 crons = ["17,47 * * * *"]

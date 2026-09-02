@@ -32,7 +32,7 @@
     "sha256": "452702fde47e0eab"
   },
   "engine_utils.js": {
-    "version": "sw-229",
+    "version": "sw-231",
     "sha256": "3c8e7975735846a6"
   },
   "experience_coordinator.js": {
@@ -68,15 +68,19 @@
     "sha256": "6de25429f8f93e36"
   },
   "motion_lite.js": {
-    "version": "sw-229",
+    "version": "sw-231",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
     "version": "narration-loader-v66",
     "sha256": "183d57a3e1104a3a"
   },
+  "native_app_key.js": {
+    "version": "native-key-v1",
+    "sha256": "f5f6c2d8666d18c0"
+  },
   "ort_memory_probe_worker.js": {
-    "version": "sw-229",
+    "version": "sw-231",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -104,8 +108,8 @@
     "sha256": "83bebca9ff67745b"
   },
   "settings_manager.js": {
-    "version": "settings-v128",
-    "sha256": "706f444e59681460"
+    "version": "settings-v130",
+    "sha256": "a3876cde4f265f33"
   },
   "storage_core.js": {
     "version": "storage-v19",
@@ -124,15 +128,15 @@
     "sha256": "6ae4e9ccd1ead7aa"
   },
   "ui_controller.js": {
-    "version": "ui-v161",
-    "sha256": "9dbc3c2292936006"
+    "version": "ui-v163",
+    "sha256": "5fe74d9d79c79e01"
   },
   "virtue_controller.js": {
     "version": "virtue-v20",
     "sha256": "fcdeed67dcc76cf6"
   },
   "sw.js": {
-    "version": "sw-229",
-    "sha256": "aabe81c866d7043a"
+    "version": "sw-231",
+    "sha256": "65240a6ba84e0f5f"
   }
 }

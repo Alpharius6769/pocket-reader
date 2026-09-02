@@ -41,6 +41,26 @@ function hostAllowed(hostname, env) {
   return list.some((a) => h === a || h.endsWith("." + a));
 }
 
+// The Capacitor WebView's own page origin. Android with androidScheme "https"
+// serves the bundled app from https://localhost, iOS uses capacitor://localhost,
+// and http://localhost covers an androidScheme of "http".
+//
+// These are REFLECTABLE but never AUTHORISING, and keeping those two ideas
+// apart is the whole fix. Reflecting an origin in Access-Control-Allow-Origin
+// only decides which browser page may READ a response the Worker already chose
+// to serve; it decides nothing about whether to serve it. Authorisation is a
+// separate question, answered per route below, and an Origin header can never
+// answer it because any non-browser caller can send any Origin it likes.
+const NATIVE_APP_ORIGINS = Object.freeze([
+  "https://localhost",
+  "http://localhost",
+  "capacitor://localhost",
+]);
+
+function isNativeAppOrigin(origin) {
+  return NATIVE_APP_ORIGINS.includes(origin);
+}
+
 // Restrict CORS to known app origins. Configure extra origins via the
 // ALLOWED_ORIGINS Worker variable (comma-separated).
 function resolveAllowedOrigin(request, env) {
@@ -73,6 +93,18 @@ function resolveAllowedOrigin(request, env) {
     }
   }
   return null;
+}
+
+// Which origin may be reflected in Access-Control-Allow-Origin. This is the
+// trusted web origin plus the native shell's own page origin, and it is
+// deliberately WIDER than resolveAllowedOrigin: the native build has to be able
+// to read responses from the public asset routes, but must not inherit the
+// trusted web origin's authority over the credential-attaching ones.
+function resolveCorsOrigin(request, env) {
+  const trusted = resolveAllowedOrigin(request, env);
+  if (trusted) return trusted;
+  const origin = request.headers.get("Origin") || "";
+  return isNativeAppOrigin(origin) ? origin : null;
 }
 
 function timingSafeEqual(left, right) {
@@ -193,11 +225,13 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const allowedOrigin = resolveAllowedOrigin(request, env);
-    const corsOrigin = allowedOrigin || "null";
+    const requestOrigin = request.headers.get("Origin") || "";
+    const nativeAppOrigin = !allowedOrigin && isNativeAppOrigin(requestOrigin);
+    const corsOrigin = resolveCorsOrigin(request, env) || "null";
 
     // Handle CORS preflight
     if (request.method === "OPTIONS") {
-      if (!allowedOrigin) {
+      if (corsOrigin === "null") {
         return new Response(null, { status: 403 });
       }
       return new Response(null, {
@@ -222,7 +256,26 @@ export default {
       && timingSafeEqual(proxyKey, expectedProxyToken),
     );
 
-    if (request.headers.get("Origin") && !allowedOrigin) {
+    // The native build's own credential, injected at package time (see
+    // tools/inject_native_app_key.mjs). Deliberately NOT the backend hop token:
+    // this one ships inside an APK, so it is extractable by anyone holding the
+    // binary and must be rotatable without touching the backend's own access.
+    // It raises the cost of abuse from "send a header" to "decompile a build";
+    // it is not a secret, and nothing that needs to be one may rest on it.
+    // Unset means inert -- no caller is authorised by this path.
+    const expectedAppToken = env.APP_PROXY_TOKEN || "";
+    const appAuthorized = Boolean(
+      expectedAppToken
+      && proxyKey
+      && timingSafeEqual(proxyKey, expectedAppToken),
+    );
+
+    // An Origin the Worker will not even reflect is refused outright. Native
+    // app origins are reflectable, so they fall through to the per-route
+    // authorisation gates rather than being rejected here -- which is what
+    // previously 403'd the Capacitor build on EVERY route, including the public
+    // model assets that a caller sending no Origin at all could already fetch.
+    if (requestOrigin && corsOrigin === "null") {
       return new Response("Forbidden: origin is not allowed.", {
         status: 403,
         headers: { "Vary": "Origin", "Content-Type": "text/plain" },
@@ -234,8 +287,13 @@ export default {
       // a cross-origin fetch, so the app is unaffected; a header-less caller
       // (curl, a script) previously reached every backend route with the
       // Worker's own credentials attached, burning Zyte quota and Space CPU.
-      if (!allowedOrigin && !backendAuthorized) {
-        return new Response("Forbidden: proxy authentication is required.", {
+      // A native app origin is reflectable but carries no authority of its own,
+      // so the packaged build has to present APP_PROXY_TOKEN like any other
+      // non-browser caller.
+      if (!allowedOrigin && !backendAuthorized && !appAuthorized) {
+        return new Response(nativeAppOrigin
+          ? "Forbidden: this build is missing its proxy key. Package it with tools/inject_native_app_key.mjs."
+          : "Forbidden: proxy authentication is required.", {
           status: 403,
           headers: { "Vary": "Origin", "Content-Type": "text/plain" },
         });
@@ -297,16 +355,26 @@ export default {
       // and clientToken is caller-supplied, so per-device dedupe upstream is not
       // a substitute for authenticating the caller here.
       //
-      // TODO(android): the Capacitor build sends Origin: https://localhost and
-      // holds no key, so it cannot use this route yet — allowlisting that origin
-      // would not help, since anything that is not a browser can send it. Giving
-      // the app a real credential needs a build-time secret injection step that
-      // public/ does not have today (public/ ships verbatim to GitHub Pages, so
-      // a key committed there would be published). Until then the web build
-      // talks to Supabase directly, which its origin already satisfies.
-      if (!allowedOrigin && !backendAuthorized) {
+      // The Capacitor build sends Origin: https://localhost, which is reflected
+      // for CORS but grants nothing here -- anything that is not a browser can
+      // send that header, so allowlisting it would have opened these writes to
+      // the world. Instead the packaged build carries APP_PROXY_TOKEN, injected
+      // into the copied web assets at package time by
+      // tools/inject_native_app_key.mjs so the key never enters public/ (which
+      // ships verbatim to GitHub Pages, where a committed key would be public).
+      //
+      // Be clear about what that buys: a key inside an APK is extractable by
+      // anyone holding the APK. It is a cost barrier, not a secret. It is a
+      // token separate from PROXY_AUTH_TOKEN precisely so that when it leaks it
+      // can be rotated on its own without disturbing the backend hop, and so a
+      // leaked app key never confers the backend's identity.
+      if (!allowedOrigin && !backendAuthorized && !appAuthorized) {
         return new Response(
-          JSON.stringify({ error: "Proxy authentication is required." }),
+          JSON.stringify({
+            error: nativeAppOrigin
+              ? "This build is missing its proxy key. Package it with tools/inject_native_app_key.mjs."
+              : "Proxy authentication is required.",
+          }),
           { status: 403, headers: corsHeaders },
         );
       }
@@ -548,8 +616,10 @@ export default {
             status: 403, headers: { "Access-Control-Allow-Origin": corsOrigin, "Vary": "Origin" }
         });
     }
-    if (!allowedOrigin && !backendAuthorized) {
-      return new Response("Forbidden: proxy authentication is required.", {
+    if (!allowedOrigin && !backendAuthorized && !appAuthorized) {
+      return new Response(nativeAppOrigin
+        ? "Forbidden: this build is missing its proxy key. Package it with tools/inject_native_app_key.mjs."
+        : "Forbidden: proxy authentication is required.", {
         status: 403,
         headers: { "Vary": "Origin", "Content-Type": "text/plain" },
       });

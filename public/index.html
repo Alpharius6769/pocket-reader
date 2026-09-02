@@ -132,6 +132,7 @@ Fully self-contained so no versioned module needs to change.
 Preload render-critical modules in parallel during initial HTML parsing.
 Playback-only modules remain deferred so they do not compete with first paint.
 -->
+<link rel="modulepreload" href="assets/js/native_app_key.js?v=native-key-v1">
 <link rel="modulepreload" href="assets/js/diagnostics.js?v=diag-v7">
 <link rel="modulepreload" href="assets/js/motion_lite.js">
 <link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v19">
@@ -144,11 +145,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v26">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v17">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v128">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v130">
 <link rel="modulepreload" href="assets/js/library_manager.js?v=library-v40">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v8">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v16">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v161">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v163">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v8">
 
 <!-- ==========================================
@@ -165,7 +166,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.indexOf('/debug/') !== -1 || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=229', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=231', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -1529,6 +1530,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
         <button onclick="if(typeof window._stopCaching==='function') window._stopCaching()" class="pr-btn-outline pr-layout-186">Stop Caching Completely</button>
       </div>
     </div>
+    <script src='assets/js/native_app_key.js?v=native-key-v1' type='module'></script>
     <script src='assets/js/diagnostics.js?v=diag-v7' type='module'></script>
     <script src='assets/js/storage_core.js?v=storage-v19' type='module'></script>
     <script src='assets/js/sync_core.js?v=sync-v15' type='module'></script>
@@ -1543,10 +1545,10 @@ Playback-only modules remain deferred so they do not compete with first paint.
          itself is only downloaded when the masterlist view is opened. -->
     <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v7' type='module'></script>
     <script src='assets/js/device_setup.js?v=device-setup-v17' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v128' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v130' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v8' type='module'></script>
     <script src='assets/js/reader_features.js?v=features-v16' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v161' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v163' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v8' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v5' type='module'></script>
   </div>
