@@ -197,9 +197,12 @@ test('the measured-worse model swap stays reverted, with the numbers kept', asyn
   assert.match(w, /REVERTED on measurement/);
   assert.match(w, /quantized run A     587 MB/);
 
-  // Same engine as before means the v2 renders are valid again; bumping would
-  // force a third full re-render for an identical render.
-  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov2';/);
+  // The version moved to v3, and NOT because the model changed -- it did not.
+  // Clause-level prosody did: seam silence sized to punctuation, and a slight
+  // ritardando into a terminal. That genuinely changes the rendered audio, so
+  // v2 chunks are stale and must not be replayed. The rule this test still
+  // guards is the real one: bump for a changed RENDER, never for a no-op swap.
+  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';/);
 
   // The reasoning above only holds while this stays a CPU-only path.
   assert.match(code, /executionProviders: \['wasm'\]/);

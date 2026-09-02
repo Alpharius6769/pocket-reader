@@ -379,50 +379,116 @@ function wordPiecesOf(unitText) {
 // rather than the pathological one. Slicing token ids blindly there -- which is
 // what the previous version did once a unit was oversized -- would put a cut
 // inside a word, and that is exactly the artefact this cap must not introduce.
-function packUnitsIntoChunks(units) {
+// ── Clause prosody ──────────────────────────────────────────────────────────
+// Two things were missing here that Pocket has had all along.
+//
+// 1. SEAM SILENCE. A paragraph is packed into chunks and each chunk is a
+//    separate inference, then the results were concatenated with merged.set()
+//    at zero offset -- back to back, no gap at all. The model renders the
+//    punctuation INSIDE a chunk (that is what putting the marks back buys), but
+//    it cannot know a chunk boundary happened, so two sentences split across
+//    chunks ran together with no breath between them. That is the flat,
+//    hurried delivery on long paragraphs, and it got worse the longer the
+//    paragraph, because longer paragraphs mean more seams.
+//
+// 2. PACE SHAPE. speed was one scalar for the whole paragraph. Real narration
+//    slows into a full stop and carries on through a comma. The shaping below
+//    is deliberately small -- a few percent -- because the failure mode of
+//    overdoing it is seasick delivery that sounds worse than flat.
+//
+// The pause table is Pocket's PUNCT_PAUSE_SEC verbatim, so a reader switching
+// engines hears the same breathing rather than a different narrator.
+const PUNCT_PAUSE_SEC = {
+  '.': 0.38, '!': 0.42, '?': 0.42, '\u2026': 0.60,
+  ',': 0.18, ';': 0.26, ':': 0.26, '\u2014': 0.28,
+};
+const DEFAULT_SEAM_PAUSE_SEC = 0.12;
+const PARAGRAPH_TAIL_PAUSE_SEC = 0.5;
+
+// A terminal mark gets a slight ritardando, a comma keeps its pace. Clamped
+// tight: this is phrasing, not a tempo effect.
+const CLAUSE_SPEED_SCALE = {
+  '.': 0.97, '!': 0.98, '?': 0.98, '\u2026': 0.95,
+  ',': 1.0, ';': 0.99, ':': 0.99, '\u2014': 0.99,
+};
+
+function pauseAfterMark(mark, expressive) {
+  if (!expressive) return 0;
+  if (!mark) return DEFAULT_SEAM_PAUSE_SEC;
+  const sec = PUNCT_PAUSE_SEC[mark];
+  return sec == null ? DEFAULT_SEAM_PAUSE_SEC : sec;
+}
+
+function speedForMark(baseSpeed, mark, expressive) {
+  if (!expressive || !mark) return baseSpeed;
+  const scale = CLAUSE_SPEED_SCALE[mark];
+  const shaped = scale == null ? baseSpeed : baseSpeed * scale;
+  // Never leave the range the graph was exported for, whatever the base is.
+  return Math.max(0.5, Math.min(2, shaped));
+}
+
+function silenceFrames(seconds, sampleRate) {
+  const frames = Math.max(0, Math.round((Number(seconds) || 0) * sampleRate));
+  return frames > 0 ? new Float32Array(frames) : null;
+}
+
+function packUnitsIntoChunks(units, unitMarks = []) {
   const limit = chunkTokenLimit();
   const chunks = [];
+  const chunkMarks = [];
   let current = [];
+  let currentMark = '';
+  // The mark a chunk ends on is the mark of the LAST unit packed into it. A
+  // chunk split mid-unit (an oversized clause) ends on nothing, and correctly
+  // gets the neutral seam pause rather than a full stop it never reached.
   const flush = () => {
-    if (current.length) { chunks.push(current); current = []; }
+    if (current.length) { chunks.push(current); chunkMarks.push(currentMark); current = []; currentMark = ''; }
   };
   // Both call sites below only reach this with ids that already fit, but an
   // oversized chunk would be handed to a graph whose sequence axis is 512 and
   // fail at inference rather than here -- so the invariant is enforced, not
   // assumed.
-  const add = (ids) => {
+  const add = (ids, mark = '') => {
     if (ids.length > limit) {
       flush();
       for (let index = 0; index < ids.length; index += limit) {
         chunks.push(ids.slice(index, index + limit));
+        chunkMarks.push(index + limit >= ids.length ? mark : '');
       }
       return;
     }
     if (current.length + ids.length > limit) flush();
     current = current.length ? current.concat(ids) : ids.slice();
+    if (mark) currentMark = mark;
   };
 
-  for (const unit of units) {
+  units.forEach((unit, unitIndex) => {
+    const mark = unitMarks[unitIndex] || '';
     const ids = tokenizePhonemes(unit);
-    if (!ids.length) continue;
-    if (ids.length <= limit) { add(ids); continue; }
+    if (!ids.length) return;
+    if (ids.length <= limit) { add(ids, mark); return; }
 
     flush();
-    for (const word of wordPiecesOf(unit)) {
+    const words = wordPiecesOf(unit);
+    words.forEach((word, wordIndex) => {
       const wordIds = tokenizePhonemes(word);
-      if (!wordIds.length) continue;
+      if (!wordIds.length) return;
+      // Only the LAST piece of a split clause carries the clause's mark; the
+      // pieces before it are mid-sentence and must not be given a full stop.
+      const wordMark = wordIndex === words.length - 1 ? mark : '';
       if (wordIds.length > limit) {
         flush();
         for (let index = 0; index < wordIds.length; index += limit) {
           chunks.push(wordIds.slice(index, index + limit));
+          chunkMarks.push(index + limit >= wordIds.length ? wordMark : '');
         }
-        continue;
+        return;
       }
-      add(wordIds);
-    }
-  }
+      add(wordIds, wordMark);
+    });
+  });
   flush();
-  return chunks;
+  return { chunks, chunkMarks };
 }
 
 async function runChunk(tokenIds, voiceData, speed) {
@@ -440,6 +506,9 @@ async function runChunk(tokenIds, voiceData, speed) {
 async function generate(text, voiceId, opts = {}) {
   if (!isReady) throw new Error('Kokoro engine is not initialized.');
   const speed = Math.max(0.5, Math.min(2, Number(opts.speed) || 1));
+  // Defaults ON: flat delivery was never a choice anyone made, it was the
+  // absence of this code. Settings can still turn it off.
+  const expressive = opts.expressive !== false;
   const voiceData = await loadVoice(voiceId);
   // phonemize() returns an ARRAY, one entry per clause, splitting ON
   // punctuation and dropping the mark ("Hello there, this is a test." ->
@@ -463,8 +532,11 @@ async function generate(text, voiceId, opts = {}) {
   // marks (a stripped [2s] tag, an expanded contraction).
   const marks = clauseMarksFrom(spoken);
   const aligned = marks.length === clauses.length;
+  const unitMarks = clauses.map((clause, index) => (
+    aligned ? marks[index] : (index < clauses.length - 1 ? ',' : '')
+  ));
   const units = clauses.map((clause, index) => {
-    const mark = aligned ? marks[index] : (index < clauses.length - 1 ? ',' : '');
+    const mark = unitMarks[index];
     // Trailing space between clauses; the vocab has one, and without it two
     // clauses run together as a single word.
     return `${clause}${mark}${index < clauses.length - 1 ? ' ' : ''}`;
@@ -473,19 +545,30 @@ async function generate(text, voiceId, opts = {}) {
 
   const pieces = [];
   let total = 0;
-  const chunks = packUnitsIntoChunks(units);
+  const { chunks, chunkMarks } = packUnitsIntoChunks(units, unitMarks);
   if (!chunks.length) return new Float32Array(0);
-  for (const chunk of chunks) {
+  let rendered = 0;
+  for (let index = 0; index < chunks.length; index += 1) {
     // Cancelling must FAIL the request, not resolve it short. Breaking out and
     // returning what had been produced so far reported generate_done with
     // truncated audio, and the caller has no way to know it is incomplete — it
     // caches it, so a paragraph interrupted once stays half-spoken forever.
     if (cancelRequested) throw new Error('Narration cancelled.');
-    const audio = await runChunk(chunk, voiceData, speed);
+    const mark = chunkMarks[index] || '';
+    const audio = await runChunk(chunks[index], voiceData, speedForMark(speed, mark, expressive));
     pieces.push(audio);
     total += audio.length;
+    rendered += 1;
+    // Silence AFTER the chunk, sized to the punctuation the listener just
+    // heard. The final chunk gets the paragraph tail instead, so consecutive
+    // paragraphs do not run together either.
+    const gapSec = index === chunks.length - 1
+      ? (expressive ? PARAGRAPH_TAIL_PAUSE_SEC : 0)
+      : pauseAfterMark(mark, expressive);
+    const gap = silenceFrames(gapSec, SAMPLE_RATE);
+    if (gap) { pieces.push(gap); total += gap.length; }
   }
-  if (pieces.length !== chunks.length) throw new Error('Narration ended before every chunk was rendered.');
+  if (rendered !== chunks.length) throw new Error('Narration ended before every chunk was rendered.');
   if (pieces.length === 1) return pieces[0];
   const merged = new Float32Array(total);
   let offset = 0;

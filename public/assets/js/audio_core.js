@@ -157,10 +157,10 @@ const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // v2 audio cached on THOSE devices was rendered without espeak's dictionaries.
 // Reverting the key re-serves it. That is not a regression -- it is the state
 // they were already in -- and fixing it would cost everyone else a re-render.
-const KOKORO_NARRATION_CACHE_VERSION = 'kokorov2';
+const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';
 // Kitten renders are versioned on their own axis: a different model produces
 // different audio for the same (text, voice), so the two must not share a key.
-const KITTEN_NARRATION_CACHE_VERSION = 'kittenv1';
+const KITTEN_NARRATION_CACHE_VERSION = 'kittenv2';
 const NEURAL_CACHE_VERSIONS = Object.freeze({
   kokoro: KOKORO_NARRATION_CACHE_VERSION,
   kitten: KITTEN_NARRATION_CACHE_VERSION,
@@ -1400,8 +1400,8 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v20',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v9',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v23',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v12',
           pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v75',
         };
         const workerScript = new URL(

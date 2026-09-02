@@ -176,7 +176,7 @@ try {
     const samples = [];
     samples.push(await measure('baseline (page only, no worker)'));
 
-    const worker = new Worker(`${base}/assets/js/kokoro_worker.js?v=kokoro-v20`, { type: 'module' });
+    const worker = new Worker(`${base}/assets/js/kokoro_worker.js?v=kokoro-v23`, { type: 'module' });
     const waitFor = (types, timeoutMs, label) => new Promise((settle) => {
       const timer = setTimeout(() => settle({ type: 'timeout', error: `${label} timed out` }), timeoutMs);
       const onMessage = (event) => {

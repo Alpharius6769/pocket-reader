@@ -97,7 +97,7 @@ test('the worker bounds its own memory the way this device needs', async () => {
   assert.match(worker, /const MAX_TOKENS = 512;/);
   // Was chunkTokenIds(), a blind slice every 510 ids. Splitting still never
   // truncates, but it now falls between clauses instead of inside a word.
-  assert.match(worker, /function packUnitsIntoChunks\(units\)/);
+  assert.match(worker, /function packUnitsIntoChunks\(units, unitMarks = \[\]\)/);
   assert.doesNotMatch(worker, /\.slice\(0, MAX_TOKENS\)/, 'must split, never truncate');
   // Same preallocate-from-Content-Length shape the Pocket loader needed.
   assert.match(worker, /const out = new Uint8Array\(declared\);/);
@@ -332,7 +332,9 @@ test('a cancelled generation fails instead of caching truncated audio', async ()
   // the caller caches — a paragraph interrupted once stayed half-spoken forever.
   assert.doesNotMatch(fn, /if \(cancelRequested\) break;/);
   assert.match(fn, /if \(cancelRequested\) throw new Error\('Narration cancelled\.'\);/);
-  assert.match(fn, /if \(pieces\.length !== chunks\.length\) throw new Error/);
+  // Counted on inferences, not on `pieces`: that array now also carries the
+  // inter-chunk silence, so its length is no longer the chunk count.
+  assert.match(fn, /if \(rendered !== chunks\.length\) throw new Error/);
 });
 
 // The most consequential audit finding: caching is the entire reason Kokoro
@@ -586,16 +588,22 @@ test('a Kokoro chunk boundary can only fall between clauses', async () => {
   // concatenated, so a long paragraph fractured audibly inside a word.
   assert.doesNotMatch(worker, /function chunkTokenIds\(/,
     'the blind fixed-stride splitter must be gone');
-  assert.match(worker, /function packUnitsIntoChunks\(units\)/);
-  assert.match(worker, /const chunks = packUnitsIntoChunks\(units\);/);
+  assert.match(worker, /function packUnitsIntoChunks\(units, unitMarks = \[\]\)/);
+  assert.match(worker, /packUnitsIntoChunks\(units, unitMarks\)/);
+  // The marks travel WITH the units: a packer that only sees text cannot
+  // know which seam is a full stop and which is mid-sentence.
+  assert.match(worker, /const \{ chunks, chunkMarks \} = packUnitsIntoChunks/);
 
   // The packer takes STRINGS now, not pre-tokenized ids, precisely so it can
   // fall back to word gaps when one clause exceeds the cap on its own.
   assert.match(worker, /function wordPiecesOf\(unitText\)/);
-  assert.match(worker, /for \(const word of wordPiecesOf\(unit\)\)/);
+  assert.match(worker, /wordPiecesOf\(unit\)/);
+  // Indexed rather than for-of: only the LAST piece of a split clause may
+  // carry that clause's mark, or a full stop lands inside a word.
+  assert.match(worker, /wordIndex === words\.length - 1 \? mark : ''/);
 
   const pack = worker.slice(
-    worker.indexOf('function packUnitsIntoChunks(units)'),
+    worker.indexOf('function packUnitsIntoChunks(units, unitMarks'),
     worker.indexOf('async function runChunk('),
   );
   assert.ok(pack.length > 200, 'the packer must be locatable');
@@ -605,8 +613,10 @@ test('a Kokoro chunk boundary can only fall between clauses', async () => {
   // pathological path at a 510-token cap; at 192 (~48 words) a long sentence
   // routinely exceeds the cap, so it is now the common path and a blind slice
   // there would put a cut mid-word on ordinary prose.
-  assert.match(pack, /if \(ids\.length <= limit\) \{ add\(ids\); continue; \}/);
-  assert.match(pack, /flush\(\);\s*\n\s*for \(const word of wordPiecesOf\(unit\)\)/);
+  assert.match(pack, /if \(ids\.length <= limit\) \{ add\(ids, mark\); return; \}/);
+  // forEach rather than for-of, because pairing each unit with its mark needs
+  // the index. The word-gap fallback itself is unchanged.
+  assert.match(pack, /flush\(\);\s*\n\s*const words = wordPiecesOf\(unit\);/);
 
   // Slicing survives only for a single "word" longer than the entire cap.
   assert.match(pack, /if \(wordIds\.length > limit\)[\s\S]{0,220}?wordIds\.slice\(index, index \+ limit\)/);
