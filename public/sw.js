@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v242';
+var CACHE_NAME = 'pocket-reader-core-v244';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -108,6 +108,18 @@ self.addEventListener('message', function (event) {
 // offline shell at all. Cached best-effort below and, if missed, filled in by
 // the fetch handler on first use.
 var OPTIONAL_ASSETS = [
+    // First-run device-setup probes. Neither is needed to boot or narrate: they
+    // run once, during setup, on a device that is online by definition at that
+    // moment, and both degrade gracefully when absent -- the CPU probe falls to
+    // safe WASM settings and the memory probe reports "not measured", which the
+    // tier policy already reads as "stay conservative".
+    //
+    // They were in the ATOMIC core list, where one failed fetch rejects the
+    // whole install and leaves the device with NO offline shell. That is the
+    // exact failure this list was created to prevent, and paying it for a
+    // setup-only asset is the worst version of it.
+    'assets/js/device_benchmark_worker.js?v=device-bench-v1',
+    'assets/js/memory_headroom_worker.js?v=memory-probe-v1',
     'assets/icons/lucide-sprite.svg',
     'assets/fonts/literata-400.woff2',
     'assets/fonts/literata-600.woff2',
@@ -120,9 +132,9 @@ var OPTIONAL_ASSETS = [
 // connection these are the most likely single fetch to fail -- and losing the
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
-    'assets/js/buffer_manager.js?v=buffer-v75',
-    'assets/js/audio_core.js?v=audio-v134',
-    'assets/js/pocket_worker.js?v=pocket-worker-v75',
+    'assets/js/buffer_manager.js?v=buffer-v76',
+    'assets/js/audio_core.js?v=audio-v136',
+    'assets/js/pocket_worker.js?v=pocket-worker-v76',
     'assets/js/kokoro_worker.js?v=kokoro-v23',
     'assets/js/kitten_worker.js?v=kitten-v12',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
@@ -133,32 +145,30 @@ var CORE_ASSETS = [
     './',
     'assets/css/theme.css?v=midnight-v39',
     'assets/js/tts_pronunciation_core.js?v=pron-v23',
-    'assets/js/pocket_backend_policy.js?v=backend-v31',
+    'assets/js/pocket_backend_policy.js?v=backend-v33',
     'assets/js/pocket_performance_policy.js?v=performance-v2',
     'assets/js/native_app_key.js?v=native-key-v1',
     'assets/js/diagnostics.js?v=diag-v7',
     'assets/js/api_core.js?v=search-v25',
     'assets/js/experience_coordinator.js?v=experience-v6',
-    'assets/js/virtue_controller.js?v=virtue-v23',
+    'assets/js/virtue_controller.js?v=virtue-v24',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v170',
+    'assets/js/ui_controller.js?v=ui-v171',
     'assets/js/supabase_bridge.js?v=supabase-v8',
     'assets/js/profile_merge.js?v=merge-v7',
     'assets/js/data_transfer.js?v=transfer-v5',
-    'assets/js/device_setup.js?v=device-setup-v21',
-    'assets/js/device_benchmark_worker.js?v=device-bench-v1',
-    'assets/js/memory_headroom_worker.js?v=memory-probe-v1',
-    'assets/js/settings_manager.js?v=settings-v136',
-    'assets/js/library_manager.js?v=library-v46',
+    'assets/js/device_setup.js?v=device-setup-v22',
+    'assets/js/settings_manager.js?v=settings-v137',
+    'assets/js/library_manager.js?v=library-v47',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v7',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v1',
     'assets/js/hmofa_community.js?v=hmofa-community-v2',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v2',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v73',
-    'assets/js/storage_core.js?v=storage-v22',
-    'assets/js/sync_core.js?v=sync-v18',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v74',
+    'assets/js/storage_core.js?v=storage-v23',
+    'assets/js/sync_core.js?v=sync-v19',
     'assets/js/cinematic_ui.js?v=cinematic-v8',
-    'assets/js/reader_features.js?v=features-v19',
+    'assets/js/reader_features.js?v=features-v20',
     'assets/js/motion_lite.js'
 ];
 

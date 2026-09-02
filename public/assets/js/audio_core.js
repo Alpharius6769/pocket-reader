@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v22';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v23';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -53,7 +53,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v31';
+} from './pocket_backend_policy.js?v=backend-v33';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -1403,7 +1403,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v23',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v12',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v75',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v76',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -4467,7 +4467,12 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
       if (typeof window.renderPocketVoiceOptions === 'function') {
         savedVoice = window.renderPocketVoiceOptions(voiceSelector, savedVoice);
       } else {
-        voiceSelector.innerHTML = `<option value="${POCKET_DEFAULT_VOICE}">Donald Malone - American, Midwestern (Recommended)</option>`;
+        // Label derived, never written out. This line said "Donald Malone -
+        // American, Midwestern (Recommended)" against a value of POCKET_DEFAULT_VOICE
+        // long after that voice was retired, so the fallback picker named one
+        // narrator while a different one spoke.
+        const fallbackLabel = window.getPocketVoiceLabel?.(POCKET_DEFAULT_VOICE) || POCKET_DEFAULT_VOICE;
+        voiceSelector.innerHTML = `<option value="${POCKET_DEFAULT_VOICE}">${fallbackLabel}</option>`;
         voiceSelector.value = POCKET_DEFAULT_VOICE;
         savedVoice = POCKET_DEFAULT_VOICE;
       }

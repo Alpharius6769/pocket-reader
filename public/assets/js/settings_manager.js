@@ -14,9 +14,9 @@ import {
   NARRATION_ENGINE_TIERS,
   voicesForEngine,
   coerceVoiceForEngine,
-} from './pocket_backend_policy.js?v=backend-v31';
+} from './pocket_backend_policy.js?v=backend-v33';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '242';
+export const NARRATION_SERVICE_WORKER_VERSION = '244';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;

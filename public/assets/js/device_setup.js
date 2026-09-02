@@ -8,7 +8,7 @@ import {
   wasmThreadCandidates,
   POCKET_DEVICE_SETUP_KEY,
   isIosLikePlatform,
-} from './pocket_backend_policy.js?v=backend-v31';
+} from './pocket_backend_policy.js?v=backend-v33';
 
 const SETTINGS_RISK_ACK_KEY = 'pr_settings_risk_ack_v1';
 const SUPPORT_NOTICE_KEY = 'pr_device_support_notice_v2';

@@ -161,6 +161,31 @@ export function classifyPocketDeviceCapability(options = {}) {
   };
 }
 
+// The working-memory measurement taken at first-run setup, read back out of the
+// stored record.
+//
+// This exists because passing the probe's result straight into
+// selectNarrationEngine at the ONE call site that ran the probe fixed nothing.
+// That call happens once, during setup, and only decides what gets WRITTEN to
+// the record. Every later decision -- _resolveActiveEngine on each narration
+// request, getNarrationEngineDecision at boot, the two Settings call sites --
+// runs in a fresh page that never saw the probe, passes no headroom, and so
+// collapses every ambiguous device to the conservative floor. The measurement
+// would have decided the label in Settings and never the engine that actually
+// ran: an iPhone 15 Pro measuring 900 MB would still have narrated on Kokoro.
+//
+// So the fallback lives inside the selector rather than at its call sites. A
+// future caller cannot forget it, which is exactly how this was missed once.
+export function readMeasuredHeadroomMb(storage = globalThis.localStorage) {
+  try {
+    const record = readPocketDeviceSetup(storage);
+    const measured = Number(record?.memory?.measured ? record.memory.headroomMb : 0);
+    return Number.isFinite(measured) && measured > 0 ? measured : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
 export function readPocketDeviceSetup(storage = globalThis.localStorage) {
   try {
     const value = JSON.parse(storage?.getItem(POCKET_DEVICE_SETUP_KEY) || 'null');
@@ -1446,8 +1471,13 @@ export function selectNarrationEngine(options = {}) {
     screenWidth: options.screenWidth ?? globalThis.screen?.width ?? 0,
     screenHeight: options.screenHeight ?? globalThis.screen?.height ?? 0,
     deviceMemory: memoryGb,
+    // Explicit value first (the setup run that just measured), then a capability
+    // object that carries one, then the persisted record. Without that last
+    // step the probe only ever informs the decision made during setup itself.
     memoryHeadroomMb: Number(
-      options.memoryHeadroomMb ?? capability.memoryHeadroomMb ?? 0,
+      options.memoryHeadroomMb
+      ?? capability.memoryHeadroomMb
+      ?? readMeasuredHeadroomMb(options.storage),
     ) || 0,
     hardwareConcurrency: options.hardwareConcurrency
       ?? capability.hardwareConcurrency
