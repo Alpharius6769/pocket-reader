@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v19';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v21';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -52,7 +52,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v26';
+} from './pocket_backend_policy.js?v=backend-v29';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -1402,7 +1402,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v20',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v9',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v72',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v74',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,

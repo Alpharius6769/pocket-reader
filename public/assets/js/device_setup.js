@@ -8,7 +8,7 @@ import {
   wasmThreadCandidates,
   POCKET_DEVICE_SETUP_KEY,
   isIosLikePlatform,
-} from './pocket_backend_policy.js?v=backend-v26';
+} from './pocket_backend_policy.js?v=backend-v29';
 
 const SETTINGS_RISK_ACK_KEY = 'pr_settings_risk_ack_v1';
 const SUPPORT_NOTICE_KEY = 'pr_device_support_notice_v2';
@@ -266,6 +266,86 @@ async function benchmarkWebGpu(capability) {
   }
 }
 
+// The measurement that decides which narration engine a device can hold.
+//
+// Everything else first-run setup measures is throughput -- how FAST this phone
+// is. That was never the question. The iPhone failure mode is capacity: a
+// transient spike while ORT builds its session, which either fits or reaps the
+// tab. And capacity is exactly what separates the models a browser cannot tell
+// apart, since an iPhone 14 Pro and a 15 Pro report identical geometry, cores
+// and user agent while belonging on different tiers.
+//
+// The probe climbs in 32 MB steps inside a worker and reports each step as it
+// lands. Two outcomes are both useful:
+//   - it reaches the ceiling or fails to allocate -> the worker reports a total
+//   - iOS reaps the worker without an error -> onerror or the watchdog fires,
+//     and the last progress message is the answer
+// The second case is why progress is streamed rather than summarised at the
+// end: on iOS an allocation failure is frequently not an exception at all.
+async function benchmarkMemoryHeadroom(capability) {
+  if (typeof Worker !== 'function') {
+    return { measured: false, headroomMb: 0, reason: 'Workers are unavailable in this browser.' };
+  }
+  // A ceiling past the top tier's requirement buys nothing but risk: every
+  // engine is already unlocked, so there is no decision left to inform.
+  const ceilingMb = capability.lowMemoryMode === true ? 512 : 1024;
+  let worker = null;
+  try {
+    worker = new Worker('assets/js/memory_headroom_worker.js?v=memory-probe-v1');
+  } catch (error) {
+    return { measured: false, headroomMb: 0, reason: error?.message || String(error) };
+  }
+  let highWater = 0;
+  try {
+    return await new Promise((resolve) => {
+      let settled = false;
+      const finish = (payload) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watchdog);
+        resolve(payload);
+      };
+      // Generous, because the probe is deliberately doing the slowest thing a
+      // phone can do. It exists so a reaped worker that never fires onerror
+      // still produces the high-water mark instead of hanging setup forever.
+      const watchdog = setTimeout(() => finish({
+        measured: highWater > 0,
+        headroomMb: highWater,
+        stoppedBy: 'timeout',
+        reason: 'The memory probe did not finish in time.',
+      }), 20000);
+      worker.onmessage = (event) => {
+        const data = event.data || {};
+        if (data.type === 'progress') {
+          highWater = Math.max(highWater, Number(data.heldMb) || 0);
+          setSetupProgress(62, `Measuring working memory (${highWater} MB)...`);
+          return;
+        }
+        if (data.type === 'result') {
+          finish({
+            measured: true,
+            headroomMb: Math.max(highWater, Number(data.headroomMb) || 0),
+            stoppedBy: data.stoppedBy,
+            ceilingMb: data.ceilingMb,
+            elapsedMs: data.elapsedMs,
+          });
+        }
+      };
+      // The reap case. The worker is gone, but every step it survived was
+      // already reported, so the high-water mark is a real measurement.
+      worker.onerror = () => finish({
+        measured: highWater > 0,
+        headroomMb: highWater,
+        stoppedBy: 'worker-terminated',
+        reason: 'The device stopped the probe, which is itself the answer.',
+      });
+      worker.postMessage({ type: 'measure', ceilingMb });
+    });
+  } finally {
+    try { worker.terminate(); } catch (_) { /* already gone */ }
+  }
+}
+
 function benchmarkPassed(cpuResults) {
   const valid = cpuResults.filter((result) => !result.failures && Number.isFinite(result.medianMs));
   if (!valid.length) return false;
@@ -317,6 +397,9 @@ export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
       benchmarkPassed: passed,
     });
 
+    setSetupProgress(62, 'Measuring working memory...');
+    const memory = await benchmarkMemoryHeadroom(capability);
+
     setSetupProgress(70, 'Testing WebGPU FP16 safely...');
     const webgpu = await benchmarkWebGpu(capability);
     support = classifyPocketDeviceSupport({
@@ -339,10 +422,18 @@ export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
     // on a memory-constrained phone is the more consequential decision — the
     // difference between Pocket's three sessions and Kokoro's one. Record it
     // alongside the backend so first-run setup reports both.
+    //
+    // memoryHeadroomMb is the point of the probe above. Without it this call
+    // falls back to screen geometry on iOS, which cannot separate an iPhone
+    // 14 Pro from a 15 Pro -- identical size, identical cores, opposite tiers.
+    // Passing 0 when the probe could not run is deliberate: the policy reads
+    // that as "no measurement" and takes the conservative candidate rather than
+    // treating a failed probe as evidence of a small device.
     const narration = selectNarrationEngine({
       capability,
       userAgent: navigator.userAgent || '',
       deviceMemory: Number(capability.deviceMemoryGb || navigator.deviceMemory || 0),
+      memoryHeadroomMb: memory.measured ? Number(memory.headroomMb) || 0 : 0,
       lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
       storage: localStorage,
     });
@@ -351,6 +442,7 @@ export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
       support,
       cpuResults,
       webgpu,
+      memory,
       narrationEngine: narration.engine,
       narrationEngineReason: narration.reason,
       narrationEngineAutomatic: narration.automatic,

@@ -7,47 +7,109 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const read = (rel) => readFile(path.join(ROOT, rel), 'utf8');
 const policy = await import('../public/assets/js/pocket_backend_policy.js');
 
-const ios = (w, h) => policy.selectNarrationEngine({
-  capability: { platform: 'ios' }, screenWidth: w, screenHeight: h, storage: null });
-const android = (mem, cores) => policy.selectNarrationEngine({
-  capability: { platform: 'android' }, deviceMemory: mem, hardwareConcurrency: cores, storage: null });
+const ios = (w, h, memoryHeadroomMb = 0) => policy.selectNarrationEngine({
+  capability: { platform: 'ios' }, screenWidth: w, screenHeight: h, memoryHeadroomMb, storage: null });
+const android = (mem, cores, memoryHeadroomMb = 0) => policy.selectNarrationEngine({
+  capability: { platform: 'android' }, deviceMemory: mem, hardwareConcurrency: cores,
+  memoryHeadroomMb, storage: null });
+
+// Headroom figures that stand in for a device class, read against
+// ENGINE_HEADROOM_MB: below Kokoro's floor, between the two, above Pocket's.
+const SMALL = 120;
+const MID = 500;
+const LARGE = 900;
 
 test('the iOS ladder places each generation on its intended tier', () => {
-  // Geometry is the ONLY signal that tracks iPhone generation -- Safari reports
-  // neither RAM nor model.
+  // Target mapping: 15 Pro and above -> Pocket, 13 through 14 Pro -> Kokoro,
+  // older than 13 -> Kitten. Sizes that only ever belonged to one model family
+  // need no measurement at all.
   assert.equal(ios(440, 956).engine, 'pocket', 'iPhone 16 Pro Max');
   assert.equal(ios(402, 874).engine, 'pocket', 'iPhone 16 Pro');
-  assert.equal(ios(393, 852).engine, 'kokoro', 'iPhone 14 Pro / 15 / 16');
-  assert.equal(ios(430, 932).engine, 'kokoro', 'iPhone 15 Plus');
-  assert.equal(ios(390, 844).engine, 'kitten', 'iPhone 13 / 14');
-  assert.equal(ios(375, 812).engine, 'kitten', 'iPhone 13 mini');
+  assert.equal(ios(414, 896).engine, 'kitten', 'iPhone XR / XS Max / 11 / 11 Pro Max');
   assert.equal(ios(375, 667).engine, 'kitten', 'iPhone SE');
+
+  // The 15 Pro sits at 393x852 with the 14 Pro. Only a measurement separates
+  // them, and with one the 15 Pro reaches the tier the product asks for.
+  assert.equal(ios(393, 852, LARGE).engine, 'pocket', 'iPhone 15 Pro / 16');
+  assert.equal(ios(393, 852, MID).engine, 'kokoro', 'iPhone 14 Pro / 15');
+  assert.equal(ios(430, 932, LARGE).engine, 'pocket', 'iPhone 15 Pro Max / 16 Plus');
+  assert.equal(ios(430, 932, MID).engine, 'kokoro', 'iPhone 14 Pro Max / 15 Plus');
+
+  // The 13 sits at 390x844 with the 12. Same story one tier down.
+  assert.equal(ios(390, 844, MID).engine, 'kokoro', 'iPhone 13 / 13 Pro / 14');
+  assert.equal(ios(390, 844, SMALL).engine, 'kitten', 'iPhone 12 on a tight budget');
+  assert.equal(ios(375, 812, MID).engine, 'kokoro', 'iPhone 13 mini');
+  assert.equal(ios(375, 812, SMALL).engine, 'kitten', 'iPhone X / XS / 11 Pro');
 });
 
 test('exact geometries, not ranges -- a 15 Plus must not read as a 16 Pro', () => {
   // A ">= 402 wide and >= 874 tall" rule reads naturally and is wrong: it also
-  // swallows the iPhone 15 Plus at 430x932 and promotes it two tiers.
+  // swallows the iPhone 15 Plus at 430x932 and promotes it two tiers. The
+  // 16 Pro's own size stays unambiguous and needs no measurement.
   assert.equal(ios(430, 932).engine, 'kokoro');
-  assert.notEqual(ios(430, 932).engine, 'pocket');
+  assert.equal(ios(430, 932, MID).engine, 'kokoro');
+  assert.equal(ios(402, 874).engine, 'pocket');
 });
 
-test('the undecidable iPhone 13/14 case resolves DOWNWARD and says so', () => {
-  const r = ios(390, 844);
-  assert.equal(r.engine, 'kitten',
-    'a wrong guess upward crashes the tab on the device that actually OOMs');
-  assert.equal(r.confident, false, 'it must not claim confidence it does not have');
-  assert.match(r.reason, /identical|indistinguishable/i);
-  assert.equal(ios(375, 812).confident, true, 'a device it CAN identify should be confident');
+test('an unmeasured ambiguous device resolves DOWNWARD and says so', () => {
+  // Being wrong downward costs voice quality. Being wrong upward costs the tab.
+  for (const [w, h] of [[393, 852], [430, 932], [390, 844], [375, 812], [428, 926]]) {
+    const r = ios(w, h);
+    assert.equal(r.confident, false, `${w}x${h} must not claim confidence it lacks`);
+    assert.match(r.reason, /identical|device test/i);
+  }
+  assert.equal(ios(393, 852).engine, 'kokoro', 'the 15 Pro bucket floors at Kokoro');
+  assert.equal(ios(390, 844).engine, 'kitten', 'the 13 bucket floors at Kitten');
+  assert.equal(ios(414, 896).confident, true, 'a device it CAN identify should be confident');
+});
+
+test('a measurement makes an ambiguous device confident', () => {
+  const measured = ios(393, 852, LARGE);
+  assert.equal(measured.confident, true);
+  assert.match(measured.reason, /measured 900 MB/);
+});
+
+test('headroom resolves to the best tier the measurement actually supports', () => {
+  const { ENGINE_HEADROOM_MB, resolveTierByHeadroom } = policy;
+  assert.ok(ENGINE_HEADROOM_MB.kitten < ENGINE_HEADROOM_MB.kokoro);
+  assert.ok(ENGINE_HEADROOM_MB.kokoro < ENGINE_HEADROOM_MB.pocket);
+  const set = ['kitten', 'kokoro', 'pocket'];
+  assert.equal(resolveTierByHeadroom(set, ENGINE_HEADROOM_MB.pocket).engine, 'pocket');
+  assert.equal(resolveTierByHeadroom(set, ENGINE_HEADROOM_MB.pocket - 1).engine, 'kokoro');
+  assert.equal(resolveTierByHeadroom(set, ENGINE_HEADROOM_MB.kokoro - 1).engine, 'kitten');
+  // No measurement is not the same as a measurement of zero: it must fall to
+  // the conservative candidate WITHOUT claiming it measured anything.
+  for (const absent of [0, -1, NaN, null, undefined]) {
+    const r = resolveTierByHeadroom(set, absent);
+    assert.equal(r.engine, 'kitten');
+    assert.equal(r.measured, false);
+  }
+});
+
+test('an unknown iOS geometry is decided by measurement, not floored blindly', () => {
+  // A model this table has never seen -- next year's iPhone -- should not be
+  // stuck on Kitten forever when the device can demonstrably do better.
+  assert.equal(ios(500, 1100).engine, 'kitten', 'no measurement: stay safe');
+  assert.equal(ios(500, 1100).confident, false);
+  assert.equal(ios(500, 1100, LARGE).engine, 'pocket', 'measured: let it up');
+  assert.equal(ios(500, 1100, LARGE).confident, true);
 });
 
 test('the Android ladder floors at Kokoro, never Kitten', () => {
-  assert.equal(android(8, 8).engine, 'pocket', '6GB+ and a good CPU');
-  assert.equal(android(6, 8).engine, 'pocket');
-  assert.equal(android(6, 4).engine, 'kokoro', 'enough RAM, too few cores');
+  // navigator.deviceMemory is quantised to a power of two and capped at 8, so
+  // a Pixel 6 Pro holding 12 GB reports 8 and no device ever reports 6.
+  assert.equal(android(8, 8).engine, 'pocket', 'Pixel 6 Pro class');
+  assert.equal(android(8, 6).engine, 'pocket', 'top memory bucket does not need 8 cores');
+  assert.equal(android(8, 4).engine, 'kokoro', 'a weak CPU drops a tier even with the memory');
+  assert.equal(android(4, 8).engine, 'kokoro', '4 GB is too tight for three ORT sessions');
   assert.equal(android(4, 4).engine, 'kokoro', 'weaker Android still gets Kokoro');
   for (const m of [1, 2, 3, 4, 6, 8, 12]) {
     assert.notEqual(android(m, 4).engine, 'kitten', `Android must not fall to Kitten (${m}GB)`);
   }
+  // A measurement outranks the reported bucket in BOTH directions, and the
+  // floor still holds underneath it.
+  assert.equal(android(8, 8, SMALL).engine, 'kokoro', 'a measurement can step a device down');
+  assert.equal(android(4, 4, LARGE).engine, 'pocket', 'and can step one up');
 });
 
 test('an explicit override wins, and only a known engine counts as one', () => {

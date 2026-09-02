@@ -1266,60 +1266,139 @@ export function writeNarrationEngineOverride(storage = globalThis.localStorage, 
 // device who prefers Pocket's voice quality can have it, and a reader on a
 // capable device can pick Kokoro if they would rather have the lighter engine.
 // Returning the reason keeps the settings panel honest about why.
+// Transient headroom, in MB, that each engine needs to survive its worst
+// moment. The number that matters is NOT steady-state synthesis but the spike
+// while ORT builds its session: measured at 396-421 MB for Kokoro against a
+// 298-310 MB steady state, which is why a device that narrates happily for an
+// hour can still die in the first two seconds. Pocket builds a heavier graph
+// still; Kitten's model is roughly 12x smaller than Kokoro's.
+export const ENGINE_HEADROOM_MB = Object.freeze({
+  [KITTEN_ENGINE]: 96,
+  [KOKORO_ENGINE]: 448,
+  [POCKET_ENGINE]: 704,
+});
+
 // iOS device ladder, built from what the web platform ACTUALLY exposes.
 //
-// Intended mapping: iPhone 13 and older -> Kitten, 14/15 -> Kokoro, 16+ ->
-// Pocket. Safari reports neither RAM nor model, so this cannot be read directly.
-// Logical viewport size at devicePixelRatio 3 is the only signal that tracks
-// iPhone generation, because Apple changed display geometry as the hardware
-// moved. These are matched EXACTLY, not as ranges: a ">= 402 wide and >= 874
-// tall" rule reads naturally and is wrong, because it also swallows the iPhone
-// 15 Plus at 430x932 and promotes it two tiers.
+// Target mapping: iPhone 15 Pro and above -> Pocket, iPhone 13 through 14 Pro
+// -> Kokoro, anything older than a 13 -> Kitten.
+//
+// Safari reports neither RAM nor model, and logical viewport size is the only
+// signal that tracks iPhone generation. But geometry alone CANNOT express the
+// mapping above, and pretending otherwise is how a device gets promoted into a
+// crash: an iPhone 14 Pro and an iPhone 15 Pro are both 393x852 and are
+// byte-identical to a browser, yet they sit on opposite sides of the boundary.
+// The same is true of the 12/13 pair at 390x844.
+//
+// So geometry resolves to a CANDIDATE SET, ordered low tier first, and the
+// measured headroom probe from first-run setup decides within it. With no
+// measurement the set collapses to its lowest member -- the conservative end --
+// because guessing upward is what kills the tab. Sizes are matched EXACTLY, not
+// as ranges: a ">= 402 wide and >= 874 tall" rule reads naturally and is wrong,
+// because it also swallows the iPhone 15 Plus at 430x932.
+const IOS_GEOMETRY = Object.freeze({
+  // Unambiguous: every model shipping this size belongs on one tier.
+  '440x956': { candidates: [POCKET_ENGINE], note: 'iPhone 16 Pro Max' },
+  '402x874': { candidates: [POCKET_ENGINE], note: 'iPhone 16 Pro' },
+  '414x896': { candidates: [KITTEN_ENGINE], note: 'iPhone XR, XS Max, 11 or 11 Pro Max' },
+  '375x667': { candidates: [KITTEN_ENGINE], note: 'iPhone SE' },
+  // Straddles the Pocket boundary: the 15 Pro and 16 belong on Pocket, the
+  // 14 Pro and 15 do not, and all four report the same size.
+  '393x852': { candidates: [KOKORO_ENGINE, POCKET_ENGINE], note: 'iPhone 14 Pro, 15, 15 Pro or 16' },
+  '430x932': { candidates: [KOKORO_ENGINE, POCKET_ENGINE], note: 'iPhone 14 Pro Max, 15 Plus, 15 Pro Max or 16 Plus' },
+  // Straddles the Kokoro boundary: the 13 and 14 belong on Kokoro, the 12 does not.
+  '390x844': { candidates: [KITTEN_ENGINE, KOKORO_ENGINE], note: 'iPhone 12, 12 Pro, 13, 13 Pro or 14' },
+  '428x926': { candidates: [KITTEN_ENGINE, KOKORO_ENGINE], note: 'iPhone 12 Pro Max, 13 Pro Max or 14 Plus' },
+  '375x812': { candidates: [KITTEN_ENGINE, KOKORO_ENGINE], note: 'iPhone X, XS, 11 Pro, 12 mini or 13 mini' },
+});
+
+// Picks the best candidate the measured headroom actually supports. Absent a
+// measurement this returns the lowest candidate rather than the likeliest one:
+// being wrong downward costs voice quality, being wrong upward costs the tab.
+export function resolveTierByHeadroom(candidates, headroomMb) {
+  const measured = Number(headroomMb);
+  if (!Number.isFinite(measured) || measured <= 0) {
+    return { engine: candidates[0], measured: false };
+  }
+  for (let index = candidates.length - 1; index >= 0; index -= 1) {
+    if (measured >= ENGINE_HEADROOM_MB[candidates[index]]) {
+      return { engine: candidates[index], measured: true };
+    }
+  }
+  return { engine: candidates[0], measured: true };
+}
+
 export function classifyIosNarrationTier(signals = {}) {
   const w = Number(signals.screenWidth || 0);
   const h = Number(signals.screenHeight || 0);
+  const headroomMb = Number(signals.memoryHeadroomMb || 0);
   if (!w || !h) {
     return { engine: KITTEN_ENGINE, confident: false,
       reason: 'This browser did not report a screen size, so the lightest engine is the safe default.' };
   }
   const key = `${Math.min(w, h)}x${Math.max(w, h)}`;
-  const IOS_GEOMETRY = {
-    '402x874': { engine: POCKET_ENGINE, note: 'iPhone 16 Pro' },
-    '440x956': { engine: POCKET_ENGINE, note: 'iPhone 16 Pro Max' },
-    '393x852': { engine: KOKORO_ENGINE, note: 'iPhone 14 Pro / 15 / 16' },
-    '430x932': { engine: KOKORO_ENGINE, note: 'iPhone 14 Pro Max / 15 Plus / 16 Plus' },
-  };
   const hit = IOS_GEOMETRY[key];
-  if (hit) {
-    return { engine: hit.engine, confident: true,
+  // An unrecognised size is a device this table has never seen -- a new model,
+  // an iPad, or a browser reporting something unexpected. Measurement is the
+  // only thing that can speak for it, so let it, and floor at Kitten otherwise.
+  if (!hit) {
+    const open = resolveTierByHeadroom([KITTEN_ENGINE, KOKORO_ENGINE, POCKET_ENGINE], headroomMb);
+    return {
+      engine: open.engine,
+      confident: open.measured,
+      reason: open.measured
+        ? `This device is not a known iPhone model, but it measured ${Math.round(headroomMb)} MB of working memory.`
+        : 'This screen size does not match a known iPhone, so the lightest engine is the safe default.',
+    };
+  }
+  if (hit.candidates.length === 1) {
+    return { engine: hit.candidates[0], confident: true,
       reason: `This screen size belongs to the ${hit.note} family.` };
   }
-  // Everything else is iPhone 14 non-Pro or older. 390x844 is genuinely
-  // undecidable -- an iPhone 13 and an iPhone 14 are byte-identical to a
-  // browser -- and it resolves DOWN, because the 13 is the device that actually
-  // runs out of memory and guessing upward crashes the tab.
-  const ambiguous = key === '390x844' || key === '428x926';
+  const resolved = resolveTierByHeadroom(hit.candidates, headroomMb);
   return {
-    engine: KITTEN_ENGINE,
-    confident: !ambiguous,
-    reason: ambiguous
-      ? 'iPhone 13 and iPhone 14 look identical to a browser, so the lighter engine is used. You can change this below.'
-      : 'This screen size belongs to iPhone 13 mini or older.',
+    engine: resolved.engine,
+    confident: resolved.measured,
+    reason: resolved.measured
+      ? `This device measured ${Math.round(headroomMb)} MB of working memory, which is what tells its family (${hit.note}) apart.`
+      : `These models (${hit.note}) are identical to a browser, so the lighter engine is used until the device test runs. You can change this below.`,
   };
 }
 
-// Android ladder. Chrome DOES report deviceMemory here, so this can be direct.
-// Per the product rule, Android's floor is Kokoro rather than Kitten.
+// Android ladder. Chrome DOES report deviceMemory here, so this can be direct
+// -- with one trap worth naming: navigator.deviceMemory is quantised to a power
+// of two AND capped at 8. A Pixel 6 Pro holding 12 GB reports 8, and no device
+// ever reports 6. A `>= 6` threshold therefore reads as a middle setting and
+// behaves as `>= 8`, so the buckets below are written as the values that can
+// actually arrive.
+//
+// Android runs the higher tiers more comfortably than iOS at equivalent RAM:
+// there is no per-tab jetsam budget as tight as Safari's, and Chrome reports
+// enough to decide honestly. So the floor is Kokoro, never Kitten, and the top
+// bucket goes to Pocket on memory alone rather than requiring a core count too
+// -- a Pixel 6 Pro (8 as reported, 8 cores) and an 8 GB device with 6 big cores
+// both hold a Pocket session fine, and the old `cores >= 8` rule sent the
+// second one down a tier for no measured reason.
 export function classifyAndroidNarrationTier(signals = {}) {
   const memoryGb = Number(signals.deviceMemory || 0);
   const cores = Number(signals.hardwareConcurrency || 0);
-  if (memoryGb >= 6 && cores >= 8) {
+  const headroomMb = Number(signals.memoryHeadroomMb || 0);
+
+  // A real measurement outranks the reported bucket in both directions: it is
+  // the quantity that decides whether the session build survives.
+  if (Number.isFinite(headroomMb) && headroomMb > 0) {
+    const resolved = resolveTierByHeadroom([KOKORO_ENGINE, POCKET_ENGINE], headroomMb);
+    return { engine: resolved.engine, confident: true,
+      reason: `This device measured ${Math.round(headroomMb)} MB of working memory.` };
+  }
+  // 6 rather than the old 8. Every current Android flagship and most
+  // mid-rangers report 8 big.LITTLE cores, so requiring 8 only ever demoted
+  // the handful of 6-core devices that hold a Pocket session perfectly well.
+  // A report of 4 in 2026 is a genuinely weak CPU, and Pocket's three sessions
+  // would synthesise too slowly to be worth the memory, so that keeps Kokoro.
+  if (memoryGb >= 8 && cores >= 6) {
     return { engine: POCKET_ENGINE, confident: true,
       reason: `This device reports ${memoryGb} GB of RAM and ${cores} CPU cores.` };
-  }
-  if (memoryGb >= 6 && cores > 0 && cores < 8) {
-    return { engine: KOKORO_ENGINE, confident: true,
-      reason: `This device has ${memoryGb} GB of RAM but only ${cores} CPU cores.` };
   }
   return { engine: KOKORO_ENGINE, confident: memoryGb > 0,
     reason: memoryGb > 0
@@ -1338,10 +1417,19 @@ export function selectNarrationEngine(options = {}) {
   const capability = options.capability || {};
   const platform = capability.platform || detectMobilePlatform(options.userAgent || '');
   const memoryGb = Number(options.deviceMemory ?? capability.deviceMemoryGb ?? 0);
+  // The measured working-memory headroom from first-run setup. This is the
+  // signal that separates models a browser cannot otherwise tell apart -- a
+  // 14 Pro from a 15 Pro, a 12 from a 13 -- so it is threaded all the way
+  // through rather than being computed and discarded, which is what the device
+  // benchmark did before: it measured CPU and GPU, then picked the narration
+  // engine from screen geometry alone.
   const signals = {
     screenWidth: options.screenWidth ?? globalThis.screen?.width ?? 0,
     screenHeight: options.screenHeight ?? globalThis.screen?.height ?? 0,
     deviceMemory: memoryGb,
+    memoryHeadroomMb: Number(
+      options.memoryHeadroomMb ?? capability.memoryHeadroomMb ?? 0,
+    ) || 0,
     hardwareConcurrency: options.hardwareConcurrency
       ?? capability.hardwareConcurrency
       ?? globalThis.navigator?.hardwareConcurrency ?? 0,
@@ -1355,9 +1443,15 @@ export function selectNarrationEngine(options = {}) {
   } else {
     // Desktop. Plenty of headroom, and deviceMemory is frequently absent there,
     // so absence must not be read as a constrained device.
-    picked = (memoryGb > 0 && memoryGb <= 4)
-      ? { engine: KOKORO_ENGINE, confident: true, reason: `This computer reports ${memoryGb} GB of RAM.` }
-      : { engine: POCKET_ENGINE, confident: true, reason: '' };
+    if (signals.memoryHeadroomMb > 0) {
+      const resolved = resolveTierByHeadroom([KOKORO_ENGINE, POCKET_ENGINE], signals.memoryHeadroomMb);
+      picked = { engine: resolved.engine, confident: true,
+        reason: `This computer measured ${Math.round(signals.memoryHeadroomMb)} MB of working memory.` };
+    } else {
+      picked = (memoryGb > 0 && memoryGb <= 4)
+        ? { engine: KOKORO_ENGINE, confident: true, reason: `This computer reports ${memoryGb} GB of RAM.` }
+        : { engine: POCKET_ENGINE, confident: true, reason: '' };
+    }
   }
 
   // Low-memory mode outranks the ladder, but only ever steps DOWN -- it must not

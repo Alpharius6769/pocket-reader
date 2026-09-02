@@ -4,7 +4,7 @@ import {
   isMobileLikePlatform,
   selectNarrationEngine,
   NARRATION_ENGINE_TIERS,
-} from './pocket_backend_policy.js?v=backend-v26';
+} from './pocket_backend_policy.js?v=backend-v29';
 
 const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 2) : 2;
 // Routed through the shared platform helper so a stock iPad — which reports a
