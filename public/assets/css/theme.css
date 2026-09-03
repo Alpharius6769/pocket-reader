@@ -3155,6 +3155,22 @@ Minimum 44 × 44 px touch targets per Apple/Google HIG.           */
   background: rgba(7, 8, 9, 0.97);
 }
 
+.device-setup-picker {
+  margin: 14px 0 4px;
+  padding: 12px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+  border-radius: 10px;
+  background: var(--bg-surface-2, rgba(255, 255, 255, 0.03));
+}
+.device-setup-picker label { display: block; margin-bottom: 6px; font-size: 0.9rem; }
+.device-setup-picker select { width: 100%; }
+.device-setup-picker-help {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 #device-setup-modal > .device-setup-card {
   width: min(620px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));

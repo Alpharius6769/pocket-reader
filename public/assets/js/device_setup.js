@@ -1,4 +1,7 @@
 import {
+  deviceFingerprint,
+  readDeclaredDevice,
+  writeDeclaredDevice,
   collectPocketDeviceCapability,
   classifyPocketDeviceSupport,
   selectNarrationEngine,
@@ -8,7 +11,13 @@ import {
   wasmThreadCandidates,
   POCKET_DEVICE_SETUP_KEY,
   isIosLikePlatform,
+  detectMobilePlatform,
 } from './pocket_backend_policy.js?v=backend-v42';
+import {
+  androidClassForModel,
+  geometryKey,
+  pickerOptions,
+} from './device_catalog.js?v=catalog-v1';
 
 const SETTINGS_RISK_ACK_KEY = 'pr_settings_risk_ack_v1';
 const SUPPORT_NOTICE_KEY = 'pr_device_support_notice_v2';
@@ -383,8 +392,134 @@ function resultLabel(record) {
   // WebGPU/WASM decision while staying silent about which model would run.
   const SETUP_ENGINE_NAMES = { kokoro: 'Kokoro-82M', kitten: 'KittenTTS Nano', pocket: 'Pocket TTS' };
   const engine = SETUP_ENGINE_NAMES[record.narrationEngine] || 'Pocket TTS';
-  return `${platform} · ${engine} · ${backend} · ${support}`;
+  const seconds = estimateModelDownloadSeconds(record.narrationEngine, record.downlinkMbps);
+  // Only worth saying when it is long enough to be mistaken for a stall.
+  const download = seconds >= 90
+    ? ` · first download about ${Math.round(seconds / 60)} min on this connection`
+    : '';
+  return `${platform} · ${engine} · ${backend} · ${support}${download}`;
 }
+
+// Measured ProMotion. The paper's technique: sample rAF intervals and take the
+// median, because a mean is dragged around by a single dropped frame.
+//
+// POSITIVE EVIDENCE ONLY, and the policy treats it that way. Every way this can
+// be wrong reports 60 Hz -- iOS Low Power Mode caps the panel, a backgrounded
+// tab stops receiving frames at all, and a device busy running a benchmark drops
+// them -- so 120 narrows the candidate set and 60 says nothing. It runs before
+// the CPU benchmark for exactly that reason.
+async function measureRefreshHz(sampleCount = 24) {
+  if (typeof requestAnimationFrame !== 'function') return 0;
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return 0;
+  return new Promise((resolve) => {
+    const stamps = [];
+    // A tab that never paints would otherwise leave this pending forever, and
+    // it sits in front of the whole setup flow.
+    const bail = setTimeout(() => resolve(0), 1500);
+    const step = (time) => {
+      stamps.push(time);
+      if (stamps.length <= sampleCount) { requestAnimationFrame(step); return; }
+      clearTimeout(bail);
+      const gaps = [];
+      for (let index = 1; index < stamps.length; index += 1) gaps.push(stamps[index] - stamps[index - 1]);
+      gaps.sort((a, b) => a - b);
+      const median = gaps[Math.floor(gaps.length / 2)] || 0;
+      resolve(median > 0 ? Math.round(1000 / median) : 0);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+// Kokoro's model is 86 MB and Kitten's is 23.8 MB. On the 1.7 Mbps this app has
+// been measured against in the field that is roughly seven minutes against two,
+// once, before a word is spoken. The engine choice does not change -- a slow
+// link says nothing about what the device can RUN -- but the reader deserves to
+// be told which of those they are in for rather than watching a silent bar.
+function readDownlinkMbps() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const downlink = Number(connection?.downlink);
+  return Number.isFinite(downlink) && downlink > 0 ? downlink : 0;
+}
+
+export function estimateModelDownloadSeconds(engine, downlinkMbps) {
+  const megabytes = { kokoro: 86, kitten: 24, pocket: 120 }[String(engine || '')] || 0;
+  const mbps = Number(downlinkMbps) || 0;
+  if (!megabytes || !mbps) return 0;
+  return Math.round((megabytes * 8) / mbps);
+}
+
+function currentDeviceSignals() {
+  return {
+    platform: detectMobilePlatform(navigator.userAgent || ''),
+    screenWidth: Number(window.screen?.width || 0),
+    screenHeight: Number(window.screen?.height || 0),
+    devicePixelRatio: Number(window.devicePixelRatio || 0),
+    hardwareConcurrency: Number(navigator.hardwareConcurrency || 0),
+  };
+}
+
+// What the reader picked, or auto-detected on Android and pre-selected.
+let pickerAutoSelectedId = '';
+
+export function renderDevicePicker({ refreshHz = 0, detectedModel = '' } = {}) {
+  const row = document.getElementById('device-picker-row');
+  const select = document.getElementById('device-picker-select');
+  if (!row || !select) return null;
+  const signals = currentDeviceSignals();
+  if (signals.platform !== 'ios' && signals.platform !== 'android') {
+    row.hidden = true;
+    return null;
+  }
+  const { groups, narrowed } = pickerOptions({
+    platform: signals.platform,
+    geometryKey: geometryKey(signals.screenWidth, signals.screenHeight),
+    refreshHz,
+  });
+  if (!groups.length) { row.hidden = true; return null; }
+
+  // Android already knows. Pre-select it so the step is a confirmation rather
+  // than a question, and say where the answer came from.
+  const inferred = signals.platform === 'android' ? androidClassForModel(detectedModel) : null;
+  const declared = readDeclaredDevice(localStorage, deviceFingerprint(signals));
+  pickerAutoSelectedId = declared?.id || inferred?.id || '';
+
+  const escape = (value) => String(value).replace(/[&<>"]/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  select.innerHTML = `<option value="">Not sure — just test it</option>`
+    + groups.map((group) => `<optgroup label="${escape(group.label)}">`
+      + group.options.map((entry) =>
+        `<option value="${escape(entry.id)}"${entry.id === pickerAutoSelectedId ? ' selected' : ''}>${escape(entry.label)}</option>`).join('')
+      + '</optgroup>').join('');
+
+  const help = document.getElementById('device-picker-help');
+  if (help) {
+    if (detectedModel && inferred) {
+      help.textContent = `Detected ${detectedModel}. Change it if that is wrong.`;
+    } else if (signals.platform === 'ios' && narrowed) {
+      help.textContent = 'Narrowed to the models with this exact screen. Safari will not say which one, and it decides how much memory narration can use.';
+    } else {
+      help.textContent = 'Optional. It helps most on iPhone, where the browser will not say which model this is.';
+    }
+  }
+  row.hidden = false;
+  return { platform: signals.platform, narrowed };
+}
+window.renderDevicePicker = renderDevicePicker;
+
+// Persisted against a fingerprint of the hardware, so a restored backup cannot
+// carry a claim about a phone that is no longer there.
+export function commitDevicePickerChoice() {
+  const select = document.getElementById('device-picker-select');
+  const chosen = String(select?.value || '');
+  const signals = currentDeviceSignals();
+  const fingerprint = deviceFingerprint(signals);
+  // An Android auto-detection is recorded too: it is a detection, not a guess,
+  // and recording it is what lets the ceiling apply on later launches.
+  const id = chosen || pickerAutoSelectedId || '';
+  if (!id) { writeDeclaredDevice(localStorage, '', fingerprint); return null; }
+  return writeDeclaredDevice(localStorage, id, fingerprint);
+}
+window.commitDevicePickerChoice = commitDevicePickerChoice;
 
 export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
   if (diagnosticsInFlight) return diagnosticsInFlight;
@@ -396,6 +531,14 @@ export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
       model: window.POCKET_READER_DEVICE_MODEL || '',
       lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
     });
+
+    // Before the CPU benchmark, not after: a device already saturated by the
+    // benchmark drops frames, and a dropped frame reads as a 60 Hz panel.
+    const refreshHz = await measureRefreshHz();
+    capability.refreshHz = refreshHz;
+    // Whatever the reader chose is committed here rather than at the end, so a
+    // benchmark that fails partway still leaves their answer recorded.
+    const declaredDevice = commitDevicePickerChoice();
 
     const cpuResults = await benchmarkCpu(capability, (threads, index, total) => {
       const percent = 25 + Math.round((index / Math.max(1, total)) * 35);
@@ -455,6 +598,11 @@ export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
       deviceMemory: Number(capability.deviceMemoryGb || navigator.deviceMemory || 0),
       hardwareConcurrency: Number(navigator.hardwareConcurrency || 0),
       memoryHeadroomMb: memory.measured ? Number(memory.headroomMb) || 0 : 0,
+      // The claim the reader just made, and the two signals that narrow what
+      // the browser could work out on its own.
+      declaredDeviceId: declaredDevice?.id || '',
+      refreshHz,
+      model: capability.model || '',
       lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
       storage: localStorage,
     });
@@ -467,6 +615,10 @@ export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
       narrationEngine: narration.engine,
       narrationEngineReason: narration.reason,
       narrationEngineAutomatic: narration.automatic,
+      declaredDeviceId: declaredDevice?.id || '',
+      declaredDeviceLabel: declaredDevice?.label || '',
+      refreshHz,
+      downlinkMbps: readDownlinkMbps(),
       ...selection,
       benchmarkPassed: passed,
       crossOriginIsolated: window.crossOriginIsolated === true,
@@ -651,6 +803,25 @@ if (setupStartButton) {
   setupStartButton.disabled = false;
   setupStartButton.removeAttribute('aria-busy');
   if (!window._pocketDeviceSetup) setSetupText('device-setup-status', 'Ready to test this device.');
+}
+
+// Populate the picker while the modal is idle. The refresh measurement runs
+// here rather than during the benchmark for the same reason it does inside
+// runPocketDeviceDiagnostics -- a busy device drops frames and a dropped frame
+// reads as a 60 Hz panel -- and its result narrows the iPhone list the reader
+// is about to read.
+if (!window._pocketDeviceSetup) {
+  (async () => {
+    let refreshHz = 0;
+    try { refreshHz = await measureRefreshHz(); } catch (_) {}
+    let detectedModel = '';
+    try {
+      detectedModel = String(
+        (await navigator.userAgentData?.getHighEntropyValues?.(['model']))?.model || '',
+      );
+    } catch (_) { /* WebKit and Gecko do not implement Client Hints at all */ }
+    try { renderDevicePicker({ refreshHz, detectedModel }); } catch (_) {}
+  })();
 }
 setTimeout(renderPocketDeviceSetupSummary, 0);
 

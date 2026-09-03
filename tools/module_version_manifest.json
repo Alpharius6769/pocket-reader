@@ -28,15 +28,15 @@
     "sha256": "b901b67834d643d7"
   },
   "device_setup.js": {
-    "version": "device-setup-v33",
-    "sha256": "ff2f4119158cb656"
+    "version": "device-setup-v36",
+    "sha256": "df3992c0aa8b2e33"
   },
   "diagnostics.js": {
     "version": "diag-v9",
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-278",
+    "version": "sw-280",
     "sha256": "0443f57507f2a23b"
   },
   "experience_coordinator.js": {
@@ -76,7 +76,7 @@
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-278",
+    "version": "sw-280",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
@@ -88,7 +88,7 @@
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-278",
+    "version": "sw-280",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -120,8 +120,8 @@
     "sha256": "a969697ffb428a6d"
   },
   "settings_manager.js": {
-    "version": "settings-v162",
-    "sha256": "67e7e954dacf3494"
+    "version": "settings-v163",
+    "sha256": "c6728856ec57edfd"
   },
   "storage_core.js": {
     "version": "storage-v29",
@@ -140,15 +140,15 @@
     "sha256": "6ae4e9ccd1ead7aa"
   },
   "ui_controller.js": {
-    "version": "ui-v196",
-    "sha256": "92d22f141221e51c"
+    "version": "ui-v197",
+    "sha256": "5e9b186defb6c6d9"
   },
   "virtue_controller.js": {
     "version": "virtue-v36",
     "sha256": "4285dc68ed2d3777"
   },
   "sw.js": {
-    "version": "sw-278",
-    "sha256": "b5911a23d6da2730"
+    "version": "sw-280",
+    "sha256": "bc358ae8b91d7d7e"
   }
 }
