@@ -4,8 +4,8 @@
     "sha256": "c03bf65b544fdb09"
   },
   "audio_core.js": {
-    "version": "audio-v162",
-    "sha256": "a443cf4126fed9c5"
+    "version": "audio-v165",
+    "sha256": "24b2b374fcd3789a"
   },
   "buffer_manager.js": {
     "version": "buffer-v92",
@@ -36,7 +36,7 @@
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-286",
+    "version": "sw-288",
     "sha256": "f42a175ba9504eb1"
   },
   "experience_coordinator.js": {
@@ -60,35 +60,35 @@
     "sha256": "f4c9755b6b44b491"
   },
   "kitten_worker.js": {
-    "version": "kitten-v21",
-    "sha256": "7d0360d81c350241"
+    "version": "kitten-v23",
+    "sha256": "a587058d3fb5f8ca"
   },
   "kokoro_worker.js": {
-    "version": "kokoro-v32",
-    "sha256": "d3d240579757759a"
+    "version": "kokoro-v34",
+    "sha256": "f6e3a9a9d75a9e01"
   },
   "library_manager.js": {
-    "version": "library-v68",
-    "sha256": "3572e384e600296a"
+    "version": "library-v70",
+    "sha256": "4cf618f922001175"
   },
   "memory_headroom_worker.js": {
     "version": "memory-probe-v1",
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-286",
+    "version": "sw-288",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v89",
-    "sha256": "dd7bcbca6ff34201"
+    "version": "narration-loader-v91",
+    "sha256": "7b3566e806a4eb29"
   },
   "native_app_key.js": {
     "version": "native-key-v1",
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-286",
+    "version": "sw-288",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -104,8 +104,8 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v86",
-    "sha256": "4a30f94aa5cd8319"
+    "version": "pocket-worker-v89",
+    "sha256": "4fb74cdb63ec27f2"
   },
   "profile_merge.js": {
     "version": "merge-v10",
@@ -120,8 +120,8 @@
     "sha256": "a969697ffb428a6d"
   },
   "settings_manager.js": {
-    "version": "settings-v168",
-    "sha256": "23dc83977768bf01"
+    "version": "settings-v170",
+    "sha256": "b152383b918f0a7f"
   },
   "storage_core.js": {
     "version": "storage-v33",
@@ -136,19 +136,19 @@
     "sha256": "10622989fcd4d8d0"
   },
   "tts_pronunciation_core.js": {
-    "version": "pron-v23",
-    "sha256": "6ae4e9ccd1ead7aa"
+    "version": "pron-v26",
+    "sha256": "a6441a68dd94aaa8"
   },
   "ui_controller.js": {
-    "version": "ui-v200",
-    "sha256": "690e86ea735e4271"
+    "version": "ui-v201",
+    "sha256": "c008d46195f3c4c4"
   },
   "virtue_controller.js": {
     "version": "virtue-v40",
     "sha256": "0b001a0154303a5c"
   },
   "sw.js": {
-    "version": "sw-286",
-    "sha256": "3dfa72283bebb214"
+    "version": "sw-288",
+    "sha256": "f6e4280266d3a01a"
   }
 }

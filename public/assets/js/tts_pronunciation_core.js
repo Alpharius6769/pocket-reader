@@ -15,9 +15,9 @@ export const DEFAULT_POCKET_QUALITY_MODE = 'mobile';
 export const DEFAULT_POCKET_VOICE_SEED = 'pr-voice-1';
 
 export const POCKET_TTS_TUNING_PRESETS = Object.freeze({
-  stable: { temperature: 0.70, lsdSteps: 4, label: 'Stable audiobook' },
-  balanced: { temperature: 0.86, lsdSteps: 4, label: 'Balanced audiobook' },
-  expressive: { temperature: 0.93, lsdSteps: 4, label: 'Full expression' },
+  stable: { temperature: 0.70, lsdSteps: 1, label: 'Stable audiobook' },
+  balanced: { temperature: 0.86, lsdSteps: 1, label: 'Balanced audiobook' },
+  expressive: { temperature: 0.93, lsdSteps: 1, label: 'Full expression' },
   quality: { temperature: 0.86, lsdSteps: 4, label: 'Benchmark quality' },
 });
 

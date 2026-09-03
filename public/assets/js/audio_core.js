@@ -6,7 +6,7 @@ import {
   DEFAULT_POCKET_VOICE_SEED,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v23';
+} from './tts_pronunciation_core.js?v=pron-v26';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -563,23 +563,20 @@ function _pocketTuningConfig() {
   const mode = _emotionMode();
   const preset = getPocketTuningPreset(_pocketTemperaturePresetName(), mode);
   const qualityMode = _pocketQualityMode();
-  const constrained = window.isPocketDeviceConstrained?.() === true;
-  let lsdSteps;
-  if (qualityMode === 'quality' || !constrained) {
-    // Pocket TTS is the high-end tier. Four LSD steps is Kyutai's quality
-    // sampler; grain from 1-step INT8 sampling is the thing listeners heard.
-    // LSD is compute, not resident model memory, so this keys off constrained
-    // rather than the iOS memory-safe session path.
-    lsdSteps = 4;
-  } else {
-    lsdSteps = 2;
-  }
+  const allowBenchmarkQuality = qualityMode === 'quality';
+  // Standard and mobile audiobook playback uses 1 LSD step so that the fused
+  // 4-frame decode block (flow_lm_decode_block4_int8 / flow_lm_unified_block4_int8)
+  // or WebGPU R3 pipeline can run. Multi-step LSD is compute-heavy and disables
+  // the 4-frame WASM block session, falling back to unaccelerated per-frame flow
+  // sampling that degrades RTF to ~2.0+ on phones. Benchmark quality (4 steps)
+  // is reserved exclusively for explicit desktop benchmark quality mode.
+  const lsdSteps = allowBenchmarkQuality ? (preset.lsdSteps || 4) : 1;
   return {
     presetName: preset.name,
     temperature: preset.temperature,
     qualityMode,
     lsdSteps,
-    allowBenchmarkQuality: qualityMode === 'quality',
+    allowBenchmarkQuality,
   };
 }
 
@@ -1523,9 +1520,9 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v32',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v21',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v86',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v34',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v23',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v89',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,

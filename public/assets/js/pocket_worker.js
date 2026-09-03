@@ -4,7 +4,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v23';
+} from './tts_pronunciation_core.js?v=pron-v26';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -228,8 +228,8 @@ function resolveWorkerTuning(opts = {}) {
   const requestedSteps = Number(opts.lsdSteps);
   const presetSteps = Number(preset.lsdSteps) || DEFAULT_LSD_STEPS;
   const steps = allowQualityLsd
-    ? BENCHMARK_QUALITY_LSD_STEPS
-    : (Number.isFinite(requestedSteps) && requestedSteps > 0 ? requestedSteps : presetSteps);
+    ? (Number.isFinite(requestedSteps) && requestedSteps > 1 ? requestedSteps : (presetSteps > 1 ? presetSteps : BENCHMARK_QUALITY_LSD_STEPS))
+    : DEFAULT_LSD_STEPS;
   return {
     temperaturePreset: preset.name,
     qualityMode,

@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v23';
+} from './tts_pronunciation_core.js?v=pron-v26';
 import { profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit } from './profile_merge.js?v=merge-v10';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 

@@ -273,15 +273,13 @@ test('every retired voice migrates to a LIVE voice of the same gender', async ()
   assert.match(source, /if \(alias && window\.POCKET_VOICES\.includes\(alias\)\) return alias;/);
 });
 
-test('high-end Pocket TTS uses four LSD steps instead of the 1-step grain path', async () => {
+test('Pocket TTS mobile and standard audiobook presets use 1 LSD step to enable decode-block acceleration', async () => {
   const source = await read('public/assets/js/audio_core.js');
   const config = source.slice(
     source.indexOf('function _pocketTuningConfig'),
     source.indexOf('function _pocketVoiceSeed'),
   );
-  assert.match(config, /isPocketDeviceConstrained\?\.\(\) === true/);
-  assert.match(config, /lsdSteps = 4/);
-  assert.doesNotMatch(config, /isPocketDeviceMemorySafeMode/);
+  assert.match(config, /allowBenchmarkQuality \? \(preset\.lsdSteps \|\| 4\) : 1/);
 });
 
 test('Alba is the configured default voice across the engine', async () => {
@@ -313,7 +311,8 @@ test('temperature presets sit well above the old 0.70 ceiling', () => {
   assert.equal(POCKET_TTS_TUNING_PRESETS.stable.temperature, 0.70);
   assert.equal(POCKET_TTS_TUNING_PRESETS.balanced.temperature, 0.86);
   assert.equal(POCKET_TTS_TUNING_PRESETS.expressive.temperature, 0.93);
-  assert.equal(POCKET_TTS_TUNING_PRESETS.balanced.lsdSteps, 4);
+  assert.equal(POCKET_TTS_TUNING_PRESETS.balanced.lsdSteps, 1);
+  assert.equal(POCKET_TTS_TUNING_PRESETS.quality.lsdSteps, 4);
   assert.ok(POCKET_TTS_TUNING_PRESETS.expressive.temperature < 0.96,
     'must stay inside the worker clamp of 0.95');
 });
