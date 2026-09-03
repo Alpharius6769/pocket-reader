@@ -51,6 +51,35 @@ Last reviewed: 2026-08-30.
   tree. Their license and redistribution terms should be tracked with the
   asset bucket metadata/release notes before mirroring or repackaging them.
 
+### Kokoro-82M (narration engine)
+
+- Upstream: hexgrad/Kokoro-82M, ONNX build `onnx-community/Kokoro-82M-v1.0-ONNX`
+- License: Apache-2.0
+- Source: https://huggingface.co/hexgrad/Kokoro-82M
+- ONNX build: https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX
+- DOI: 10.57967/hf/4329
+- Architecture: StyleTTS2, finetuned from `yl4579/StyleTTS2-LJSpeech`.
+- Used as: the middle narration tier, run in-browser through ONNX Runtime Web.
+  One 86 MB session, non-autoregressive.
+- Shipped voices: `af_heart`, `af_bella`, `bf_emma`, `am_michael`, `am_fenrir`,
+  `am_puck`. Voice style tables ship as `.bin` files alongside the model.
+- Distribution note: the model and voice tables are served through the
+  Cloudflare Worker from Backblaze B2 rather than stored in this source tree.
+
+### KittenTTS Nano 0.1 (narration engine)
+
+- Upstream: KittenML/kitten-tts-nano-0.1, ONNX build
+  `onnx-community/kitten-tts-nano-0.1-ONNX`
+- License: Apache-2.0
+- Source: https://huggingface.co/KittenML/kitten-tts-nano-0.1
+- Used as: the lightest narration tier, for devices that cannot hold Kokoro.
+  15M parameters; roughly 12x less resident memory than Kokoro.
+- Shipped voices: `expr-voice-3-f`, `expr-voice-4-f`, `expr-voice-5-f`,
+  `expr-voice-3-m`, `expr-voice-4-m`, `expr-voice-5-m`. Each voice is a single
+  256-float style vector, unlike Kokoro's (510, 1, 256) table.
+- Distribution note: served through the Cloudflare Worker from Backblaze B2
+  rather than stored in this source tree.
+
 ### Voice-Zero Emotional Pack
 
 - Upstream: OwenTyme/voice-zero
@@ -66,6 +95,10 @@ Last reviewed: 2026-08-30.
 - Distribution note: source `.flac` references and converted `.safetensors`
   files are not stored in this source tree. The maintainer tool records source
   URLs and writes a runtime manifest for the uploaded B2/Cloudflare assets.
+- Status: RETIRED from the shipped catalog. These voices are no longer
+  offered in the app; a stored setting naming one is migrated to a live voice
+  of the same gender. The converted assets remain in the bucket, so the
+  attribution above still applies and is kept for that reason.
 
 ### Kyutai Pocket TTS catalog voices (Alba, Jane, Charles, Michael, George, Noah, Mary, Eve)
 
@@ -89,6 +122,8 @@ Last reviewed: 2026-08-30.
   and are served through the Cloudflare Worker. Not stored in this source tree.
 
 ### Rayne (Personal Clone)
+
+- Status: RETIRED from the shipped catalog and no longer offered in the app.
 
 - Author: Chris (Alpharius67 / Fluffarius)
 - Origin: AI-generated voice created by the maintainer.

@@ -21,7 +21,7 @@ Pocket Reader is an offline-capable story reader with browser-side Pocket TTS na
 - **GitHub Pages:** frontend and PWA shell (`https://alpharius6769.github.io/pocket-reader/`).
 - **Supabase:** authentication, profiles, and account synchronization.
 - **Hugging Face Space:** story search, scraping, uploads, curated-library API, FicHub relay, health endpoints, and push subscriptions.
-- **Cloudflare Worker:** edge routing for Pocket TTS, ONNX Runtime Web, and Voice-Zero assets.
+- **Cloudflare Worker:** edge routing for the Pocket TTS, Kokoro and Kitten model bundles, ONNX Runtime Web, and voice assets.
 - **HMOFA Anthronomicon & Masterlist:** interactive story catalog (`https://alpharius6769.github.io/hmofa-story-index/`) authored by Chris (Alpharius67 / Fluffarius). Pocket Reader renders it natively in the masterlist view from the index's published catalog JSON, so a tap loads the story directly. The standalone site is unaffected. See `ANTHRONOMICON_BRIDGE.md`.
 - **Backblaze B2:** origin storage for model bundles and voice assets.
 - **Zyte API:** optional protected-source fetch path used by the backend.
@@ -40,7 +40,24 @@ node tools/verify_release_parity.mjs --live
 FastAPI backend for the Pocket Reader web app. This Space is a lightweight I/O router: it searches and scrapes supported story sources, parses uploaded files, serves bundled curated PDFs, registers push subscriptions, and provides health and diagnostics endpoints.
 
 No neural text-to-speech inference runs on this backend. Narration runs in the browser through Pocket TTS assets loaded by the frontend, with the browser's native Web Speech voices available as a fallback.
-The shipped Pocket voice catalog is the Voice-Zero Emotional Pack: three male and three female CC0-positioned Voice-Zero voices with neutral, calm, happy, sad, worried, surprised, tired, frustrated, and optional high-intensity emotion references. Eight Kyutai catalog voices — Alba, Jane, Charles, Michael, George, Noah, Mary, and Eve — are shipped as additional narrators with a single official reference each (neutral only). George, Noah, Mary, and Eve are American VCTK speakers. A further voice, Rayne, is a project-owned personal clone with a neutral reference only (see `ATTRIBUTIONS.md`). On memory-constrained devices narration runs on Kokoro-82M instead, which has its own voice list.
+Narration runs on one of three in-browser engines, chosen per device by a measured
+memory-headroom probe at first launch and overridable in Settings:
+
+| Tier | Model | Shipped voices |
+| --- | --- | --- |
+| Pocket TTS | project-hosted, autoregressive | Alba, Mary, Eve / Charles, George, Noah |
+| Kokoro | Kokoro-82M (Apache-2.0), one 86 MB session | af_heart, af_bella, bf_emma / am_michael, am_fenrir, am_puck |
+| Kitten | KittenTTS Nano 0.1 (Apache-2.0), 15M params | expr-voice-3/4/5-f and -m |
+
+Every tier ships three female and three male voices. The Pocket voices come from the
+Kyutai Pocket TTS catalog with a single official reference each (neutral only); Alba is
+CC BY 4.0 (Alba MacKenna) and the rest are CC BY 4.0 VCTK enhanced references, of which
+George, Noah, Mary, and Eve are American VCTK speakers. The browser's own Web Speech
+voices remain available as a fallback tier below all three.
+
+The Voice-Zero emotional pack and the Rayne personal clone were retired from the shipped
+catalog; a stored setting naming one migrates to a live voice of the same gender. See
+`ATTRIBUTIONS.md`.
 
 The frontend is hosted separately on GitHub Pages and talks to this backend through the Cloudflare Worker over HTTPS. Supabase provides authentication and the authenticated profile-sync bridge used by the web app. The unauthenticated FastAPI `/api/state/*` endpoints are intentionally disabled.
 Cloud sync stores canonical JSON profile objects with schema version, sanitized library entries, settings, stats, and deletion tombstones.
@@ -105,7 +122,7 @@ Optional scraping/model routing:
 
 ### Maintainer Tools
 
-- `tools/build_voice_zero_pack.py` audits, downloads, and optionally converts the curated Voice-Zero emotional voice pack into upload-ready Pocket TTS `.safetensors` files. Use `--convert --output <dir>` after installing the optional Pocket conversion dependencies, then upload the generated files to the Cloudflare/B2 voice asset path as `/models/voices/{voice}_{emotion}.safetensors`.
+- `tools/build_voice_zero_pack.py` built the Voice-Zero emotional voice pack, which is retired from the shipped catalog. Kept for the conversion pipeline it documents; it is not part of the current build.
 - `tools/convert_pocket_voice.py` converts local voice samples into Pocket TTS `.safetensors` conditioning files. It is not runtime app code. Optional dependencies are documented in the script header.
 
 ### Operational Notes

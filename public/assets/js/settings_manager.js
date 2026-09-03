@@ -16,7 +16,7 @@ import {
   coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v33';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '250';
+export const NARRATION_SERVICE_WORKER_VERSION = '257';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -383,6 +383,11 @@ export function initSettingsUI() {
   if (el('companion-select'))                               el('companion-select').value = settings.companion;
   _syncEngineSelects(_voiceEngineControlValue(settings));
   try { renderNarrationEngineControls(); } catch (_) {}
+  // The engine selects alone are not the whole picture: without this the
+  // controls read "Kitten" while the voice picker still lists Pocket voices
+  // with a Pocket id selected, which is exactly the cross-engine mismatch the
+  // voice contract exists to prevent.
+  try { window.syncNarrationControls?.(); } catch (_) {}
   // Backend choice is hardware-specific and must never follow an account to a
   // different phone or computer. Remove the legacy synced field and render the
   // device-local override instead.
@@ -1773,4 +1778,29 @@ if (typeof window.saveAwayWorkersSetting !== 'function') {
       }
     }
   };
+}
+
+
+// Boot catch-up. MUST be the last thing in this module.
+//
+// loadLocalData() renders the settings UI when it finishes hydrating, but it
+// runs from library_manager's module body, and that module is loaded BEFORE
+// this one. When hydration wins the race, its
+// `typeof window.initSettingsUI === 'function'` guard is false and the render
+// is skipped in silence -- which is how a stored Kitten choice showed as
+// "Automatic" on every launch while the policy correctly resolved 'kitten'.
+//
+// Position matters as much as existence. Placed next to the
+// `window.initSettingsUI =` export this ran BEFORE
+// `window.syncNarrationControls` was assigned further down, so the optional
+// call inside initSettingsUI no-opped and the engine selects came back correct
+// while the voice picker still listed the previous engine's voices. Same
+// load-order trap, one module lower. At the very end every export exists.
+//
+// Idempotent: if hydration has not finished yet this does nothing, and
+// loadLocalData still owns the call.
+if (window.__pocketProfileHydrated === true && window.userProfile?.settings) {
+  try { initSettingsUI(); } catch (_) {}
+  try { window.applySettings?.(); } catch (_) {}
+  try { window.syncNarrationControls?.(); } catch (_) {}
 }

@@ -296,7 +296,15 @@ window.renderPocketVoiceOptions = function renderPocketVoiceOptions(selectEl, se
   const selectedBase = window.POCKET_VOICES.includes(selected)
     ? selected
     : selected.replace(/_(neutral|calm|happy|sad|worried|surprised|tired|frustrated|anger|excited|enthused|shout|confused)$/, '');
-  ['male', 'female'].forEach((gender) => {
+  // Female first, to match Kokoro and Kitten (built in settings_manager's
+  // syncNarrationControls) and the static markup in the shell. Pocket was the
+  // only engine listing male first, so the picker reordered itself purely
+  // because the reader changed engine.
+  //
+  // No "(Recommended)" suffix either: it is now on every shipped voice, since
+  // the catalog was cut to six curated ones. A label that appears on every
+  // option distinguishes nothing and just crowds a narrow phone dropdown.
+  ['female', 'male'].forEach((gender) => {
     const group = document.createElement('optgroup');
     group.label = gender === 'male' ? 'Male voices' : 'Female voices';
     window.POCKET_VOICE_PACK.voices
@@ -304,7 +312,7 @@ window.renderPocketVoiceOptions = function renderPocketVoiceOptions(selectEl, se
       .forEach((voice) => {
         const opt = document.createElement('option');
         opt.value = voice.id;
-        opt.textContent = `${voice.displayName} - ${voice.accent}${voice.recommended ? ' (Recommended)' : ''}`;
+        opt.textContent = `${voice.displayName} - ${voice.accent}`;
         group.appendChild(opt);
       });
     selectEl.appendChild(group);

@@ -1403,7 +1403,7 @@ async function _loadPocketEngine() {
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v23',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v12',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v15',
           pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v76',
         };
         const workerScript = new URL(

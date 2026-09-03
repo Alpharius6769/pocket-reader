@@ -328,7 +328,18 @@ export function saveWeeklyGoals() {
 window.saveWeeklyGoals = saveWeeklyGoals;
 
 function queueMarkup(data) {
-  const stories = data.readingQueue.map((key) => data.library.find((story) => stableKey(story) === key)).filter(Boolean);
+  // Index once instead of scanning the library per queued story. The old form
+  // was library.find() inside a map, so it cost queue x library, and every
+  // inner step called stableKey() -- which falls through to
+  // getStoryStableKey(), a hash over title and author when a story has no
+  // stored key. On a 500-story library that is ~2,500 hashes to lay out at
+  // most five rows, repeated on every workflow re-render.
+  const byKey = new Map();
+  for (const story of data.library) {
+    const key = stableKey(story);
+    if (key && !byKey.has(key)) byKey.set(key, story);
+  }
+  const stories = data.readingQueue.map((key) => byKey.get(key)).filter(Boolean);
   if (!stories.length) return '<div class="empty-state"><strong>Your queue is clear.</strong><span>Add stories from the library when you want a deliberate next read.</span></div>';
   return stories.map((story, index) => `<article class="workflow-row"><button class="row-main" onclick="window.loadStory(${inlineArg(stableKey(story) || story.title || story.url || '')})"><strong>${esc(story.title)}</strong><span>${esc(story.author || 'Unknown author')}</span></button><div class="row-actions"><button class="icon-btn" title="Move up" aria-label="Move up" onclick="moveReadingQueue(${inlineArg(stableKey(story))},-1)" ${index === 0 ? 'disabled' : ''}>${window.prIcon('chevron-up')}</button><button class="icon-btn" title="Move down" aria-label="Move down" onclick="moveReadingQueue(${inlineArg(stableKey(story))},1)" ${index === stories.length - 1 ? 'disabled' : ''}>${window.prIcon('chevron-down')}</button></div></article>`).join('');
 }

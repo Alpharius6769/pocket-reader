@@ -57,15 +57,21 @@ Notable license-sensitive items:
 - `pywebpush` is MPL-2.0.
 - Achievement icons from Game-Icons.net are CC-BY-3.0.
 - Pocket TTS model assets retain their upstream model licenses.
-- The curated Pocket voice catalog is built from Voice-Zero references. The
-  selected Voice-Zero emotional pack is CC0 unless otherwise noted by
-  Voice-Zero; converted voice states should keep source metadata in the asset
-  bucket release notes.
-- Eight additional Pocket TTS voices (Alba, Jane, Charles, Michael, George,
-  Noah, Mary, Eve) come from the Kyutai Pocket TTS catalog. Alba is CC BY 4.0
-  (Alba MacKenna). The others are CC BY 4.0 VCTK enhanced references
-  republished by Kyutai. George, Noah, Mary, and Eve are American VCTK
-  speakers. See ATTRIBUTIONS.md.
+- Kokoro-82M, the middle narration tier, is Apache-2.0 (hexgrad/Kokoro-82M;
+  ONNX build onnx-community/Kokoro-82M-v1.0-ONNX). It is a StyleTTS2 model
+  finetuned from yl4579/StyleTTS2-LJSpeech. See ATTRIBUTIONS.md.
+- KittenTTS Nano 0.1, the lightest narration tier, is Apache-2.0
+  (KittenML/kitten-tts-nano-0.1). See ATTRIBUTIONS.md.
+- The shipped Pocket voice catalog is six Kyutai Pocket TTS catalog voices:
+  Alba, Mary, Eve, Charles, George, and Noah. Alba is CC BY 4.0
+  (Alba MacKenna); the rest are CC BY 4.0 VCTK enhanced references republished
+  by Kyutai, of which George, Noah, Mary, and Eve are American VCTK speakers.
+  See ATTRIBUTIONS.md.
+- RETIRED from the shipped catalog, and no longer offered in the app: the
+  Voice-Zero emotional pack (CC0 unless otherwise noted by Voice-Zero), the
+  Kyutai voices Jane and Michael, and the project-owned Rayne clone. Their
+  converted assets remain in the bucket, so their attribution is retained in
+  ATTRIBUTIONS.md rather than removed.
 - The frontend Lucide icon sprite is ISC licensed.
 - Literata frontend font is licensed under the SIL Open
   Font License 1.1; its full license text ships with the frontend assets.

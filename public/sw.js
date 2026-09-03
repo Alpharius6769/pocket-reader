@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v250';
+var CACHE_NAME = 'pocket-reader-core-v257';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -133,10 +133,10 @@ var OPTIONAL_ASSETS = [
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
     'assets/js/buffer_manager.js?v=buffer-v78',
-    'assets/js/audio_core.js?v=audio-v138',
+    'assets/js/audio_core.js?v=audio-v140',
     'assets/js/pocket_worker.js?v=pocket-worker-v76',
     'assets/js/kokoro_worker.js?v=kokoro-v23',
-    'assets/js/kitten_worker.js?v=kitten-v12',
+    'assets/js/kitten_worker.js?v=kitten-v15',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
 ];
 
@@ -154,22 +154,22 @@ var CORE_ASSETS = [
     'assets/js/experience_coordinator.js?v=experience-v6',
     'assets/js/virtue_controller.js?v=virtue-v24',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v179',
+    'assets/js/ui_controller.js?v=ui-v183',
     'assets/js/supabase_bridge.js?v=supabase-v10',
     'assets/js/profile_merge.js?v=merge-v10',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v22',
-    'assets/js/settings_manager.js?v=settings-v140',
-    'assets/js/library_manager.js?v=library-v52',
+    'assets/js/settings_manager.js?v=settings-v148',
+    'assets/js/library_manager.js?v=library-v55',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v7',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v1',
     'assets/js/hmofa_community.js?v=hmofa-community-v2',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v2',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v75',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v76',
     'assets/js/storage_core.js?v=storage-v23',
     'assets/js/sync_core.js?v=sync-v23',
     'assets/js/cinematic_ui.js?v=cinematic-v8',
-    'assets/js/reader_features.js?v=features-v20',
+    'assets/js/reader_features.js?v=features-v23',
     'assets/js/motion_lite.js'
 ];
 

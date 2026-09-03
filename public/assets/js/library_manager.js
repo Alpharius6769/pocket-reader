@@ -796,6 +796,13 @@ async function _hydrateLocalProfile() {
     console.error('[Profile] Could not read the stored profile:', error);
   } finally {
     _profileHydrated = true;
+    // Published because the modules that render this profile are not
+    // guaranteed to exist yet. library_manager loads BEFORE settings_manager
+    // in the shell, so the `typeof window.initSettingsUI === 'function'` guard
+    // below can be false here and skip the settings render entirely -- which
+    // is how a stored Kitten choice showed as "Automatic" on every launch.
+    // Whichever of the two finishes second is the one that renders.
+    window.__pocketProfileHydrated = true;
     if (_saveDeferredDuringHydration) {
       _saveDeferredDuringHydration = false;
       saveLocalData({ immediate: true });

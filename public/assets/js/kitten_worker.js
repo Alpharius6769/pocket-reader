@@ -582,7 +582,12 @@ self.onmessage = async (event) => {
           maxChunkTokens: chunkTokenLimit(),
         },
       });
-      log('INFO', `Kokoro engine ready (single 86MB session, non-autoregressive, chunk cap ${chunkTokenLimit()})`);
+      // Said "Kokoro engine ready (single 86MB session...)" -- a leftover from
+      // cloning this worker off Kokoro's. Both halves were wrong: the engine
+      // name and the size, since Kitten's model is roughly 12x smaller. This
+      // is the ONLY line that confirms Kitten actually started, so anyone
+      // debugging it was being told to look at the wrong engine.
+      log('INFO', `Kitten engine ready (KittenTTS Nano 0.1, non-autoregressive, chunk cap ${chunkTokenLimit()})`);
     } catch (error) {
       isReady = false;
       self.postMessage({ type: 'init_error', error: error?.message || String(error) });
