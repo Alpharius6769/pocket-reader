@@ -971,12 +971,25 @@ export async function probePocketWebGpuEligibility(options = {}) {
   try {
     adapter = await nav.gpu.requestAdapter({ powerPreference: 'high-performance' });
   } catch (error) {
-    return { eligible: false, reason: `WebGPU adapter request failed: ${error?.message || error}`, cores, memoryGb, isolated };
+    return { eligible: false, transient: true, reason: `WebGPU adapter request failed: ${error?.message || error}`, cores, memoryGb, isolated };
   }
-  if (!adapter) return { eligible: false, reason: 'No WebGPU adapter was returned.', cores, memoryGb, isolated };
+  if (!adapter) return { eligible: false, transient: true, reason: 'No WebGPU adapter was returned.', cores, memoryGb, isolated };
   if (!adapter.features?.has('shader-f16')) {
     return { eligible: false, reason: 'The WebGPU adapter does not support shader-f16.', cores, memoryGb, isolated };
   }
+
+  // Read the adapter's identity BEFORE the allocation probe. It is what keys
+  // the stored calibration, so losing it to a failed probe silently repoints
+  // the lookup at an empty bucket -- the device forgets it ever calibrated.
+  let info = {};
+  try {
+    info = typeof adapter.requestAdapterInfo === 'function'
+      ? await adapter.requestAdapterInfo()
+      : (adapter.info || {});
+  } catch (_) {
+    info = adapter.info || {};
+  }
+  const identity = adapterIdentity(info);
 
   const probeBytes = platform === 'ios' ? IOS_GPU_ALLOCATION_PROBE_BYTES : GPU_ALLOCATION_PROBE_BYTES;
   let allocationProbeBytes = 0;
@@ -991,21 +1004,24 @@ export async function probePocketWebGpuEligibility(options = {}) {
       buffer = device.createBuffer({ size: probeBytes, usage });
       allocationProbeBytes = probeBytes;
     } catch (error) {
-      return { eligible: false, reason: `WebGPU allocation probe failed: ${error?.message || error}`, cores, memoryGb, isolated };
+      // Transient by nature: the GPU can refuse a 16 MB buffer while another
+      // session still holds the device, and an engine reset re-probes at
+      // exactly that moment. The identity travels with the failure so the
+      // caller can still find this device's calibration.
+      return {
+        eligible: false,
+        transient: true,
+        reason: `WebGPU allocation probe failed: ${error?.message || error}`,
+        cores, memoryGb, isolated,
+        adapterInfo: info,
+        adapterIdentity: identity,
+      };
     } finally {
       buffer?.destroy?.();
       device?.destroy?.();
     }
   }
 
-  let info = {};
-  try {
-    info = typeof adapter.requestAdapterInfo === 'function'
-      ? await adapter.requestAdapterInfo()
-      : (adapter.info || {});
-  } catch (_) {
-    info = adapter.info || {};
-  }
   return {
     eligible: true,
     reason: '',
@@ -1014,7 +1030,7 @@ export async function probePocketWebGpuEligibility(options = {}) {
     isolated,
     adapter,
     adapterInfo: info,
-    adapterIdentity: adapterIdentity(info),
+    adapterIdentity: identity,
     allocationProbeBytes,
   };
 }

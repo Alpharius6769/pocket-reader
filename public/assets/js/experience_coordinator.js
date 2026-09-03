@@ -104,6 +104,19 @@ export function enqueueExperience({ id, priority = 0, allowDuringModal = false, 
     if (activeEvent && isVirtueEventId(activeEvent.id) && Number(priority) < Number(activeEvent.priority || 0)) {
       return Promise.resolve(false);
     }
+  } else if (activeEvent
+      && isVirtueEventId(activeEvent.id)
+      && Number(priority) > Number(activeEvent.priority || 0)) {
+    // Preempt the companion. Priority orders the PENDING queue but never
+    // interrupts what is already running, and a Virtue beat holds the slot for
+    // its full speech duration -- so a modal asked for while Virtue was talking
+    // waited up to ten seconds, which reads as the modal being broken.
+    //
+    // A modal answers something the reader just did; a beat is decorative and
+    // built to be interrupted (dismissVirtue resolves the very waiters its run
+    // promise waits on). Only strictly higher priority preempts, so an
+    // interactive Virtue prompt is not cut off by a routine notice.
+    try { window.dismissVirtue?.(); } catch (_) {}
   }
 
   if (pendingEvents.length >= MAX_PENDING_EVENTS) {
@@ -172,6 +185,13 @@ export function setExperienceSuppressed(suppressed, reason = '') {
 }
 window.setExperienceSuppressed = setExperienceSuppressed;
 
+// How long a revealed modal is given to actually become visible before the
+// watchdog will believe it has closed. reveal() adds the class synchronously,
+// so this only has to cover a transition frame; it is generous because ending
+// the event early would let the next modal open on top of this one.
+const MODAL_REVEAL_GRACE_MS = 1500;
+const MODAL_WATCHDOG_INTERVAL_MS = 400;
+
 export function queueModalReveal(id, reveal, { priority = 80, eventKey = id, allowDuringModal = false } = {}) {
   const modalId = String(id || 'modal');
   return enqueueExperience({
@@ -179,8 +199,29 @@ export function queueModalReveal(id, reveal, { priority = 80, eventKey = id, all
     priority,
     allowDuringModal,
     run: () => new Promise((resolve) => {
-      modalReleases.set(modalId, resolve);
+      let settled = false;
+      let watchdog = null;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (watchdog) clearInterval(watchdog);
+        modalReleases.delete(modalId);
+        resolve(true);
+      };
+      // releaseQueuedModal() still resolves it directly; this is idempotent so
+      // the two cannot double-resolve.
+      modalReleases.set(modalId, finish);
       reveal();
+
+      // Self-healing. A close path that forgets releaseQueuedModal used to
+      // strand activeEvent permanently, which silently killed every later
+      // modal and companion beat. The queue now notices the modal is gone.
+      const openedAt = Date.now();
+      watchdog = setInterval(() => {
+        if (Date.now() - openedAt < MODAL_REVEAL_GRACE_MS) return;
+        if (isVisible(document.getElementById(modalId))) return;
+        finish();
+      }, MODAL_WATCHDOG_INTERVAL_MS);
     }),
   });
 }

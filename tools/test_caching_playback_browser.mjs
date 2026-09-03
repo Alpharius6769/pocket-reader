@@ -115,8 +115,8 @@ try {
       return new Blob([new Uint8Array(256)], { type: 'audio/wav' });
     };
 
-    const storageModule = await import('/assets/js/storage_core.js?v=storage-v23');
-    await import('/assets/js/buffer_manager.js?v=buffer-v78');
+    const storageModule = await import('/assets/js/storage_core.js?v=storage-v25');
+    await import('/assets/js/buffer_manager.js?v=buffer-v80');
     window.BufferManager.initUI();
 
     const repaired = storageModule.normalizeStoryChapters([{

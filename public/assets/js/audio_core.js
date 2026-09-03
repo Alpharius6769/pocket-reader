@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v23';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v25';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -53,7 +53,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v33';
+} from './pocket_backend_policy.js?v=backend-v36';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -1052,7 +1052,29 @@ let _engineReadyResolve = null;
 let _engineReadyPromise = null;
 let loadedVoiceEngine = null;
 let _pocketBackendPlanPromise = null;
+// The adapter identity keys the stored calibration. A probe can fail while the
+// GPU is busy, and before this a failure reported no identity at all -- so the
+// key became `unknown-adapter`, the calibration for this machine stopped being
+// found, and the plan fell back to the first-run setup recommendation. Holding
+// the last known identity for the session keeps the lookup pointed at the same
+// bucket whether or not this particular probe succeeded.
+let _lastKnownAdapterIdentity = '';
 let _pocketBackendOptimizationPromise = null;
+// Settling, not just forgetting. Clearing the variable above leaves any awaiter
+// hanging on a promise that can no longer resolve, because the worker whose
+// message would have resolved it has been terminated.
+let _pocketBackendOptimizationAbort = null;
+
+const POCKET_OPTIMIZATION_ABORTED = 'pocket-backend-optimization-aborted';
+
+function _abortPocketBackendOptimization(reason) {
+  const abort = _pocketBackendOptimizationAbort;
+  _pocketBackendOptimizationAbort = null;
+  _pocketBackendOptimizationPromise = null;
+  if (typeof abort === 'function') {
+    try { abort(reason || 'The narration engine was reset.'); } catch (_) {}
+  }
+}
 let _pocketBackendContext = null;
 let _pocketCalibration = null;
 let _pocketGpuFailureCount = 0;
@@ -1175,8 +1197,9 @@ async function _preparePocketBackendPlan(force = false) {
         clearTimeout(timer);
       }
     }
+    if (eligibility.adapterIdentity) _lastKnownAdapterIdentity = eligibility.adapterIdentity;
     _pocketBackendContext = {
-      adapterIdentity: eligibility.adapterIdentity || 'unknown-adapter',
+      adapterIdentity: eligibility.adapterIdentity || _lastKnownAdapterIdentity || 'unknown-adapter',
       browserMajor: stickyContext.browserMajor,
       isolated: stickyContext.isolated,
       platform,
@@ -1221,6 +1244,25 @@ async function _preparePocketBackendPlan(force = false) {
       ? measuredWasmRtf
       : null;
     const calibratedGpu = _pocketCalibration?.selectedBackend === 'webgpu';
+
+    // "Not right now" is not "not this device". The probe re-runs on every
+    // engine reset, and requesting an adapter or a 16 MB buffer can fail while
+    // the session being torn down still holds the GPU. Without this, that one
+    // moment demoted a calibrated WebGPU device to WASM for the rest of the
+    // session, silently, and only a manual re-optimisation brought it back.
+    //
+    // Only transient failures are forgiven, and only for a device that has
+    // already PROVEN WebGPU by storing a calibration for it. A recorded
+    // demotion still wins below, and every durable reason still demotes.
+    if (!eligibility.eligible && eligibility.transient === true
+        && calibratedGpu && !stickyDemotion?.demotedFromWebGpu) {
+      window.Diagnostics?.log('INFO', 'Retained calibrated WebGPU across a transient probe failure', {
+        reason: eligibility.reason,
+        adapterIdentity: _pocketBackendContext.adapterIdentity,
+      });
+      eligibility = { ...eligibility, eligible: true, reason: '', retainedAfterTransientFailure: true };
+    }
+
     let selectedBackend = 'wasm';
     let rejectionReason = eligibility.reason || '';
     if (stickyDemotion?.demotedFromWebGpu) {
@@ -1253,6 +1295,17 @@ async function _preparePocketBackendPlan(force = false) {
       rejectionReason = '';
     } else if (preference === 'webgpu' && !calibratedGpu && !rejectionReason) {
       rejectionReason = 'WebGPU must pass optimization on this device before manual selection.';
+    }
+    // The reported symptom was "it dropped to WASM for an unknown reason".
+    // A downgrade away from a calibrated WebGPU device is now always on the
+    // record, with the reason that caused it.
+    if (calibratedGpu && selectedBackend !== 'webgpu') {
+      window.Diagnostics?.log('WARN', 'Pocket backend fell back to WASM on a WebGPU-calibrated device', {
+        reason: rejectionReason || eligibility.reason || 'unknown',
+        transientProbeFailure: eligibility.transient === true,
+        demoted: stickyDemotion?.demotedFromWebGpu === true,
+        preference,
+      });
     }
     Object.assign(_pocketBackendRuntime, {
       preference,
@@ -1303,7 +1356,7 @@ function _recoverFromPocketWorkerCrash(workerObj, reason) {
   });
   ttsQueue = {};
   _resetPocketVoiceRegistry();
-  _pocketBackendOptimizationPromise = null;
+  _abortPocketBackendOptimization('The narration engine was reset.');
   _setNeuralState('idle');
   loadedVoiceEngine = null;
 }
@@ -1404,7 +1457,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v23',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v15',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v76',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v78',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -2510,7 +2563,17 @@ async function _ensurePocketBackendOptimizedForVoice(voiceName) {
       }, 20 * 60 * 1000);
       const cleanup = () => {
         clearTimeout(timeoutId);
+        _pocketBackendOptimizationAbort = null;
         workerObj.worker.removeEventListener('message', onMessage);
+      };
+      // The only other way out is a message from THIS worker. Terminate it and
+      // the message can never come, leaving the 20-minute timeout as the sole
+      // exit -- which is what stranded an engine switch after a stopped cache.
+      _pocketBackendOptimizationAbort = (reason) => {
+        cleanup();
+        const error = new Error(reason);
+        error.code = POCKET_OPTIMIZATION_ABORTED;
+        reject(error);
       };
       const onMessage = (event) => {
         const data = event.data || {};
@@ -2526,6 +2589,15 @@ async function _ensurePocketBackendOptimizedForVoice(voiceName) {
       workerObj.worker.postMessage({ type: 'calibrate_backend', voiceName: loadedVoice });
     });
   })().catch((error) => {
+    // We aborted it ourselves by tearing the worker down. That says nothing
+    // about whether this device can run WebGPU, so pinning the session to WASM
+    // here would demote a capable machine for a reason the reader never caused.
+    if (error?.code === POCKET_OPTIMIZATION_ABORTED) {
+      window.Diagnostics?.log('INFO', 'Pocket backend optimization aborted with the engine', {
+        reason: error?.message || 'engine reset',
+      });
+      return _pocketBackendRuntime;
+    }
     Object.assign(_pocketBackendRuntime, {
       selectedBackend: 'wasm', precision: 'int8', modelRevision: POCKET_WASM_MODEL_REVISION,
       gpuResidentStateBytes: 0, rejectionReason: error?.message || String(error),
@@ -2564,7 +2636,7 @@ async function _resetPocketEngineForBackend() {
   ttsQueue = {};
   _resetPocketVoiceRegistry();
   _pocketBackendPlanPromise = null;
-  _pocketBackendOptimizationPromise = null;
+  _abortPocketBackendOptimization('The narration engine was reset.');
   _setNeuralState('idle');
   loadedVoiceEngine = null;
   if (hadWorkers) {
@@ -2614,7 +2686,7 @@ window.trimPocketCacheWorkerPool = function trimPocketCacheWorkerPool() {
     });
     ttsQueue = {};
     _resetPocketVoiceRegistry();
-    _pocketBackendOptimizationPromise = null;
+    _abortPocketBackendOptimization('The narration engine was reset.');
     _pocketBackendRuntime.cacheWorkerCount = 0;
     _setNeuralState('idle');
     loadedVoiceEngine = null;
@@ -2656,7 +2728,7 @@ function _releaseIdlePocketWorkers() {
   });
   ttsQueue = {};
   _resetPocketVoiceRegistry();
-  _pocketBackendOptimizationPromise = null;
+  _abortPocketBackendOptimization('The narration engine was reset.');
   _pocketBackendRuntime.cacheWorkerCount = 0;
   _setNeuralState('idle');
   loadedVoiceEngine = null;

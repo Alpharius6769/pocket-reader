@@ -8,7 +8,7 @@ import {
   wasmThreadCandidates,
   POCKET_DEVICE_SETUP_KEY,
   isIosLikePlatform,
-} from './pocket_backend_policy.js?v=backend-v33';
+} from './pocket_backend_policy.js?v=backend-v36';
 
 const SETTINGS_RISK_ACK_KEY = 'pr_settings_risk_ack_v1';
 const SUPPORT_NOTICE_KEY = 'pr_device_support_notice_v2';
@@ -597,6 +597,11 @@ function handleSettingsRiskAccept(event) {
   if (!checkbox?.checked) return;
   localStorage.setItem(SETTINGS_RISK_ACK_KEY, 'accepted');
   document.getElementById('settings-modal-overlay')?.classList.remove('active');
+  // That overlay is in the coordinator's BLOCKING_OVERLAY_IDS and may be held
+  // open as the active queue event. Hiding it without this stranded the queue,
+  // and every later modal and companion beat waited on an event that had
+  // already finished. The watchdog would recover it; releasing is immediate.
+  window.releaseQueuedModal?.('settings-modal-overlay');
   openAdvancedSettings();
 }
 
