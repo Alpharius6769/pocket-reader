@@ -37,6 +37,19 @@ function isolateModalSiblings(modal, active) {
         sibling.dataset.pocketPrevAriaHidden = sibling.getAttribute('aria-hidden') ?? '__none__';
         sibling.setAttribute('data-pocket-modal-muted', 'true');
       }
+      // `inert` does not blur what is already focused -- measured: activeElement
+      // is unchanged both synchronously and after a task. Marking a subtree
+      // aria-hidden while it still holds focus is what produces "Blocked
+      // aria-hidden on an element because its descendant retained focus", and
+      // it leaves a screen reader parked on a node that is no longer in the
+      // accessibility tree while document.activeElement sits outside the modal
+      // that just claimed to trap it.
+      //
+      // Virtue is where this shows up because _syncVirtueAccessibility gives
+      // the container tabindex="0" for the length of a beat.
+      if (sibling.contains(document.activeElement) && document.activeElement !== document.body) {
+        try { document.activeElement.blur(); } catch (_) {}
+      }
       sibling.setAttribute('inert', '');
       sibling.setAttribute('aria-hidden', 'true');
     } else if (sibling.hasAttribute('data-pocket-modal-muted')) {

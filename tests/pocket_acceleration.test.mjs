@@ -214,12 +214,12 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
   assert.match(serviceWorker, /pocket-reader-core-v\d+/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v186/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v190/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
   assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v78/);
   assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v36/);
-  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v25/);
+  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v28/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
   const shell = await read('public/index.html');
   const swRevision = serviceWorker.match(/pocket-reader-core-v(\d+)/)?.[1];

@@ -1,4 +1,5 @@
 import { animate } from './motion_lite.js';
+import { BLOCKING_OVERLAY_IDS } from './experience_coordinator.js?v=experience-v17';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 // Heavy containers that are fully rebuilt every time their view is entered.
@@ -1387,10 +1388,13 @@ function _isElemVisible(el) {
 }
 
 // Any full-screen modal/overlay a tip must not render behind or fight with.
+// The list is the coordinator's, not a copy: the copy that used to live here
+// had lost track of feature-dialog and never knew about device-setup-modal, so
+// the first-run tip sequence started underneath the device-setup dialog (tips
+// sit at z-index 11000, that dialog at 99998) and waited there for a Next
+// button the reader could not reach.
 function _isBlockingOverlayOpen() {
-  const ids = ['global-loading-overlay', 'cache-modal-overlay',
-               'settings-modal-overlay', 'first-time-setup-modal', 'caching-progress-modal'];
-  return ids.some((id) => _isElemVisible(document.getElementById(id)));
+  return BLOCKING_OVERLAY_IDS.some((id) => _isElemVisible(document.getElementById(id)));
 }
 
 // The very first view is pre-marked `active-view` in the shell HTML and is
@@ -1678,7 +1682,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=263', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=267', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

@@ -1,11 +1,21 @@
 // Serializes transient UI so achievements, companion feedback, and modals do
 // not overwrite each other or appear on top of an interactive screen.
 const MAX_PENDING_EVENTS = 12;
-const BLOCKING_OVERLAY_IDS = Object.freeze([
+// Every full-screen dialog that must not have a notice, a companion beat or a
+// page tip drawn over it. Exported because ui_controller's tip sequencer needs
+// the same answer, and the copy it used to keep had drifted: it was missing
+// feature-dialog, and this one was missing device-setup-modal and
+// profile-edit-modal -- the first of which is the very first thing a new
+// reader sees, and which the queue therefore treated as "nothing is open".
+//
+// A new overlay belongs here and nowhere else.
+export const BLOCKING_OVERLAY_IDS = Object.freeze([
   'global-loading-overlay',
   'cache-modal-overlay',
   'settings-modal-overlay',
   'first-time-setup-modal',
+  'device-setup-modal',
+  'profile-edit-modal',
   'caching-progress-modal',
   'feature-dialog',
 ]);
