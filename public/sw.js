@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v280';
+var CACHE_NAME = 'pocket-reader-core-v282';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -138,8 +138,8 @@ var OPTIONAL_ASSETS = [
 // connection these are the most likely single fetch to fail -- and losing the
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
-    'assets/js/buffer_manager.js?v=buffer-v85',
-    'assets/js/audio_core.js?v=audio-v155',
+    'assets/js/buffer_manager.js?v=buffer-v88',
+    'assets/js/audio_core.js?v=audio-v158',
     'assets/js/pocket_worker.js?v=pocket-worker-v82',
     'assets/js/kokoro_worker.js?v=kokoro-v32',
     'assets/js/kitten_worker.js?v=kitten-v21',
@@ -161,18 +161,18 @@ var CORE_ASSETS = [
     'assets/js/experience_coordinator.js?v=experience-v17',
     'assets/js/virtue_controller.js?v=virtue-v36',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v197',
+    'assets/js/ui_controller.js?v=ui-v198',
     'assets/js/supabase_bridge.js?v=supabase-v10',
     'assets/js/profile_merge.js?v=merge-v10',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v36',
-    'assets/js/settings_manager.js?v=settings-v163',
+    'assets/js/settings_manager.js?v=settings-v164',
     'assets/js/library_manager.js?v=library-v64',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v7',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v1',
     'assets/js/hmofa_community.js?v=hmofa-community-v2',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v2',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v85',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v87',
     'assets/js/storage_core.js?v=storage-v29',
     'assets/js/sync_core.js?v=sync-v29',
     'assets/js/cinematic_ui.js?v=cinematic-v8',

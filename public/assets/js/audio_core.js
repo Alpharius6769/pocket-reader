@@ -1484,6 +1484,23 @@ async function _loadPocketEngine() {
       eligibility: { eligible: false },
     }
     : await _preparePocketBackendPlan();
+  // Publish it. _preparePocketBackendPlan does this for Pocket via Object.assign,
+  // and skipping the planner for StyleTTS2 skipped the publication too -- so the
+  // runtime object kept threadCount: 1 from its own declaration while the worker
+  // ran on two or four. Everything user-facing reads the runtime object.
+  if (_isStyleTts2Engine(engine)) {
+    Object.assign(_pocketBackendRuntime, {
+      preference: backendPlan.preference,
+      selectedBackend: backendPlan.selectedBackend,
+      threadCount: backendPlan.threadCount,
+      precision: 'int8',
+      gpuResidentStateBytes: 0,
+      graphCapture: false,
+      mimiProvider: 'wasm-threaded',
+      gpuSyncGroupBlocks: 1,
+      rejectionReason: '',
+    });
+  }
   const vendor = _gpuVendor || 'unknown';
   // A second complete inference worker is allowed only for positively
   // high-memory desktop cache jobs. The shared policy keeps every mobile,
@@ -1786,6 +1803,21 @@ async function _loadPocketEngine() {
               }
             }
           } else if (data.type === 'init_done' || data.type === 'ready' || data.type === 'loaded' || data.type === 'bundle_loaded') {
+            // What ORT was ACTUALLY configured with beats what the plan asked
+            // for. Both StyleTTS2 workers report their real numThreads here and
+            // nothing read it; Pocket sends no telemetry on init_done at all, so
+            // this is a no-op for it. Same merge shape as 'backend_selected'.
+            if (data.telemetry && typeof data.telemetry === 'object') {
+              const telemetry = data.telemetry;
+              Object.assign(_pocketBackendRuntime, telemetry, {
+                selectedBackend: telemetry.selectedBackend || _pocketBackendRuntime.selectedBackend,
+                precision: telemetry.precision || _pocketBackendRuntime.precision,
+                modelRevision: telemetry.modelRevision || _pocketBackendRuntime.modelRevision,
+                threadCount: Number(telemetry.threads || _pocketBackendRuntime.threadCount || 1),
+              });
+              window.updatePocketBackendControl?.();
+              window.refreshPerfPanel?.();
+            }
             if (!workerObj.ready) {
               workerObj.ready = true;
               workersReady++;

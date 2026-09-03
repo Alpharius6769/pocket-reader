@@ -326,3 +326,76 @@ test('a slow link is reported rather than looking like a hang', async () => {
   assert.match(label, /seconds >= 90/);
   assert.match(label, /first download about/);
 });
+
+// ── An iPhone 13 told it was running one thread ─────────────────────────────
+
+test('the StyleTTS2 plan publishes its thread count to the runtime object', async () => {
+  // Reported from an iPhone 13: "Slow 1-thread mode (isolation off)" on a device
+  // that runs two performance-core threads -- and which the catalogue has just
+  // moved to Kitten, i.e. onto the StyleTTS2 path where this goes wrong.
+  //
+  // _pocketBackendRuntime.threadCount is only written by
+  // _preparePocketBackendPlan, and that planner is deliberately skipped for
+  // Kokoro and Kitten. The stub that replaces it computes the real count and
+  // hands it to the worker, but never wrote it back -- so the runtime object
+  // kept the 1 from its own declaration, and every user-facing surface reads
+  // the runtime object.
+  const source = await read('public/assets/js/audio_core.js');
+  assert.match(source, /^ {2}threadCount: 1,$/m, 'the declared default this used to be stuck on');
+
+  const load = source.slice(
+    source.indexOf('const backendPlan = _isStyleTts2Engine(engine)'),
+    source.indexOf('const ENGINE_LOAD_LABELS'),
+  );
+  assert.match(load, /if \(_isStyleTts2Engine\(engine\)\) \{\s*\n\s*Object\.assign\(_pocketBackendRuntime, \{/);
+  assert.match(load, /threadCount: backendPlan\.threadCount,/);
+});
+
+test('the worker\'s own thread count is believed over the plan\'s intention', async () => {
+  // Both StyleTTS2 workers report ort.env.wasm.numThreads in init_done
+  // telemetry -- with a comment recording that this same bug was fixed once
+  // INSIDE the worker. The main thread merged telemetry on 'backend_selected'
+  // and 'backend_status', which is what Pocket sends, and ignored it on
+  // 'init_done', which is what StyleTTS2 sends.
+  for (const file of ['public/assets/js/kokoro_worker.js', 'public/assets/js/kitten_worker.js']) {
+    const worker = await read(file);
+    assert.match(worker, /threads: ort\?\.env\?\.wasm\?\.numThreads \|\| 1,/, `${file} reports its real count`);
+  }
+  const source = await read('public/assets/js/audio_core.js');
+  const branch = source.slice(
+    source.indexOf("} else if (data.type === 'init_done' || data.type === 'ready'"),
+    source.indexOf('if (!workerObj.ready) {'),
+  );
+  assert.match(branch, /data\.telemetry && typeof data\.telemetry === 'object'/);
+  assert.match(branch, /threadCount: Number\(telemetry\.threads \|\| _pocketBackendRuntime\.threadCount \|\| 1\)/);
+  // Pocket posts init_done with no telemetry at all, so this is a no-op there.
+  const pocket = await read('public/assets/js/pocket_worker.js');
+  assert.match(pocket, /postMessage\(\{ type: 'init_done' \}\);/);
+});
+
+test('the runtime label stops blaming isolation for a thread count', async () => {
+  // `!isolated || threads <= 1` printed "(isolation off)" whenever EITHER was
+  // true, so a properly isolated single-threaded session accused the browser of
+  // something that was not happening -- and that is the half a reader acts on.
+  const source = await read('public/assets/js/buffer_manager.js');
+  const label = source.slice(
+    source.indexOf('function _narrationRuntimeLabel'),
+    source.indexOf('function _minimumPlaybackReadyCount'),
+  );
+  assert.doesNotMatch(label, /!isolated \|\| threads <= 1/, 'two conditions, two messages');
+  assert.match(label, /if \(!_isolationReady\(\)\) \{\s*\n\s*return 'Slow 1-thread mode \(isolation off\)/);
+  assert.match(label, /if \(threads <= 1\) \{\s*\n\s*return 'Slow 1-thread mode —/);
+  assert.match(label, /Threaded WASM ×\$\{threads\}/);
+});
+
+test('an isolated iPhone gets the two threads it is capable of', () => {
+  // iOS reports a constant hardwareConcurrency of 4 for anti-fingerprinting but
+  // has two performance cores; extra threads land on the E-cores and stall
+  // ORT's per-layer barrier. So 2 is the right answer, and 2 is what the
+  // StyleTTS2 workers now ask ORT for.
+  const iosIsolated = { crossOriginIsolated: true, platform: 'ios', mobile: true, hardwareConcurrency: 4 };
+  assert.equal(policy.recommendedWasmThreadCount(iosIsolated), 2);
+  // Without isolation there is no SharedArrayBuffer, so one thread is correct
+  // and the "(isolation off)" message is the true one.
+  assert.equal(policy.recommendedWasmThreadCount({ ...iosIsolated, crossOriginIsolated: false }), 1);
+});

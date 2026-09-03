@@ -55,9 +55,15 @@ function _narrationRuntimeLabel() {
     return 'WebGPU FP16 — GPU narration (auto-falls back to WASM if it lags)';
   }
   const threads = Number(runtime.threadCount || 0);
-  const isolated = _isolationReady();
-  if (!isolated || threads <= 1) {
+  // Two different problems, and they used to share one sentence: `!isolated ||
+  // threads <= 1` blamed isolation whenever EITHER was true, so a properly
+  // isolated single-threaded session accused the browser of something that was
+  // not happening -- and that is the half a reader would go and act on.
+  if (!_isolationReady()) {
     return 'Slow 1-thread mode (isolation off) — expect ~30–60s per paragraph';
+  }
+  if (threads <= 1) {
+    return 'Slow 1-thread mode — expect ~30–60s per paragraph';
   }
   return `Threaded WASM ×${threads}`;
 }
