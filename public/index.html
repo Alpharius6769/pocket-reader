@@ -136,22 +136,22 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/native_app_key.js?v=native-key-v1">
 <link rel="modulepreload" href="assets/js/diagnostics.js?v=diag-v9">
 <link rel="modulepreload" href="assets/js/motion_lite.js">
-<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v31">
-<link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v31">
+<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v33">
+<link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v33">
 <link rel="modulepreload" href="assets/js/engine_utils.js">
-<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v88">
+<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v89">
 <link rel="modulepreload" href="assets/js/api_core.js?v=search-v25">
 <link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v17">
-<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v38">
+<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v40">
 <link rel="modulepreload" href="assets/js/device_catalog.js?v=catalog-v1">
-<link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v45">
+<link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v48">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
-<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v39">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v166">
-<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v66">
+<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v41">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v168">
+<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v68">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v8">
-<link rel="modulepreload" href="assets/js/reader_features.js?v=features-v31">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v199">
+<link rel="modulepreload" href="assets/js/reader_features.js?v=features-v33">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v200">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v10">
 
 <!-- ==========================================
@@ -168,7 +168,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.indexOf('/debug/') !== -1 || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=284', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=286', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -1530,23 +1530,23 @@ Playback-only modules remain deferred so they do not compete with first paint.
     </div>
     <script src='assets/js/native_app_key.js?v=native-key-v1' type='module'></script>
     <script src='assets/js/diagnostics.js?v=diag-v9' type='module'></script>
-    <script src='assets/js/storage_core.js?v=storage-v31' type='module'></script>
-    <script src='assets/js/sync_core.js?v=sync-v31' type='module'></script>
+    <script src='assets/js/storage_core.js?v=storage-v33' type='module'></script>
+    <script src='assets/js/sync_core.js?v=sync-v33' type='module'></script>
     <script src='assets/js/api_core.js?v=search-v25' type='module'></script>
     <script src='assets/js/experience_coordinator.js?v=experience-v17' type='module'></script>
-    <script src='assets/js/virtue_controller.js?v=virtue-v38' type='module'></script>
+    <script src='assets/js/virtue_controller.js?v=virtue-v40' type='module'></script>
     <script src='assets/js/engine_utils.js' type='module'></script>
-    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v88' type='module'></script>
+    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v89' type='module'></script>
     <script src='assets/js/tts_pronunciation_core.js?v=pron-v23' type='module'></script>
-    <script src='assets/js/library_manager.js?v=library-v66' type='module'></script>
+    <script src='assets/js/library_manager.js?v=library-v68' type='module'></script>
     <!-- Pulls in hmofa_catalog_core.js via a versioned import. The catalog
          itself is only downloaded when the masterlist view is opened. -->
     <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v7' type='module'></script>
-    <script src='assets/js/device_setup.js?v=device-setup-v39' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v166' type='module'></script>
+    <script src='assets/js/device_setup.js?v=device-setup-v41' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v168' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v8' type='module'></script>
-    <script src='assets/js/reader_features.js?v=features-v31' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v199' type='module'></script>
+    <script src='assets/js/reader_features.js?v=features-v33' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v200' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v10' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v5' type='module'></script>
   </div>

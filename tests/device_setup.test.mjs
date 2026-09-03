@@ -10,7 +10,7 @@ test('device calibration blocks profile setup until its local benchmark complete
   const theme = await read('public/assets/css/theme.css');
   assert.ok(html.indexOf('id="device-setup-modal"') < html.indexOf('id="first-time-setup-modal"'));
   assert.match(html, /html:not\(\.pr-device-setup-complete\) #first-time-setup-modal/);
-  assert.match(html, /device_setup\.js\?v=device-setup-v39/);
+  assert.match(html, /device_setup\.js\?v=device-setup-v41/);
   assert.match(deviceSetup, /pr_device_setup_v2|POCKET_DEVICE_SETUP_KEY/);
   assert.match(deviceSetup, /localOnly:\s*true/);
   assert.match(deviceSetup, /simulateThreadedWasm:\s*true/);

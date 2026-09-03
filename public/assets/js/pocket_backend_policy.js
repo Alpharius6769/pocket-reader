@@ -272,6 +272,38 @@ function tierFromDeclaredDevice(deviceId, headroomMb) {
   };
 }
 
+// Same lesson as readMeasuredHeadroomMb below, and the same fix: a signal that
+// only reaches the decision when a CALLER happens to pass it is a signal that
+// informs first-run setup and nothing afterwards.
+//
+// The ProMotion measurement is written into the device record and was read back
+// by nobody. It rarely changes the answer -- a successful headroom probe already
+// separates a 13 Pro from a 13 -- but when the probe failed it was the only
+// thing that could, and that is exactly when it went missing.
+export function readMeasuredRefreshHz(storage = globalThis.localStorage) {
+  try {
+    const refreshHz = Number(readPocketDeviceSetup(storage)?.refreshHz);
+    return Number.isFinite(refreshHz) && refreshHz > 0 ? refreshHz : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+// The Client Hints model, from the capability record collectPocketDeviceCapability
+// persists. window._pocketDeviceCapability is published by audio_core, which is
+// lazily loaded with the narration runtime -- so at boot there is no capability
+// object at all, the model read as empty, and the weak-Android demotion could
+// not fire. A safety net absent until the heavy modules load is absent when it
+// is most needed.
+export function readStoredDeviceModel(storage = globalThis.localStorage) {
+  try {
+    const record = JSON.parse(storage?.getItem(POCKET_DEVICE_CAPABILITY_KEY) || 'null');
+    return String(record?.model || '');
+  } catch (_) {
+    return '';
+  }
+}
+
 export function readMeasuredHeadroomMb(storage = globalThis.localStorage) {
   try {
     const record = readPocketDeviceSetup(storage);
@@ -1645,11 +1677,13 @@ export function selectNarrationEngine(options = {}) {
     // "Android 10; K" with no model token, so this is the only place the real
     // hardware name still appears -- and collectPocketDeviceCapability has been
     // asking for it and storing it all along without anything reading it.
-    model: options.model ?? capability.model ?? '',
+    // `||`, not `??`: an empty string is not an answer, it is the absence of
+    // one, and every layer here can legitimately produce it.
+    model: String(options.model || capability.model || readStoredDeviceModel(options.storage) || ''),
     // Measured ProMotion. Positive evidence only: every way this can be wrong
     // reports 60 Hz (Low Power Mode, a hidden tab, a busy benchmark), so a 120
     // narrows the candidate set and a 60 says nothing.
-    refreshHz: Number(options.refreshHz ?? capability.refreshHz ?? 0) || 0,
+    refreshHz: Number(options.refreshHz || capability.refreshHz || readMeasuredRefreshHz(options.storage)) || 0,
   };
   // A declared model is device-local and is discarded when the hardware
   // signals under it change, so a restored backup cannot carry a claim about a

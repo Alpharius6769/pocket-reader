@@ -492,3 +492,62 @@ test('the picker offers a way out of its own narrowing', async () => {
   const storage = { getItem: () => null, setItem: () => { throw new Error('must not write'); }, removeItem: () => {} };
   assert.equal(policy.writeDeclaredDevice(storage, '__show_all__', 'fp'), null);
 });
+
+// ── Signals that must survive the session that measured them ────────────────
+
+const setupRecord = (extra = {}) => {
+  const map = new Map();
+  map.set('pr_device_setup_v2', JSON.stringify({
+    version: 2, completedAt: Date.now(),
+    capability: { platform: 'ios' }, memory: { measured: false, headroomMb: 0 },
+    ...extra,
+  }));
+  return { getItem: (key) => (map.has(key) ? map.get(key) : null), setItem: (k, v) => map.set(k, v), removeItem: (k) => map.delete(k) };
+};
+
+test('the ProMotion measurement is read back on later launches', () => {
+  // It was written into the device record and read by nobody, so it informed
+  // first-run setup and nothing afterwards. It rarely changes the answer -- a
+  // successful headroom probe already separates a 13 Pro from a 13 -- but when
+  // the probe FAILED it was the only thing that could, which is exactly when it
+  // went missing.
+  const storage = setupRecord({ refreshHz: 120 });
+  assert.equal(policy.readMeasuredRefreshHz(storage), 120);
+  const later = policy.selectNarrationEngine({
+    capability: { platform: 'ios' }, userAgent: 'iPhone',
+    screenWidth: 390, screenHeight: 844, storage,
+  });
+  assert.equal(later.engine, 'kokoro', 'a 13 Pro stays a 13 Pro between launches');
+
+  // Without it, the same device falls to the bucket floor.
+  assert.equal(policy.selectNarrationEngine({
+    capability: { platform: 'ios' }, userAgent: 'iPhone',
+    screenWidth: 390, screenHeight: 844, storage: setupRecord(),
+  }).engine, 'kitten');
+});
+
+test('the Client Hints model reaches the decision before audio_core loads', () => {
+  // window._pocketDeviceCapability is published by audio_core, which is lazily
+  // loaded with the narration runtime. At boot there is no capability object at
+  // all, so the model read as empty and the weak-Android demotion could not
+  // fire -- a safety net absent until the heavy modules load is absent when it
+  // is most needed.
+  const withModel = (model) => ({ getItem: (key) => (key === 'pr_pocket_device_capability_v1' ? JSON.stringify({ model }) : null) });
+  const boot = (model) => policy.selectNarrationEngine({
+    userAgent: 'Mozilla/5.0 (Linux; Android 10; K) Mobile',
+    deviceMemory: 8, hardwareConcurrency: 8, storage: withModel(model),
+  }).engine;
+  assert.equal(policy.readStoredDeviceModel(withModel('SM-A536B')), 'SM-A536B');
+  assert.equal(boot('SM-A536B'), 'kitten', 'a budget SoC is demoted with no capability object');
+  assert.equal(boot('Pixel 8 Pro'), 'pocket', 'and a flagship is untouched');
+
+  // An empty string is the ABSENCE of an answer, not an answer, so `??` was the
+  // wrong operator: a capability object carrying model:'' would have skipped
+  // the stored value entirely.
+  const source = policy.selectNarrationEngine({
+    capability: { platform: 'android', model: '' },
+    userAgent: 'Mozilla/5.0 (Linux; Android 10; K) Mobile',
+    deviceMemory: 8, hardwareConcurrency: 8, storage: withModel('SM-A536B'),
+  });
+  assert.equal(source.engine, 'kitten');
+});
