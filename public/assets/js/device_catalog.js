@@ -197,19 +197,31 @@ export function iphonesForGeometry(key) {
   return IPHONES.filter((entry) => entry.geometry === wanted);
 }
 
+// The span of tiers a set of models covers, lowest to highest. This is what a
+// candidate list IS: every tier some member of the set could need, so the
+// measurement can pick inside it.
+export function tierSpanForModels(models, allTiers = ['kitten', 'kokoro', 'pocket']) {
+  if (!Array.isArray(models) || !models.length) return [...allTiers];
+  let low = allTiers.length - 1;
+  let high = 0;
+  for (const entry of models) {
+    const index = allTiers.indexOf(tierForRamGb(entry.ramGb));
+    if (index < 0) continue;
+    if (index < low) low = index;
+    if (index > high) high = index;
+  }
+  if (low > high) return [...allTiers];
+  return allTiers.slice(low, high + 1);
+}
+
 // The candidate tiers a geometry could belong to, derived from the RAM of every
 // model that shares it rather than hand-written per size. An unrecognised size
 // opens the full ladder and lets the measurement speak.
 export function tiersForGeometry(key, allTiers = ['kitten', 'kokoro', 'pocket']) {
   const models = iphonesForGeometry(key);
   if (!models.length) return { candidates: [...allTiers], models: [], note: '' };
-  const tiers = models.map((entry) => tierForRamGb(entry.ramGb));
-  const highest = tiers.reduce((best, tier) =>
-    (allTiers.indexOf(tier) > allTiers.indexOf(best) ? tier : best), allTiers[0]);
-  const lowest = tiers.reduce((worst, tier) =>
-    (allTiers.indexOf(tier) < allTiers.indexOf(worst) ? tier : worst), highest);
   return {
-    candidates: allTiers.slice(allTiers.indexOf(lowest), allTiers.indexOf(highest) + 1),
+    candidates: tierSpanForModels(models, allTiers),
     models,
     note: describeModels(models),
   };

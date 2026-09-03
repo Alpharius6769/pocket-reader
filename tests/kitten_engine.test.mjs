@@ -36,10 +36,37 @@ test('the iOS ladder places each generation on its intended tier', () => {
   assert.equal(ios(430, 932, MID).engine, 'kokoro', 'iPhone 14 Pro Max / 15 Plus');
 
   // The 13 sits at 390x844 with the 12. Same story one tier down.
-  assert.equal(ios(390, 844, MID).engine, 'kokoro', 'iPhone 13 / 13 Pro / 14');
-  assert.equal(ios(390, 844, SMALL).engine, 'kitten', 'iPhone 12 on a tight budget');
-  assert.equal(ios(375, 812, MID).engine, 'kokoro', 'iPhone 13 mini');
+  assert.equal(ios(390, 844, MID).engine, 'kokoro', 'iPhone 13 Pro / 14');
+  assert.equal(ios(390, 844, SMALL).engine, 'kitten', 'iPhone 12 or 13 on a tight budget');
+
+  // 375x812 is now unambiguous: every model shipping it -- X, XS, 11 Pro,
+  // 12 mini, 13 mini -- has 4 GB or less, so the whole size is a Kitten size
+  // and no measurement can lift it. The 13 mini moved here when the catalogue
+  // recorded its RAM: 4 GB, against a ~400 MB heap budget and a Kokoro
+  // session-build peak of 396-421 MB.
+  assert.equal(ios(375, 812, MID).engine, 'kitten', 'iPhone 13 mini');
+  assert.equal(ios(375, 812, LARGE).engine, 'kitten', 'and a big measurement cannot promote it');
   assert.equal(ios(375, 812, SMALL).engine, 'kitten', 'iPhone X / XS / 11 Pro');
+});
+
+test('ProMotion narrows a size the RAM alone cannot', () => {
+  // 390x844 spans 4 GB (12, 13) through 8 GB (16e, 17e). 120 Hz at that size
+  // is the iPhone 13 Pro and nothing else, which is the one place a refresh
+  // measurement changes the answer.
+  const promotion = policy.selectNarrationEngine({
+    capability: { platform: 'ios' }, screenWidth: 390, screenHeight: 844,
+    refreshHz: 120, memoryHeadroomMb: MID, storage: null });
+  assert.equal(promotion.engine, 'kokoro', 'a 13 Pro is a 6 GB device');
+
+  // Positive evidence only: 60 Hz must not be read as "not a Pro", because
+  // Low Power Mode, a hidden tab and a busy benchmark all report 60.
+  const sixty = policy.selectNarrationEngine({
+    capability: { platform: 'ios' }, screenWidth: 390, screenHeight: 844,
+    refreshHz: 60, memoryHeadroomMb: MID, storage: null });
+  const unknown = policy.selectNarrationEngine({
+    capability: { platform: 'ios' }, screenWidth: 390, screenHeight: 844,
+    memoryHeadroomMb: MID, storage: null });
+  assert.equal(sixty.engine, unknown.engine, '60 Hz must decide nothing on its own');
 });
 
 test('exact geometries, not ranges -- a 15 Plus must not read as a 16 Pro', () => {
@@ -49,18 +76,29 @@ test('exact geometries, not ranges -- a 15 Plus must not read as a 16 Pro', () =
   assert.equal(ios(430, 932).engine, 'kokoro');
   assert.equal(ios(430, 932, MID).engine, 'kokoro');
   assert.equal(ios(402, 874).engine, 'pocket');
+  // And the reverse: a 16 Pro must not be dragged down to a 15 Plus's tier.
+  assert.equal(ios(402, 874, MID).engine, 'pocket');
 });
 
 test('an unmeasured ambiguous device resolves DOWNWARD and says so', () => {
   // Being wrong downward costs voice quality. Being wrong upward costs the tab.
-  for (const [w, h] of [[393, 852], [430, 932], [390, 844], [375, 812], [428, 926]]) {
+  // Sizes whose models still span more than one tier.
+  for (const [w, h] of [[393, 852], [430, 932], [390, 844]]) {
     const r = ios(w, h);
     assert.equal(r.confident, false, `${w}x${h} must not claim confidence it lacks`);
     assert.match(r.reason, /identical|device test/i);
   }
   assert.equal(ios(393, 852).engine, 'kokoro', 'the 15 Pro bucket floors at Kokoro');
   assert.equal(ios(390, 844).engine, 'kitten', 'the 13 bucket floors at Kitten');
-  assert.equal(ios(414, 896).confident, true, 'a device it CAN identify should be confident');
+
+  // Sizes the catalogue resolves outright, because every model sharing them
+  // lands on one tier. 375x812 and 428x926 joined this group when RAM replaced
+  // the hand-written candidate lists.
+  for (const [w, h, engine] of [[414, 896, 'kitten'], [375, 812, 'kitten'], [428, 926, 'kokoro']]) {
+    const r = ios(w, h);
+    assert.equal(r.confident, true, `${w}x${h} is a single-tier size`);
+    assert.equal(r.engine, engine, `${w}x${h}`);
+  }
 });
 
 test('a measurement makes an ambiguous device confident', () => {

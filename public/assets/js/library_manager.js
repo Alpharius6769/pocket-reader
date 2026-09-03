@@ -1,5 +1,5 @@
 import { animate, stagger } from './motion_lite.js';
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v39';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v42';
 import {
   DEFAULT_POCKET_PLAYBACK_SPEED,
   DEFAULT_POCKET_TEMPERATURE_PRESET,

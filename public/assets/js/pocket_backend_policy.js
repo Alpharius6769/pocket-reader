@@ -1,4 +1,14 @@
 // Shared device-local policy for Pocket TTS backend selection.
+import {
+  CATALOG_VERSION,
+  androidInferredCeiling,
+  deviceById,
+  geometryKey,
+  refreshRateNarrows,
+  tierCeilingForDevice,
+  tierSpanForModels,
+  tiersForGeometry,
+} from './device_catalog.js?v=catalog-v1';
 
 export const POCKET_ORT_VERSION = '1.27.0';
 export const POCKET_CALIBRATION_VERSION = 'cal-v12';
@@ -176,6 +186,92 @@ export function classifyPocketDeviceCapability(options = {}) {
 //
 // So the fallback lives inside the selector rather than at its call sites. A
 // future caller cannot forget it, which is exactly how this was missed once.
+// ── The device a reader declared during setup ───────────────────────────────
+//
+// Device-local and deliberately NOT part of the synced profile: restoring a
+// backup onto a different phone would otherwise carry a claim about hardware
+// that is no longer there, which is the exact failure the ceiling exists to
+// prevent. The fingerprint below is the second half of that guarantee -- if the
+// hardware signals change under a stored claim, the claim is discarded rather
+// than trusted.
+export const DECLARED_DEVICE_KEY = 'pr_declared_device_v1';
+
+// Coarse on purpose. It has to change when the hardware does and NOT change
+// when a browser updates, a window resizes or the phone rotates -- so it is
+// built from screen geometry (orientation-independent), pixel ratio, core count
+// and platform, and from nothing version-shaped.
+export function deviceFingerprint(signals = {}) {
+  const platform = String(signals.platform || '');
+  const geometry = geometryKey(signals.screenWidth, signals.screenHeight);
+  const dpr = Math.round((Number(signals.devicePixelRatio) || 0) * 10) / 10;
+  const cores = Number(signals.hardwareConcurrency) || 0;
+  return `${platform}|${geometry}|${dpr}|${cores}`;
+}
+
+export function readDeclaredDevice(storage = globalThis.localStorage, fingerprint = '') {
+  try {
+    const record = JSON.parse(storage?.getItem(DECLARED_DEVICE_KEY) || 'null');
+    if (!record?.id || !deviceById(record.id)) return null;
+    // A claim recorded against different hardware is not a claim about this
+    // one. An absent fingerprint on either side means "cannot verify", which
+    // keeps an older record usable rather than silently dropping it.
+    if (fingerprint && record.fingerprint && record.fingerprint !== fingerprint) return null;
+    return record;
+  } catch (_) {
+    return null;
+  }
+}
+
+export function writeDeclaredDevice(storage = globalThis.localStorage, id = '', fingerprint = '') {
+  try {
+    if (!id) { storage?.removeItem(DECLARED_DEVICE_KEY); return null; }
+    const entry = deviceById(id);
+    if (!entry) return null;
+    const record = {
+      id: entry.id,
+      label: entry.label,
+      ramGb: entry.ramGb,
+      fingerprint: String(fingerprint || ''),
+      catalogVersion: CATALOG_VERSION,
+      declaredAt: Date.now(),
+    };
+    storage?.setItem(DECLARED_DEVICE_KEY, JSON.stringify(record));
+    return record;
+  } catch (_) {
+    return null;
+  }
+}
+
+export function clearDeclaredDevice(storage = globalThis.localStorage) {
+  try { storage?.removeItem(DECLARED_DEVICE_KEY); } catch (_) {}
+}
+
+// Truncate the ladder at a ceiling. The measurement then resolves inside it,
+// which is what keeps a wrong claim upward from costing a tab.
+export function tiersUpTo(ceiling, tiers = NARRATION_ENGINE_TIERS) {
+  const index = tiers.indexOf(ceiling);
+  return index < 0 ? [...tiers] : tiers.slice(0, index + 1);
+}
+
+// Shared by both mobile classifiers: resolve a declared model against whatever
+// measurement exists. With a measurement the ladder is truncated at the claim
+// and the measurement picks inside it; without one the claim stands, because
+// the reader asserted their own hardware and Settings can still override.
+function tierFromDeclaredDevice(deviceId, headroomMb) {
+  const ceiling = tierCeilingForDevice(deviceId);
+  if (!ceiling) return null;
+  const label = deviceById(deviceId)?.label || 'this device';
+  const resolved = resolveTierByHeadroom(tiersUpTo(ceiling), headroomMb);
+  const vetoed = resolved.measured && resolved.engine !== ceiling;
+  return {
+    engine: resolved.measured ? resolved.engine : ceiling,
+    confident: true,
+    reason: vetoed
+      ? `You selected ${label}, but this device measured only ${Math.round(headroomMb)} MB of working memory.`
+      : `You selected ${label}.`,
+  };
+}
+
 export function readMeasuredHeadroomMb(storage = globalThis.localStorage) {
   try {
     const record = readPocketDeviceSetup(storage);
@@ -1338,39 +1434,19 @@ export const ENGINE_HEADROOM_MB = Object.freeze({
   [POCKET_ENGINE]: 704,
 });
 
-// iOS device ladder, built from what the web platform ACTUALLY exposes.
+// The iOS ladder lives in device_catalog.js now.
 //
-// Target mapping: iPhone 15 Pro and above -> Pocket, iPhone 13 through 14 Pro
-// -> Kokoro, anything older than a 13 -> Kitten.
+// It used to be a geometry table here: each logical screen size mapped to a
+// hand-written candidate list, with the model names kept in comments beside it.
+// That is a device catalogue with the useful part -- the RAM -- left in prose,
+// so the candidate lists had to be maintained by hand and could drift from the
+// models they claimed to describe.
 //
-// Safari reports neither RAM nor model, and logical viewport size is the only
-// signal that tracks iPhone generation. But geometry alone CANNOT express the
-// mapping above, and pretending otherwise is how a device gets promoted into a
-// crash: an iPhone 14 Pro and an iPhone 15 Pro are both 393x852 and are
-// byte-identical to a browser, yet they sit on opposite sides of the boundary.
-// The same is true of the 12/13 pair at 390x844.
-//
-// So geometry resolves to a CANDIDATE SET, ordered low tier first, and the
-// measured headroom probe from first-run setup decides within it. With no
-// measurement the set collapses to its lowest member -- the conservative end --
-// because guessing upward is what kills the tab. Sizes are matched EXACTLY, not
-// as ranges: a ">= 402 wide and >= 874 tall" rule reads naturally and is wrong,
-// because it also swallows the iPhone 15 Plus at 430x932.
-const IOS_GEOMETRY = Object.freeze({
-  // Unambiguous: every model shipping this size belongs on one tier.
-  '440x956': { candidates: [POCKET_ENGINE], note: 'iPhone 16 Pro Max' },
-  '402x874': { candidates: [POCKET_ENGINE], note: 'iPhone 16 Pro' },
-  '414x896': { candidates: [KITTEN_ENGINE], note: 'iPhone XR, XS Max, 11 or 11 Pro Max' },
-  '375x667': { candidates: [KITTEN_ENGINE], note: 'iPhone SE' },
-  // Straddles the Pocket boundary: the 15 Pro and 16 belong on Pocket, the
-  // 14 Pro and 15 do not, and all four report the same size.
-  '393x852': { candidates: [KOKORO_ENGINE, POCKET_ENGINE], note: 'iPhone 14 Pro, 15, 15 Pro or 16' },
-  '430x932': { candidates: [KOKORO_ENGINE, POCKET_ENGINE], note: 'iPhone 14 Pro Max, 15 Plus, 15 Pro Max or 16 Plus' },
-  // Straddles the Kokoro boundary: the 13 and 14 belong on Kokoro, the 12 does not.
-  '390x844': { candidates: [KITTEN_ENGINE, KOKORO_ENGINE], note: 'iPhone 12, 12 Pro, 13, 13 Pro or 14' },
-  '428x926': { candidates: [KITTEN_ENGINE, KOKORO_ENGINE], note: 'iPhone 12 Pro Max, 13 Pro Max or 14 Plus' },
-  '375x812': { candidates: [KITTEN_ENGINE, KOKORO_ENGINE], note: 'iPhone X, XS, 11 Pro, 12 mini or 13 mini' },
-});
+// The catalogue keys on RAM and derives the same lists, which is why the 13 and
+// 13 mini moved to Kitten by writing down that they have 4 GB rather than by
+// editing a candidate array. Sizes are still matched EXACTLY, not as ranges: a
+// ">= 402 wide and >= 874 tall" rule reads naturally and is wrong, because it
+// also swallows the iPhone 15 Plus at 430x932.
 
 // Picks the best candidate the measured headroom actually supports. Absent a
 // measurement this returns the lowest candidate rather than the likeliest one:
@@ -1392,12 +1468,34 @@ export function classifyIosNarrationTier(signals = {}) {
   const w = Number(signals.screenWidth || 0);
   const h = Number(signals.screenHeight || 0);
   const headroomMb = Number(signals.memoryHeadroomMb || 0);
+
+  // A declared model outranks geometry, because it separates what geometry
+  // cannot: a 14 Pro and a 15 Pro are both 393x852 and byte-identical to a
+  // browser, yet 6 GB and 8 GB respectively.
+  const declared = signals.declaredDeviceId
+    ? tierFromDeclaredDevice(signals.declaredDeviceId, headroomMb)
+    : null;
+  if (declared) return declared;
+
   if (!w || !h) {
     return { engine: KITTEN_ENGINE, confident: false,
       reason: 'This browser did not report a screen size, so the lightest engine is the safe default.' };
   }
-  const key = `${Math.min(w, h)}x${Math.max(w, h)}`;
-  const hit = IOS_GEOMETRY[key];
+  const key = geometryKey(w, h);
+  // Candidates come from the catalogue now: every iPhone shipping this exact
+  // size, reduced to the span of tiers their RAM allows. Derived rather than
+  // hand-written, so adding a model cannot leave a stale candidate list behind.
+  //
+  // ProMotion then narrows that set where it can. It is the one hardware
+  // difference still measurable between two iPhones of the same size, and at
+  // 390x844 it identifies the 13 Pro outright -- the 6 GB device among five
+  // 4 GB ones. It buys nothing at 393x852, where both the 120 Hz and the 60 Hz
+  // sets straddle the Pocket boundary.
+  const catalogHit = tiersForGeometry(key, [...NARRATION_ENGINE_TIERS]);
+  const models = refreshRateNarrows(catalogHit.models, signals.refreshHz);
+  const hit = catalogHit.models.length
+    ? { candidates: tierSpanForModels(models, [...NARRATION_ENGINE_TIERS]), note: catalogHit.note }
+    : null;
   // An unrecognised size is a device this table has never seen -- a new model,
   // an iPad, or a browser reporting something unexpected. Measurement is the
   // only thing that can speak for it, so let it, and floor at Kitten otherwise.
@@ -1444,12 +1542,32 @@ export function classifyAndroidNarrationTier(signals = {}) {
   const cores = Number(signals.hardwareConcurrency || 0);
   const headroomMb = Number(signals.memoryHeadroomMb || 0);
 
+  const declared = signals.declaredDeviceId
+    ? tierFromDeclaredDevice(signals.declaredDeviceId, headroomMb)
+    : null;
+  if (declared) return declared;
+
+  // An INFERRED Android class may only demote -- see androidInferredCeiling.
+  // Applied after the normal decision below rather than instead of it, so a
+  // device that measures well is never capped by a catalogue guess.
+  const inferredCeiling = androidInferredCeiling(signals.model || '');
+  const demote = (picked) => {
+    if (!inferredCeiling) return picked;
+    const rank = (engine) => NARRATION_ENGINE_TIERS.indexOf(engine);
+    if (rank(picked.engine) <= rank(inferredCeiling)) return picked;
+    return {
+      engine: inferredCeiling,
+      confident: picked.confident,
+      reason: `This model is a known memory-constrained device, so the lighter engine is used.`,
+    };
+  };
+
   // A real measurement outranks the reported bucket in both directions: it is
   // the quantity that decides whether the session build survives.
   if (Number.isFinite(headroomMb) && headroomMb > 0) {
     const resolved = resolveTierByHeadroom([KOKORO_ENGINE, POCKET_ENGINE], headroomMb);
-    return { engine: resolved.engine, confident: true,
-      reason: `This device measured ${Math.round(headroomMb)} MB of working memory.` };
+    return demote({ engine: resolved.engine, confident: true,
+      reason: `This device measured ${Math.round(headroomMb)} MB of working memory.` });
   }
   // 6 rather than the old 8. Every current Android flagship and most
   // mid-rangers report 8 big.LITTLE cores, so requiring 8 only ever demoted
@@ -1457,13 +1575,13 @@ export function classifyAndroidNarrationTier(signals = {}) {
   // A report of 4 in 2026 is a genuinely weak CPU, and Pocket's three sessions
   // would synthesise too slowly to be worth the memory, so that keeps Kokoro.
   if (memoryGb >= 8 && cores >= 6) {
-    return { engine: POCKET_ENGINE, confident: true,
-      reason: `This device reports ${memoryGb} GB of RAM and ${cores} CPU cores.` };
+    return demote({ engine: POCKET_ENGINE, confident: true,
+      reason: `This device reports ${memoryGb} GB of RAM and ${cores} CPU cores.` });
   }
-  return { engine: KOKORO_ENGINE, confident: memoryGb > 0,
+  return demote({ engine: KOKORO_ENGINE, confident: memoryGb > 0,
     reason: memoryGb > 0
       ? `This device reports ${memoryGb} GB of RAM.`
-      : 'This device did not report its memory, so the middle engine is used.' };
+      : 'This device did not report its memory, so the middle engine is used.' });
 }
 
 export function selectNarrationEngine(options = {}) {
@@ -1507,7 +1625,24 @@ export function selectNarrationEngine(options = {}) {
     hardwareConcurrency: options.hardwareConcurrency
       ?? capability.hardwareConcurrency
       ?? globalThis.navigator?.hardwareConcurrency ?? 0,
+    devicePixelRatio: options.devicePixelRatio ?? globalThis.devicePixelRatio ?? 0,
+    platform,
+    // The UA-CH model string. Chrome's UA Reduction froze the User-Agent to
+    // "Android 10; K" with no model token, so this is the only place the real
+    // hardware name still appears -- and collectPocketDeviceCapability has been
+    // asking for it and storing it all along without anything reading it.
+    model: options.model ?? capability.model ?? '',
+    // Measured ProMotion. Positive evidence only: every way this can be wrong
+    // reports 60 Hz (Low Power Mode, a hidden tab, a busy benchmark), so a 120
+    // narrows the candidate set and a 60 says nothing.
+    refreshHz: Number(options.refreshHz ?? capability.refreshHz ?? 0) || 0,
   };
+  // A declared model is device-local and is discarded when the hardware
+  // signals under it change, so a restored backup cannot carry a claim about a
+  // phone that is no longer there.
+  signals.declaredDeviceId = options.declaredDeviceId
+    ?? readDeclaredDevice(options.storage, deviceFingerprint(signals))?.id
+    ?? '';
 
   let picked;
   if (platform === 'ios') {
