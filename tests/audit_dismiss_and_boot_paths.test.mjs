@@ -226,3 +226,70 @@ test('a muted sibling is blurred before it is marked aria-hidden', async () => {
   assert.match(isolate, /document\.activeElement !== document\.body/,
     'body is not a focus victim worth blurring');
 });
+
+// ── The quota fallback shed the wrong things ────────────────────────────────
+
+test('the graduated ladder keeps achievements and the streak', async () => {
+  // Functional, not structural: run the real ladder against an oversized
+  // profile and check what survives. Only DERIVED data may go.
+  const { shrinkProfileToFit, MAX_PROFILE_BYTES } = await import('../public/assets/js/profile_merge.js');
+  const profile = {
+    displayName: 'Reader',
+    achievements: [{ id: 'first_book', at: 1 }, { id: 'night_owl', at: 2 }],
+    activityDays: Array.from({ length: 800 }, (_, i) => `2024-01-${String((i % 28) + 1).padStart(2, '0')}`),
+    readingQueue: ['story-a', 'story-b'],
+    goals: { weeklyMinutes: 120 },
+    history: Array.from({ length: 250 }, (_, i) => ({ storyKey: `s${i}`, title: 'x'.repeat(4000), lastAt: i })),
+    // Unique day keys, or the object collapses to a couple of hundred entries
+    // and the fixture is not actually oversized.
+    dailyStatsByDevice: Object.fromEntries(
+      ['dev1', 'dev2'].map((d) => [d, Object.fromEntries(
+        Array.from({ length: 1500 }, (_, i) => [
+          `${2015 + Math.floor(i / 360)}-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}-${i}`,
+          { minutes: i, words: i * 50 },
+        ]),
+      )]),
+    ),
+    library: Array.from({ length: 40 }, (_, i) => ({ storyKey: `lib${i}`, title: 'A story', author: 'Someone' })),
+    settings: { theme: 'slate' },
+  };
+  const before = new TextEncoder().encode(JSON.stringify(profile)).length;
+  assert.ok(before > MAX_PROFILE_BYTES, 'the fixture must actually be oversized');
+
+  const { value, pruned } = shrinkProfileToFit(profile);
+  assert.ok(new TextEncoder().encode(JSON.stringify(value)).length <= MAX_PROFILE_BYTES);
+  assert.ok(pruned.length > 0, 'something must have been shed');
+
+  // The point of the fix: none of these are why a profile overflows, and none
+  // of them can be regenerated.
+  assert.equal(value.achievements.length, 2, 'achievements are user-authored');
+  assert.ok(value.activityDays.length > 0, 'the reading streak survives');
+  assert.deepEqual(value.readingQueue, ['story-a', 'story-b']);
+  assert.deepEqual(value.goals, { weeklyMinutes: 120 });
+  assert.equal(value.library.length, 40, 'the library is never trimmed to make room');
+  assert.deepEqual(value.settings, { theme: 'slate' });
+});
+
+test('the local quota fallback uses that ladder before amputating', async () => {
+  const source = await read('public/assets/js/library_manager.js');
+  assert.match(source, /import \{ profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit \}/);
+
+  const flush = source.slice(
+    source.indexOf('function _flushLocalData'),
+    source.indexOf('// ── Coalesced profile-commit batch'),
+  );
+  const shrinkAt = flush.indexOf('shrinkProfileToFit(liteProfile)');
+  const slimAt = flush.indexOf('const slim = {');
+  assert.notEqual(shrinkAt, -1, 'the ladder must be tried');
+  assert.ok(shrinkAt < slimAt, 'before the one-step fallback');
+
+  // The payload that failed is the one that gets shrunk -- not a different,
+  // smaller object rebuilt from scratch.
+  assert.match(flush, /let liteProfile = null;/);
+
+  // And the last resort carries the small irreplaceable fields it used to drop.
+  const slim = flush.slice(slimAt, flush.indexOf('localStorage.setItem', slimAt));
+  for (const field of ['achievements', 'activityDays', 'readingQueue', 'goals']) {
+    assert.match(slim, new RegExp(`${field}:`), `${field} must survive the last resort`);
+  }
+});

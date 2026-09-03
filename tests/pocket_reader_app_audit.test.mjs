@@ -74,7 +74,15 @@ test('audio ended-with-error pauses playback (H7)', async () => {
 
 test('library hashes and login merge share profile_merge (M2/M3)', async () => {
   const library = await read('public/assets/js/library_manager.js');
-  assert.match(library, /import \{ profileHash, storyKeyFor, mergeClockedMap \} from '\.\/profile_merge\.js\?v=merge-v10'/);
+  // Pinned by binding, not by the exact list: the point is that these come
+  // from profile_merge rather than a local reimplementation, and the import
+  // legitimately grows (shrinkProfileToFit joined it for the quota fallback).
+  const importLine = library.match(/import \{([^}]*)\} from '\.\/profile_merge\.js\?v=[^']+'/);
+  assert.ok(importLine, 'library_manager must import from profile_merge');
+  const bound = importLine[1].split(',').map((name) => name.trim());
+  for (const name of ['profileHash', 'storyKeyFor', 'mergeClockedMap']) {
+    assert.ok(bound.includes(name), `${name} must come from profile_merge`);
+  }
   assert.doesNotMatch(library, /replace\(\/\[\^a-z0-9\]\+\/g/);
   assert.match(library, /function getStoryStableKey\(story\) \{\s*return storyKeyFor\(/);
   const merge = library.slice(

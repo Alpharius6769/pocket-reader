@@ -6,7 +6,7 @@ import {
   DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
 } from './tts_pronunciation_core.js?v=pron-v23';
-import { profileHash, storyKeyFor, mergeClockedMap } from './profile_merge.js?v=merge-v10';
+import { profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit } from './profile_merge.js?v=merge-v10';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
@@ -854,6 +854,9 @@ function _flushLocalData(options = {}) {
     _saveDeferredDuringHydration = true;
     return;
   }
+  // Declared out here so the quota fallback can shrink the very payload that
+  // failed rather than rebuilding a different, smaller one from scratch.
+  let liteProfile = null;
   try {
     window.userProfile = normalizeProfileObject(window.userProfile);
     sanitizeProfileLibrary(window.userProfile, { purgeStorage: false });
@@ -863,7 +866,7 @@ function _flushLocalData(options = {}) {
     // first meant serialising and re-parsing megabytes of prose on every
     // paragraph purely to delete it on the next line.
     const { library, avatar, ...profileRest } = window.userProfile;
-    const liteProfile = JSON.parse(JSON.stringify(profileRest));
+    liteProfile = JSON.parse(JSON.stringify(profileRest));
     liteProfile.schemaVersion = PROFILE_SCHEMA_VERSION;
     liteProfile.updatedAt = Date.now();
     if (Array.isArray(library)) {
@@ -902,7 +905,27 @@ function _flushLocalData(options = {}) {
     }
   } catch (e) {
     console.error("saveLocalData failed:", e);
-    console.warn("Storage Quota Exceeded. Retrying without avatar/stats, preserving library.");
+    // Shed DERIVED data a step at a time rather than amputating everything that
+    // is not the library. shrinkProfileToFit trims reading history, then the
+    // per-device day buckets, then the activity stamps, re-measuring after each
+    // step and stopping the moment it fits -- and it never touches user-authored
+    // fields. Written for the sync payload; the same judgement applies here.
+    //
+    // What this replaces dropped in one go: achievements, the reading streak,
+    // the reading queue and the weekly goals. None of those is why a profile
+    // overflows (they are a few kilobytes between them), and losing a streak to
+    // a transient quota blip is exactly the kind of damage a fallback is
+    // supposed to prevent.
+    try {
+      if (!liteProfile) throw new Error('The payload never got built, so there is nothing to shrink.');
+      const shrunk = shrinkProfileToFit(liteProfile);
+      localStorage.setItem('pocketReaderData', JSON.stringify(shrunk.value));
+      console.warn('Storage quota exceeded; saved after shedding', shrunk.pruned.join(', ') || 'nothing');
+      return;
+    } catch (shrinkError) {
+      console.warn('Graduated shrink did not fit either:', shrinkError?.message || shrinkError);
+    }
+    console.warn("Storage Quota Exceeded. Retrying with the irreducible core, preserving library.");
     try {
       const slim = {
         displayName: window.userProfile.displayName,
@@ -910,6 +933,13 @@ function _flushLocalData(options = {}) {
         deletedStoryKeys: window.userProfile.deletedStoryKeys || {},
         updatedAt: Date.now(),
         settings: window.userProfile.settings || {},
+        // Carried through the last resort too. Between them these are a few
+        // kilobytes, they cannot be regenerated from anything, and they are what
+        // a reader would notice missing.
+        achievements: window.userProfile.achievements || [],
+        activityDays: window.userProfile.activityDays || [],
+        readingQueue: window.userProfile.readingQueue || [],
+        goals: window.userProfile.goals || {},
         library: (window.userProfile.library || []).map((s) => {
           const { chapters, ...rest } = s;
           rest.storyKey = rest.storyKey || getStoryStableKey(rest);
