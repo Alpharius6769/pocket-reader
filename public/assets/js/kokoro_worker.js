@@ -93,6 +93,13 @@ const STREAM_IDLE_TIMEOUT_MS = 25000;
 // the message port during a fast download.
 const STREAM_PROGRESS_INTERVAL_MS = 750;
 
+// Ceiling on WASM threads for this engine, whatever the device policy asks for.
+const MAX_WASM_THREADS = 4;
+// Set from the init message before loadOrtRuntime() runs. 0 means "nothing was
+// sent" -- a worker constructed directly by the measurement tools -- and falls
+// back to the conservative pair this used to hardcode for everyone.
+let requestedThreadCount = 0;
+
 let ort = null;
 let session = null;
 let phonemize = null;
@@ -193,11 +200,25 @@ async function loadOrtRuntime() {
   };
   // The threaded binary needs SharedArrayBuffer, which needs cross-origin
   // isolation. Where that is unavailable it still runs, single-threaded.
-  // Kokoro is one non-autoregressive pass, so extra threads buy little and each
-  // carries its own stack and arena on a device with none to spare — two is the
-  // ceiling rather than hardwareConcurrency.
+  //
+  // The count comes from the main thread's device policy, which was already in
+  // every init message and was being ignored here -- so a Pixel 6 Pro ran this
+  // 15M-parameter model on 2 threads while Pocket's autoregressive one got 4.
+  //
+  // Deferring to the policy keeps the caution this used to hardcode: it returns
+  // 2 on iOS (two performance cores; extra threads stall ORT's per-layer
+  // barrier on the E-cores), 2 on budget Androids and on desktop, and only
+  // reaches 4 on a flagship whose big cores can hold them.
+  //
+  // Still capped at 4. One non-autoregressive pass has less to gain per thread
+  // than Pocket's loop, and each thread carries its own stack and arena, so this
+  // raises the ceiling rather than removing it.
   const isolated = self.crossOriginIsolated === true && typeof SharedArrayBuffer !== 'undefined';
-  ort.env.wasm.numThreads = isolated ? Math.min(2, self.navigator?.hardwareConcurrency || 1) : 1;
+  const requested = Number(requestedThreadCount) || 0;
+  const fallback = Math.min(2, self.navigator?.hardwareConcurrency || 1);
+  ort.env.wasm.numThreads = isolated
+    ? Math.max(1, Math.min(MAX_WASM_THREADS, requested || fallback))
+    : 1;
   ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
   ort.env.logLevel = 'error';
@@ -634,6 +655,10 @@ self.onmessage = async (event) => {
       maxChunkTokens = Number(data.maxChunkTokens) > 0
         ? Number(data.maxChunkTokens)
         : (data.constrainedMemoryMode === false ? ROOMY_MAX_CHUNK_TOKENS : CONSTRAINED_MAX_CHUNK_TOKENS);
+      // Same reasoning as the line above: the main thread's device policy has
+      // been sending this all along and this worker was answering with its own
+      // constant instead.
+      requestedThreadCount = Number(data.wasmThreadCount) || 0;
       progress(2);
       await loadOrtRuntime();
       progress(10);

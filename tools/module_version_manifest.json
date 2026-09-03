@@ -4,8 +4,8 @@
     "sha256": "c03bf65b544fdb09"
   },
   "audio_core.js": {
-    "version": "audio-v150",
-    "sha256": "d5d0c7a31f4b4001"
+    "version": "audio-v153",
+    "sha256": "9c322516081a9c68"
   },
   "buffer_manager.js": {
     "version": "buffer-v83",
@@ -32,7 +32,7 @@
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-273",
+    "version": "sw-275",
     "sha256": "55a885668f30ffd2"
   },
   "experience_coordinator.js": {
@@ -56,12 +56,12 @@
     "sha256": "f4c9755b6b44b491"
   },
   "kitten_worker.js": {
-    "version": "kitten-v18",
-    "sha256": "e561660492bdb7f4"
+    "version": "kitten-v21",
+    "sha256": "7d0360d81c350241"
   },
   "kokoro_worker.js": {
-    "version": "kokoro-v29",
-    "sha256": "74be544b95f2e3bd"
+    "version": "kokoro-v32",
+    "sha256": "d3d240579757759a"
   },
   "library_manager.js": {
     "version": "library-v62",
@@ -72,19 +72,19 @@
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-273",
+    "version": "sw-275",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v82",
-    "sha256": "f6845bcd72d70915"
+    "version": "narration-loader-v84",
+    "sha256": "4434cc28161b7674"
   },
   "native_app_key.js": {
     "version": "native-key-v1",
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-273",
+    "version": "sw-275",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -116,8 +116,8 @@
     "sha256": "a969697ffb428a6d"
   },
   "settings_manager.js": {
-    "version": "settings-v159",
-    "sha256": "8c53684624ea17f4"
+    "version": "settings-v160",
+    "sha256": "b3a6ef1392b54f30"
   },
   "storage_core.js": {
     "version": "storage-v27",
@@ -136,15 +136,15 @@
     "sha256": "6ae4e9ccd1ead7aa"
   },
   "ui_controller.js": {
-    "version": "ui-v193",
-    "sha256": "6bcee9a1b9aa2ad8"
+    "version": "ui-v194",
+    "sha256": "6637d8c54cfbeaf1"
   },
   "virtue_controller.js": {
     "version": "virtue-v34",
     "sha256": "374197ac4d2e6781"
   },
   "sw.js": {
-    "version": "sw-273",
-    "sha256": "834d9f1b4a84b269"
+    "version": "sw-275",
+    "sha256": "495b025dacc81cd7"
   }
 }

@@ -176,3 +176,86 @@ test('a model download reports progress and cannot stall forever', async () => {
     assert.ok(idle > 0 && idle < total, `${file}: idle ${idle} must be well under ${total}`);
   }
 });
+
+// ── Kitten on half the threads Pocket gets ──────────────────────────────────
+
+test('the StyleTTS2 workers take the thread count the policy already sends', async () => {
+  // Reported: "Kitten TTS caching performance speed doesn't seem much better
+  // than Pocket TTS on this device" -- a Pixel 6 Pro. The diagnostic:
+  //   Pocket runtime: WASM relaxed-simd-minimal-ort, 4 WASM threads
+  //   Kitten runtime: threaded WASM x2
+  // A 15M-parameter model ran on half the threads the 100M+ autoregressive one
+  // got. wasmThreadCount was already in the init message and both workers
+  // answered with their own Math.min(2, cores) instead -- the same shape as
+  // constrainedMemoryMode, which their own comments record being dropped here.
+  for (const file of ['public/assets/js/kokoro_worker.js', 'public/assets/js/kitten_worker.js']) {
+    const source = await read(file);
+    assert.doesNotMatch(source, /numThreads = isolated \? Math\.min\(2, self\.navigator/,
+      `${file} must not hardcode the cap any more`);
+    assert.match(source, /requestedThreadCount = Number\(data\.wasmThreadCount\) \|\| 0;/,
+      `${file} must read what the main thread sends`);
+    assert.match(source, /const MAX_WASM_THREADS = 4;/, `${file} keeps a ceiling`);
+    assert.match(source, /Math\.max\(1, Math\.min\(MAX_WASM_THREADS, requested \|\| fallback\)\)/);
+    // A worker started without an init payload (the measurement tools construct
+    // these directly) still gets the conservative pair.
+    assert.match(source, /const fallback = Math\.min\(2, self\.navigator\?\.hardwareConcurrency \|\| 1\);/,
+      `${file} keeps a fallback`);
+  }
+});
+
+test('the StyleTTS2 plan stub carries a real thread count', async () => {
+  // It was a hardcoded `threadCount: 1` that nothing read. The moment the
+  // workers started reading it, that placeholder would have taken a Pixel from
+  // two threads to one -- a regression dressed as a fix.
+  const source = await read('public/assets/js/audio_core.js');
+  const stub = source.slice(
+    source.indexOf('const backendPlan = _isStyleTts2Engine(engine)'),
+    source.indexOf('const vendor = _gpuVendor'),
+  );
+  assert.doesNotMatch(stub, /threadCount: 1,/);
+  assert.match(stub, /threadCount: recommendedWasmThreadCount\(\{/);
+  // The reason the stub exists at all must survive: the planner may appear only
+  // as the OTHER branch of the ternary, never inside the StyleTTS2 one.
+  const styleBranch = stub.slice(0, stub.indexOf(': await _preparePocketBackendPlan()'));
+  assert.ok(styleBranch.length > 200, 'the StyleTTS2 branch must be locatable');
+  assert.doesNotMatch(styleBranch, /_preparePocketBackendPlan/,
+    'the WebGPU planner stays skipped for an engine with no WebGPU variant');
+  assert.match(stub, /: await _preparePocketBackendPlan\(\);/,
+    'and still runs for Pocket, which does have one');
+});
+
+test('raising the ceiling moves only flagship Androids', () => {
+  // The flat cap was written for iPhone memory pressure, and the policy already
+  // encodes that caution per platform -- so deferring to it keeps every device
+  // the cap was protecting exactly where it was.
+  const at = (options) => Math.max(1, Math.min(4, policy.recommendedWasmThreadCount(options)));
+  const isolated = { crossOriginIsolated: true };
+
+  assert.equal(at({ ...isolated, platform: 'ios', mobile: true, hardwareConcurrency: 4 }), 2,
+    'iOS: two performance cores, extra threads stall the per-layer barrier');
+  assert.equal(at({ ...isolated, platform: 'android', mobile: true, hardwareConcurrency: 8, memoryGb: 4 }), 2,
+    'budget Android: 8 logical cores, 2 big ones');
+  assert.equal(at({ ...isolated, platform: 'android', mobile: true, hardwareConcurrency: 8, memoryGb: 8, saveData: true }), 2,
+    'Data Saver stays conservative');
+  assert.equal(at({ ...isolated, platform: 'desktop', hardwareConcurrency: 16 }), 2,
+    'desktop is unchanged');
+  assert.equal(at({ ...isolated, platform: 'android', mobile: true, hardwareConcurrency: 8, memoryGb: 8, lowMemoryMode: true }), 1,
+    'low-memory mode now tightens below the old flat 2');
+
+  assert.equal(at({ ...isolated, platform: 'android', mobile: true, hardwareConcurrency: 8, memoryGb: 8 }), 4,
+    'the reported device, and the only class that moves');
+});
+
+test('a wider thread count cannot change the cache worker count', () => {
+  // recommendedPocketCacheWorkerCount gates on hardwareConcurrency against
+  // Math.max(8, wasmThreads * 2), so anything up to 4 threads is absorbed by
+  // the constant. Worth pinning: this is the one place the two numbers meet.
+  const base = {
+    throughputMode: true, backend: 'wasm', platform: 'desktop', constrained: false,
+    crossOriginIsolated: true, deviceMemory: 16, hardwareConcurrency: 8,
+  };
+  for (const wasmThreads of [1, 2, 4]) {
+    assert.equal(policy.recommendedPocketCacheWorkerCount({ ...base, wasmThreads }),
+      policy.POCKET_MAX_CACHE_WORKERS, `wasmThreads ${wasmThreads} must not change the pool`);
+  }
+});

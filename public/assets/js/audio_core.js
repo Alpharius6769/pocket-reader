@@ -1457,8 +1457,32 @@ async function _loadPocketEngine() {
   // planner (eligibility probes, calibration, GPU demotion bookkeeping) has
   // nothing to decide and running it would only spend time and write
   // calibration state that does not describe this engine.
+  // threadCount was a hardcoded 1 here, which nothing read -- the StyleTTS2
+  // workers answered with their own Math.min(2, cores) and ignored the init
+  // message. Now that they take it, this stub has to carry a real number or a
+  // Pixel would go from 2 threads to 1.
+  //
+  // recommendedWasmThreadCount is a pure function of the device signals, so
+  // calling it does not reintroduce any of what the note below avoids: the
+  // eligibility probe, the calibration read/write and the demotion bookkeeping
+  // all live in _preparePocketBackendPlan and stay skipped.
+  const styleTts2Connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   const backendPlan = _isStyleTts2Engine(engine)
-    ? { preference: 'wasm', selectedBackend: 'wasm', threadCount: 1, eligibility: { eligible: false } }
+    ? {
+      preference: 'wasm',
+      selectedBackend: 'wasm',
+      threadCount: recommendedWasmThreadCount({
+        crossOriginIsolated: window.crossOriginIsolated === true,
+        hardwareConcurrency: Number(navigator.hardwareConcurrency || 0),
+        mobile: isMobileLikePlatform(navigator.userAgent || ''),
+        platform: detectMobilePlatform(navigator.userAgent || ''),
+        userAgent: navigator.userAgent || '',
+        memoryGb: Number(navigator.deviceMemory || 0),
+        saveData: styleTts2Connection?.saveData === true,
+        lowMemoryMode: settings.lowMemoryMode === true,
+      }),
+      eligibility: { eligible: false },
+    }
     : await _preparePocketBackendPlan();
   const vendor = _gpuVendor || 'unknown';
   // A second complete inference worker is allowed only for positively
@@ -1482,8 +1506,8 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v29',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v18',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v32',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v21',
           pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v80',
         };
         const workerScript = new URL(
