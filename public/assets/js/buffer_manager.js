@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v25';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v27';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -8,7 +8,7 @@ import {
   detectMobilePlatform,
   isMobileLikePlatform,
   voicesForEngine,
-} from './pocket_backend_policy.js?v=backend-v36';
+} from './pocket_backend_policy.js?v=backend-v39';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
@@ -1371,7 +1371,12 @@ export const BufferManager = {
     _releaseCacheWakeLock();
     _clearPersistedCacheJob();
     if (typeof window.triggerVirtue === 'function') {
-      window.triggerVirtue('virtue_smile');
+      // NOT virtue_smile: that is the 3-star rating beat, and its dialogue pool
+      // is rating language ("A solid middle-of-the-road score"). The virtueSpeak
+      // below is meant to replace the line, but only lands when the override
+      // reaches this particular beat -- so every time it did not, stopping a
+      // cache announced a review the reader never wrote.
+      window.triggerVirtue('virtue_explaining');
       window.virtueSpeak('Caching stopped.', 2500);
     }
   },

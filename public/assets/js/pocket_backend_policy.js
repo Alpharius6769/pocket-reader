@@ -1470,7 +1470,16 @@ export function selectNarrationEngine(options = {}) {
   // Validate rather than trust: options.override is caller-supplied and a stored
   // value can be stale or hand-edited. An unrecognised string must fall through
   // to automatic selection, not become the engine name.
-  const requested = options.override ?? readNarrationEngineOverride(options.storage);
+  //
+  // ignoreOverride exists because `override: null` cannot express "ignore the
+  // manual choice": `??` falls through on null, straight back to storage. The
+  // only way to suppress it used to be passing `storage: null`, which ALSO
+  // blinds the headroom read below -- and that is the measurement the whole
+  // ladder turns on. Both callers who wanted "what would automatic pick?" got
+  // it wrong in one of those two ways.
+  const requested = options.ignoreOverride === true
+    ? null
+    : (options.override ?? readNarrationEngineOverride(options.storage));
   if (NARRATION_ENGINE_TIERS.includes(requested)) {
     return { engine: requested, automatic: false, confident: true, reason: 'Chosen in Settings.' };
   }

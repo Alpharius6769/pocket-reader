@@ -1,5 +1,5 @@
 import { animate } from './motion_lite.js';
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v36';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v39';
 
 export const virtueState = {
   virtueCooldown: false,
@@ -43,6 +43,10 @@ export const virtueAssets = {
   // ── Greetings / generic ──────────────────────────────────────────────────
   "virtue_waving_bubble":              "virtue_waving",        // welcome, idle greeting
   "virtue_happy":                      "virtue_waving",        // first-time setup welcome → waving hello!
+  // RATINGS ONLY. Its dialogue pool is star-rating language, so any other use
+  // announces a review the reader never wrote whenever the paired virtueSpeak
+  // override does not reach the beat. Three call sites did exactly that; they
+  // use virtue_explaining now.
   "virtue_smile":                      "virtue_smile",         // 3-star rating positive confirmation (Fixed CSS Link)
   "virtue_bubble_wink":                "virtue_wink",          // playful / teasing
   "virtue_bubble_point":               "virtue_point",         // pointing at something important
@@ -387,7 +391,15 @@ function _fitVirtueSpeech(overlay) {
   overlay.classList.remove('short-text', 'long-text', 'compact-text');
   overlay.style.fontSize = '';
   overlay.style.lineHeight = '';
-  if (overlay.classList.contains('no-bubble')) return;
+  // no-bubble used to return here, which left floating text at the stylesheet's
+  // clamp(0.65rem, 4.2cqi, 0.95rem) however much room it had. Measured on a
+  // 65-character line in a 182x317 overlay: 9.5px, filling 6% of the height.
+  //
+  // There is no reason floating text should go unfitted. The search below is
+  // driven by measured overflow and its ceiling is capped by width as well as
+  // height, so running it here cannot spill outside the box; it only stops long
+  // lines being pinned to the minimum. The floating look -- outline, no bubble
+  // background -- is a stylesheet concern and is untouched.
 
   const text = String(overlay.textContent || '').trim();
   const length = text.length;
@@ -423,7 +435,6 @@ function _fitVirtueSpeech(overlay) {
   // Fit after sprite-specific coordinates and responsive dimensions are applied.
   // Refit on resize so desktop split panes cannot retain a clipped measurement.
   const fit = () => {
-    if (overlay.classList.contains('no-bubble')) return;
     const h = overlay.clientHeight;
     const w = overlay.clientWidth;
     if (!h || !w) return;
@@ -482,7 +493,6 @@ function _fitVirtueSpeech(overlay) {
     fitScheduled = true;
     requestAnimationFrame(() => {
       fitScheduled = false;
-      if (overlay.classList.contains('no-bubble')) return;
       if (!overlay.closest('.virtue-container.active')) {
         overlay._virtueFitObserver?.disconnect();
         overlay._virtueFitObserver = null;

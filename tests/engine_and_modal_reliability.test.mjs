@@ -62,8 +62,12 @@ test('a calibrated WebGPU device is retained across a transient failure', async 
     'only a device that already proved WebGPU is forgiven, and never one that was demoted');
   assert.match(plan, /eligible: true/);
 
-  // And the sticky identity keeps the calibration key stable regardless.
-  assert.match(source, /let _lastKnownAdapterIdentity = '';/);
+  // And the sticky identity keeps the calibration key stable regardless --
+  // across reloads too, because an engine switch can take a ?tts_fast=1
+  // navigation and the first probe of the new document is both the likeliest to
+  // find the GPU busy and the one with no remembered identity of its own.
+  assert.match(source, /let _lastKnownAdapterIdentity = _readStoredAdapterIdentity\(\);/);
+  assert.match(source, /localStorage\.setItem\(POCKET_ADAPTER_IDENTITY_KEY, value\);/);
   assert.match(source, /adapterIdentity: eligibility\.adapterIdentity \|\| _lastKnownAdapterIdentity \|\| 'unknown-adapter'/);
 });
 

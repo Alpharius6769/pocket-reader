@@ -8,7 +8,7 @@ import {
   wasmThreadCandidates,
   POCKET_DEVICE_SETUP_KEY,
   isIosLikePlatform,
-} from './pocket_backend_policy.js?v=backend-v36';
+} from './pocket_backend_policy.js?v=backend-v39';
 
 const SETTINGS_RISK_ACK_KEY = 'pr_settings_risk_ack_v1';
 const SUPPORT_NOTICE_KEY = 'pr_device_support_notice_v2';
@@ -442,10 +442,18 @@ export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
     // Passing 0 when the probe could not run is deliberate: the policy reads
     // that as "no measurement" and takes the conservative candidate rather than
     // treating a failed probe as evidence of a small device.
+    // ignoreOverride: a device test MEASURES. Without it this read the reader's
+    // manual choice straight back out of storage and reported it as the
+    // recommendation ("Chosen in Settings."), so re-running the test always
+    // agreed with whatever they had picked -- and worse, wrote that choice into
+    // the device record as narrationEngine, turning a manual preference into
+    // the stored measurement that everything downstream trusts.
     const narration = selectNarrationEngine({
+      ignoreOverride: true,
       capability,
       userAgent: navigator.userAgent || '',
       deviceMemory: Number(capability.deviceMemoryGb || navigator.deviceMemory || 0),
+      hardwareConcurrency: Number(navigator.hardwareConcurrency || 0),
       memoryHeadroomMb: memory.measured ? Number(memory.headroomMb) || 0 : 0,
       lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
       storage: localStorage,

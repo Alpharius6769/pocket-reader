@@ -83,6 +83,15 @@ const MODEL_FILE = 'model_q8f16.onnx';
 
 const MODEL_TIMEOUT_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 90000;
+// How long a body read may produce nothing before the download is called dead.
+// Deliberately much smaller than FETCH_TIMEOUT_MS: this is an IDLE timeout
+// between chunks, not a budget for the whole transfer, so a slow-but-alive
+// connection is never cut off while a stalled one fails quickly.
+const STREAM_IDLE_TIMEOUT_MS = 25000;
+// Throttle for the progress messages below. Frequent enough to keep the
+// main-thread watchdog fed and the percentage moving, rare enough not to flood
+// the message port during a fast download.
+const STREAM_PROGRESS_INTERVAL_MS = 750;
 
 let ort = null;
 let session = null;
@@ -123,8 +132,16 @@ async function fetchBuffer(url, label) {
   const out = new Uint8Array(declared);
   const reader = response.body.getReader();
   let filled = 0;
+  let lastReportAt = 0;
   while (true) {
-    const { done, value } = await reader.read();
+    // Per-chunk deadline, not a whole-download one. The timeout above only
+    // covers the response HEADERS -- fetch() resolves as soon as they arrive --
+    // so before this the body read had no deadline at all and a stalled stream
+    // simply never returned. This measures the stall, so a slow connection is
+    // still allowed to finish while a dead one fails in seconds.
+    const { done, value } = await withTimeout(
+      reader.read(), STREAM_IDLE_TIMEOUT_MS, `${label} download stalled`,
+    );
     if (done) break;
     if (filled + value.byteLength > out.byteLength) {
       await reader.cancel().catch(() => {});
@@ -132,6 +149,26 @@ async function fetchBuffer(url, label) {
     }
     out.set(value, filled);
     filled += value.byteLength;
+    // Proof of life, throttled. audio_core's startup watchdog allows 75 s of
+    // silence, and this download used to produce every second of it: the 86 MB
+    // model takes ~69 s on the 10 Mbps link the reporting phone was on, so
+    // Kokoro sat nine percent inside the budget on a good connection and
+    // outside it on any worse one. It also fills in the byte-level
+    // "Downloading model weights..." status that was already written for it.
+    const now = Date.now();
+    if (now - lastReportAt >= STREAM_PROGRESS_INTERVAL_MS) {
+      lastReportAt = now;
+      self.postMessage({
+        type: 'progress',
+        info: {
+          status: 'progress',
+          progress: Math.round((filled / out.byteLength) * 100),
+          loadedBytes: filled,
+          totalBytes: out.byteLength,
+          asset: label,
+        },
+      });
+    }
   }
   if (filled !== out.byteLength) throw new Error(`${label} ended short`);
   return out.buffer;
@@ -255,12 +292,16 @@ async function loadModel() {
   // runs is wider than the effect, so neither is where the memory goes, and
   // 'basic' would have forgone real optimisations to buy nothing. Reverted.
   //
-  // RESOLVED — it was the fp16 half, not the int8 half. ORT's WASM CPU backend
-  // does not implement float16 at all, so every fp16 tensor was getting a Cast
-  // to fp32 around it, doubling the memory those weights occupy. The old
-  // model_q8f16.onnx is a WebGPU-oriented build and this worker is wasm-only.
-  // See MODEL_FILE above: the model now loaded is the same int8 quantisation
-  // without the fp16 conversion machinery.
+  // NOT RESOLVED, and the swap that looked like the answer was measured and
+  // rejected. This block used to claim the fp16 casts were the cause and that
+  // MODEL_FILE had been changed to model_quantized.onnx. It has not: see the
+  // comment on MODEL_FILE above, which records two clean runs where the swap
+  // cost +64 MB at PEAK -- the number that gets a tab killed -- for +3 MB at the
+  // plateau and +10 MB of download.
+  //
+  // Left as a warning rather than deleted: this paragraph read as a completed
+  // fix while the constant said otherwise, which is exactly the shape of thing
+  // that gets a measured decision reverted by someone reading only one of them.
   session = await withTimeout(
     ort.InferenceSession.create(buffer, {
       executionProviders: ['wasm'],

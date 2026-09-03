@@ -21,7 +21,7 @@ import {
   selectWebGpuVariant,
   shouldDemoteWebGpuSustained,
   POCKET_WEBGPU_WASM_PARITY_RATIO,
-} from './pocket_backend_policy.js?v=backend-v36';
+} from './pocket_backend_policy.js?v=backend-v39';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   computePocketFrameBudget,

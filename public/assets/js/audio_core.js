@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v25';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v27';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -53,7 +53,7 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v36';
+} from './pocket_backend_policy.js?v=backend-v39';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -1055,10 +1055,25 @@ let _pocketBackendPlanPromise = null;
 // The adapter identity keys the stored calibration. A probe can fail while the
 // GPU is busy, and before this a failure reported no identity at all -- so the
 // key became `unknown-adapter`, the calibration for this machine stopped being
-// found, and the plan fell back to the first-run setup recommendation. Holding
-// the last known identity for the session keeps the lookup pointed at the same
-// bucket whether or not this particular probe succeeded.
-let _lastKnownAdapterIdentity = '';
+// found, and the plan fell back to the first-run setup recommendation.
+//
+// Persisted, not session-scoped. A module variable starts empty on every load,
+// and an engine switch can take a ?tts_fast=1 isolation navigation -- so the
+// first probe of the new document is both the likeliest to find the GPU busy
+// and the one with no remembered identity to fall back on, which put the lookup
+// straight back on `unknown-adapter`. The adapter is a property of the machine,
+// so it outlives the document.
+const POCKET_ADAPTER_IDENTITY_KEY = 'pr_pocket_adapter_identity_v1';
+function _readStoredAdapterIdentity() {
+  try { return localStorage.getItem(POCKET_ADAPTER_IDENTITY_KEY) || ''; } catch (_) { return ''; }
+}
+function _rememberAdapterIdentity(identity) {
+  const value = String(identity || '');
+  if (!value || value === _lastKnownAdapterIdentity) return;
+  _lastKnownAdapterIdentity = value;
+  try { localStorage.setItem(POCKET_ADAPTER_IDENTITY_KEY, value); } catch (_) {}
+}
+let _lastKnownAdapterIdentity = _readStoredAdapterIdentity();
 let _pocketBackendOptimizationPromise = null;
 // Settling, not just forgetting. Clearing the variable above leaves any awaiter
 // hanging on a promise that can no longer resolve, because the worker whose
@@ -1209,7 +1224,7 @@ async function _preparePocketBackendPlan(force = false) {
         clearTimeout(timer);
       }
     }
-    if (eligibility.adapterIdentity) _lastKnownAdapterIdentity = eligibility.adapterIdentity;
+    if (eligibility.adapterIdentity) _rememberAdapterIdentity(eligibility.adapterIdentity);
     _pocketBackendContext = {
       adapterIdentity: eligibility.adapterIdentity || _lastKnownAdapterIdentity || 'unknown-adapter',
       browserMajor: stickyContext.browserMajor,
@@ -1467,9 +1482,9 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v23',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v15',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v78',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v29',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v18',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v80',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -3308,7 +3323,25 @@ window.generateChunk = async function(text, voice) {
           await _loadPocketEngine();
         } catch (_) {}
       }
-      const retry = await _generatePocketAttempt(null, text, route, 1);
+      // The reload above starts whatever engine is active NOW, which is not
+      // necessarily the one the route was built for: the commonest way to reach
+      // this retry is the reader switching engines mid-cache, which fails the
+      // in-flight paragraph with "Pocket backend reset". Replaying the old route
+      // then sent a Kitten voice id to a freshly built Pocket worker, which
+      // answered "Unknown built-in voice: expr-voice-3-f" and lost the paragraph.
+      //
+      // A retry across an engine change is a different request, at a different
+      // voice, under a different cache key. Re-resolve it.
+      const retryEngine = _resolveActiveEngine();
+      const retryRoute = retryEngine === route.engine
+        ? route
+        : _resolvePocketRoute(retryEngine, _defaultVoiceForEngine(retryEngine), text);
+      if (retryRoute !== route) {
+        window.Diagnostics?.log('INFO', 'Quality-guard retry re-routed after an engine change', {
+          from: route.engine, to: retryEngine, fromVoice: route.voiceId, toVoice: retryRoute.voiceId,
+        });
+      }
+      const retry = await _generatePocketAttempt(null, text, retryRoute, 1);
       retryUsed = true;
       // A paragraph that needed a re-render is drift evidence regardless of
       // whether the second pass succeeded.
@@ -3488,11 +3521,28 @@ export function togglePlayState() {
     const readyCount = window.BufferManager.getReadyCount?.() || 0;
     const total = window.BufferManager.totalToCache || 0;
     const minReady = window.getPocketPlaybackReadyCount?.(total) ?? Math.min(20, total);
+    // Restart the job this gate is waiting on. Reporting a shortfall and then
+    // leaving the thing that would clear it stopped is what made Play look
+    // broken: the reader stopped caching, pressed Play, was told 8 of 20 were
+    // ready, and no further press ever changed that number. The only exits were
+    // opening a different story or finding the Resume control on the idle bar --
+    // which is exactly the call below, reached by the gesture they made.
+    const paused = window.BufferManager.paused === true;
+    const running = window.BufferManager.isActive === true && !paused;
+    let restarting = false;
+    if (paused) {
+      try { window.BufferManager.resume(); restarting = true; } catch (_) {}
+    } else if (!running) {
+      try { window._resumeCaching?.(); restarting = window.BufferManager.isActive === true; } catch (_) {}
+    }
+    const message = restarting
+      ? `Picking caching back up — ${readyCount} of ${minReady} paragraphs ready. I'll start as soon as the runway is safe.`
+      : `Still securing the text! ${readyCount} of ${minReady} paragraphs are ready.`;
     if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_explaining');
     if (typeof window.virtueSpeak === 'function') {
-      window.virtueSpeak(`Still securing the text! ${readyCount} of ${minReady} paragraphs are ready.`, 4500, true);
+      window.virtueSpeak(message, 4500, true);
     } else {
-      window.pocketNotify?.(`Still caching — ${readyCount} of ${minReady} paragraphs ready.`, 4000);
+      window.pocketNotify?.(message, 4000);
     }
     return;
   }

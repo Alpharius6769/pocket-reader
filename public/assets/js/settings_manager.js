@@ -14,9 +14,9 @@ import {
   NARRATION_ENGINE_TIERS,
   voicesForEngine,
   coerceVoiceForEngine,
-} from './pocket_backend_policy.js?v=backend-v36';
+} from './pocket_backend_policy.js?v=backend-v39';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '269';
+export const NARRATION_SERVICE_WORKER_VERSION = '273';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -989,7 +989,8 @@ export function resetAllCacheDecisions() {
   window.userProfile.library.forEach(story => { delete story.cacheDecisionMade; });
   if (typeof window.saveLocalData === 'function') window.saveLocalData();
   if (typeof window.triggerVirtue === 'function') {
-    window.triggerVirtue('virtue_smile');
+    // See buffer_manager.stop(): virtue_smile is the 3-star rating beat.
+    window.triggerVirtue('virtue_explaining');
     window.virtueSpeak("Cache prompts reset. I'll ask you how to handle audio the next time you open a story.", 6000);
   }
 }
@@ -1161,7 +1162,8 @@ export function initPushNotifications(checkbox) {
       }).catch(e => console.error("Failed to unsubscribe", e));
     }
     if (typeof window.triggerVirtue === 'function') {
-      window.triggerVirtue('virtue_smile');
+      // See buffer_manager.stop(): virtue_smile is the 3-star rating beat.
+      window.triggerVirtue('virtue_explaining');
       window.virtueSpeak("Push notifications disabled.", 3000);
     }
   }
@@ -1622,11 +1624,20 @@ export function renderNarrationEngineControls() {
   // default rather than the real decision. The label must use the AUTOMATIC
   // pick, not `choice.engine`: once a reader overrides to Pocket, `choice`
   // is Pocket and the Automatic option would then claim Pocket is the default.
+  // ignoreOverride, not storage: null. The old form suppressed the manual
+  // choice by taking storage away, which also hid the measured headroom -- so
+  // on a phone that had measured 1024 MB and really resolves to Pocket, this
+  // fell through to the reported-RAM rule with no RAM figure either and
+  // labelled Automatic as Kokoro. The "Detected: ..." line two lines below read
+  // the measurement correctly, so the panel contradicted itself.
   const autoPick = selectNarrationEngine({
-    override: null,
-    storage: null,
+    ignoreOverride: true,
+    storage: localStorage,
     capability: window._pocketDeviceCapability || {},
     userAgent: navigator.userAgent || '',
+    deviceMemory: Number(navigator.deviceMemory || 0),
+    hardwareConcurrency: Number(navigator.hardwareConcurrency || 0),
+    lowMemoryMode: window.userProfile?.settings?.lowMemoryMode === true,
     screenWidth: Number(window.screen?.width || 0),
     screenHeight: Number(window.screen?.height || 0),
   });

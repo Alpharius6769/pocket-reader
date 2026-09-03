@@ -10,8 +10,8 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v145'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v80'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v150'\)/);
+  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v83'\)/);
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
@@ -95,8 +95,8 @@ test('a narration-resume fix advances the immutable module and service-worker re
     read('public/sw.js'),
     read('public/index.html'),
   ]);
-  assert.match(loader, /buffer_manager\.js\?v=buffer-v80/);
-  assert.match(worker, /buffer_manager\.js\?v=buffer-v80/);
+  assert.match(loader, /buffer_manager\.js\?v=buffer-v83/);
+  assert.match(worker, /buffer_manager\.js\?v=buffer-v83/);
   assert.match(worker, /pocket-reader-core-v\d+/);
   // Derived, not pinned: the shell must register whatever revision the service
   // worker actually ships. Hardcoding the number here only forced a mechanical
@@ -167,7 +167,11 @@ test('a failed cache render gets one varied quality retry instead of three ident
   const generate = audio.match(/window\.generateChunk = async function[\s\S]*?\n};/)?.[0] || '';
 
   assert.match(generate, /throughputRetry/);
-  assert.match(generate, /_generatePocketAttempt\(null,\s*text,\s*route,\s*1\)/);
+  // The retry takes a RE-RESOLVED route: the reload between the two attempts
+  // starts whatever engine is active now, and replaying the first attempt's
+  // route sent a Kitten voice to a freshly built Pocket worker.
+  assert.match(generate, /_generatePocketAttempt\(null,\s*text,\s*retryRoute,\s*1\)/);
+  assert.match(generate, /const retryEngine = _resolveActiveEngine\(\);/);
   assert.match(generate, /_lastPocketQualityFailure/);
   assert.match(buffer, /qualityFailure\?\.text === task\.text/);
   assert.match(buffer, /task\.failCount = 3/);
