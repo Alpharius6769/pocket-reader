@@ -104,26 +104,39 @@ export function enqueueExperience({ id, priority = 0, allowDuringModal = false, 
     if (activeEvent && isVirtueEventId(activeEvent.id) && Number(priority) < Number(activeEvent.priority || 0)) {
       return Promise.resolve(false);
     }
-  } else if (activeEvent
-      && isVirtueEventId(activeEvent.id)
-      && Number(priority) > Number(activeEvent.priority || 0)) {
-    // Preempt the companion. Priority orders the PENDING queue but never
-    // interrupts what is already running, and a Virtue beat holds the slot for
-    // its full speech duration -- so a modal asked for while Virtue was talking
-    // waited up to ten seconds, which reads as the modal being broken.
-    //
-    // A modal answers something the reader just did; a beat is decorative and
-    // built to be interrupted (dismissVirtue resolves the very waiters its run
-    // promise waits on). Only strictly higher priority preempts, so an
-    // interactive Virtue prompt is not cut off by a routine notice.
-    try { window.dismissVirtue?.(); } catch (_) {}
   }
+  // Preempt the companion. Priority orders the PENDING queue but never
+  // interrupts what is already running, and a Virtue beat holds the slot for
+  // its full speech duration -- so a modal asked for while Virtue was talking
+  // waited up to ten seconds, which reads as the modal being broken.
+  //
+  // A modal answers something the reader just did; a beat is decorative and
+  // built to be interrupted (dismissVirtue resolves the very waiters its run
+  // promise waits on). Only strictly higher priority preempts, so an
+  // interactive Virtue prompt is not cut off by a routine notice.
+  //
+  // Decided here, acted on below: an event that is then refused for lack of
+  // room must not have dismissed Virtue on its way out.
+  const preemptsCompanion = !isVirtueEventId(eventId)
+    && !!activeEvent
+    && isVirtueEventId(activeEvent.id)
+    && Number(priority) > Number(activeEvent.priority || 0);
 
   if (pendingEvents.length >= MAX_PENDING_EVENTS) {
-    const removable = pendingEvents.findIndex((event) => event.priority < priority);
+    // pendingEvents is sorted DESCENDING by priority, so the FIRST match here
+    // was the most important of the events eligible to be dropped -- the queue
+    // shed its best expendable event and kept its worst. Take the last match.
+    let removable = -1;
+    for (let index = pendingEvents.length - 1; index >= 0; index -= 1) {
+      if (pendingEvents[index].priority < priority) { removable = index; break; }
+    }
     if (removable < 0) return Promise.resolve(false);
     const [dropped] = pendingEvents.splice(removable, 1);
     dropped.resolve(false);
+  }
+
+  if (preemptsCompanion) {
+    try { window.dismissVirtue?.(); } catch (_) {}
   }
 
   return new Promise((resolve) => {

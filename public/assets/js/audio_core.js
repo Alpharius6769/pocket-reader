@@ -1064,13 +1064,25 @@ let _pocketBackendOptimizationPromise = null;
 // hanging on a promise that can no longer resolve, because the worker whose
 // message would have resolved it has been terminated.
 let _pocketBackendOptimizationAbort = null;
+// Bumped by every abort. The attempt carries the value it started with and
+// checks it after each await, so an attempt whose engine was reset mid-load
+// stops instead of continuing on to post a message to a terminated worker and
+// wait out the 20-minute timeout.
+let _pocketBackendOptimizationGeneration = 0;
 
 const POCKET_OPTIMIZATION_ABORTED = 'pocket-backend-optimization-aborted';
+
+function _pocketOptimizationAbortError(reason) {
+  const error = new Error(reason || 'The narration engine was reset.');
+  error.code = POCKET_OPTIMIZATION_ABORTED;
+  return error;
+}
 
 function _abortPocketBackendOptimization(reason) {
   const abort = _pocketBackendOptimizationAbort;
   _pocketBackendOptimizationAbort = null;
   _pocketBackendOptimizationPromise = null;
+  _pocketBackendOptimizationGeneration += 1;
   if (typeof abort === 'function') {
     try { abort(reason || 'The narration engine was reset.'); } catch (_) {}
   }
@@ -2550,12 +2562,28 @@ async function _ensurePocketBackendOptimizedForVoice(voiceName) {
   if (plan.preference === 'wasm' || !plan.eligibility.eligible || plan.calibration) return _pocketBackendRuntime;
   if (_pocketBackendOptimizationPromise) return _pocketBackendOptimizationPromise;
 
-  _pocketBackendOptimizationPromise = (async () => {
+  // Registered BEFORE the async work, not inside the inner promise. The two
+  // awaits below can each take tens of seconds -- building the worker pool and
+  // downloading a voice pack -- and a teardown during either used to settle
+  // nothing at all, because the inner promise had not been constructed yet.
+  const generation = _pocketBackendOptimizationGeneration;
+  let signalAbort = null;
+  const abortSignal = new Promise((_, reject) => { signalAbort = reject; });
+  _pocketBackendOptimizationAbort = (reason) => signalAbort(_pocketOptimizationAbortError(reason));
+  const stillCurrent = () => {
+    if (generation !== _pocketBackendOptimizationGeneration) {
+      throw _pocketOptimizationAbortError('The narration engine was reset.');
+    }
+  };
+
+  const attempt = (async () => {
     const ready = await _loadPocketEngine();
+    stillCurrent();
     if (!ready) throw new Error('Pocket TTS must be loaded before backend optimization.');
     const workerObj = ttsWorkers.find((candidate) => candidate.ready);
     if (!workerObj) throw new Error('No Pocket worker is ready for backend optimization.');
     const loadedVoice = await ensurePocketVoiceLoaded(voiceName || `${POCKET_DEFAULT_VOICE}_neutral`);
+    stillCurrent();
     return new Promise((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         cleanup();
@@ -2563,18 +2591,17 @@ async function _ensurePocketBackendOptimizedForVoice(voiceName) {
       }, 20 * 60 * 1000);
       const cleanup = () => {
         clearTimeout(timeoutId);
-        _pocketBackendOptimizationAbort = null;
         workerObj.worker.removeEventListener('message', onMessage);
       };
       // The only other way out is a message from THIS worker. Terminate it and
       // the message can never come, leaving the 20-minute timeout as the sole
       // exit -- which is what stranded an engine switch after a stopped cache.
-      _pocketBackendOptimizationAbort = (reason) => {
+      // The abort now arrives through the race below, so this only has to drop
+      // the timer and the listener rather than settle the caller.
+      abortSignal.catch(() => {
         cleanup();
-        const error = new Error(reason);
-        error.code = POCKET_OPTIMIZATION_ABORTED;
-        reject(error);
-      };
+        reject(_pocketOptimizationAbortError('The narration engine was reset.'));
+      });
       const onMessage = (event) => {
         const data = event.data || {};
         if (data.type === 'calibration_result') {
@@ -2588,7 +2615,12 @@ async function _ensurePocketBackendOptimizedForVoice(voiceName) {
       workerObj.worker.addEventListener('message', onMessage);
       workerObj.worker.postMessage({ type: 'calibrate_backend', voiceName: loadedVoice });
     });
-  })().catch((error) => {
+  })();
+
+  _pocketBackendOptimizationPromise = Promise.race([abortSignal, attempt]).catch((error) => {
+    if (_pocketBackendOptimizationGeneration === generation) {
+      _pocketBackendOptimizationAbort = null;
+    }
     // We aborted it ourselves by tearing the worker down. That says nothing
     // about whether this device can run WebGPU, so pinning the session to WASM
     // here would demote a capable machine for a reason the reader never caused.
@@ -2605,6 +2637,11 @@ async function _ensurePocketBackendOptimizedForVoice(voiceName) {
     });
     window.Diagnostics?.log('WARN', 'Pocket backend optimization retained WASM', { reason: _pocketBackendRuntime.rejectionReason });
     return _pocketBackendRuntime;
+  }).then((result) => {
+    if (_pocketBackendOptimizationGeneration === generation) {
+      _pocketBackendOptimizationAbort = null;
+    }
+    return result;
   });
   return _pocketBackendOptimizationPromise;
 }

@@ -237,10 +237,37 @@ function _displayVirtue(triggerKey, variables = {}, isPriority = false) {
     const img = new Image();
     let displayed = false;
 
+    // Nothing is dismissible yet. The run promise is resolved by
+    // _waitForVirtueDismiss, which displayFn does not reach until the sprite
+    // has decoded, so a dismiss arriving before then walked an empty waiter set
+    // and did nothing -- the beat rendered anyway, on top of whatever had just
+    // preempted it, and went on holding the experience queue for its full
+    // duration. Opening a story lands squarely in that window: api_core fires
+    // virtue_story_loading, and the feature dialog follows milliseconds later.
+    //
+    // Park a stand-in waiter for the load window and hand over to the real one
+    // at render time.
+    let cancelled = false;
+    const cancelDuringLoad = () => {
+      if (cancelled) return;
+      cancelled = true;
+      virtueState.dismissWaiters.delete(cancelDuringLoad);
+      resolve(false);
+    };
+    virtueState.dismissWaiters.add(cancelDuringLoad);
+
     const displayFn = () => {
-      if (displayed) return;
+      if (cancelled || displayed) return;
       displayed = true;
-      if (displaySequence !== virtueState.displaySequence) return;
+      // A newer display took over. Returning bare here left the run promise
+      // pending forever, and the queue runs one event at a time -- so this
+      // would have stranded every later modal, notice and beat, the same way a
+      // modal closed without releaseQueuedModal used to.
+      if (displaySequence !== virtueState.displaySequence) {
+        cancelDuringLoad();
+        return;
+      }
+      virtueState.dismissWaiters.delete(cancelDuringLoad);
       container.className = 'virtue-container' + (wasActive ? ' active' : '');
       container.classList.add(activeAsset);
       _syncVirtueAccessibility(container);

@@ -94,10 +94,34 @@ test('tearing down the workers settles the backend optimization', async () => {
     'a teardown must call _abortPocketBackendOptimization, not null the variable');
   const aborts = [...source.matchAll(/_abortPocketBackendOptimization\('The narration engine was reset\.'\)/g)];
   assert.equal(aborts.length, 4, 'all four teardown sites must settle it');
+});
 
-  // The aborter is registered where the worker message listener is.
-  assert.match(source, /_pocketBackendOptimizationAbort = \(reason\) => \{/);
-  assert.match(source, /_pocketBackendOptimizationAbort = null;/);
+test('the abort is armed before the first await, not after it', async () => {
+  // The first version registered the abort handle inside the innermost promise,
+  // which is reached only after _loadPocketEngine() and ensurePocketVoiceLoaded()
+  // -- two awaits that can each take tens of seconds. A teardown during either
+  // settled nothing, so the caller waited for the voice load to finish and THEN
+  // armed a 20-minute timeout against a worker that no longer existed. Stopping
+  // a cache terminates those workers, and the load phase is exactly the part a
+  // reader interrupts.
+  const source = await read('public/assets/js/audio_core.js');
+  const fn = source.slice(
+    source.indexOf('async function _ensurePocketBackendOptimizedForVoice'),
+    source.indexOf('window.ensurePocketBackendOptimized'),
+  );
+  const armedAt = fn.indexOf('_pocketBackendOptimizationAbort = (reason) =>');
+  const firstAwaitAt = fn.indexOf('await _loadPocketEngine()');
+  assert.notEqual(armedAt, -1, 'the abort must be armed');
+  assert.ok(armedAt < firstAwaitAt, 'and armed before the engine load begins');
+
+  // Racing is what releases the caller mid-load; the generation check is what
+  // stops the orphaned attempt from continuing against a dead worker.
+  assert.match(fn, /Promise\.race\(\[abortSignal, attempt\]\)/);
+  assert.match(fn, /const generation = _pocketBackendOptimizationGeneration;/);
+  const stillCurrent = [...fn.matchAll(/^\s+stillCurrent\(\);$/gm)];
+  assert.equal(stillCurrent.length, 2, 'both awaits must be followed by a generation check');
+  assert.match(source, /_pocketBackendOptimizationGeneration \+= 1;/,
+    'aborting must invalidate the generation');
 });
 
 test('an abort is not treated as a failed optimization', async () => {
@@ -105,7 +129,10 @@ test('an abort is not treated as a failed optimization', async () => {
   // worker down would demote a capable machine for a reason the reader never
   // caused -- and would be a second source of the WebGPU-to-WASM drop.
   const source = await read('public/assets/js/audio_core.js');
-  const catchBlock = source.slice(source.indexOf('})().catch((error) => {'), source.indexOf('window.ensurePocketBackendOptimized'));
+  const catchBlock = source.slice(
+    source.indexOf('Promise.race([abortSignal, attempt]).catch((error) => {'),
+    source.indexOf('window.ensurePocketBackendOptimized'),
+  );
   const abortAt = catchBlock.indexOf('POCKET_OPTIMIZATION_ABORTED');
   const wasmAt = catchBlock.indexOf("selectedBackend: 'wasm'");
   assert.notEqual(abortAt, -1, 'the abort must be recognised');

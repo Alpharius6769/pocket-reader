@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v261';
+var CACHE_NAME = 'pocket-reader-core-v263';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -48,6 +48,12 @@ function fetchWithTimeout(request, timeoutMs) {
         }
     );
 }
+
+// How long an unversioned asset waits for the network before the cached copy is
+// served instead. Past a normal mobile TTFB, short enough that a stalled
+// connection never costs a visible wait -- the same reasoning, and the same
+// number, as the navigation timeout above.
+var UNVERSIONED_NETWORK_DEADLINE_MS = 1800;
 
 function updateAppCache(request, response) {
     if (!response || !response.ok) return Promise.resolve();
@@ -133,7 +139,7 @@ var OPTIONAL_ASSETS = [
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
     'assets/js/buffer_manager.js?v=buffer-v80',
-    'assets/js/audio_core.js?v=audio-v143',
+    'assets/js/audio_core.js?v=audio-v145',
     'assets/js/pocket_worker.js?v=pocket-worker-v78',
     'assets/js/kokoro_worker.js?v=kokoro-v23',
     'assets/js/kitten_worker.js?v=kitten-v15',
@@ -151,21 +157,21 @@ var CORE_ASSETS = [
     'assets/js/native_app_key.js?v=native-key-v1',
     'assets/js/diagnostics.js?v=diag-v9',
     'assets/js/api_core.js?v=search-v25',
-    'assets/js/experience_coordinator.js?v=experience-v12',
-    'assets/js/virtue_controller.js?v=virtue-v26',
+    'assets/js/experience_coordinator.js?v=experience-v14',
+    'assets/js/virtue_controller.js?v=virtue-v28',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v185',
+    'assets/js/ui_controller.js?v=ui-v186',
     'assets/js/supabase_bridge.js?v=supabase-v10',
     'assets/js/profile_merge.js?v=merge-v10',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v25',
-    'assets/js/settings_manager.js?v=settings-v151',
+    'assets/js/settings_manager.js?v=settings-v152',
     'assets/js/library_manager.js?v=library-v57',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v7',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v1',
     'assets/js/hmofa_community.js?v=hmofa-community-v2',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v2',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v78',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v79',
     'assets/js/storage_core.js?v=storage-v25',
     'assets/js/sync_core.js?v=sync-v25',
     'assets/js/cinematic_ui.js?v=cinematic-v8',
@@ -398,15 +404,31 @@ self.addEventListener('fetch', function (event) {
         }
 
         // Unversioned assets stay network-first so emergency updates to a URL
-        // that never changes are never pinned behind the cache.
+        // that never changes are never pinned behind the cache -- but only up to
+        // a deadline. Falling back to the cache on REJECTION alone is not enough:
+        // a stalled fetch never rejects, so a weak connection used to hold up the
+        // boot on modules that were already cached, while every versioned module
+        // beside them was served instantly.
+        //
+        // With no cached copy there is nothing to fall back to, so those requests
+        // still wait for the network however long it takes. A deadline must not
+        // be able to turn a slow first load into a 503.
         var updatePromise = fetchAndCache();
         event.waitUntil(updatePromise.then(function () {}).catch(function () {}));
         event.respondWith(
-            updatePromise.catch(function () {
-                return caches.match(event.request).then(function (cachedResponse) {
-                    if (!cachedResponse) return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
-                    return isWorkerScript ? withNarrationIsolation(cachedResponse) : cachedResponse;
-                });
+            caches.match(event.request).then(function (cachedResponse) {
+                if (!cachedResponse) {
+                    return updatePromise.catch(function () {
+                        return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+                    });
+                }
+                var served = isWorkerScript ? withNarrationIsolation(cachedResponse) : cachedResponse;
+                return Promise.race([
+                    updatePromise.catch(function () { return served; }),
+                    new Promise(function (resolve) {
+                        setTimeout(function () { resolve(served); }, UNVERSIONED_NETWORK_DEADLINE_MS);
+                    })
+                ]);
             })
         );
         return;
