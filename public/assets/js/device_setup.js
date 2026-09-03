@@ -12,7 +12,7 @@ import {
   POCKET_DEVICE_SETUP_KEY,
   isIosLikePlatform,
   detectMobilePlatform,
-} from './pocket_backend_policy.js?v=backend-v42';
+} from './pocket_backend_policy.js?v=backend-v45';
 import {
   androidClassForModel,
   geometryKey,
@@ -461,7 +461,10 @@ function currentDeviceSignals() {
 // What the reader picked, or auto-detected on Android and pre-selected.
 let pickerAutoSelectedId = '';
 
-export function renderDevicePicker({ refreshHz = 0, detectedModel = '' } = {}) {
+// Selecting this asks for the unnarrowed list instead of choosing a device.
+const SHOW_ALL_MODELS = '__show_all__';
+
+export function renderDevicePicker({ refreshHz = 0, detectedModel = '', showAll = false } = {}) {
   const row = document.getElementById('device-picker-row');
   const select = document.getElementById('device-picker-select');
   if (!row || !select) return null;
@@ -472,8 +475,12 @@ export function renderDevicePicker({ refreshHz = 0, detectedModel = '' } = {}) {
   }
   const { groups, narrowed } = pickerOptions({
     platform: signals.platform,
-    geometryKey: geometryKey(signals.screenWidth, signals.screenHeight),
-    refreshHz,
+    // Narrowing is the point -- four options beat thirty-five -- but it must
+    // never be a trap. The 2025 iPhone geometries in the catalogue are the best
+    // available rather than verified, so a reader whose phone reports a size
+    // this table has wrong would otherwise never find their model at all.
+    geometryKey: showAll ? '' : geometryKey(signals.screenWidth, signals.screenHeight),
+    refreshHz: showAll ? 0 : refreshHz,
   });
   if (!groups.length) { row.hidden = true; return null; }
 
@@ -489,7 +496,21 @@ export function renderDevicePicker({ refreshHz = 0, detectedModel = '' } = {}) {
     + groups.map((group) => `<optgroup label="${escape(group.label)}">`
       + group.options.map((entry) =>
         `<option value="${escape(entry.id)}"${entry.id === pickerAutoSelectedId ? ' selected' : ''}>${escape(entry.label)}</option>`).join('')
-      + '</optgroup>').join('');
+      + '</optgroup>').join('')
+    + (narrowed && !showAll
+      ? `<option value="${SHOW_ALL_MODELS}">My device isn't listed — show all</option>`
+      : '');
+
+  // Re-render unnarrowed rather than treating the sentinel as a device.
+  if (!select._pickerExpandBound) {
+    select._pickerExpandBound = true;
+    select.addEventListener('change', () => {
+      if (select.value !== SHOW_ALL_MODELS) return;
+      renderDevicePicker({ refreshHz, detectedModel, showAll: true });
+      select.value = '';
+      select.focus();
+    });
+  }
 
   const help = document.getElementById('device-picker-help');
   if (help) {
@@ -510,12 +531,22 @@ window.renderDevicePicker = renderDevicePicker;
 // carry a claim about a phone that is no longer there.
 export function commitDevicePickerChoice() {
   const select = document.getElementById('device-picker-select');
-  const chosen = String(select?.value || '');
   const signals = currentDeviceSignals();
   const fingerprint = deviceFingerprint(signals);
+
+  // No picker on screen means nobody was asked, which is not the same as
+  // answering "not sure". The device test can be re-run from Settings, where
+  // this element does not exist -- and clearing the record there threw away the
+  // reader's answer and let geometry alone decide the engine on every re-run.
+  if (!select) return readDeclaredDevice(localStorage, fingerprint);
+
   // An Android auto-detection is recorded too: it is a detection, not a guess,
   // and recording it is what lets the ceiling apply on later launches.
-  const id = chosen || pickerAutoSelectedId || '';
+  const raw = String(select.value || '');
+  // The sentinel is a request to widen the list, never a device.
+  const id = (raw === SHOW_ALL_MODELS ? '' : raw) || pickerAutoSelectedId || '';
+  // An explicit "Not sure" DOES clear it: the reader is in front of the control
+  // and has just withdrawn the claim.
   if (!id) { writeDeclaredDevice(localStorage, '', fingerprint); return null; }
   return writeDeclaredDevice(localStorage, id, fingerprint);
 }

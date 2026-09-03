@@ -399,3 +399,96 @@ test('an isolated iPhone gets the two threads it is capable of', () => {
   // and the "(isolation off)" message is the true one.
   assert.equal(policy.recommendedWasmThreadCount({ ...iosIsolated, crossOriginIsolated: false }), 1);
 });
+
+// ── Re-running the device test on an iPhone 13 ──────────────────────────────
+
+test('a re-run keeps the declared model instead of erasing it', async () => {
+  // The picker's <select> only exists inside the first-run modal. Re-running
+  // the test from Settings found no element, read '' as the answer, and wrote
+  // that -- deleting the record. Then geometry alone decided, every time.
+  const source = await read('public/assets/js/device_setup.js');
+  const commit = source.slice(
+    source.indexOf('export function commitDevicePickerChoice'),
+    source.indexOf('window.commitDevicePickerChoice ='),
+  );
+  assert.match(commit, /if \(!select\) return readDeclaredDevice\(localStorage, fingerprint\);/,
+    'no picker on screen means nobody was asked');
+  // An explicit "Not sure" still clears it: the reader is looking at the
+  // control and has withdrawn the claim.
+  assert.match(commit, /if \(!id\) \{ writeDeclaredDevice\(localStorage, '', fingerprint\); return null; \}/);
+});
+
+test('an undeclared measurement may climb only one tier', () => {
+  // 390x844 spans all three tiers now that the 16e and 17e are recorded as
+  // sharing the iPhone 14 chassis at 8 GB. Without a cap, a measurement above
+  // Pocket's floor promoted a 4 GB iPhone 13 two tiers -- which the old
+  // hand-written candidate list made structurally impossible.
+  //
+  // The probe cannot carry that. It allocates plain arrays and touches a page
+  // each, ORT dies on a transient spike during session build, and the probe
+  // stops at its own 1024 MB ceiling.
+  const at = (extra) => policy.selectNarrationEngine({
+    capability: { platform: 'ios' }, userAgent: 'iPhone',
+    screenWidth: 390, screenHeight: 844, storage: null, ...extra,
+  }).engine;
+  assert.equal(at({ memoryHeadroomMb: 0 }), 'kitten');
+  assert.equal(at({ memoryHeadroomMb: 500 }), 'kokoro');
+  assert.equal(at({ memoryHeadroomMb: 1024 }), 'kokoro', 'never two tiers on a guess');
+
+  // Declaring settles it in both directions.
+  assert.equal(at({ memoryHeadroomMb: 1024, declaredDeviceId: 'iphone-13' }), 'kitten');
+  assert.equal(at({ memoryHeadroomMb: 900, declaredDeviceId: 'iphone-16e' }), 'pocket');
+});
+
+test('every size that existed before the catalogue behaves as it did', () => {
+  // The cap must be invisible everywhere the old hand-written lists already
+  // spanned exactly two tiers, which is every size but 390x844.
+  const at = (w, h, mb) => policy.selectNarrationEngine({
+    capability: { platform: 'ios' }, userAgent: 'iPhone',
+    screenWidth: w, screenHeight: h, memoryHeadroomMb: mb, storage: null,
+  }).engine;
+  assert.equal(at(393, 852, 900), 'pocket');
+  assert.equal(at(393, 852, 500), 'kokoro');
+  assert.equal(at(430, 932, 900), 'pocket');
+  assert.equal(at(430, 932, 500), 'kokoro');
+  assert.equal(at(375, 812, 900), 'kitten');
+  assert.equal(at(428, 926, 900), 'kokoro');
+  assert.equal(at(402, 874, 0), 'pocket');
+});
+
+test('every iPhone is offered to someone, and a narrowed list is never a trap', () => {
+  // The reader saw only the models sharing their screen, which is the point --
+  // but it must be possible to reach the rest. First: no model is orphaned.
+  const iphones = catalog.DEVICE_CATALOG.filter((entry) => entry.kind === 'iphone');
+  const reachable = new Set();
+  for (const key of new Set(iphones.map((entry) => entry.geometry))) {
+    for (const option of catalog.pickerOptions({ platform: 'ios', geometryKey: key, includeIpad: false }).groups[0].options) {
+      reachable.add(option.id);
+    }
+  }
+  for (const entry of iphones) {
+    assert.ok(reachable.has(entry.id), `${entry.id} is offered to nobody`);
+  }
+  // Named explicitly, because these are the ones a reader would notice missing.
+  for (const id of ['iphone-17', 'iphone-17-pro', 'iphone-17-pro-max', 'iphone-air', 'iphone-16e']) {
+    assert.ok(reachable.has(id), `${id} must be selectable by its own owner`);
+  }
+});
+
+test('the picker offers a way out of its own narrowing', async () => {
+  // The 2025 geometries are the best available rather than verified, so a phone
+  // this table has wrong would otherwise never find its model at all.
+  const source = await read('public/assets/js/device_setup.js');
+  assert.match(source, /const SHOW_ALL_MODELS = '__show_all__';/);
+  assert.match(source, /My device isn't listed — show all/);
+  assert.match(source, /geometryKey: showAll \? '' : geometryKey\(/,
+    'showing all means dropping the geometry filter');
+  assert.match(source, /refreshHz: showAll \? 0 : refreshHz/,
+    'and the ProMotion narrowing with it');
+  // The sentinel must never be stored as if it were a device.
+  assert.match(source, /raw === SHOW_ALL_MODELS \? '' : raw/);
+  assert.equal(catalog.deviceById('__show_all__'), null);
+  // Nor written, even if it somehow arrived.
+  const storage = { getItem: () => null, setItem: () => { throw new Error('must not write'); }, removeItem: () => {} };
+  assert.equal(policy.writeDeclaredDevice(storage, '__show_all__', 'fp'), null);
+});

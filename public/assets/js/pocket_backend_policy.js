@@ -1513,7 +1513,21 @@ export function classifyIosNarrationTier(signals = {}) {
     return { engine: hit.candidates[0], confident: true,
       reason: `This screen size belongs to the ${hit.note} family.` };
   }
-  const resolved = resolveTierByHeadroom(hit.candidates, headroomMb);
+  // One tier above the floor is as far as a measurement may carry an UNDECLARED
+  // device, and the reason is what the probe actually measures. It allocates
+  // plain arrays and touches a page each; ORT dies on a transient spike while
+  // building its session, a different allocation pattern -- and the probe stops
+  // at its own 1024 MB ceiling, so a roomy iOS heap reports "at least 1 GB" for
+  // a phone that will still fail on an 86 MB model. Good veto, bad promoter.
+  //
+  // Every size that existed before the catalogue spanned exactly two tiers, so
+  // this changes none of them. It matters at 390x844, which grew to three when
+  // the 16e and 17e were recorded as sharing the iPhone 14 chassis at 8 GB:
+  // without it, a measurement could carry a 4 GB iPhone 13 two tiers up to
+  // Pocket. Reaching the top of a three-way bucket now needs the reader to say
+  // which phone it is, which is the only thing that settles it.
+  const promotable = hit.candidates.slice(0, 2);
+  const resolved = resolveTierByHeadroom(promotable, headroomMb);
   return {
     engine: resolved.engine,
     confident: resolved.measured,

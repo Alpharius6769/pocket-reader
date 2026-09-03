@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v29';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v31';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -8,7 +8,7 @@ import {
   detectMobilePlatform,
   isMobileLikePlatform,
   voicesForEngine,
-} from './pocket_backend_policy.js?v=backend-v42';
+} from './pocket_backend_policy.js?v=backend-v45';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
