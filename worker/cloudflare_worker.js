@@ -654,14 +654,82 @@ const handlers = {
 
     const proxyHeaders = buildUpstreamHeaders(request);
 
-    const fetchRequest = new Request(targetUrl, {
-      method: request.method,
-      headers: proxyHeaders,
-      redirect: "manual"
-    });
-
     try {
-      let response = await fetch(fetchRequest, { signal: AbortSignal.timeout(25000) });
+      let currentUrl = targetUrl;
+      let response = null;
+      const maxRedirectHops = 3;
+
+      for (let hop = 0; hop <= maxRedirectHops; hop += 1) {
+        const fetchRequest = new Request(currentUrl, {
+          method: request.method,
+          headers: proxyHeaders,
+          redirect: "manual"
+        });
+
+        response = await fetch(fetchRequest, { signal: AbortSignal.timeout(25000) });
+
+        if (isRedirectStatus(response.status)) {
+          const location = response.headers.get("Location");
+          await response.body?.cancel?.();
+
+          if (!location || hop === maxRedirectHops) {
+            return new Response("Proxy Error: too many redirects or missing Location header.", {
+              status: 502,
+              headers: {
+                "Access-Control-Allow-Origin": corsOrigin,
+                "Vary": "Origin",
+                "Content-Type": "text/plain"
+              }
+            });
+          }
+
+          let nextUrl;
+          try {
+            nextUrl = new URL(location, currentUrl);
+          } catch {
+            return new Response("Proxy Error: invalid redirect Location header.", {
+              status: 502,
+              headers: {
+                "Access-Control-Allow-Origin": corsOrigin,
+                "Vary": "Origin",
+                "Content-Type": "text/plain"
+              }
+            });
+          }
+
+          if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
+            return new Response("Forbidden: only http(s) URLs may be proxied.", {
+              status: 403, headers: { "Access-Control-Allow-Origin": corsOrigin, "Vary": "Origin" }
+            });
+          }
+          if (nextUrl.username || nextUrl.password) {
+            return new Response("Forbidden: credentials in proxy URLs are not allowed.", {
+              status: 403, headers: { "Access-Control-Allow-Origin": corsOrigin, "Vary": "Origin" }
+            });
+          }
+          if (nextUrl.port && nextUrl.port !== "80" && nextUrl.port !== "443") {
+            return new Response("Forbidden: target port is not allowed.", {
+              status: 403, headers: { "Access-Control-Allow-Origin": corsOrigin, "Vary": "Origin" }
+            });
+          }
+          if (isBlockedHost(nextUrl.hostname)) {
+            return new Response("Forbidden: target host is not allowed.", {
+              status: 403, headers: { "Access-Control-Allow-Origin": corsOrigin, "Vary": "Origin" }
+            });
+          }
+          if (!hostAllowed(nextUrl.hostname, env)) {
+            return new Response("Forbidden: target host is not on the proxy allowlist.", {
+              status: 403, headers: { "Access-Control-Allow-Origin": corsOrigin, "Vary": "Origin" }
+            });
+          }
+
+          currentUrl = nextUrl;
+          continue;
+        }
+
+        break;
+      }
+
       let newResponse = new Response(response.body, response);
       newResponse.headers.set("Access-Control-Allow-Origin", corsOrigin);
       newResponse.headers.set("Vary", "Origin");

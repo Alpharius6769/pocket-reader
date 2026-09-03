@@ -174,7 +174,7 @@ CURATED_DIR.mkdir(exist_ok=True)
 def _safe_curated_pdf_path(filename: str) -> pathlib.Path:
     base = CURATED_DIR.resolve()
     candidate = (CURATED_DIR / filename).resolve()
-    if base not in candidate.parents and candidate != base:
+    if candidate == base or base not in candidate.parents:
         raise HTTPException(
             status_code=400,
             detail="Invalid curated file path")
@@ -272,6 +272,9 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+_RATE_LIMIT_EVICT_THRESHOLD = int(os.environ.get("RATE_LIMIT_EVICT_THRESHOLD", 1000))
+
+
 def _evict_idle_rate_keys(table: dict, window_seconds: int, now: float) -> None:
     """Drop callers whose window has fully expired.
 
@@ -280,7 +283,7 @@ def _evict_idle_rate_keys(table: dict, window_seconds: int, now: float) -> None:
     of the process. Only worth walking once the table is large enough that the
     scan cost is justified.
     """
-    if len(table) <= 10_000:
+    if len(table) <= _RATE_LIMIT_EVICT_THRESHOLD:
         return
     for key in list(table):
         stamps = table[key]
@@ -1263,6 +1266,8 @@ def fetch_curated_story(filename: str, request: Request):
             author = (meta.get("author") or "").strip() or "Unknown"
             if _curated_is_withdrawn(title=title, author=author, filename=filename):
                 raise HTTPException(status_code=404)
+            chapters = sanitize_narration_chapters(
+                chapters, story_title=title, author=author)
             words = sum(len(p.split())
                         for ch in chapters for p in (ch.paragraphs or []))
             return {
@@ -1452,6 +1457,8 @@ async def _delete_push_owner_data(
         user_id: str,
         *,
         delete_subscription: bool = True) -> None:
+    if _db_conn is None:
+        return
     if delete_subscription:
         await _db_conn.execute(
             "DELETE FROM subscriptions WHERE user_id = ?", (user_id,))
@@ -1490,9 +1497,12 @@ async def _send_new_chapter_push(
             "status_code",
             None) if e.response is not None else None
         if status in (404, 410):
-            async with _db_lock:
-                await _delete_push_owner_data(user_id)
-                await _db_conn.commit()
+            try:
+                async with _db_lock:
+                    await _delete_push_owner_data(user_id)
+                    await _db_conn.commit()
+            except Exception as prune_err:
+                log.warning("Push cleanup failed for %s: %s", user_id, prune_err)
         return False
     except Exception:
         return False
@@ -1561,7 +1571,7 @@ async def _run_chapter_sync_sweep() -> dict:
                     current,
                     str(story.get("story_key") or "")):
                 story["published_chapters"] = current
-                updated_states[user_id] = profile
+                updated_states[user_id] = json.loads(json.dumps(profile))
                 pushes_queued += 1
 
     if updated_states:
@@ -1619,10 +1629,10 @@ _HEALTH_TARGETS = [("Archive of Our Own",
 
 
 async def _probe_site(label: str, url: str, cookies: dict, domain: str) -> dict:
-    async with make_client(timeout=6) as client:
-        for k, v in cookies.items():
-            client.cookies.set(k, v, domain=domain)
-        try:
+    try:
+        async with make_client(timeout=6) as client:
+            for k, v in cookies.items():
+                client.cookies.set(k, v, domain=domain)
             async with client.stream("GET", url) as resp:
                 body = bytearray()
                 async for chunk in resp.aiter_bytes():
@@ -1635,21 +1645,22 @@ async def _probe_site(label: str, url: str, cookies: dict, domain: str) -> dict:
                 body_preview = body.decode(
                     resp.encoding or "utf-8",
                     errors="replace")
-        except Exception as e:
-            return {"site": label, "status": "unreachable", "note": str(e)[:80]}
+                sc = resp.status_code
+                is_err = resp.is_error
+                cf = detect_cloudflare(resp, body_preview)
+    except Exception as e:
+        return {"site": label, "status": "unreachable", "note": str(e)[:80]}
 
-    cf = detect_cloudflare(resp, body_preview)
     if cf:
         return {"site": label, "status": "cloudflare", "note": cf}
 
-    sc = resp.status_code
     if sc == 429:
         return {"site": label, "status": "rate_limited", "detail": f"HTTP {sc}"}
     if sc in (401, 403):
         return {"site": label, "status": "login_required", "detail": f"HTTP {sc}"}
     if 500 <= sc < 600:
         return {"site": label, "status": "server_error", "detail": f"HTTP {sc}"}
-    if resp.is_error:
+    if is_err:
         return {"site": label, "status": "http_error", "detail": f"HTTP {sc}"}
 
     body_lower = body_preview.lower()
@@ -1838,9 +1849,14 @@ async def fetch_ao3_story(url: str, request: Request):
         _fm_desc = _re2.sub(r"<[^>]+>", " ", _fm_desc)
         _fm_desc = _re2.sub(r"\s+", " ", _fm_desc).strip()
 
+    title_val = _fm_title or ((meta.get("title") or "").strip()) or ""
+    author_val = _fm_author or ((meta.get("author") or "Unknown").strip())
+    chapters = sanitize_narration_chapters(
+        chapters, story_title=title_val, author=author_val)
+
     result = {
-        "title":    _fm_title or ((meta.get("title")  or "").strip()) or "",
-        "author":   _fm_author or ((meta.get("author") or "Unknown").strip()),
+        "title":    title_val,
+        "author":   author_val,
         "url":      canonical_url,
         "chapters": [asdict(ch) for ch in chapters],
     }
@@ -1994,6 +2010,12 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
                 parsers_dispatcher.extract_metadata, local_path)
             chapters = await asyncio.to_thread(
                 parsers_dispatcher.parse_file, local_path)
+            meta = meta or {}
+            chapters = sanitize_narration_chapters(
+                chapters,
+                story_title=(meta.get("title") or "").strip(),
+                author=(meta.get("author") or "").strip(),
+            )
         except HTTPException:
             raise
         except (ValueError, RuntimeError) as exc:

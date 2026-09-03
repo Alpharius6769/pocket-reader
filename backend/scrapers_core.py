@@ -27,6 +27,7 @@ AO3_ZYTE_COOLDOWN_SEC = max(30, int(os.environ.get("AO3_ZYTE_COOLDOWN_SEC", 600)
 _ao3_semaphore = asyncio.Semaphore(AO3_MAX_CONCURRENCY)
 _ao3_429_streak = 0
 _ao3_zyte_until = 0.0
+_ao3_streak_lock = asyncio.Lock()
 
 
 def is_ao3_url(url: Optional[str]) -> bool:
@@ -50,23 +51,28 @@ async def ao3_gate(url: Optional[str] = None):
         yield
 
 
-def note_ao3_status(status_code: Optional[int]) -> None:
-    """Track consecutive AO3 429s and trip the Zyte failover breaker."""
+async def note_ao3_status(status_code: Optional[int]) -> None:
+    """Track consecutive AO3 429s and trip the Zyte failover breaker.
+
+    Protected by _ao3_streak_lock so concurrent coroutines cannot interleave
+    the read-modify-write on _ao3_429_streak and silently skip the threshold.
+    """
     global _ao3_429_streak, _ao3_zyte_until
-    if status_code == 429:
-        _ao3_429_streak += 1
-        if _ao3_429_streak >= AO3_429_STREAK_THRESHOLD and not ao3_zyte_forced():
-            if os.environ.get("ZYTE_API_KEY", "").strip():
-                _ao3_zyte_until = time.time() + AO3_ZYTE_COOLDOWN_SEC
-                log.warning(
-                    "ao3: %d consecutive 429s — routing AO3 through Zyte for %ds",
-                    _ao3_429_streak, AO3_ZYTE_COOLDOWN_SEC)
-            else:
-                log.warning(
-                    "ao3: %d consecutive 429s but ZYTE_API_KEY is not set; cannot fail over",
-                    _ao3_429_streak)
-    elif status_code is not None and 200 <= status_code < 400:
-        _ao3_429_streak = 0
+    async with _ao3_streak_lock:
+        if status_code == 429:
+            _ao3_429_streak += 1
+            if _ao3_429_streak >= AO3_429_STREAK_THRESHOLD and not ao3_zyte_forced():
+                if os.environ.get("ZYTE_API_KEY", "").strip():
+                    _ao3_zyte_until = time.time() + AO3_ZYTE_COOLDOWN_SEC
+                    log.warning(
+                        "ao3: %d consecutive 429s — routing AO3 through Zyte for %ds",
+                        _ao3_429_streak, AO3_ZYTE_COOLDOWN_SEC)
+                else:
+                    log.warning(
+                        "ao3: %d consecutive 429s but ZYTE_API_KEY is not set; cannot fail over",
+                        _ao3_429_streak)
+        elif status_code is not None and 200 <= status_code < 400:
+            _ao3_429_streak = 0
 
 
 def ao3_zyte_forced() -> bool:
@@ -364,7 +370,7 @@ async def proxy_fetch(url: str, timeout: int = DEFAULT_TIMEOUT) -> Optional[str]
     """Fetch HTML text routing via Zyte smart proxy first, then falling back to the custom
     Cloudflare Worker proxy before attempting a direct request.
     """
-    assert_public_url(url)  # validate before any proxy path, not just the direct-fetch path
+    await asyncio.to_thread(assert_public_url, url)  # validate before any proxy path; to_thread avoids blocking DNS on the event loop
     # 1. Try Zyte
     zyte_body = await zyte_fetch(url, timeout=timeout)
     if zyte_body:
@@ -395,7 +401,7 @@ async def proxy_fetch(url: str, timeout: int = DEFAULT_TIMEOUT) -> Optional[str]
                         request=streamed.request,
                     )
         if is_ao3_url(url):
-            note_ao3_status(resp.status_code)
+            await note_ao3_status(resp.status_code)
         if resp.status_code == 200:
             cf_reason = detect_cloudflare(resp, resp.text)
             if not cf_reason:
@@ -412,7 +418,7 @@ async def proxy_fetch_binary(url: str, timeout: int = DEFAULT_TIMEOUT) -> Option
     """Fetch binary payload routing via Zyte smart proxy first, then falling back to the custom
     Cloudflare Worker proxy before attempting a direct request.
     """
-    assert_public_url(url)  # validate before any proxy path, not just the direct-fetch path
+    await asyncio.to_thread(assert_public_url, url)  # validate before any proxy path; to_thread avoids blocking DNS on the event loop
     # 1. Try Zyte
     zyte_bytes = await zyte_fetch_binary(url, timeout=timeout)
     if zyte_bytes:
@@ -443,7 +449,7 @@ async def proxy_fetch_binary(url: str, timeout: int = DEFAULT_TIMEOUT) -> Option
                         request=streamed.request,
                     )
         if is_ao3_url(url):
-            note_ao3_status(resp.status_code)
+            await note_ao3_status(resp.status_code)
         if resp.status_code == 200:
             return resp.content
         else:
@@ -518,50 +524,50 @@ async def fetch(url: str,
                             raise RuntimeError("Response too large")
                     break
         if is_ao3_url(url) and resp is not None:
-            note_ao3_status(resp.status_code)
+            await note_ao3_status(resp.status_code)
+
+        encoding = resp.encoding or "utf-8"
+        if encoding.upper() in ('ISO-8859-1', 'LATIN-1'):
+            encoding = "utf-8"
+
+        body_text = content_bytes.decode(encoding, errors="replace")
+
+        cf_reason = detect_cloudflare(resp, body_text)
+        if cf_reason:
+            raise CloudflareBlocked(url, cf_reason)
+
+        resp.raise_for_status()
+        return body_text
     except httpx.TimeoutException:
-        if not client: await c.aclose()
         raise RuntimeError(f"Timed out fetching {url}") from None
-    except RuntimeError:
+    except (RuntimeError, CloudflareBlocked):
         # Re-raise our own guard errors verbatim (Response too large, SSRF block,
-        # too many redirects) rather than masking them as a generic read failure.
-        if not client: await c.aclose()
+        # too many redirects, Cloudflare block) rather than masking them.
         raise
     except Exception as e:
-        if not client: await c.aclose()
         raise RuntimeError("Failed to read response body") from e
-
-    encoding = resp.encoding or "utf-8"
-    if encoding.upper() in ('ISO-8859-1', 'LATIN-1'):
-        encoding = "utf-8"
-
-    body_text = content_bytes.decode(encoding, errors="replace")
-
-    cf_reason = detect_cloudflare(resp, body_text)
-    if cf_reason:
-        if not client: await c.aclose()
-        raise CloudflareBlocked(url, cf_reason)
-
-    if not client: await c.aclose()
-    resp.raise_for_status()
-    return body_text
+    finally:
+        if not client:
+            await c.aclose()
 
 
 async def fetch_image(url: str,
                 client: Optional[httpx.AsyncClient] = None,
                 timeout: int = 15) -> Optional[bytes]:
     """Download image bytes from a URL."""
-    assert_public_url(url)
-    c = client or make_client(follow_redirects=False)
+    await asyncio.to_thread(assert_public_url, url)
+    c = client or make_client(follow_redirects=True)
     result = None
     try:
         async with c.stream(
-                "GET", url, timeout=timeout, follow_redirects=False) as resp:
+                "GET", url, timeout=timeout, follow_redirects=True) as resp:
             _assert_public_connected_peer(resp)
             if (resp.status_code == 200
                     and resp.headers.get("content-type", "").startswith("image/")):
                 result = await _read_limited_response(resp)
     except Exception as e:
         log.debug("fetch_image failed for %s: %s", url, e)
-    if not client: await c.aclose()
+    finally:
+        if not client:
+            await c.aclose()
     return result

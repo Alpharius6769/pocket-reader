@@ -68,10 +68,9 @@ async def scrape_royalroad(url: str, **kwargs) -> ScrapeResult:
 
     chapters: List[Chapter] = []
     dropped = 0
-    client = make_client()
     RR_CHAPTER_DELAY = float(os.environ.get("RR_CHAPTER_DELAY", 1.0))
 
-    try:
+    async with make_client() as client:
         for idx, (ch_url, ch_title) in enumerate(chapter_links):
             if idx > 0:
                 await asyncio.sleep(RR_CHAPTER_DELAY)
@@ -91,8 +90,6 @@ async def scrape_royalroad(url: str, **kwargs) -> ScrapeResult:
                 dropped += 1
                 log.debug("RoyalRoad chapter fetch failed (%s): %s", ch_url, e)
                 continue
-    finally:
-        await client.aclose()
 
     if dropped:
         log.warning(

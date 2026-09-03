@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import List
-from parsers_core import Chapter, guard_zip_bomb, sanitize_narration_chapters
+from parsers_core import Chapter, guard_zip_bomb
 
 # Format mappings
 from parsers_epub import parse_epub, extract_epub_metadata
@@ -49,12 +49,6 @@ def parse_file(path) -> List[Chapter]:
     if ext in (".epub", ".docx"):
         guard_zip_bomb(path)
     chapters = dispatch[ext](path)
-    metadata = extract_metadata(path)
-    chapters = sanitize_narration_chapters(
-        chapters,
-        story_title=metadata.get("title", ""),
-        author=metadata.get("author", ""),
-    )
     if not chapters:
         raise RuntimeError(
             "Zero parseable text chapters could be isolated from this file asset.")
