@@ -113,10 +113,11 @@ Last reviewed: 2026-09-04.
 - Distribution note: source `.flac` references and converted `.safetensors`
   files are not stored in this source tree. The maintainer tool records source
   URLs and writes a runtime manifest for the uploaded B2/Cloudflare assets.
-- Status: RETIRED from the shipped catalog. These voices are no longer
-  offered in the app; a stored setting naming one is migrated to a live voice
-  of the same gender. The converted assets remain in the bucket, so the
-  attribution above still applies and is kept for that reason.
+- Status: REMOVED. These voices are no longer offered in the app, and their
+  converted assets were deleted from the asset bucket on 2026-09-04, so nothing
+  derived from Voice-Zero is distributed any more. A stored setting naming one
+  is migrated to a live voice of the same gender. The entry is retained as a
+  record of what was once distributed, not as a live obligation.
 
 ### Kyutai Pocket TTS catalog voices (Alba, Jane, Charles, Michael, George, Noah, Mary, Eve)
 
@@ -133,15 +134,18 @@ Last reviewed: 2026-09-04.
 - Catalog: https://github.com/kyutai-labs/pocket-tts
 - Used as: Additional Pocket TTS narrator voices. Each has a single official
   reference, so only the `_neutral` conditioning file is shipped.
-- Runtime asset names: `alba_neutral`, `jane_neutral`, `charles_neutral`,
-  `michael_neutral`, `george_neutral`, `noah_neutral`, `mary_neutral`,
-  `eve_neutral`.
+- Runtime asset names: `alba_neutral`, `charles_neutral`, `george_neutral`,
+  `noah_neutral`, `mary_neutral`, `eve_neutral`. Jane (VCTK p339) and Michael
+  (VCTK p360) were retired from the catalog and their converted assets deleted
+  from the bucket on 2026-09-04; their sources are listed above as a record of
+  what was once distributed.
 - Distribution note: converted `.safetensors` files live on B2 under `voices/v2/`
   and are served through the Cloudflare Worker. Not stored in this source tree.
 
 ### Rayne (Personal Clone)
 
-- Status: RETIRED from the shipped catalog and no longer offered in the app.
+- Status: REMOVED. Retired from the catalog and deleted from the asset bucket
+  on 2026-09-04. Project-owned, so no third-party obligation attaches either way.
 
 - Author: Chris (Alpharius67 / Fluffarius)
 - Origin: AI-generated voice created by the maintainer.

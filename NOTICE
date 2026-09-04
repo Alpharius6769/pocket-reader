@@ -70,11 +70,11 @@ Notable license-sensitive items:
   (Alba MacKenna); the rest are CC BY 4.0 VCTK enhanced references republished
   by Kyutai, of which George, Noah, Mary, and Eve are American VCTK speakers.
   See ATTRIBUTIONS.md.
-- RETIRED from the shipped catalog, and no longer offered in the app: the
+- REMOVED on 2026-09-04, from both the catalog and the asset bucket: the
   Voice-Zero emotional pack (CC0 unless otherwise noted by Voice-Zero), the
-  Kyutai voices Jane and Michael, and the project-owned Rayne clone. Their
-  converted assets remain in the bucket, so their attribution is retained in
-  ATTRIBUTIONS.md rather than removed.
+  Kyutai voices Jane and Michael, and the project-owned Rayne clone. Nothing
+  derived from them is distributed any more. ATTRIBUTIONS.md keeps their
+  entries as a record of what was once distributed.
 - The frontend Lucide icon sprite is ISC licensed.
 - Literata frontend font is licensed under the SIL Open
   Font License 1.1; its full license text ships with the frontend assets.
