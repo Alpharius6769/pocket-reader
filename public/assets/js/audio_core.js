@@ -3534,10 +3534,27 @@ async function _generatePocketAttempt(workerObj, text, route, retryLevel = 0, ha
   }
 }
 
+// Which engine actually produced a render, for the diagnostic log.
+//
+// Every neural synthesis was logged as "Pocket synth" whatever engine ran it,
+// because this file grew up Pocket-only and the label was never revisited when
+// Kokoro and Kitten arrived. That is not cosmetic: it is the field report
+// saying "Pocket TTS is slow" about a phone that resolved to Kokoro at startup
+// and has never loaded a Pocket model, and it is a Kokoro voice-loading failure
+// filed under "Pocket synth quality guard". Two separate investigations in one
+// day started from the wrong engine because of this line.
+function _synthEngineLabel() {
+  const engine = _resolveActiveEngine();
+  if (engine === 'kokoro') return 'Kokoro';
+  if (engine === KITTEN_ENGINE) return 'Kitten';
+  return 'Pocket';
+}
+
 function _logPocketQuality(level, message, attempt, extra = {}) {
   if (!window.Diagnostics) return;
   const quality = attempt?.quality || {};
   window.Diagnostics.log(level, message, {
+    engine: _resolveActiveEngine(),
     voice: attempt?.route?.voiceId,
     baseVoice: attempt?.route?.baseVoice,
     emotion: attempt?.route?.emotion,
@@ -3650,8 +3667,8 @@ window.generateChunk = async function(text, voice) {
       // Re-render once with clean worker state at lower temperature.
       const throughputRetry = _isPocketThroughputCache();
       _logPocketQuality('WARN', throughputRetry
-        ? 'Pocket synth quality guard retrying failed cache paragraph'
-        : 'Pocket synth quality guard retrying with clean worker session', first, { retryUsed: false });
+        ? `${_synthEngineLabel()} synth quality guard retrying failed cache paragraph`
+        : `${_synthEngineLabel()} synth quality guard retrying with clean worker session`, first, { retryUsed: false });
       const isTimeoutFailure = (first.quality?.reasons || []).some((r) => /timeout/i.test(String(r || '')));
       if (!throughputRetry || isTimeoutFailure) {
         window._pocketParagraphCount = 0;
@@ -3698,7 +3715,7 @@ window.generateChunk = async function(text, voice) {
         attempts.push(attempt);
         retryUsed = true;
         if (!attempt.quality.fatal) break;
-        _logPocketQuality('WARN', `Pocket synth quality guard attempt ${level + 1} rejected`, attempt, {
+        _logPocketQuality('WARN', `${_synthEngineLabel()} synth quality guard attempt ${level + 1} rejected`, attempt, {
           retryUsed: true,
           firstReason: first.quality.reasons.join(', '),
         });
@@ -3714,7 +3731,7 @@ window.generateChunk = async function(text, voice) {
         accepted = clean;
       } else {
         const best = _leastBadPocketAttempt(attempts);
-        _logPocketQuality('ERROR', 'Pocket synth quality guard rejected every attempt; keeping the least-bad render', best, {
+        _logPocketQuality('ERROR', `${_synthEngineLabel()} synth quality guard rejected every attempt; keeping the least-bad render`, best, {
           retryUsed: true,
           attempts: attempts.length,
           firstReason: first.quality.reasons.join(', '),
@@ -3736,7 +3753,7 @@ window.generateChunk = async function(text, voice) {
       const reason = _isPocketThroughputCache()
         ? 'no retry in throughput mode'
         : 'shared engine is serving another synthesis';
-      _logPocketQuality('ERROR', `Pocket synth quality guard rejected paragraph (${reason})`, first, { retryUsed: false });
+      _logPocketQuality('ERROR', `${_synthEngineLabel()} synth quality guard rejected paragraph (${reason})`, first, { retryUsed: false });
       _recordProsodyOutcome(false);
       window._lastPocketQualityFailure = {
         text,
@@ -3745,7 +3762,7 @@ window.generateChunk = async function(text, voice) {
       };
       return null;
     } else if (!first.quality.ok) {
-      _logPocketQuality('WARN', 'Pocket synth accepted with a soft quality warning', first, { retryUsed: false });
+      _logPocketQuality('WARN', `${_synthEngineLabel()} synth accepted with a soft quality warning`, first, { retryUsed: false });
       _recordProsodyOutcome(false);
     } else {
       _recordProsodyOutcome(true);
@@ -3760,6 +3777,7 @@ window.generateChunk = async function(text, voice) {
       temperature: accepted.opts?.temperature,
       retryUsed,
       throughputMode: _isPocketThroughputCache(),
+      engine: _resolveActiveEngine(),
       cacheVersion: POCKET_NARRATION_CACHE_VERSION,
       artifactGuardVersion: POCKET_ARTIFACT_GUARD_VERSION,
       pauseProfileVersion: POCKET_PAUSE_PROFILE_VERSION,
@@ -3773,7 +3791,7 @@ window.generateChunk = async function(text, voice) {
     _recordPocketTtsCalibrationFromTelemetry(synthTelemetry);
     if (window.Diagnostics) {
       window.Diagnostics.log(_ms > 8000 ? 'WARN' : 'INFO',
-        `Pocket synth ${_ms}ms${retryUsed ? ' (quality retry)' : ''}${synthTelemetry.throughputMode ? ' (cache throughput)' : ''}`,
+        `${_synthEngineLabel()} synth ${_ms}ms${retryUsed ? ' (quality retry)' : ''}${synthTelemetry.throughputMode ? ' (cache throughput)' : ''}`,
         synthTelemetry);
     }
 
@@ -3782,7 +3800,7 @@ window.generateChunk = async function(text, voice) {
     const wav = _encodeWAV(accepted.result.audio, accepted.result.sampleRate || 24000, {
       fadeInSec: _onsetFadeSecFor(route.voiceId),
     });
-    window.Diagnostics?.log('INFO', 'Pocket WAV encoded', { wavEncodingMs: Math.round(performance.now() - wavStartedAt), bytes: wav.size });
+    window.Diagnostics?.log('INFO', `${_synthEngineLabel()} WAV encoded`, { wavEncodingMs: Math.round(performance.now() - wavStartedAt), bytes: wav.size });
     // A render we only kept because every attempt failed is good enough to PLAY
     // — the story stays complete — but it must not be written to the cache, or
     // the defect becomes permanent for that paragraph and the reader hears it
