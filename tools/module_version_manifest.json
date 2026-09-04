@@ -1,15 +1,15 @@
 {
   "api_core.js": {
-    "version": "search-v25",
-    "sha256": "c03bf65b544fdb09"
+    "version": "search-v28",
+    "sha256": "c184754b096cacdf"
   },
   "audio_core.js": {
-    "version": "audio-v194",
-    "sha256": "d406a53daa2d1b8a"
+    "version": "audio-v197",
+    "sha256": "78defb3e179a35b4"
   },
   "buffer_manager.js": {
-    "version": "buffer-v98",
-    "sha256": "46ebef57e17602bd"
+    "version": "buffer-v101",
+    "sha256": "eac3e6b40a58aa5b"
   },
   "cinematic_ui.js": {
     "version": "cinematic-v8",
@@ -36,7 +36,7 @@
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-314",
+    "version": "sw-316",
     "sha256": "143c9f568e6fcfa8"
   },
   "experience_coordinator.js": {
@@ -76,19 +76,19 @@
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-314",
+    "version": "sw-316",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v111",
-    "sha256": "5329f80e31c50d4f"
+    "version": "narration-loader-v113",
+    "sha256": "ec51ec4d15c77eb6"
   },
   "native_app_key.js": {
     "version": "native-key-v1",
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-314",
+    "version": "sw-316",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -104,8 +104,8 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v109",
-    "sha256": "d4cacfaade532906"
+    "version": "pocket-worker-v112",
+    "sha256": "b0c5608e87c0089a"
   },
   "profile_merge.js": {
     "version": "merge-v13",
@@ -120,16 +120,16 @@
     "sha256": "a969697ffb428a6d"
   },
   "settings_manager.js": {
-    "version": "settings-v189",
-    "sha256": "95cf8ad88375c41d"
+    "version": "settings-v190",
+    "sha256": "ad3ee90a3c78647b"
   },
   "storage_core.js": {
-    "version": "storage-v38",
-    "sha256": "b5e12f146836ede6"
+    "version": "storage-v41",
+    "sha256": "4123f5ad7a7352d7"
   },
   "supabase_bridge.js": {
-    "version": "supabase-v12",
-    "sha256": "0c7f84b5565f5dc3"
+    "version": "supabase-v15",
+    "sha256": "519aea600bdea3f5"
   },
   "sync_core.js": {
     "version": "sync-v38",
@@ -140,15 +140,15 @@
     "sha256": "0d5594353439250b"
   },
   "ui_controller.js": {
-    "version": "ui-v216",
-    "sha256": "50ec948aa9b0d496"
+    "version": "ui-v219",
+    "sha256": "00efa7e3ed114404"
   },
   "virtue_controller.js": {
     "version": "virtue-v45",
     "sha256": "9e7b25d345163542"
   },
   "sw.js": {
-    "version": "sw-314",
-    "sha256": "a9b8f8d8608a670b"
+    "version": "sw-316",
+    "sha256": "d4af70d23c9a1aeb"
   }
 }

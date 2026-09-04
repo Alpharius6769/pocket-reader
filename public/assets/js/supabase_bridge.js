@@ -49,14 +49,32 @@ function storeSession(next) {
   } catch (_) { /* private mode: session stays in memory only */ }
 }
 
+// Where GoTrue should send the user after they click a confirmation or reset
+// link. Without it the link lands on whatever the project's Site URL happens to
+// be, which for a GitHub Pages sub-path deploy is usually not this app. GoTrue
+// only honours a redirect_to that the project's redirect allow-list already
+// permits, so this can never point the link somewhere the project has not
+// approved.
+function appRedirectUrl() {
+  try {
+    const here = new URL(window.location.href);
+    return here.origin + here.pathname;
+  } catch (_) {
+    return undefined;
+  }
+}
+
 const authHeaders = (token) => ({
   apikey: SUPABASE_KEY,
   Authorization: `Bearer ${token || SUPABASE_KEY}`,
   'Content-Type': 'application/json',
 });
 
-async function gotrue(path, { method = 'POST', body, token } = {}) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1${path}`, {
+async function gotrue(path, { method = 'POST', body, token, redirect } = {}) {
+  // GoTrue reads redirect_to from the QUERY STRING; passing it in the JSON body
+  // is silently ignored.
+  const query = redirect ? `${path.includes('?') ? '&' : '?'}redirect_to=${encodeURIComponent(redirect)}` : '';
+  const res = await fetch(`${SUPABASE_URL}/auth/v1${path}${query}`, {
     method,
     headers: authHeaders(token),
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -208,7 +226,10 @@ function showLoginForm() {
       if (!needEmail()) return;
       busy(true);
       try {
-        await gotrue('/recover', { body: { email: email.value.trim() } });
+        await gotrue('/recover', {
+          body: { email: email.value.trim() },
+          redirect: appRedirectUrl(),
+        });
         status.style.color = '#9ae6a0';
         // Deliberately not confirming whether the address exists.
         status.textContent = 'If that address has an account, a reset link is on its way.';
@@ -222,7 +243,10 @@ function showLoginForm() {
       if (!needEmail()) return;
       busy(true);
       try {
-        await gotrue('/resend', { body: { type: 'signup', email: email.value.trim() } });
+        await gotrue('/resend', {
+          body: { type: 'signup', email: email.value.trim() },
+          redirect: appRedirectUrl(),
+        });
         status.style.color = '#9ae6a0';
         status.textContent = 'Confirmation email sent again. Check your inbox and spam folder.';
       } catch (err) {
@@ -290,7 +314,10 @@ function showLoginForm() {
     });
 
     signUp.addEventListener('click', () => attempt(async () => {
-      const next = await gotrue('/signup', { body: { email: email.value.trim(), password: password.value } });
+      const next = await gotrue('/signup', {
+        body: { email: email.value.trim(), password: password.value },
+        redirect: appRedirectUrl(),
+      });
       // Email confirmation is required on this project, so signup returns a user
       // without a session. Say so instead of appearing to hang.
       if (next?.access_token) { storeSession(next); return next.user?.email || email.value.trim(); }

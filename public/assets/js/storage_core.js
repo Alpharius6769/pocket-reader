@@ -208,6 +208,35 @@ function _isNarrationFrontMatterChapter(chapter) {
     || (_AO3_EXPORT_SIGNATURE_RE.test(opening) && /^(?:preface|summary|notes?)/i.test(title));
 }
 
+// A generated EPUB -- FicHub's AO3 export, Calibre, most converters -- opens
+// with a table of contents: one section whose whole body is the titles of the
+// sections after it. It is labelled with the WORK's title rather than
+// "Contents", so the front-matter title list above never matched it, and the
+// cost of keeping it is not cosmetic. It becomes chapter 1, so every real
+// chapter is numbered one too high, the jump list points one chapter off for
+// the entire book, and narration opens by reading thirty-odd bare chapter
+// titles aloud before reaching any prose.
+//
+// Detected by content rather than by title, since the title is the thing that
+// gives no clue: a section made of short lines that ARE the other sections'
+// titles. Prose cannot satisfy that -- it would have to consist of chapter
+// headings and nothing else.
+function _isChapterTitleIndex(chapter, siblings) {
+  const paragraphs = (chapter?.paragraphs || []).map((value) => String(value || '').trim()).filter(Boolean);
+  if (paragraphs.length < 4) return false;
+  if (paragraphs.some((value) => value.length > 200)) return false; // contents lines are never prose
+  const titles = new Set(siblings
+    .filter((sibling) => sibling !== chapter)
+    .map((sibling) => _chapterTextKey(sibling?.title))
+    .filter(Boolean));
+  if (titles.size < 4) return false;
+  let matched = 0;
+  for (const paragraph of paragraphs) {
+    if (titles.has(_chapterTextKey(paragraph))) matched += 1;
+  }
+  return matched >= 4 && matched >= paragraphs.length * 0.6;
+}
+
 function _looksLikeAuthorNote(text) {
   const value = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
   if (!value) return true;
@@ -318,7 +347,8 @@ function _sanitizeNarrationParagraphs(chapterTitle, paragraphs, context = {}, ha
 
 export function normalizeStoryChapters(chapters, context = {}) {
   if (!Array.isArray(chapters)) return [];
-  const narratable = chapters.filter((chapter) => !_isNarrationFrontMatterChapter(chapter));
+  const narratable = chapters.filter((chapter) => !_isNarrationFrontMatterChapter(chapter)
+    && !_isChapterTitleIndex(chapter, chapters));
   // Never erase a document made entirely of a legitimately named "Preface" or
   // "Introduction"; remove metadata sections only when actual story chapters
   // remain beside them.

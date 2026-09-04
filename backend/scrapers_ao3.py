@@ -107,6 +107,68 @@ async def ao3_published_chapter_count(
         return None
 
 
+def _chapter_paragraphs(node) -> list[str]:
+    """Narratable paragraphs of one chapter body."""
+    return [
+        text
+        for text in (p.get_text(strip=True) for p in node.find_all("p"))
+        if len(text) > 5
+    ]
+
+
+def _collect_ao3_chapters(soup, content_divs) -> list[Chapter]:
+    """Pair each chapter with its OWN title and body.
+
+    This used to zip two independently-built lists -- every
+    ``div.userstuff[role='article']`` on the page against every
+    ``#chapters .chapter h3.title`` -- by position, and then ``continue`` past
+    any body that yielded no paragraphs. Both halves of that are numbering
+    bugs, and they are silent:
+
+    * ``continue`` skipped the chapter but left the enumeration index
+      advancing, so a chapter whose text is not in ``<p>`` tags (AO3 authors
+      routinely post ``<div>``- or ``<br>``-separated bodies) simply vanished
+      and every chapter after it shifted down one slot. Downstream that is
+      permanent -- the short array is what gets cached.
+    * positional zipping assumes the two selectors always return equal counts
+      in the same order, which nothing enforces. One stray article-role block
+      anywhere on the page re-labels the entire work.
+
+    Walking the ``div.chapter`` sections instead takes each title from inside
+    the section it belongs to, so the pairing cannot drift, and keeps a chapter
+    that parsed empty rather than deleting it -- a gap the reader can see and
+    re-fetch beats a renumbered story nobody can tell is wrong.
+    """
+    # Direct children only: AO3 nests a div.chapter.preface.group inside
+    # each chapter for its title/summary/notes, so a descendant selector returns
+    # every chapter twice plus stray blocks.
+    sections = soup.select("#chapters > div.chapter")
+    if sections:
+        chapters = []
+        for i, section in enumerate(sections):
+            heading = section.select_one("h3.title")
+            title = heading.get_text(strip=True) if heading else f"Chapter {i + 1}"
+            body = section.select_one("div.userstuff[role='article']")
+            if body is None:
+                body = next(
+                    (d for d in section.find_all("div", class_="userstuff")
+                     if not d.find_parent(class_=["preface", "notes", "summary"])),
+                    None,
+                )
+            chapters.append(Chapter(
+                title=title,
+                paragraphs=_chapter_paragraphs(body) if body is not None else [],
+            ))
+        return chapters
+
+    # Single-chapter work (no #chapters wrapper): the body divs are the story.
+    return [
+        Chapter(title=f"Chapter {i + 1}", paragraphs=paras)
+        for i, paras in enumerate(_chapter_paragraphs(d) for d in content_divs)
+        if paras
+    ]
+
+
 async def scrape_ao3(url: str) -> ScrapeResult:
     url = _ensure_ao3_full_work(url)
     html = await fetch(url)
@@ -163,22 +225,9 @@ async def scrape_ao3(url: str) -> ScrapeResult:
                 artwork_url = "https://archiveofourown.org" + artwork_url
             break
 
-    chapters = []
-    chapter_titles = [t.get_text(strip=True)
-                      for t in soup.select("#chapters .chapter h3.title")]
-    for i, div in enumerate(content_divs):
-        paras = [
-            p.get_text(
-                strip=True) for p in div.find_all("p") if len(
-                p.get_text(
-                    strip=True)) > 5]
-        if not paras:
-            continue
-        ch_title = chapter_titles[i] if i < len(
-            chapter_titles) else f"Chapter {i + 1}"
-        chapters.append(Chapter(title=ch_title, paragraphs=paras))
+    chapters = _collect_ao3_chapters(soup, content_divs)
 
-    if not chapters:
+    if not any(c.paragraphs for c in chapters):
         raise RuntimeError("No readable chapters found.")
 
     return ScrapeResult(

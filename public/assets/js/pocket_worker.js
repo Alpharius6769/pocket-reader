@@ -490,6 +490,9 @@ let stTensorCache = new Map();
 let isGenerating = false;
 // Cooperative stop signal. The chunk/frame loops poll it and unwind cleanly.
 let cancelRequested = false;
+// Recognised by buffer_manager's cache loop, which requeues the paragraph and
+// carries on. Keep the two spellings in step.
+const POCKET_YIELDED_TO_PLAYBACK = 'Pocket cache yielded to playback';
 let isReady = false;
 
 function generationShouldContinue() {
@@ -3196,15 +3199,47 @@ async function calibrateBackends(voiceName) {
 
 let generationQueue = [];
 let activeGenerationJobId = null;
+// True while the running job is a live playback render rather than a
+// cache-ahead one. See enqueueGeneration for why the distinction matters.
+let activeGenerationIsPriority = false;
+// Set when a cache render is being stood down for a playback render, so its
+// settle path reports the yield instead of pretending the paragraph failed.
+let preemptedJobId = null;
 let backendReloadInFlight = false;
 async function processGenerationQueue() {
   if (isGenerating || generationQueue.length === 0) return;
-  const task = generationQueue.shift();
+  // Playback first. Ordering only decides between jobs that have not started;
+  // enqueueGeneration handles the one already running.
+  const next = generationQueue.findIndex((job) => job.isPriority);
+  const task = generationQueue.splice(next === -1 ? 0 : next, 1)[0];
   try {
-    await startGeneration(task.text, task.voice, task.jobId, task.opts);
+    await startGeneration(task.text, task.voice, task.jobId, task.opts, task.isPriority);
   } catch (e) {
     console.error("Queue generation error:", e);
   }
+}
+
+// The main thread marks a generate isPriority when a listener is waiting on it
+// RIGHT NOW -- the paragraph currently being played -- as opposed to a
+// cache-ahead render, which nobody is waiting for. That flag was being sent on
+// every generate and read by nothing, so the queue was strictly first-in and
+// playback simply inherited whatever the background cache job had already
+// started. A cache render of a long paragraph holds the sessions for several
+// seconds on a phone, and narration cannot begin until it lets go -- which is
+// heard as the reader pausing every few lines while the cache counter climbs.
+//
+// So: a playback job goes to the front of the queue, and if a CACHE job is
+// mid-render it is stood down (cooperatively -- the loops poll cancelRequested)
+// and reported with a message the buffer manager already knows how to requeue.
+// The abandoned work is redone later, at no cost to the listener. A playback
+// job is never preempted, and a cache job never preempts anything.
+function enqueueGeneration(job) {
+  generationQueue.push(job);
+  if (job.isPriority && isGenerating && !activeGenerationIsPriority && !cancelRequested) {
+    preemptedJobId = activeGenerationJobId;
+    cancelRequested = true;
+  }
+  processGenerationQueue();
 }
 
 self.onmessage = async (e) => {
@@ -3331,6 +3366,7 @@ self.onmessage = async (e) => {
           text: data.text,
           voice: data.voice || currentVoiceName || firstCustomVoice,
           jobId: data.id,
+          isPriority: data.isPriority === true,
           opts: type === 'stream_generate' ? { ...(data.opts || {}), streamSegments: true } : (data.opts || null),
         });
         return;
@@ -3380,13 +3416,13 @@ self.onmessage = async (e) => {
     if (type === "generate" || type === 'stream_generate') {
       const firstCustomVoice = customVoiceStates.size ? customVoiceStates.keys().next().value : null;
       const voiceName = data.voice || currentVoiceName || firstCustomVoice;
-      generationQueue.push({
+      enqueueGeneration({
         text: data.text,
         voice: voiceName,
         jobId: data.id,
+        isPriority: data.isPriority === true,
         opts: type === 'stream_generate' ? { ...(data.opts || {}), streamSegments: true } : (data.opts || null),
       });
-      processGenerationQueue();
     }
   } catch (err) {
     console.error("Worker error:", err);
@@ -3400,10 +3436,11 @@ self.onmessage = async (e) => {
   }
 };
 
-async function startGeneration(text, voiceName, jobId, opts) {
+async function startGeneration(text, voiceName, jobId, opts, isPriority = false) {
   isGenerating = true;
   cancelRequested = false;
   activeGenerationJobId = jobId;
+  activeGenerationIsPriority = isPriority === true;
   // Pin this voice's conditioned state for the whole render. A voice
   // registration for the next paragraph arrives mid-generation and moves
   // currentVoiceName, so that variable alone cannot protect it.
@@ -3479,7 +3516,12 @@ async function startGeneration(text, voiceName, jobId, opts) {
       });
     }
 
-    if (allChunks.length > 0) {
+    if (preemptedJobId != null && preemptedJobId === activeGenerationJobId) {
+      // Whatever this render produced is a fragment of the paragraph, and the
+      // buffer manager would store it as the whole thing. Throw it away and ask
+      // for the paragraph again later.
+      settleWithError(POCKET_YIELDED_TO_PLAYBACK);
+    } else if (allChunks.length > 0) {
       const totalLength = allChunks.reduce((acc, c) => acc + c.length, 0);
       const combined = new Float32Array(totalLength);
       let offset = 0;
@@ -3549,6 +3591,8 @@ async function startGeneration(text, voiceName, jobId, opts) {
     isGenerating = false;
     cancelRequested = false;
     activeGenerationJobId = null;
+    activeGenerationIsPriority = false;
+    preemptedJobId = null;
     generatingVoiceName = null;
     // The render is over, so the states it pinned can go. Doing this here rather
     // than only on the next conditioning means an idle worker settles back to

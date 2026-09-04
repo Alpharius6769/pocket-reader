@@ -794,9 +794,20 @@ window.handleSearchSubmit = handleSearchSubmit;
 // Story fetches route through our own backend, which uses the Zyte API to
 // bypass Cloudflare and datacenter-IP blocks (no public CORS proxies).
 
+// FicHub REJECTS a scheme-less query. Stripping "https://" here made every AO3
+// FicHub lookup come back {"err":-1,"fixits":["(please try a full url including
+// http:// or https:// at the start)"]}, which _fichubResolve correctly reads as
+// fatal and gives up on -- so the FicHub branch had quietly stopped working and
+// every AO3 story was costing a wasted round trip before falling back to the
+// backend scrape. Keep the scheme; still drop the query, fragment and the
+// per-chapter suffix so the whole work is requested rather than one chapter.
 function _fichubApiUrl(storyUrl) {
-  const clean = storyUrl.replace(/^https?:\/\//i, '').split('?')[0].split('#')[0].replace(/\/chapters\/\d+.*$/, '');
-  return `https://fichub.net/api/v0/epub?q=${clean}`;
+  const clean = String(storyUrl).trim()
+    .split('?')[0]
+    .split('#')[0]
+    .replace(/\/chapters\/\d+.*$/, '')
+    .replace(/^(?!https?:\/\/)/i, 'https://');
+  return `https://fichub.net/api/v0/epub?q=${encodeURIComponent(clean)}`;
 }
 
 async function _fichubResolve(fichubApiUrl, sig, onPass) {

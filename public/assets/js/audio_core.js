@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v38';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v41';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -1535,7 +1535,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v38',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v27',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v109',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v112',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -4598,8 +4598,16 @@ function _advanceIndices() {
   if (p + 1 < story.chapters[c].paragraphs.length) {
     window.currentParagraphIndex++;
     return true;
-  } else if (c + 1 < story.chapters.length) {
-    window.currentChapterIndex++;
+  }
+  // Walk forward past any chapter with nothing to read. A chapter can legitimately
+  // arrive empty -- a source body the parser could not read, a curated .json that
+  // never passed through normalizeStoryChapters -- and it is deliberately KEPT in
+  // the array so every chapter number after it stays true. Landing on one used to
+  // hand playCurrentParagraph an undefined paragraph, which ends narration at the
+  // gap instead of reading on.
+  for (let next = c + 1; next < story.chapters.length; next++) {
+    if (!story.chapters[next]?.paragraphs?.length) continue;
+    window.currentChapterIndex = next;
     window.currentParagraphIndex = 0;
     window.incrementDeviceStat?.('chaptersCompleted', 1);
     return true;

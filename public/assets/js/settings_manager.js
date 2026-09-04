@@ -16,7 +16,7 @@ import {
   coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v51';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '314';
+export const NARRATION_SERVICE_WORKER_VERSION = '316';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;

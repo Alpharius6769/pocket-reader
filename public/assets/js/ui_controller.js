@@ -250,10 +250,22 @@ export function toggleReaderSidebar() {
 }
 window.toggleReaderSidebar = toggleReaderSidebar;
 
-// Chapter label for the reader header, the resume line and the chapter list.
-// Was defined verbatim three times, in three separate function scopes.
+// Chapter label for the reader header, the section headings, the resume line
+// and the chapter jump list.
+//
+// The jump list used to carry its OWN second copy of this with a DIFFERENT
+// numbering rule: it renumbered a bare "Chapter N" title to its array position,
+// while this one keeps the number the source stated. So whenever a story lost a
+// chapter anywhere upstream, the same chapter was labelled "Chapter 6" in the
+// reader header and "Chapter 5" in the jump list -- which reads as a second
+// chapter having gone missing on top of the one that actually did. One
+// function, one rule: a title that states its own number is believed (the
+// source is the authority on which chapter this is), anything else is numbered
+// by position.
 function _formatChapterLabel(idx, title) {
-  const t = String(title || '').trim();
+  // Some parsers fold "Chapter Summary"/"Summary:" or a whole second line into
+  // the title; keep just the heading.
+  const t = String(title || '').trim().replace(/\s*(?:Chapter\s+Summary|Summary:|\n).*$/is, '').trim();
   if (!t || t.toLowerCase() === `chapter ${idx + 1}`) return `Chapter ${idx + 1}`;
   if (/^chapter\s+\d+/i.test(t)) return t;
   return `Chapter ${idx + 1}: ${t}`;
@@ -310,21 +322,8 @@ export function renderChaptersTab() {
   let html = '<ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px;">';
   window.userProfile.library = window.userProfile.library || [];
 
-  function _formatChapterTitle(idx, title) {
-    if (!title || !title.trim()) return `Chapter ${idx + 1}`;
-    let t = title.trim();
-    // Strip out "Chapter Summary...", "Summary:...", or appended summary text
-    t = t.replace(/\s*(?:Chapter\s+Summary|Summary:|\n).*$/is, '').trim();
-    if (!t) return `Chapter ${idx + 1}`;
-    // Bare "Chapter N" (no subtitle) — always renumber to sequential position
-    if (/^chapter\s+\d+\s*$/i.test(t)) return `Chapter ${idx + 1}`;
-    // Already has a "Chapter N:" prefix — keep clean title as-is
-    if (/^chapter\s+\d+\s*:/i.test(t)) return t;
-    return `Chapter ${idx + 1}: ${t}`;
-  }
-
   window.currentStory.chapters.forEach((ch, idx) => {
-    const title = _formatChapterTitle(idx, ch.title);
+    const title = _formatChapterLabel(idx, ch.title);
     // Hover is expressed in CSS (.chapter-jump-item:hover) rather than two
     // inline handlers per chapter: on touch they never fire, and they were
     // parsed and retained for every chapter in the story regardless.
@@ -707,6 +706,46 @@ window._readerSeekCommit = function(v) {
   window._readerSeeking = false;
 };
 
+// Jump to a paragraph in a reader whose chapters are `content-visibility: auto`.
+//
+// A single scrollIntoView() is not enough here and the failure is nasty: a
+// skipped section is laid out at the contain-intrinsic-size ESTIMATE
+// renderFullStory computes (~60 characters per line, 28px per line), and on a
+// phone -- narrow column, larger type -- the real height is roughly twice that.
+// So scrolling to a paragraph in chapter 7 lands at the sum of seven bad
+// guesses, the sections then render and take their true heights, and the
+// content under the viewport slides away from the target. The reader header
+// says "Chapter 7" (it is driven by the index, which IS correct) while the text
+// on screen is still chapter 1 -- the app appearing to contradict itself.
+//
+// Re-issuing the scroll after each layout pass fixes it: every attempt resolves
+// a few more real section heights, so the target converges. Stops as soon as
+// the element is where it should be, and is bounded so it can never spin.
+function _settleScrollTo(el) {
+  let frames = 0;
+  let stable = 0;
+  let lastTop = NaN;
+  const settle = () => {
+    if (!el.isConnected) return;
+    // Give up if the reader has moved on to a different paragraph since the
+    // jump was requested -- this scroll is no longer the one anybody wants.
+    if (el.id !== `reader-p-${window.currentChapterIndex}-${window.currentParagraphIndex}`) return;
+    // Which element scrolls is not knowable here (page vs. a scrolling reader
+    // pane), so convergence is measured instead of position: re-issue the jump
+    // and watch the element's viewport offset. Once two consecutive frames land
+    // it in the same place, every section between here and the top has taken
+    // its real height and the scroll is correct.
+    el.scrollIntoView({ behavior: 'auto', block: 'start' });
+    const top = Math.round(el.getBoundingClientRect().top);
+    stable = (top === lastTop) ? stable + 1 : 0;
+    lastTop = top;
+    if (stable >= 1 || ++frames >= 8) return;
+    requestAnimationFrame(settle);
+  };
+  settle();
+  requestAnimationFrame(settle);
+}
+
 export function updateReaderUIText() {
   if (!window.currentStory) return;
 
@@ -736,7 +775,7 @@ export function updateReaderUIText() {
 
     if (scrollBehavior !== 'none') {
       if (isInitialResume) {
-        activeEl.scrollIntoView({ behavior: 'auto', block: 'start' });
+        _settleScrollTo(activeEl);
       } else {
         activeEl.scrollIntoView({ behavior: scrollBehavior, block: 'nearest' });
       }
@@ -1673,7 +1712,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=314', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=316', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

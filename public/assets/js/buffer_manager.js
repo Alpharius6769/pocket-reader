@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v38';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v41';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -1759,19 +1759,32 @@ export const BufferManager = {
           }
         } catch (err) {
           this._currentSynthStartedAt = null;
-          if (err?.message === 'Pocket backend reset' || err?.message === 'Pocket memory-safe cache session released') {
-            // Interrupted by a worker recycle mid-generation — normally just
-            // retry. But bound it: if the SAME paragraph keeps getting
-            // interrupted (a reset loop, e.g. the periodic recycle repeatedly
-            // landing on this one, or a worker that can't stay alive), don't
-            // re-queue forever. After a cap, skip it like the quality circuit
-            // breaker so caching moves on instead of wedging on one paragraph.
-            task.resetRetries = (task.resetRetries || 0) + 1;
+          // A yield is the worker standing this paragraph down so the paragraph
+          // the listener is waiting on can render first (see enqueueGeneration
+          // in pocket_worker.js). Same requeue, but its OWN counter: a yield is
+          // the system working as intended and always means a playback
+          // paragraph got rendered instead, whereas a recycle interruption is a
+          // symptom. Sharing the recycle budget would let ~6 seconds of normal
+          // listening permanently skip a paragraph that was never in trouble.
+          const yielded = err?.message === 'Pocket cache yielded to playback';
+          if (yielded
+              || err?.message === 'Pocket backend reset'
+              || err?.message === 'Pocket memory-safe cache session released') {
+            // Interrupted mid-generation — normally just retry. But bound it: if
+            // the SAME paragraph keeps getting interrupted (a reset loop, e.g.
+            // the periodic recycle repeatedly landing on this one, or a worker
+            // that can't stay alive), don't re-queue forever. After a cap, skip
+            // it like the quality circuit breaker so caching moves on instead of
+            // wedging on one paragraph.
+            const counter = yielded ? 'yieldRetries' : 'resetRetries';
+            const limit = yielded ? 40 : 6;
+            task[counter] = (task[counter] || 0) + 1;
             this.activeWorkers = Math.max(0, this.activeWorkers - 1);
-            if (task.resetRetries > 6) {
-              console.warn(`[BufferManager] Paragraph ${task.chapIdx}:${task.paraIdx} interrupted by worker recycling ${task.resetRetries} times. Skipping to avoid a reset loop.`);
-              window.Diagnostics?.log('WARN', 'Skipped paragraph stuck in worker-recycle retry loop', {
-                storyTitle: task.storyTitle, chapIdx: task.chapIdx, paraIdx: task.paraIdx, resetRetries: task.resetRetries,
+            if (task[counter] > limit) {
+              console.warn(`[BufferManager] Paragraph ${task.chapIdx}:${task.paraIdx} interrupted (${counter}) ${task[counter]} times. Skipping to avoid a stall loop.`);
+              window.Diagnostics?.log('WARN', 'Skipped paragraph stuck in a retry loop', {
+                storyTitle: task.storyTitle, chapIdx: task.chapIdx, paraIdx: task.paraIdx,
+                reason: counter, attempts: task[counter],
               });
               // Count the skip as processed so the job can still reach 100% /
               // "complete" instead of sitting one short forever per skipped para.
@@ -1780,9 +1793,14 @@ export const BufferManager = {
               this._scheduleLoop(gen, 100);
               return;
             }
-            console.log("[BufferManager] Chunk generation interrupted by worker recycling. Retrying paragraph...");
-            this.queue.unshift(task);
-            this._scheduleLoop(gen, 100);
+            console.log("[BufferManager] Chunk generation interrupted (%s). Retrying paragraph...", err.message);
+            // A recycle goes back to the front (nothing else is competing for
+            // the worker). A yield goes to the BACK: retrying it immediately
+            // just loses the race to the next playback render, and every other
+            // paragraph in the queue would sit behind it while it does.
+            if (yielded) this.queue.push(task);
+            else this.queue.unshift(task);
+            this._scheduleLoop(gen, yielded ? 250 : 100);
             return;
           }
           console.error("generateChunk failed:", err);
