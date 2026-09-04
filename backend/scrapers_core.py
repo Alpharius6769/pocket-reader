@@ -549,25 +549,3 @@ async def fetch(url: str,
     finally:
         if not client:
             await c.aclose()
-
-
-async def fetch_image(url: str,
-                client: Optional[httpx.AsyncClient] = None,
-                timeout: int = 15) -> Optional[bytes]:
-    """Download image bytes from a URL."""
-    await asyncio.to_thread(assert_public_url, url)
-    c = client or make_client(follow_redirects=True)
-    result = None
-    try:
-        async with c.stream(
-                "GET", url, timeout=timeout, follow_redirects=True) as resp:
-            _assert_public_connected_peer(resp)
-            if (resp.status_code == 200
-                    and resp.headers.get("content-type", "").startswith("image/")):
-                result = await _read_limited_response(resp)
-    except Exception as e:
-        log.debug("fetch_image failed for %s: %s", url, e)
-    finally:
-        if not client:
-            await c.aclose()
-    return result
