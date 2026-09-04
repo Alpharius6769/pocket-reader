@@ -81,7 +81,7 @@ test('the six voices are the graded picks and the roster is coherent', () => {
 test('the worker speaks the existing engine protocol', async () => {
   const worker = await read('public/assets/js/kokoro_worker.js');
   // audio_core needs no special case only if these match pocket_worker.
-  for (const marker of ['init_done', 'init_error', 'generate_done', 'generate_error', 'dispose_backend']) {
+  for (const marker of ['init_done', 'init_error', 'generate_done', 'generate_error']) {
     assert.ok(worker.includes(marker), `${marker} is part of the shared protocol`);
   }
   assert.match(worker, /sampleRate: SAMPLE_RATE/);
@@ -135,9 +135,11 @@ test('the engine is resolved from the shell, not from lazy-loaded audio_core', a
   // this returned 'pocket', and every gate downstream followed.
   assert.match(utils, /NARRATION_ENGINE_TIERS\.includes\(choice\.engine\)/);
   assert.match(utils, /return choice\.engine;/);
-  // Decided once at boot and observable before narration is requested.
-  assert.match(utils, /window\._narrationEngineDecision = decision;/);
+  // Decided once at boot and recorded in the diagnostic log, which is what
+  // makes it observable. It was also assigned to window._narrationEngineDecision,
+  // which nothing ever read; removed in the 2026-09-04 audit.
   assert.match(utils, /Narration engine resolved at startup/);
+  assert.ok(!utils.includes('_narrationEngineDecision'), 'the write-only global must stay gone');
 
   assert.match(settings, /selectNarrationEngine,/, 'settings imports the policy directly');
   assert.doesNotMatch(settings, /window\.describeNarrationEngineChoice\?\.\(\)/,
@@ -767,11 +769,12 @@ test('Pocket voice registration cannot run on a Kokoro session', async () => {
     'an ungated call is the bug: it resolves a Kokoro id to a Pocket voice pack',
   );
 
-  // The worker really does handle only these four, which is why an ungated
-  // register_precompiled_voice never gets an answer.
+  // The worker really does handle only these three, which is why an ungated
+  // register_precompiled_voice never gets an answer. (dispose_backend was a
+  // fourth until the 2026-09-04 audit found nothing had ever posted it.)
   const worker = await read('public/assets/js/kokoro_worker.js');
   assert.doesNotMatch(worker, /register_precompiled_voice/);
-  for (const type of ['init', 'cancel_generation', 'generate', 'dispose_backend']) {
+  for (const type of ['init', 'cancel_generation', 'generate']) {
     assert.match(worker, new RegExp(`type === '${type}'`));
   }
 });

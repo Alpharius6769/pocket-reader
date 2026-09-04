@@ -25,7 +25,7 @@ import {
   normalizeString,
   safeJsonParse,
   validateSavedList,
-} from './hmofa_catalog_core.js?v=hmofa-core-v1';
+} from './hmofa_catalog_core.js?v=hmofa-core-v4';
 
 const KEYS = Object.freeze({
   preferences: 'hmofa_user_prefs_v2',

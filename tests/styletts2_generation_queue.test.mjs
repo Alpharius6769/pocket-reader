@@ -59,7 +59,7 @@ for (const file of ['kokoro_worker.js', 'kitten_worker.js']) {
     // The main thread parks a promise per dispatched id; a dropped job that is
     // never settled costs the caller its full timeout.
     assert.match(worker, /function drainGenerationQueue\(reason\) \{/);
-    assert.match(worker, /drainGenerationQueue\('Narration backend was disposed\.'\);/);
+    assert.match(worker, /drainGenerationQueue\('Generation was cancelled\.'\);/);
     assert.match(worker, /generationQueue = generationQueue\.filter\(\(job\) => job\.jobId !== targetId\);/);
     // And the mutex is always released.
     const drain = worker.slice(worker.indexOf('async function processGenerationQueue'), worker.indexOf('function withTimeout'));

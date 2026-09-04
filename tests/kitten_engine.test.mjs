@@ -235,14 +235,14 @@ test('the Kitten worker loads Kitten assets and rejects a Kokoro voice table', a
 test('every engine routes to its own worker, and Kitten counts as neural', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   const sw = await read('public/sw.js');
-  assert.match(audio, /kitten: 'assets\/js\/kitten_worker\.js\?v=kitten-v36'/);
+  assert.match(audio, /kitten: 'assets\/js\/kitten_worker\.js\?v=kitten-v39'/);
   assert.match(audio, /kokoro: 'assets\/js\/kokoro_worker\.js/);
   assert.match(audio, /pocket: 'assets\/js\/pocket_worker\.js/);
   // Omitting Kitten here would make every narration gate treat it as device speech.
   const at = audio.indexOf('function _isNeuralEngine');
   assert.match(audio.slice(at, at + 400), /KITTEN_ENGINE/);
   // The SW must precache it, and its name has to end _worker.js to be stamped.
-  assert.match(sw, /assets\/js\/kitten_worker\.js\?v=kitten-v36/);
+  assert.match(sw, /assets\/js\/kitten_worker\.js\?v=kitten-v39/);
 });
 
 test('overriding UPWARD warns; overriding downward does not nag', async () => {

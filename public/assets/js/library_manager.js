@@ -1,5 +1,5 @@
 import { animate, stagger } from './motion_lite.js';
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v54';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v57';
 import {
   DEFAULT_POCKET_PLAYBACK_SPEED,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -1694,10 +1694,6 @@ window.showMoreLibraryStories = function showMoreLibraryStories() {
   // skipAnimation: the already-visible cards must not replay their entrance
   // animation just because more were appended below them.
   renderLibrary(true);
-};
-
-window.resetLibraryRenderLimit = function resetLibraryRenderLimit() {
-  _libraryRenderLimit = LIBRARY_PAGE_SIZE;
 };
 
 export function renderLibrary(skipAnimation = false) {

@@ -242,10 +242,6 @@ export function writeDeclaredDevice(storage = globalThis.localStorage, id = '', 
   }
 }
 
-export function clearDeclaredDevice(storage = globalThis.localStorage) {
-  try { storage?.removeItem(DECLARED_DEVICE_KEY); } catch (_) {}
-}
-
 // Truncate the ladder at a ceiling. The measurement then resolves inside it,
 // which is what keeps a wrong claim upward from costing a tab.
 export function tiersUpTo(ceiling, tiers = NARRATION_ENGINE_TIERS) {

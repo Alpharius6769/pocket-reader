@@ -209,7 +209,10 @@ test('a declared model is device-local and dies with the hardware', () => {
   });
   assert.equal(rotated, here);
 
-  policy.clearDeclaredDevice(storage);
+  // How the picker actually clears a declaration (device_setup.js passes '' when
+  // no model is chosen). clearDeclaredDevice was a second, unused way to do the
+  // same thing and was removed in the 2026-09-04 audit.
+  policy.writeDeclaredDevice(storage, '', here);
   assert.equal(policy.readDeclaredDevice(storage, here), null);
   // An id the catalogue does not know is refused rather than stored.
   assert.equal(policy.writeDeclaredDevice(storage, 'iphone-99-ultra', here), null);

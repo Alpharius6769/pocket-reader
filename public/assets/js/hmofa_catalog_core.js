@@ -410,11 +410,6 @@ export function applyLiveMetadata(record, overlay) {
   return merged;
 }
 
-export function applyLiveMetadataAll(records, overlays) {
-  if (!overlays || typeof overlays !== "object") return records;
-  return records.map(record => applyLiveMetadata(record, overlays[record.id]));
-}
-
 export function formatWords(value) {
   return value === null ? "Unavailable" : Number(value).toLocaleString("en-US");
 }
@@ -429,25 +424,6 @@ export function formatDate(value) {
     day: "numeric",
     timeZone: "UTC"
   }).format(date);
-}
-
-export function legacyBase64Encode(value) {
-  const binary = encodeURIComponent(value).replace(/%([0-9A-F]{2})/gu, (_, byte) =>
-    String.fromCharCode(Number.parseInt(byte, 16))
-  );
-  return btoa(binary);
-}
-
-export function legacyBase64Decode(value) {
-  if (typeof value !== "string" || value.length > 200_000 || !/^[A-Za-z0-9+/=_-]+$/u.test(value)) {
-    throw new Error("Invalid shared-list payload");
-  }
-  const standard = value.replace(/-/gu, "+").replace(/_/gu, "/");
-  const binary = atob(standard);
-  const encoded = [...binary].map(character =>
-    `%${character.charCodeAt(0).toString(16).padStart(2, "0")}`
-  ).join("");
-  return decodeURIComponent(encoded);
 }
 
 export const POV_VALUES = Object.freeze([
@@ -573,21 +549,6 @@ export function normalizeRatings(value, knownIds = null) {
     result[id] = score;
   }
   return result;
-}
-
-export function mergeBackup({ currentLists, currentRatings, imported, knownIds }) {
-  const legacyLists = imported?.lists;
-  const legacyRatings = imported?.ratings;
-  const storage = imported?.storage && typeof imported.storage === "object" ? imported.storage : {};
-  const importedLists = storage.hmofa_saved_lists_v1 ?? legacyLists ?? [];
-  const importedRatings = storage.hmofa_user_ratings_v2 ?? legacyRatings ?? {};
-  return {
-    lists: deduplicateLists([...deduplicateLists(currentLists, knownIds),...deduplicateLists(importedLists, knownIds)], knownIds),
-    ratings: {
-...normalizeRatings(currentRatings, knownIds),
-...normalizeRatings(importedRatings, knownIds)
-    }
-  };
 }
 
 function inWordBucket(wordCount, bucket) {

@@ -39,7 +39,7 @@ import {
   sortCatalog,
   speciesFacetValues,
   validateHttpUrl,
-} from './hmofa_catalog_core.js?v=hmofa-core-v1';
+} from './hmofa_catalog_core.js?v=hmofa-core-v4';
 import {
   fetchCommunitySnapshot,
   loadLocalRatings,
@@ -51,7 +51,7 @@ import {
   openHmofaPreferencesDialog,
   readPreferences,
   reconcileWithProfile,
-} from './hmofa_preferences.js?v=hmofa-prefs-v2';
+} from './hmofa_preferences.js?v=hmofa-prefs-v4';
 
 const CATALOG_BASE = 'https://alpharius6769.github.io/hmofa-story-index';
 const CATALOG_URL = `${CATALOG_BASE}/assets/catalog.json`;

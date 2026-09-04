@@ -42,14 +42,21 @@ test('every accepted narration job is settled exactly once', async () => {
   assert.match(finallyBlock, /settleWithError\('Generation ended without producing audio\.'\)/);
 });
 
-test('a streamed generation failure settles the job rather than posting a bare error', async () => {
+test('a generation failure settles the job rather than posting a bare error', async () => {
   const worker = await read('public/assets/js/pocket_worker.js');
   // Anchored on a single-line marker: the file is CRLF, so a multi-line needle
   // written with \n would silently miss and slice from -1.
   const handler = worker.slice(worker.indexOf('console.error("Worker error:", err);'));
-  assert.match(handler, /data\?\.type === "stream_generate"/,
-    'stream_generate must map to generate_error so the id reaches the waiting promise');
-  assert.match(handler, /const errorType = data\?\.type === "init" \? "init_error" : \(isGenerateJob \? "generate_error" : "error"\)/);
+  // A bare 'error' carries no id, so the main thread cannot match it to the
+  // promise it parked in ttsQueue and the paragraph hangs until its timeout.
+  // (This also covered a second 'stream_generate' entry point, removed in the
+  // 2026-09-04 audit: nothing had ever posted it. Streaming is a generate with
+  // opts.streamSegments.)
+  assert.match(handler, /data\?\.type === "generate" \? "generate_error" : "error"/);
+  assert.ok(
+    !/type === ['"]stream_generate['"]/.test(worker),
+    'the dead streaming entry point must stay gone',
+  );
 });
 
 test('cancellation is cooperative and never drops the generation mutex', async () => {
@@ -64,7 +71,9 @@ test('cancellation is cooperative and never drops the generation mutex', async (
   assert.equal(writes.length, 3,
     'isGenerating should only be written by startGeneration (set + finally) and the calibration save/restore');
 
-  for (const handler of ['cancel_generation', 'stop', 'dispose_backend']) {
+  // stop and dispose_backend were removed in the 2026-09-04 audit; nothing had
+  // ever posted them. cancel_generation is the one the app actually sends.
+  for (const handler of ['cancel_generation']) {
     const start = worker.indexOf(`type === '${handler}'`) >= 0
       ? worker.indexOf(`type === '${handler}'`)
       : worker.indexOf(`type === "${handler}"`);

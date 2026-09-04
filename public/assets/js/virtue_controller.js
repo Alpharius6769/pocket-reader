@@ -1,5 +1,5 @@
 import { animate } from './motion_lite.js';
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v54';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v57';
 
 export const virtueState = {
   virtueCooldown: false,

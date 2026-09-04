@@ -846,13 +846,5 @@ self.onmessage = async (event) => {
     return;
   }
 
-  if (type === 'dispose_backend') {
-    // Nothing queued can run after the session goes away.
-    drainGenerationQueue('Narration backend was disposed.');
-    try { await session?.release?.(); } catch (_) {}
-    session = null;
-    voiceCache.clear();
-    isReady = false;
-    self.postMessage({ type: 'backend_disposed' });
-  }
+
 };

@@ -53,8 +53,13 @@ test('fast-narration reload paints a self-removing, theme-aware anti-flash mask'
   assert.match(page, /pr_backend_optimization_resume_v1/);
   // Theme-aware so light-theme users don't get a dark mask.
   assert.match(page, /background:var\(--app-bg,#111214\)/);
-  // Self-removes when a non-Home view (or the JS overlay) takes over.
-  assert.match(page, /__prClearIsoMask/);
+  // Self-removes when a non-Home view (or the JS overlay) takes over, via the
+  // MutationObserver below plus a 10s backstop. It also published the clear
+  // function as window.__prClearIsoMask, which nothing ever called; removed in
+  // the 2026-09-04 audit.
+  assert.match(page, /var check = function \(\)/);
+  assert.match(page, /MutationObserver/);
+  assert.ok(!page.includes('__prClearIsoMask'), 'the write-only global must stay gone');
 });
 
 test('audio-cache clear is wrapped once with working feedback for both callers', async () => {

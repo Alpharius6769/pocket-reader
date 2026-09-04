@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v43';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v45';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -55,7 +55,7 @@ import {
   readPocketDeviceSetup,
   wasmThreadCandidates,
   readMeasuredHeadroomMb,
-} from './pocket_backend_policy.js?v=backend-v54';
+} from './pocket_backend_policy.js?v=backend-v57';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -1546,9 +1546,9 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v47',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v36',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v123',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v50',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v39',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v126',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -1704,7 +1704,10 @@ async function _loadPocketEngine() {
             }
             if (window.Diagnostics) window.Diagnostics.log(data.level, data.message);
             if (data.level === 'WARN' && i === 0) _setStatus('Hardware issue detected,auto-falling back...');
-          } else if (data.type === 'backend_selected' || data.type === 'backend_status') {
+          // 'backend_status' was the reply to probe_backend/profile_backend,
+          // neither of which anything ever posted; both were removed in the
+          // 2026-09-04 audit, and no worker sends this any more.
+          } else if (data.type === 'backend_selected') {
             const telemetry = data.telemetry || {};
             Object.assign(_pocketBackendRuntime, telemetry, {
               selectedBackend: telemetry.selectedBackend || _pocketBackendRuntime.selectedBackend,
@@ -2647,7 +2650,10 @@ async function ensurePocketVoiceLoaded(voiceName) {
           clearTimeout(timer);
         };
         const msgHandler = (e) => {
-          if (e.data && (e.data.type === 'voice_encoded' || e.data.type === 'voice_set') && (!e.data.voiceName || e.data.voiceName === loadedVoice)) {
+          // 'voice_set' was the reply to the set_voice handler, which nothing
+          // posted and which the 2026-09-04 audit removed. Registration answers
+          // with voice_encoded.
+          if (e.data && e.data.type === 'voice_encoded' && (!e.data.voiceName || e.data.voiceName === loadedVoice)) {
             cleanup();
             resolve();
           } else if (e.data && (e.data.type === 'error' || e.data.type === 'generate_error')) {

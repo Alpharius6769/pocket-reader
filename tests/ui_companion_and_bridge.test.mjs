@@ -206,7 +206,7 @@ test('the masterlist shares ratings and lists with the live Anthronomicon', asyn
     'HMOFA prefs and lists must sync with the profile, so they cannot sit in DEVICE_ONLY_SETTINGS');
 
   assert.match(sw, /hmofa_community\.js\?v=hmofa-community-v2/);
-  assert.match(sw, /hmofa_preferences\.js\?v=hmofa-prefs-v2/);
+  assert.match(sw, /hmofa_preferences\.js\?v=hmofa-prefs-v4/);
 });
 
 test('the native masterlist keeps catalog freshness, URLs, prefs and lists honest', async () => {

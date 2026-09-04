@@ -22,7 +22,7 @@ import {
   selectWebGpuVariant,
   shouldDemoteWebGpuSustained,
   POCKET_WEBGPU_WASM_PARITY_RATIO,
-} from './pocket_backend_policy.js?v=backend-v54';
+} from './pocket_backend_policy.js?v=backend-v57';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   computePocketFrameBudget,
@@ -3444,17 +3444,6 @@ self.onmessage = async (e) => {
       return;
     }
 
-    if (type === 'probe_backend' || type === 'profile_backend') {
-      postMessage({ type: 'backend_status', telemetry: lastBackendTelemetry || {
-        selectedBackend: currentBackend,
-        precision: currentModelPrecision,
-        modelRevision: currentModelRevision,
-        ortVersion: POCKET_ORT_VERSION,
-        gpuResidentStateBytes: currentBackend === 'webgpu' ? POCKET_GPU_RESIDENT_STATE_BYTES : 0,
-      } });
-      return;
-    }
-
     if (type === 'cancel_generation') {
       const targetId = data.id;
       // Queued-but-unstarted jobs are dropped here, so settle each one — the
@@ -3472,18 +3461,6 @@ self.onmessage = async (e) => {
       return;
     }
 
-    if (type === 'dispose_backend') {
-      cancelRequested = true;
-      generationQueue.splice(0).forEach((job) => {
-        postMessage({ type: 'generate_error', id: job.jobId, error: 'Narration backend was disposed.' });
-      });
-      await releaseAllSessions();
-      releaseGpuDevice();
-      isReady = false;
-      postMessage({ type: 'backend_disposed' });
-      return;
-    }
-
     if (type === 'calibrate_backend') {
       if (isGenerating) throw new Error('Cannot calibrate while narration is running.');
       const voiceName = String(data.voiceName || currentVoiceName || '').trim();
@@ -3492,46 +3469,17 @@ self.onmessage = async (e) => {
       return;
     }
 
-    if (type === 'set_backend') {
-      if (isGenerating) throw new Error('Cannot switch backend while narration is running.');
-      const backend = data.backend === 'webgpu' ? 'webgpu' : 'wasm';
-      const voiceName = currentVoiceName;
-      await loadBundle(DEFAULT_LANGUAGE, { backend });
-      if (voiceName) await restoreVoiceForBackend(voiceName);
-      return;
-    }
-
-    if (type === "set_language") {
-      if (isGenerating) {
-        postMessage({ type: "error", error: "Cannot switch language while generation is running." });
-        return;
-      }
-      await loadBundle(data.language, { initialLoad: false });
-      return;
-    }
-
-    if (type === "stop") {
-      cancelRequested = true;
-      // Settle every queued job before dropping it, or the main thread waits out
-      // its per-job timeout for work that will never run.
-      generationQueue.splice(0).forEach((job) => {
-        postMessage({ type: 'generate_error', id: job.jobId, error: 'Narration was stopped.' });
-      });
-      postMessage({ type: "status", status: "Stopped", state: "idle" });
-      return;
-    }
-
     if (!isReady) {
       // During a backend-fallback reload, queue generates instead of erroring —
       // the reload finishes in seconds and processGenerationQueue drains them.
-      if ((type === "generate" || type === 'stream_generate') && backendReloadInFlight) {
+      if (type === "generate" && backendReloadInFlight) {
         const firstCustomVoice = customVoiceStates.size ? customVoiceStates.keys().next().value : null;
         generationQueue.push({
           text: data.text,
           voice: data.voice || currentVoiceName || firstCustomVoice,
           jobId: data.id,
           isPriority: data.isPriority === true,
-          opts: type === 'stream_generate' ? { ...(data.opts || {}), streamSegments: true } : (data.opts || null),
+          opts: data.opts || null,
         });
         return;
       }
@@ -3559,25 +3507,10 @@ self.onmessage = async (e) => {
       return;
     }
 
-    if (type === "set_voice") {
-      if (customVoiceStates.has(data.voiceName) || (data.voiceName === "custom" && customVoiceStates.size === 1)) {
-        const voiceName = data.voiceName === "custom" ? customVoiceStates.keys().next().value : data.voiceName;
-        await ensureCustomVoiceCached(voiceName, { statusText: `Preparing custom voice (${voiceName})...` });
-        currentVoiceName = voiceName;
-      } else {
-        await ensurePredefinedVoiceCached(data.voiceName, {
-          statusText: `Preparing voice (${data.voiceName})...`,
-        });
-        currentVoiceName = data.voiceName;
-      }
-      postMessage({ type: "voice_set", voiceName: currentVoiceName });
-      if (!isGenerating) {
-        postMessage({ type: "status", status: "Ready", state: "idle" });
-      }
-      return;
-    }
-
-    if (type === "generate" || type === 'stream_generate') {
+    // Streaming is a generate with opts.streamSegments, set by audio_core's
+    // generateChunkStream. There WAS a second 'stream_generate' entry point
+    // here that set the same flag; nothing has ever posted it.
+    if (type === "generate") {
       const firstCustomVoice = customVoiceStates.size ? customVoiceStates.keys().next().value : null;
       const voiceName = data.voice || currentVoiceName || firstCustomVoice;
       enqueueGeneration({
@@ -3585,17 +3518,17 @@ self.onmessage = async (e) => {
         voice: voiceName,
         jobId: data.id,
         isPriority: data.isPriority === true,
-        opts: type === 'stream_generate' ? { ...(data.opts || {}), streamSegments: true } : (data.opts || null),
+        opts: data.opts || null,
       });
     }
   } catch (err) {
     console.error("Worker error:", err);
-    // stream_generate must settle as generate_error too. It used to fall through
-    // to a bare 'error' with no id, which the main thread cannot match to the
-    // promise it parked in ttsQueue -- so a streamed paragraph that threw here
-    // hung until the generation timeout instead of failing fast.
-    const isGenerateJob = data?.type === "generate" || data?.type === "stream_generate";
-    const errorType = data?.type === "init" ? "init_error" : (isGenerateJob ? "generate_error" : "error");
+    // A generate must settle as generate_error, carrying its id. A bare 'error'
+    // with no id is one the main thread cannot match to the promise it parked in
+    // ttsQueue, so the paragraph hangs until the generation timeout.
+    const errorType = data?.type === "init"
+      ? "init_error"
+      : (data?.type === "generate" ? "generate_error" : "error");
     postMessage({ type: errorType, id: data?.id, error: err?.message || String(err) });
   }
 };
