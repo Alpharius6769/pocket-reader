@@ -1,34 +1,57 @@
 #!/usr/bin/env python3
-"""Rebuild the Pocket TTS decode block as a PER-CHANNEL INT8 model.
+"""Rebuild Pocket TTS INT8 models with PER-CHANNEL weight scales.
 
 Maintainer tool. Not loaded by the app or the backend at runtime.
 
 Why this exists
 ---------------
-The decode block shipped as INT8 with a single scalar scale per weight matrix.
-Scored against the FP16 build of the same model on identical inputs, rolling the
-recurrent state forward the way pocket_worker.js does, that lands at
+Every INT8 model in the deployed bundle quantizes each weight matrix with a
+SINGLE scalar scale. Scored against float masters on identical inputs, with the
+recurrent state rolled forward the way pocket_worker.js does:
 
-    latent SNR   9.89 dB      eos SNR  21.46 dB      max|err| 0.76
+                        per-tensor   per-channel   reference
+    flow_lm_decode_block   9.89 dB     23.31 dB    FP16 build
+    flow_lm_main          15.66 dB     26.06 dB    FP32 master
+    flow_lm_flow          24.14 dB     33.15 dB    FP32 master
+    mimi_decoder          20.49 dB     22.72 dB    FP32 master
 
-The latents drive the vocoder, so this is upstream of everything else in the
-pipeline -- the single largest quality loss in Pocket TTS. Re-quantizing the same
-weights with per-channel scales gives
+Sizes barely move -- per-channel adds one scale per output channel -- and the
+rebuilt Mimi is 6 MB SMALLER. Nothing here costs meaningful speed; the decode
+block actually LOADS about twice as fast in ORT Web than the original did.
 
-    latent SNR  23.31 dB      eos SNR  30.42 dB      max|err| 0.19
+For the vocoder specifically, FP16 measures 64.20 dB against the same FP32
+master. Any INT8 build of Mimi is a distant second, so the per-channel Mimi
+matters only where FP16 is not affordable.
 
-a 4.7x reduction in noise power, in a file that is 1.8 MB SMALLER and loads
-roughly twice as fast in ORT Web.
+Where the float masters come from
+---------------------------------
+    https://huggingface.co/KevinAHM/pocket-tts-onnx   (CC BY 4.0, NOT gated)
+
+An ONNX export of kyutai/pocket-tts, and the SAME export lineage as the deployed
+bundle: its flow_lm_main_int8.onnx is byte-identical to the deployed one
+(sha1 94b36cf4827cbac83e162e3165e98a7c9735d6ef), so the FP32 beside it is
+literally the master it was quantized from. Nothing gated is required.
+
+    onnx/english_2026-04/flow_lm_main.onnx     302 MB  FP32
+    onnx/english_2026-04/flow_lm_flow.onnx      39 MB  FP32
+    onnx/english_2026-04/mimi_decoder.onnx      41 MB  FP32
+
+The decode block is a project-specific fusion and is not in that repo; its
+master is the FP16 build in the asset bucket.
+
+text_conditioner is left alone: its "INT8" file is the same size as its FP32
+one, i.e. it was never really quantized.
 
 The Gemm problem
 ----------------
 ORT's quantizer rewrites Gemm to MatMul before quantizing and gets it wrong on
-this graph: /flow_net/cond_embed/Gemm_MatMul fails shape inference even when the
-node is excluded from quantization, so the rewrite -- not the quantization -- is
-the defect. All 92 Gemms here are (alpha=1, beta=1, transA=0, transB=1) with the
-weight as an initializer, so this tool folds them to MatMul + Add itself, which
-is exact. Verified: the folded FP32 master scores 66.10 dB against FP16, i.e.
-only FP16's own mantissa limit.
+these graphs: /flow_net/cond_embed/Gemm_MatMul fails shape inference even when
+the node is EXCLUDED from quantization, so the rewrite -- not the quantization
+-- is the defect, and no combination of nodes_to_exclude avoids it. Every Gemm
+in these models is (alpha=1, beta=1, transA=0, transB=1) with the weight as an
+initializer, so this tool folds them to MatMul + Add itself, which is exact.
+Verified: the folded FP32 decode-block master scores 66.10 dB against FP16, i.e.
+only FP16's own mantissa limit -- the fold introduces nothing.
 
 Variants that were measured and rejected
 ----------------------------------------
@@ -41,15 +64,16 @@ that per-channel already solves, and only add size.
 
 Usage
 -----
-    python tools/rebuild_pocket_block_int8.py \
-        --fp16 path/to/flow_lm_decode_block4_fp16.onnx \
-        --out  path/to/flow_lm_decode_block4_int8_pc.onnx
+    python tools/rebuild_pocket_int8.py --fp16 master.onnx --out rebuilt.onnx
 
-Then score it before uploading anything:
+--fp16 takes either an FP16 or an FP32 master; FP16 is widened first. Score it
+against that same master before uploading anything:
 
-    python tools/rebuild_pocket_block_int8.py --score \
-        --fp16 fp16.onnx --candidate out.onnx --bundle bundle.json --bos flow_lm_bos.npy
+    python tools/rebuild_pocket_int8.py --score \
+        --fp16 master.onnx --candidate rebuilt.onnx \
+        --bundle bundle.json --bos flow_lm_bos.npy
 """
+
 from __future__ import annotations
 
 import argparse

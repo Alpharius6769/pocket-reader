@@ -56,10 +56,15 @@ Last reviewed: 2026-09-04.
   are indicated. This file and `NOTICE` carry that attribution; the exports are
   listed as modifications below.
 - Modifications made by this project: conversion of the upstream weights to
-  ONNX, dynamic INT8 quantization (per-tensor originally, and a per-channel
-  re-quantization of the fused decode block built with
-  `tools/rebuild_pocket_block_int8.py`), an FP16 variant, a fused four-frame
-  decode block, and ORT-format repackaging.
+  ONNX, dynamic INT8 quantization (per-tensor originally, and per-channel
+  re-quantizations of the decode block, `flow_lm_main`, `flow_lm_flow` and
+  `mimi_decoder`, built with `tools/rebuild_pocket_int8.py`), an FP16 variant,
+  a fused four-frame decode block, and ORT-format repackaging.
+- The FP32 masters for those re-quantizations come from
+  https://huggingface.co/KevinAHM/pocket-tts-onnx, an ONNX export of
+  `kyutai/pocket-tts` published under CC BY 4.0 with the licence text alongside
+  it. Attribution for that export is carried here; the per-channel rebuilds are
+  further modifications of it.
 - Distribution note: these large model/voice assets are not part of this source
   tree. Attribution obligations travel with the bucket assets, so keep this
   entry in sync with what is actually served.

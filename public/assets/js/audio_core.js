@@ -150,7 +150,7 @@ const POCKET_EMOTION_PATTERN = new RegExp(`_(${POCKET_ALL_EMOTIONS.join('|')})$`
 // WASM decode block is the per-channel rebuild (23.31 dB latent SNR against the
 // FP16 master, where the original per-tensor export scored 9.89). Both change
 // the waveform, so nothing cached under an older generation may be replayed.
-const POCKET_NARRATION_CACHE_VERSION = 'narrv22';
+const POCKET_NARRATION_CACHE_VERSION = 'narrv23';
 const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // Kokoro's render-shape version. Bump whenever anything that changes the audio
 // for the same (text, voice) changes: the chunk cap, the clause rejoin, the
@@ -1535,7 +1535,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v38',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v27',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v104',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v107',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,

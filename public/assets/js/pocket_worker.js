@@ -540,14 +540,42 @@ function wasmBlockFilename(unified = false) {
   return useOrtFormatWasm ? WASM_BLOCK_ORT_FILE : WASM_BLOCK_FILE;
 }
 
+// Per-channel rebuilds, mapped from the per-tensor file each one replaces.
+//
+// The originals quantize every weight matrix with a SINGLE scalar scale. Scored
+// against the real FP32 masters (published beside the exports these were made
+// from -- the deployed flow_lm_main_int8 is byte-identical to the one in that
+// repo, so the FP32 there is literally its source):
+//
+//                     per-tensor    per-channel
+//   flow_lm_main        15.66 dB      26.06 dB     (prefill / conditioning)
+//   flow_lm_flow        24.14 dB      33.15 dB     (per-frame flow network)
+//   mimi_decoder        20.49 dB      22.72 dB     (vocoder, INT8 fallback path)
+//
+// Sizes barely move -- per-channel adds one scale per output channel -- and the
+// rebuilt Mimi is 6 MB SMALLER. FP16 Mimi still beats every INT8 build of it by
+// a mile (64.20 dB), so this only matters where FP16 is not affordable.
+const PER_CHANNEL_MODEL_STEMS = Object.freeze({
+  'flow_lm_main_int8.onnx': 'flow_lm_main_int8_pc.onnx',
+  'flow_lm_flow_int8.onnx': 'flow_lm_flow_int8_pc.onnx',
+  'mimi_decoder_int8.onnx': 'mimi_decoder_int8_pc.onnx',
+});
+
 function wasmModelPaths(language, filename) {
   const bundle = useOrtFormatWasm && filename.endsWith('.ort')
     ? POCKET_ORT_FORMAT_BUNDLE
     : language;
-  return [
-    `${MODEL_BASE_URL}Pocket%20TTS%20Onnx/${bundle}/${filename}`,
-    `${B2_DIRECT_BASE_URL}/onnx/${bundle}/${filename}`,
-  ];
+  // Prefer the rebuild, then fall back to the file it replaces. Doing this here
+  // rather than at each call site means every loader -- the descriptor list,
+  // ensureFlowLmMainSession, ensureFlowLmFlowSession -- gets both for free, and
+  // a bundle that carries no rebuild (every non-English language, and the .ort
+  // bundle, which has none) simply finds the original on the next URL.
+  const upgraded = useOrtFormatWasm ? null : PER_CHANNEL_MODEL_STEMS[filename];
+  const names = upgraded ? [upgraded, filename] : [filename];
+  return names.flatMap((name) => [
+    `${MODEL_BASE_URL}Pocket%20TTS%20Onnx/${bundle}/${name}`,
+    `${B2_DIRECT_BASE_URL}/onnx/${bundle}/${name}`,
+  ]);
 }
 
 // Mobile networks fail transiently far more often than they fail persistently: a

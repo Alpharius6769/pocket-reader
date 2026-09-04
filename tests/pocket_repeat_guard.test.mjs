@@ -360,7 +360,7 @@ test('switching the vocoder busts the narration cache', async () => {
   const audio = await readFile(
     new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
   );
-  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv22'/);
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv23'/);
 });
 
 test('the Pocket TTS upstream license is recorded with its attribution terms', async () => {
@@ -408,14 +408,14 @@ test('new latents mean a new cache generation', async () => {
   const audio = await readFile(
     new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
   );
-  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv22'/);
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv23'/);
 });
 
 test('the decode-block rebuild is reproducible from a checked-in tool', async () => {
   // A model asset nobody can rebuild is a model asset nobody can fix. The
   // recipe, the Gemm workaround and the rejected variants live in the tool.
   const tool = await readFile(
-    new URL('../tools/rebuild_pocket_block_int8.py', import.meta.url), 'utf8',
+    new URL('../tools/rebuild_pocket_int8.py', import.meta.url), 'utf8',
   );
   assert.match(tool, /per_channel=True/);
   assert.match(tool, /def fold_gemms/);
@@ -494,4 +494,46 @@ test('only 8GB-and-up iPhones reach Pocket in the first place', async () => {
   assert.equal(tierForRamGb(6), 'kokoro');
   assert.equal(tierForRamGb(8), 'pocket');
   assert.equal(tierForRamGb(12), 'pocket');
+});
+
+// ── Per-channel rebuilds of the remaining INT8 models ───────────────────────
+
+test('every per-tensor model has a per-channel rebuild preferred ahead of it', async () => {
+  // Scored against the REAL FP32 masters this time, not an FP16 proxy: the
+  // deployed flow_lm_main_int8 is byte-identical to the one published beside
+  // those masters, so the FP32 there is literally its source.
+  //
+  //                   per-tensor   per-channel
+  //   flow_lm_main      15.66 dB     26.06 dB
+  //   flow_lm_flow      24.14 dB     33.15 dB
+  //   mimi_decoder      20.49 dB     22.72 dB   (and 6 MB smaller)
+  const worker = await readFile(
+    new URL('../public/assets/js/pocket_worker.js', import.meta.url), 'utf8',
+  );
+  const map = worker.slice(
+    worker.indexOf('const PER_CHANNEL_MODEL_STEMS'),
+    worker.indexOf('function wasmModelPaths'),
+  );
+  assert.ok(map.length > 0, 'the rebuild map must be findable');
+  for (const stem of ['flow_lm_main', 'flow_lm_flow', 'mimi_decoder']) {
+    assert.match(map, new RegExp(`'${stem}_int8\.onnx': '${stem}_int8_pc\.onnx'`));
+  }
+
+  const paths = worker.slice(
+    worker.indexOf('function wasmModelPaths'),
+    worker.indexOf('// Mobile networks fail transiently'),
+  );
+  // The rebuild is tried first, the original is the fallback, and both hosts are
+  // tried for each — so a bundle without the rebuild still resolves.
+  assert.match(paths, /const names = upgraded \? \[upgraded, filename\] : \[filename\];/);
+  assert.match(paths, /names\.flatMap/);
+  // The .ort bundle has no rebuilds and must not chase them.
+  assert.match(paths, /useOrtFormatWasm \? null : PER_CHANNEL_MODEL_STEMS\[filename\]/);
+});
+
+test('the rebuilt models keep the cache honest', async () => {
+  const audio = await readFile(
+    new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
+  );
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv23'/);
 });
