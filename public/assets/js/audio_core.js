@@ -1535,7 +1535,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v38',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v27',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v107',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v109',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -3059,7 +3059,6 @@ function _hasRepeatedSpeechSegment(samples, sampleRate) {
   }
   return false;
 }
-window._hasRepeatedSpeechSegment = _hasRepeatedSpeechSegment;
 
 // ── Pitch-consistency guard ──────────────────────────────────────────────────
 // The flow-LM occasionally renders a chunk noticeably higher/lower pitched than

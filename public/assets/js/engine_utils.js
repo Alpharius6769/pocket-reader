@@ -14,7 +14,6 @@ const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareCo
 const _isMobileDevice = typeof navigator !== 'undefined' && isMobileLikePlatform(navigator.userAgent || '');
 
 window.HARD_CAP_WORKERS   = _isMobileDevice ? 1 : Math.min(4, Math.max(1, Math.floor(_prLogicalCores * 0.5)));
-window.MANUAL_CAP_WORKERS = _isMobileDevice ? 2 : Math.min(8, Math.max(1, Math.floor(_prLogicalCores * 0.75)));
 window.DEFAULT_MAX_WORKERS = window.HARD_CAP_WORKERS;
 
 // The emotion vocabulary the narration router can ask for. Kept as the full

@@ -28,7 +28,7 @@ const flag = (name, fallback) => {
 };
 const PARAGRAPHS = Number(flag('paragraphs', 8));
 const SENTENCES_PER = Number(flag('sentences', 4));
-const VOICE = flag('voice', 'donald_malone_neutral');
+const VOICE = flag('voice', 'alba_neutral');
 const noWrite = argv.includes('--no-write');
 const output = resolve('benchmark-results/pocket-memory.json');
 
@@ -120,7 +120,7 @@ try {
     const samples = [];
     samples.push(await measure('baseline (page only, no worker)'));
 
-    const worker = new Worker(`${base}/assets/js/pocket_worker.js?v=pocket-worker-v107`, { type: 'module' });
+    const worker = new Worker(`${base}/assets/js/pocket_worker.js?v=pocket-worker-v109`, { type: 'module' });
     const waitFor = (types, timeoutMs, label) => new Promise((settle) => {
       const timer = setTimeout(() => settle({ type: 'timeout', error: `${label} timed out` }), timeoutMs);
       const onMessage = (event) => {

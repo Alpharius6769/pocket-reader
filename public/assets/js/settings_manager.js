@@ -16,7 +16,7 @@ import {
   coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v51';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '308';
+export const NARRATION_SERVICE_WORKER_VERSION = '312';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -69,7 +69,7 @@ if (!window.userProfile) {
 // ── Constants ────────────────────────────────────────────────────────────────
 const HARD_CAP_WORKERS   = window.HARD_CAP_WORKERS;
 // The narration pool's real ceiling, not the generic worker cap. The control
-// used to advertise 1-MANUAL_CAP (up to 8) against a policy that can only ever
+// used to advertise a wider range (up to 8) against a policy that can only ever
 // return 1 or 2, so six of its values were indistinguishable.
 const NARRATION_WORKER_CEILING = POCKET_MAX_CACHE_WORKERS;
 const DEFAULT_MAX_WORKERS = window.DEFAULT_MAX_WORKERS;

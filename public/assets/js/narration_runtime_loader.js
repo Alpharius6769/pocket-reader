@@ -7,17 +7,14 @@ export function ensureNarrationRuntime() {
   if (window.__pocketNarrationRuntimeLoaded === true) return Promise.resolve(true);
   if (narrationRuntimePromise) return narrationRuntimePromise;
 
-  window.__pocketNarrationRuntimeLoading = true;
-  narrationRuntimePromise = import('./audio_core.js?v=audio-v192')
-    .then(() => import('./buffer_manager.js?v=buffer-v96'))
+  narrationRuntimePromise = import('./audio_core.js?v=audio-v194')
+    .then(() => import('./buffer_manager.js?v=buffer-v98'))
     .then(() => {
       window.__pocketNarrationRuntimeLoaded = true;
-      window.__pocketNarrationRuntimeLoading = false;
       return true;
     })
     .catch((error) => {
       narrationRuntimePromise = null;
-      window.__pocketNarrationRuntimeLoading = false;
       console.error('Narration runtime failed to load:', error);
       window.showSettingsModal?.(
         'Narration could not start',

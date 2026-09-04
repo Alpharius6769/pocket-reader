@@ -83,12 +83,22 @@ const WEBGPU_MIMI_ROLE = 'mimi_decoder_fp16';
 // 80 ms of audio, so the vocoder stage moves from 0.20 to 0.245 RTF and the
 // flow-LM continues to dominate the paragraph.
 //
-// Constrained devices stay on INT8. ORT WASM has no native FP16 kernels, so the
-// weights are widened to FP32 in the heap; the file is smaller but the resident
-// session is larger, and that is the wrong trade on a phone whose jetsam limit
-// is already the binding constraint.
+// Devices that have not MEASURED real headroom stay on INT8. ORT WASM has no
+// native FP16 kernels, so the weights are widened to FP32 in the heap; the file
+// is smaller but the resident session is larger, and that is the wrong trade on
+// a phone whose jetsam limit is already the binding constraint. See
+// preferFp16Mimi: memory-safe mode alone no longer disqualifies a device, a
+// missing or too-small measurement does.
 const WASM_MIMI_FP16_FILE = 'mimi_decoder_fp16.onnx';
-const WASM_MIMI_FP16_BYTES = 20943707;
+// Byte sizes for the files that are not the per-tensor originals, keyed by
+// filename so download progress reports what is actually being fetched.
+const KNOWN_MODEL_FILE_BYTES = Object.freeze({
+  'mimi_decoder_fp16.onnx': 20943707,
+  'mimi_decoder_int8_pc.onnx': 16673300,
+  'flow_lm_main_int8_pc.onnx': 76622780,
+  'flow_lm_flow_int8_pc.onnx': 10059081,
+  'flow_lm_decode_block4_int8_pc.onnx': 86421636,
+});
 const MODEL_ASSET_BYTES = {
   text_conditioner: 16388384,
   flow_lm_main: 76341079,
@@ -506,8 +516,6 @@ function wasmModelFilename(role) {
   return useOrtFormatWasm ? ORT_FORMAT_MODEL_STEMS[role] : MODEL_STEMS[role];
 }
 
-// Whether this session should fetch the higher-fidelity Mimi decoder. There is
-// no FP16 build in the .ort bundle, so that path keeps INT8 regardless.
 // Enough MEASURED working memory to afford the heavy, higher-fidelity path.
 //
 // This exists because "is this iOS" was doing the job and had stopped being the
@@ -523,6 +531,8 @@ function hasMeasuredHeadroom() {
   return measuredHeadroomMb >= FUSED_BLOCK_MIN_HEADROOM_MB;
 }
 
+// Whether this session should fetch the higher-fidelity Mimi decoder. There is
+// no FP16 build in the .ort bundle, so that path keeps INT8 regardless.
 function preferFp16Mimi() {
   if (currentBackend !== 'wasm' || useOrtFormatWasm) return false;
   // A measured-roomy device gets the better vocoder even in constrained mode:
@@ -567,10 +577,15 @@ function wasmModelPaths(language, filename) {
     : language;
   // Prefer the rebuild, then fall back to the file it replaces. Doing this here
   // rather than at each call site means every loader -- the descriptor list,
-  // ensureFlowLmMainSession, ensureFlowLmFlowSession -- gets both for free, and
-  // a bundle that carries no rebuild (every non-English language, and the .ort
-  // bundle, which has none) simply finds the original on the next URL.
-  const upgraded = useOrtFormatWasm ? null : PER_CHANNEL_MODEL_STEMS[filename];
+  // ensureFlowLmMainSession, ensureFlowLmFlowSession -- gets both for free.
+  //
+  // Only english_2026-04 carries the rebuilds. Offering them for a bundle that
+  // does not have them is not free: fetchFirstAvailable would spend two 404
+  // round-trips per model AND post a "Model host unavailable" WARN for each
+  // before reaching the file that was always going to serve it.
+  const upgraded = (useOrtFormatWasm || bundle !== DEFAULT_LANGUAGE)
+    ? null
+    : PER_CHANNEL_MODEL_STEMS[filename];
   const names = upgraded ? [upgraded, filename] : [filename];
   return names.flatMap((name) => [
     `${MODEL_BASE_URL}Pocket%20TTS%20Onnx/${bundle}/${name}`,
@@ -2479,8 +2494,12 @@ async function loadBundle(language, {
     const metadata = descriptor.sourceBackend === 'webgpu' ? webGpuBundleMetadata : bundleMetadata;
     const fallbackSizes = useOrtFormatWasm ? ORT_FORMAT_MODEL_ASSET_BYTES : MODEL_ASSET_BYTES;
     const declared = metadata?.artifacts?.[descriptor.filename]?.bytes;
-    const byFile = descriptor.filename === WASM_MIMI_FP16_FILE ? WASM_MIMI_FP16_BYTES : 0;
-    const size = Number(declared || byFile || fallbackSizes[descriptor.asset] || 0);
+    // Size the FILE, not the role. Both the FP16 vocoder and the per-channel
+    // rebuilds differ from the per-tensor sizes in the fallback map -- the
+    // rebuilt Mimi by 6 MB -- so keying on the role alone made the download
+    // progress bar claim bytes that were never going to arrive.
+    const size = Number(declared || KNOWN_MODEL_FILE_BYTES[descriptor.filename]
+      || fallbackSizes[descriptor.asset] || 0);
     return [descriptor.asset, size];
   }));
   currentModelDownloadTotalBytes = Math.max(1, Object.values(currentModelAssetBytes).reduce((sum, size) => sum + size, 0));

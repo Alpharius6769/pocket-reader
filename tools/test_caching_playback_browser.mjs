@@ -33,7 +33,7 @@ const shell = `<!doctype html><meta charset="utf-8"><body>
     <button id="caching-progress-dismiss-btn"></button>
   </div>
   <button id="away-queue-minimize-btn"></button><span id="away-queue-hint"></span>
-  <select id="voice-selector"><option value="donald_malone" selected>Donald Malone</option></select>
+  <select id="voice-selector"><option value="alba" selected>Alba</option></select>
   <select id="voice-engine-select"><option value="pocket" selected>Pocket</option></select>
 </body>`;
 
@@ -85,10 +85,9 @@ try {
     });
 
     window.HARD_CAP_WORKERS = 1;
-    window.MANUAL_CAP_WORKERS = 1;
     window.DEFAULT_MAX_WORKERS = 1;
-    window.POCKET_VOICES = ['donald_malone'];
-    window.POCKET_DEFAULT_VOICE = 'donald_malone';
+    window.POCKET_VOICES = ['alba'];
+    window.POCKET_DEFAULT_VOICE = 'alba';
     window.userProfile = { settings: { voiceEngine: 'pocket', maxWorkers: 1 }, library: [] };
     window._resolveActiveEngine = () => 'pocket';
     window.resolveVoiceWithSentiment = (_engine, voice) => voice;
@@ -116,7 +115,7 @@ try {
     };
 
     const storageModule = await import('/assets/js/storage_core.js?v=storage-v38');
-    await import('/assets/js/buffer_manager.js?v=buffer-v96');
+    await import('/assets/js/buffer_manager.js?v=buffer-v98');
     window.BufferManager.initUI();
 
     const repaired = storageModule.normalizeStoryChapters([{

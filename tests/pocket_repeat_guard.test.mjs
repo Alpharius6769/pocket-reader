@@ -350,8 +350,19 @@ test('unconstrained WASM devices decode through the FP16 Mimi vocoder', async ()
   assert.match(worker, /fallbackFilename: preferFp16Mimi\(\) \? wasmModelFilename\('mimi_decoder'\) : null,/);
   assert.match(worker, /return await loadModelDescriptor\(\{ asset, target, filename: fallbackFilename, sourceBackend \}\);/);
 
-  // Download progress has to size the file actually being fetched.
-  assert.match(worker, /descriptor\.filename === WASM_MIMI_FP16_FILE \? WASM_MIMI_FP16_BYTES : 0/);
+  // Download progress has to size the FILE actually being fetched, not the role.
+  // Keying on the role reported the per-tensor size for an FP16 or per-channel
+  // fetch -- 6 MB out for the rebuilt Mimi.
+  assert.match(worker, /KNOWN_MODEL_FILE_BYTES\[descriptor\.filename\]/);
+  const sizes = worker.slice(
+    worker.indexOf('const KNOWN_MODEL_FILE_BYTES'),
+    worker.indexOf('const MODEL_ASSET_BYTES'),
+  );
+  for (const file of ['mimi_decoder_fp16.onnx', 'mimi_decoder_int8_pc.onnx',
+                      'flow_lm_main_int8_pc.onnx', 'flow_lm_decode_block4_int8_pc.onnx']) {
+    assert.ok(sizes.includes(`'${file}':`),
+      `${file} needs a declared size or progress reports the per-tensor one`);
+  }
 });
 
 test('switching the vocoder busts the narration cache', async () => {
@@ -527,8 +538,12 @@ test('every per-tensor model has a per-channel rebuild preferred ahead of it', a
   // tried for each — so a bundle without the rebuild still resolves.
   assert.match(paths, /const names = upgraded \? \[upgraded, filename\] : \[filename\];/);
   assert.match(paths, /names\.flatMap/);
-  // The .ort bundle has no rebuilds and must not chase them.
-  assert.match(paths, /useOrtFormatWasm \? null : PER_CHANNEL_MODEL_STEMS\[filename\]/);
+  // Only english_2026-04 carries the rebuilds. Offering them anywhere else costs
+  // two 404 round-trips per model AND a "Model host unavailable" WARN for each,
+  // before reaching the file that was always going to serve it. The .ort bundle
+  // has no rebuilds either.
+  assert.match(paths, /\(useOrtFormatWasm \|\| bundle !== DEFAULT_LANGUAGE\)/);
+  assert.match(paths, /PER_CHANNEL_MODEL_STEMS\[filename\]/);
 });
 
 test('the rebuilt models keep the cache honest', async () => {

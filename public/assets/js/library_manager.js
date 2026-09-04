@@ -289,7 +289,6 @@ function _markDeletedStory(profile, story) {
   if (!profile.deletedStoryKeys || typeof profile.deletedStoryKeys !== 'object') profile.deletedStoryKeys = {};
   profile.deletedStoryKeys[getStoryStableKey(story)] = Date.now();
 }
-window.markDeletedStory = _markDeletedStory;
 
 function sanitizeProfileLibrary(profile, options = {}) {
   const target = normalizeProfileObject(profile);
@@ -750,40 +749,24 @@ export async function loadLocalData() {
 }
 window.loadLocalData = loadLocalData;
 
-// Read the stored profile back at boot. Nothing did.
+// Read the stored profile back at boot, before anything can save over it.
 //
-// loadLocalData() had NO callers anywhere in the repo. Its only caller had been
-// FrontEnd_code.py in the Anvil host -- `if hasattr(window, 'loadLocalData'):
-// window.loadLocalData()` -- and when the frontend was restructured into
-// public/ and Anvil was dropped, the module came across and the boot call did
-// not. The migrations inside it commented "runs for ALL users" had therefore
-// never run for anyone.
+// Ordering is the whole point. loadLocalData() spent a long time with no caller
+// at all (the boot call lived in the retired Anvil host and did not survive the
+// move into public/), and the failure mode was not a blank shelf, it was a
+// destroyed one: window.userProfile stayed at the empty default while the good
+// copy sat unread in localStorage, and the next ordinary save -- opening a
+// story, changing a setting, a playback checkpoint -- serialised the empty
+// profile back over it.
 //
-// What that cost, measured in a browser: a guest wrote displayName, library and
-// settings to pocketReaderData correctly, and after a reload window.userProfile
-// was the empty default while the good copy still sat in localStorage,
-// unread -- an empty shelf. Worse, the next saveLocalData() (opening a story,
-// changing a setting, a playback checkpoint) serialised that empty profile back
-// over the stored one, so the library was not merely hidden, it was destroyed a
-// moment later.
-//
-// Signed-in readers were rescued, but not by anything in this file: the startup
-// cloud pull lives INSIDE loadLocalData too (checkCloudSyncOnStartup, below), so
-// it never ran either. What saved them is that supabase_bridge sets
-// _cloudPushAllowed at its own module load on session restore, so the first
-// ordinary save round-tripped through the compare-and-swap merge and
-// applyCanonicalProfile wrote the cloud library back into memory. The empty
-// push did no damage on the way out because mergeProfile only removes stories
-// carrying a deletion tombstone. Guests had no such backstop.
-//
-// The same dead call also meant seedCuratedLibrary(), the avatar restore, the
-// theme and voice-engine migrations and the first-run setup check had never run
-// on boot for anyone.
-//
-// Ordering is the whole fix: hydrate before anything can save, and make saving
-// impossible until hydration has settled (see _flushLocalData). A failure still
-// releases the latch -- the default profile is then genuinely authoritative and
+// So: hydrate before anything can save, and make saving impossible until
+// hydration has settled (see _flushLocalData). A failure still releases the
+// latch, because the default profile is then genuinely authoritative and
 // blocking every future write would be worse than starting fresh.
+//
+// seedCuratedLibrary(), the avatar restore, the theme and voice-engine
+// migrations, the first-run setup check and checkCloudSyncOnStartup all live
+// inside loadLocalData, so they are all downstream of this call running.
 async function _hydrateLocalProfile() {
   try {
     await loadLocalData();

@@ -250,6 +250,15 @@ export function toggleReaderSidebar() {
 }
 window.toggleReaderSidebar = toggleReaderSidebar;
 
+// Chapter label for the reader header, the resume line and the chapter list.
+// Was defined verbatim three times, in three separate function scopes.
+function _formatChapterLabel(idx, title) {
+  const t = String(title || '').trim();
+  if (!t || t.toLowerCase() === `chapter ${idx + 1}`) return `Chapter ${idx + 1}`;
+  if (/^chapter\s+\d+/i.test(t)) return t;
+  return `Chapter ${idx + 1}: ${t}`;
+}
+
 function _syncReaderSidebarArrow() {
   const sb = document.getElementById('reader-sidebar');
   const arrow = document.getElementById('reader-sidebar-toggle-arrow');
@@ -500,13 +509,7 @@ export function renderFullStory(storyObj) {
     const _estPx = Math.max(400, Math.round((_chars / 60) * 28 + _paras * 16));
     parts.push(`<section class="reader-chapter" style="contain-intrinsic-size:auto ${_estPx}px">`);
 
-    function _fmt(idx, t) {
-      if (!t || !t.trim() || t.trim().toLowerCase() === `chapter ${idx+1}`) return `Chapter ${idx + 1}`;
-      const tStr = t.trim();
-      if (/^chapter\s+\d+/i.test(tStr)) return tStr;
-      return `Chapter ${idx + 1}: ${tStr}`;
-    }
-    const chapterTitle = _fmt(c, chapter.title);
+    const chapterTitle = _formatChapterLabel(c, chapter.title);
     // Chapter 0 title is already shown by the <h2 id="reader-chapter-title"> above the content.
     // Chapters 1+ need a visible heading so the reader knows where each chapter starts when scrolling.
     if (c === 0) {
@@ -685,13 +688,7 @@ window._readerSeekPreview = function(v) {
   const elP = document.getElementById('chapter-seek-preview');
   if (elP && story && story.chapters) {
     const ch = story.chapters[loc.c];
-    function _fmt(idx, t) {
-      if (!t || !t.trim() || t.trim().toLowerCase() === `chapter ${idx+1}`) return `Chapter ${idx + 1}`;
-      const tStr = t.trim();
-      if (/^chapter\s+\d+/i.test(tStr)) return tStr;
-      return `Chapter ${idx + 1}: ${tStr}`;
-    }
-    elP.textContent = _fmt(loc.c, ch?.title) + ' •  ' + (loc.p + 1);
+    elP.textContent = _formatChapterLabel(loc.c, ch?.title) + ' •  ' + (loc.p + 1);
     elP.style.opacity = '1';
   }
 };
@@ -716,13 +713,7 @@ export function updateReaderUIText() {
   const currentChapter = window.currentStory.chapters[window.currentChapterIndex];
   if (!currentChapter) return; // stale/out-of-range index after a chapter merge
   const chTitleEl = document.getElementById('reader-chapter-title');
-  function _fmt(idx, t) {
-    if (!t || !t.trim() || t.trim().toLowerCase() === `chapter ${idx+1}`) return `Chapter ${idx + 1}`;
-    const tStr = t.trim();
-    if (/^chapter\s+\d+/i.test(tStr)) return tStr;
-    return `Chapter ${idx + 1}: ${tStr}`;
-  }
-  if (chTitleEl) chTitleEl.innerText = _fmt(window.currentChapterIndex, currentChapter.title);
+  if (chTitleEl) chTitleEl.innerText = _formatChapterLabel(window.currentChapterIndex, currentChapter.title);
 
   const progBar = document.getElementById('chapter-progress-bar');
   if (progBar && !window._readerSeeking) {
@@ -1682,7 +1673,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=308', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=312', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

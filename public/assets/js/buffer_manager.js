@@ -555,7 +555,6 @@ async function _resumeFastNarrationCache() {
       const savedView = prSession.getItem('POCKET_PRE-RELOAD_VIEW');
       if (savedView) {
         prSession.removeItem('POCKET_PRE-RELOAD_VIEW');
-        window._pocketViewRestored = true;
         for (let i = 0; i < 20; i++) {
           if (typeof window.showView === 'function') break;
           await new Promise(r => setTimeout(r, 50));
