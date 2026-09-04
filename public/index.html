@@ -252,7 +252,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v41">
 <link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v38">
 <link rel="modulepreload" href="assets/js/engine_utils.js">
-<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v113">
+<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v115">
 <link rel="modulepreload" href="assets/js/api_core.js?v=search-v28">
 <link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v17">
 <link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v45">
@@ -260,11 +260,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v51">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
 <link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v43">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v190">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v191">
 <link rel="modulepreload" href="assets/js/library_manager.js?v=library-v82">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v8">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v35">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v219">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v222">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v15">
 
 <!-- ==========================================
@@ -281,7 +281,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.indexOf('/debug/') !== -1 || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=316', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=318', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -1649,17 +1649,17 @@ Playback-only modules remain deferred so they do not compete with first paint.
     <script src='assets/js/experience_coordinator.js?v=experience-v17' type='module'></script>
     <script src='assets/js/virtue_controller.js?v=virtue-v45' type='module'></script>
     <script src='assets/js/engine_utils.js' type='module'></script>
-    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v113' type='module'></script>
+    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v115' type='module'></script>
     <script src='assets/js/tts_pronunciation_core.js?v=pron-v32' type='module'></script>
     <script src='assets/js/library_manager.js?v=library-v82' type='module'></script>
     <!-- Pulls in hmofa_catalog_core.js via a versioned import. The catalog
          itself is only downloaded when the masterlist view is opened. -->
     <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v7' type='module'></script>
     <script src='assets/js/device_setup.js?v=device-setup-v43' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v190' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v191' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v8' type='module'></script>
     <script src='assets/js/reader_features.js?v=features-v35' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v219' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v222' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v15' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v5' type='module'></script>
   </div>

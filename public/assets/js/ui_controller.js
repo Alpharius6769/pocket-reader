@@ -287,6 +287,23 @@ function _syncReaderSidebarArrow() {
   }
 }
 
+// A reader tab's CONTENT is only built when switchReaderTab runs -- that is,
+// when the user taps the tab. Opening a second story rebuilt the reader body
+// but left whichever tab was already showing holding the PREVIOUS story's
+// markup, so the chapter list offered another book's chapters and jumping
+// through it moved the story you were actually reading. It cleared itself only
+// once the tab was switched away and back, which is why reloading appeared to
+// fix it.
+//
+// Only the visible tab can be stale: tapping any other one re-renders it on the
+// way in.
+function _refreshActiveReaderTab() {
+  const active = ['chapters', 'bookmarks']
+    .find((name) => document.getElementById(`tab-btn-${name}`)?.classList.contains('active'));
+  if (active === 'chapters') renderChaptersTab();
+  else if (active === 'bookmarks') renderBookmarksTab();
+}
+
 export function switchReaderTab(tabName) {
   try {
     ['info', 'chapters', 'bookmarks'].forEach((name) => {
@@ -558,6 +575,8 @@ export function renderFullStory(storyObj) {
   }
 
   updateReaderUIText();
+  // Whatever the sidebar is showing now belongs to the story that just loaded.
+  _refreshActiveReaderTab();
 }
 window.renderFullStory = renderFullStory;
 
@@ -1712,7 +1731,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=316', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=318', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

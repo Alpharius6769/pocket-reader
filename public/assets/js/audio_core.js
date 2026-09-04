@@ -2167,7 +2167,12 @@ function _bindMediaSessionActions() {
   };
   bind('play', () => { if (!window.isPlaying && window.currentStory) window.togglePlayState?.(); });
   bind('pause', () => { if (window.isPlaying) window.pausePlayback?.(); });
-  bind('stop', () => { if (window.isPlaying) window.pausePlayback?.(); });
+  // Stop is not Pause. This was bound to pausePlayback, which leaves the
+  // metadata in place -- so the lock-screen / Control Centre entry stayed on
+  // screen after Stop was pressed, and pressing that entry focuses whichever
+  // app OWNS the audio session. Inside another app's in-app browser (Discord,
+  // for instance) the owner is that app, so Stop appeared to launch Discord.
+  bind('stop', () => releaseAudioSession());
   bind('previoustrack', () => window.skipChapter?.(-1));
   bind('nexttrack', () => window.skipChapter?.(1));
   bind('seekbackward', () => window.skipParagraph?.(-1));
@@ -2182,6 +2187,17 @@ function _bindMediaSessionActions() {
 
 function _updateMediaSession(playing) {
   if (!('mediaSession' in navigator) || !window.currentStory) return;
+  // Once the session has been released, only an actual play may revive it.
+  // Both stopBgKeepAlive and the visibilitychange handler call through here
+  // with playing=false as a matter of course, and republishing metadata there
+  // would put the Now Playing entry straight back on the lock screen moments
+  // after Stop removed it. playbackState is the released marker -- nothing else
+  // sets it to 'none'.
+  if (!playing) {
+    try {
+      if (navigator.mediaSession.playbackState === 'none') return;
+    } catch (_) { /* older engines: fall through and update as before */ }
+  }
   const story   = window.currentStory;
   const chapIdx = window.currentChapterIndex || 0;
   const chTitle = story.chapters?.[chapIdx]?.title || `Chapter ${chapIdx + 1}`;
@@ -2281,6 +2297,55 @@ export function stopBgKeepAlive() {
 }
 window.startBgKeepAlive = startBgKeepAlive;
 window.stopBgKeepAlive  = stopBgKeepAlive;
+
+// Hand the audio session back to the OS completely: stop narration, stop BOTH
+// silent keep-alive loops, and remove the Now Playing entry.
+//
+// stopBgKeepAlive deliberately will not touch the loops while window.isPlaying
+// is true, which is correct for an ordinary pause and wrong for every way a
+// session can END. Nothing released them on teardown, and they are what makes
+// iOS treat the page as an active media player: narration could carry on -- and
+// keep other players ducked -- after the browser had been dismissed, with the
+// only visible control being one that focuses the owning app.
+//
+// Used for Stop, for the end of a story, and for a page that is actually going
+// away. NOT for pause: a paused session keeps its metadata so the listener can
+// resume from the lock screen.
+export function releaseAudioSession() {
+  window.isPlaying = false;
+  try { _activePocketStream?.stop?.(); } catch (_) {}
+  _activePocketStream = null;
+  const narration = window.currentAudio;
+  if (narration instanceof HTMLAudioElement && !narration.paused) {
+    try { narration.pause(); } catch (_) {}
+  }
+  for (const element of [_bgKeepAlive, _premiumAudio]) {
+    if (element && !element.paused) {
+      try { element.pause(); } catch (_) {}
+    }
+  }
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.playbackState = 'none';
+      navigator.mediaSession.metadata = null;
+    } catch (_) {}
+  }
+  try { _updatePlayButton(false); } catch (_) {}
+  try { _setControlsLockedSafe(false); } catch (_) {}
+}
+window.releaseAudioSession = releaseAudioSession;
+
+function _setControlsLockedSafe(locked) {
+  if (typeof window._setControlsLocked === 'function') window._setControlsLocked(locked);
+}
+
+// A page that is being destroyed must not leave audio running. persisted===true
+// is the back/forward cache -- the page is frozen, not gone, and pageshow will
+// bring it back, so that case is left alone.
+window.addEventListener('pagehide', (event) => {
+  if (event.persisted) return;
+  releaseAudioSession();
+});
 
 // Resume after app comes back to foreground or transitions to background
 document.addEventListener('visibilitychange', () => {
@@ -4623,6 +4688,9 @@ function _finishStory() {
   _activePocketStream = null;
   _suspendIdleAudioContext();
   stopBgKeepAlive();
+  // The story is over -- there is nothing left to resume, so take the Now
+  // Playing entry down rather than leaving a paused one on the lock screen.
+  releaseAudioSession();
   _scheduleWorkerIdleRelease();
 
   if (typeof window.incrementDeviceStat === 'function') window.incrementDeviceStat('finishedStories', 1);
