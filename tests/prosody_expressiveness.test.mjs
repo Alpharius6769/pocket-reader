@@ -20,9 +20,18 @@ import {
   getPocketTuningPreset,
   POCKET_TTS_TUNING_PRESETS,
   DEFAULT_POCKET_VOICE_SEED,
+  DEFAULT_LSD_STEPS,
 } from '../public/assets/js/tts_pronunciation_core.js';
 
 const read = (p) => readFile(p, 'utf8');
+
+// The emotions each cap table is expected to carry. Parsed out of the source
+// rather than imported because the tables are module-private consts.
+const EMOTION_KEYS = {
+  balanced: { neutral: 1, calm: 1, sad: 1, tired: 1, worried: 1, happy: 1, surprised: 1, frustrated: 1 },
+  full: { neutral: 1, calm: 1, sad: 1, tired: 1, confused: 1, worried: 1, happy: 1, enthused: 1,
+          surprised: 1, frustrated: 1, excited: 1, anger: 1, shout: 1 },
+};
 const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
 test('expressive prosody is on by default on mobile', () => {
@@ -273,13 +282,72 @@ test('every retired voice migrates to a LIVE voice of the same gender', async ()
   assert.match(source, /if \(alias && window\.POCKET_VOICES\.includes\(alias\)\) return alias;/);
 });
 
-test('Pocket TTS mobile and standard audiobook presets use 1 LSD step to enable decode-block acceleration', async () => {
+// The regression this guards (088a3f4) cost ~3x RTF on every phone and was
+// invisible to the suite, because the only assertion on the subject pinned the
+// TEXT of the expression that computed the step count rather than the two things
+// that actually decide whether the fused decode block runs. Assert the mechanism.
+test('no reachable narration preset can raise LSD above the decode block ceiling', () => {
+  // _pocketTuningConfig resolves the preset through getPocketTuningPreset with a
+  // name whitelisted to these three, and the emotion mode can escalate between
+  // them. Every reachable combination has to stay at 1 step: the fused block and
+  // the WebGPU R3 pipeline refuse anything higher and fall back to per-frame AR.
+  for (const name of ['stable', 'balanced', 'expressive']) {
+    for (const mode of ['neutral', 'balanced', 'expressive', 'full']) {
+      const preset = getPocketTuningPreset(name, mode);
+      assert.equal(preset.lsdSteps, DEFAULT_LSD_STEPS,
+        `preset ${name} under emotion mode ${mode} resolved to ${preset.lsdSteps} steps, which bypasses the fused decode block`);
+    }
+  }
+  // And there is no longer a preset name that can ask for more: the
+  // benchmark-quality entry was deleted outright.
+  assert.equal(POCKET_TTS_TUNING_PRESETS.quality, undefined,
+    'the benchmark-quality preset was deleted; nothing may reintroduce a multi-step entry');
+  for (const [name, preset] of Object.entries(POCKET_TTS_TUNING_PRESETS)) {
+    assert.equal(preset.lsdSteps, DEFAULT_LSD_STEPS, `preset ${name} must stay at one step`);
+  }
+});
+
+test('the app decides LSD steps from the shared constants, not from a temperature preset', async () => {
   const source = await read('public/assets/js/audio_core.js');
   const config = source.slice(
     source.indexOf('function _pocketTuningConfig'),
     source.indexOf('function _pocketVoiceSeed'),
   );
-  assert.match(config, /allowBenchmarkQuality \? \(preset\.lsdSteps \|\| 4\) : 1/);
+  // Deriving the count from `preset` is what made the benchmark branch dead:
+  // the temperature preset is never the `quality` entry, so it always read 1
+  // and the real 4 came from a worker fallback — leaving the config object (and
+  // the Settings diagnostics that print it) reporting a count nothing ran.
+  // Match the assignment itself, not the surrounding prose, so the explanation
+  // above it in the source is free to name what it is warning against.
+  const assignment = config.match(/^\s*lsdSteps: .*$/m)?.[0] || '';
+  assert.match(assignment, /DEFAULT_LSD_STEPS/);
+  assert.doesNotMatch(assignment, /preset/);
+});
+
+test('the worker pins every non-benchmark render to one LSD step', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  const tuning = worker.slice(
+    worker.indexOf('function resolveWorkerTuning'),
+    worker.indexOf('// Inline pause tag'),
+  );
+  assert.ok(tuning.length > 0, 'resolveWorkerTuning must still be findable');
+  // The caller's requested count is honoured ONLY behind allowQualityLsd; the
+  // else branch is the backstop that survived 088a3f4 sending 4 from the app.
+  assert.match(tuning, /lsdSteps: DEFAULT_LSD_STEPS,/);
+  assert.doesNotMatch(tuning, /allowBenchmarkQuality|BENCHMARK_QUALITY_LSD_STEPS|qualityMode/,
+    'the benchmark-quality path was deleted; the worker must not grow a new way back to it');
+});
+
+test('both accelerated decode paths are gated on a single LSD step', async () => {
+  const worker = await read('public/assets/js/pocket_worker.js');
+  // The fused WASM block: 4 AR frames per session.run(), ~47MB of flow state
+  // crossing the JS/WASM boundary once per block instead of once per frame.
+  assert.match(worker, /\(flowLmUnifiedSession \|\| flowLmWasmBlockSession\) && wasmBlockBosSequence && chunkLsdSteps === 1/);
+  // WebGPU R3 does not degrade gracefully — it throws — so the same pin applies.
+  assert.match(worker, /if \(chunkLsdSteps !== 1\) throw new Error\('WebGPU R3 supports the standard one-step quality path only\.'\)/);
+  // And the per-frame flow sessions are still built only when steps > 1, so the
+  // unaccelerated path stays lazy rather than loading on every mobile render.
+  assert.match(worker, /chunkMeta\.some\(\(meta\) => Number\(meta\?\.lsdSteps \|\| DEFAULT_LSD_STEPS\) > 1\)/);
 });
 
 test('Alba is the configured default voice across the engine', async () => {
@@ -307,14 +375,27 @@ test('getPocketTuningPreset allows expressive temperature tuning without forced 
   assert.doesNotMatch(ttsCore, /if \(key === 'expressive'\) key = DEFAULT_POCKET_TEMPERATURE_PRESET;/);
 });
 
-test('temperature presets sit well above the old 0.70 ceiling', () => {
-  assert.equal(POCKET_TTS_TUNING_PRESETS.stable.temperature, 0.70);
-  assert.equal(POCKET_TTS_TUNING_PRESETS.balanced.temperature, 0.86);
-  assert.equal(POCKET_TTS_TUNING_PRESETS.expressive.temperature, 0.93);
-  assert.equal(POCKET_TTS_TUNING_PRESETS.balanced.lsdSteps, 1);
-  assert.equal(POCKET_TTS_TUNING_PRESETS.quality.lsdSteps, 4);
-  assert.ok(POCKET_TTS_TUNING_PRESETS.expressive.temperature < 0.96,
-    'must stay inside the worker clamp of 0.95');
+test('preset temperatures buy stability without flattening the three presets', () => {
+  // Pocket is the quality tier, and on a zero-shot flow-LM quality over a
+  // 20-30 minute listen means STABILITY: the reported repeats, climbing pitch
+  // inside long quotes and distorted tails were what 0.86/0.93 sampling bought.
+  // The presets came down accordingly.
+  const { stable, balanced, expressive } = POCKET_TTS_TUNING_PRESETS;
+  assert.equal(stable.temperature, 0.68);
+  assert.equal(balanced.temperature, 0.76);
+  assert.equal(expressive.temperature, 0.84);
+  assert.equal(balanced.lsdSteps, DEFAULT_LSD_STEPS);
+  assert.equal(DEFAULT_LSD_STEPS, 1);
+
+  // But they must stay three distinguishable presets, not three names for the
+  // same flat voice — the previous 0.70-everywhere era is the other failure.
+  assert.ok(expressive.temperature - stable.temperature >= 0.12,
+    'the presets must stay audibly apart');
+  assert.ok(stable.temperature < balanced.temperature && balanced.temperature < expressive.temperature,
+    'presets must stay monotonic');
+  // And nothing may sit at the worker's 0.95 clamp again.
+  assert.ok(expressive.temperature <= 0.88,
+    'the hottest preset must keep real headroom below the 0.95 clamp');
 });
 
 test('getPocketTuningPreset escalates with the emotion profile and never de-escalates', () => {
@@ -322,26 +403,28 @@ test('getPocketTuningPreset escalates with the emotion profile and never de-esca
   // so this function returned 0.70 and the voices stayed flat.
   const expressive = getPocketTuningPreset('balanced', 'expressive');
   assert.equal(expressive.name, 'expressive');
-  assert.equal(expressive.temperature, 0.93);
+  assert.equal(expressive.temperature, 0.84);
 
   const fullAlias = getPocketTuningPreset('balanced', 'full');
   assert.equal(fullAlias.name, 'expressive');
 
   const balanced = getPocketTuningPreset('balanced', 'balanced');
   assert.equal(balanced.name, 'balanced');
-  assert.equal(balanced.temperature, 0.86);
+  assert.equal(balanced.temperature, 0.76);
 
   const keepHot = getPocketTuningPreset('expressive', 'neutral');
   assert.equal(keepHot.name, 'expressive');
-  assert.equal(keepHot.temperature, 0.93);
+  assert.equal(keepHot.temperature, 0.84);
 
   const keepStable = getPocketTuningPreset('stable', 'neutral');
   assert.equal(keepStable.name, 'stable');
-  assert.equal(keepStable.temperature, 0.70);
+  assert.equal(keepStable.temperature, 0.68);
 
-  const quality = getPocketTuningPreset('quality', 'expressive');
-  assert.equal(quality.name, 'quality');
-  assert.equal(quality.lsdSteps, 4);
+  // An unknown preset name falls back to the default rather than resolving to a
+  // deleted one. 'quality' used to be a real entry; it must not resurrect.
+  const gone = getPocketTuningPreset('quality', 'neutral');
+  assert.equal(gone.name, 'balanced');
+  assert.equal(gone.lsdSteps, DEFAULT_LSD_STEPS);
 });
 
 test('per-emotion temperature tables are the sampling temps, not a ceiling on 0.70', async () => {
@@ -356,12 +439,26 @@ test('per-emotion temperature tables are the sampling temps, not a ceiling on 0.
   const full = source.match(/const POCKET_FULL_TEMP_CAPS = \{[\s\S]*?\};/)?.[0] || '';
   const num = (block, key) => Number(block.match(new RegExp(`${key}:\\s*([0-9.]+)`))?.[1]);
 
-  assert.ok(num(balanced, 'happy') >= 0.90, `balanced happy ${num(balanced, 'happy')} is still near the old 0.74`);
-  assert.ok(num(balanced, 'surprised') >= 0.92, `balanced surprised ${num(balanced, 'surprised')} is still near the old 0.76`);
-  assert.ok(num(full, 'happy') >= 0.90, `full happy ${num(full, 'happy')} is still near the old 0.84`);
-  assert.ok(num(full, 'anger') >= 0.94, `full anger ${num(full, 'anger')} is still near the old 0.88`);
-  assert.ok(num(full, 'shout') <= 0.95, 'must stay inside the worker clamp');
+  // Two failure modes bound this table, and it has been on both sides.
+  //
+  // Too cold (the original 0.70 ceiling): every emotion collapses to the same
+  // flat read. Too hot (0.82-0.95, what shipped until the long-listen report):
+  // words repeat, pitch climbs inside long quotes, tails distort. The table now
+  // sits in between — every emotion still differs from its neighbours, and
+  // nothing goes near the worker's 0.95 clamp.
+  const allTemps = [...Object.keys(EMOTION_KEYS.balanced).map((k) => num(balanced, k)),
+                    ...Object.keys(EMOTION_KEYS.full).map((k) => num(full, k))].filter(Number.isFinite);
+  assert.ok(allTemps.length >= 15, 'both cap tables must still be parsed');
+  assert.ok(Math.max(...allTemps) <= 0.88,
+    `hottest emotion ${Math.max(...allTemps)} leaves no headroom below the 0.95 clamp`);
+  assert.ok(Math.min(...allTemps) >= 0.68,
+    `coldest emotion ${Math.min(...allTemps)} is back at the flat-voice era`);
+
+  // Emotion must still be audible: calm and shout cannot converge.
+  assert.ok(num(full, 'shout') - num(full, 'calm') >= 0.10,
+    'the expressive profile has flattened — calm and shout must stay apart');
   assert.ok(num(full, 'happy') > num(balanced, 'happy'), 'expressive profile must run hotter than balanced');
+  assert.ok(num(balanced, 'surprised') > num(balanced, 'calm'), 'the balanced profile must still vary');
 });
 
 test('hotter sampling busts the Pocket audio cache', async () => {
@@ -385,7 +482,6 @@ test('cache and live share one Pocket take: seed, token cap, pause, decode batch
   assert.doesNotMatch(worker, /opts\.throughputMode \? POCKET_THROUGHPUT_TOKEN_SOFT_CAP/);
   assert.doesNotMatch(worker, /throughputBatch \? 48/);
   assert.match(worker, /const normalChunkFrames = 12/);
-  assert.match(worker, /Number\(opts\.lsdSteps\)/);
 });
 
 test('emotion switches dwell long enough that adjacent paragraphs share a voice', async () => {

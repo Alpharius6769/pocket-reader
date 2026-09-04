@@ -420,11 +420,37 @@ function _fitVirtueSpeech(overlay) {
   // to them: a line wider than the bubble measured as fitting and was then
   // clipped on the left. Measure the rendered text itself instead.
   const measureRange = document.createRange();
+  // Range rects are VIEWPORT pixels and therefore carry every ancestor
+  // transform; clientWidth/clientHeight are untransformed LAYOUT pixels. Mixing
+  // the two made the fitter measure the text ~10% small on every appearance:
+  // the container rises with `scale: [0.9, 1]`, so a refit landing inside that
+  // animation compared 0.9x text against a 1.0x box, concluded it fitted, and
+  // left a font size that spills once the animation settles. Nothing corrected
+  // it afterwards either — a transform does not change the layout box, so the
+  // ResizeObserver never fires. Measured on the 51-character narration-ready
+  // message: 71.9px of text called "fitting" in a 72.5px box that was really
+  // holding 79.9px of it.
+  //
+  // Normalising by the overlay's own scale puts both sides in layout space, and
+  // costs one extra rect read per probe.
+  const overlayScale = () => {
+    const box = overlay.getBoundingClientRect();
+    const layoutWidth = overlay.offsetWidth || overlay.clientWidth;
+    const layoutHeight = overlay.offsetHeight || overlay.clientHeight;
+    const x = layoutWidth > 0 ? box.width / layoutWidth : 1;
+    const y = layoutHeight > 0 ? box.height / layoutHeight : 1;
+    return {
+      x: Number.isFinite(x) && x > 0.01 ? x : 1,
+      y: Number.isFinite(y) && y > 0.01 ? y : 1,
+    };
+  };
   const overflows = (innerWidth, innerHeight) => {
     measureRange.selectNodeContents(overlay);
     const text = measureRange.getBoundingClientRect();
     if (!text.width && !text.height) return false;
-    return text.width > innerWidth + 0.5 || text.height > innerHeight + 0.5;
+    const scale = overlayScale();
+    return text.width / scale.x > innerWidth + 0.5
+      || text.height / scale.y > innerHeight + 0.5;
   };
 
   const applySize = (size) => {

@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v33';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v36';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,

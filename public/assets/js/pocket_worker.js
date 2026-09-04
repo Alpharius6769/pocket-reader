@@ -1,10 +1,10 @@
 // pocket_worker.js — Pocket TTS WASM/ONNX worker with B2 streaming and chunk buffering
 import {
   DEFAULT_POCKET_TEMPERATURE_PRESET,
-  DEFAULT_POCKET_QUALITY_MODE,
+  DEFAULT_LSD_STEPS,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v26';
+} from './tts_pronunciation_core.js?v=pron-v32';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -108,8 +108,6 @@ const MAX_FRAMES = 600;
 // still comfortably above a typical chunk's real length. Full-memory desktops
 // keep the higher ceiling for the rare very-long chunk.
 const CONSTRAINED_MAX_FRAMES = 500;
-const DEFAULT_LSD_STEPS = 1;
-const BENCHMARK_QUALITY_LSD_STEPS = 4;
 const RESET_FLOW_STATE_EACH_CHUNK = true;
 const RESET_MIMI_STATE_EACH_CHUNK = true;
 const MIN_FRAMES_AFTER_EOS = 3;
@@ -223,18 +221,16 @@ function resolveWorkerTuning(opts = {}) {
   const emotionMode = typeof opts.emotionMode === "string" ? opts.emotionMode : "balanced";
   const presetName = typeof opts.temperaturePreset === "string" ? opts.temperaturePreset : DEFAULT_POCKET_TEMPERATURE_PRESET;
   const preset = getPocketTuningPreset(presetName, emotionMode);
-  const qualityMode = opts.qualityMode === "quality" ? "quality" : DEFAULT_POCKET_QUALITY_MODE;
-  const allowQualityLsd = qualityMode === "quality" && opts.allowBenchmarkQuality === true;
-  const requestedSteps = Number(opts.lsdSteps);
-  const presetSteps = Number(preset.lsdSteps) || DEFAULT_LSD_STEPS;
-  const steps = allowQualityLsd
-    ? (Number.isFinite(requestedSteps) && requestedSteps > 1 ? requestedSteps : (presetSteps > 1 ? presetSteps : BENCHMARK_QUALITY_LSD_STEPS))
-    : DEFAULT_LSD_STEPS;
+  // The caller does not get a vote on the step count. The fused decode block and
+  // the WebGPU R3 pipeline both refuse to run above one step (see the
+  // chunkLsdSteps gates in runGenerationPipeline), so a higher number does not
+  // buy quality — it silently drops the render onto the unaccelerated per-frame
+  // path and costs ~3x RTF on a phone. opts.lsdSteps is accepted and ignored so
+  // an older cached job message cannot resurrect the multi-step path.
   return {
     temperaturePreset: preset.name,
-    qualityMode,
     temperature: clampPocketTemperature(opts.temperature != null ? opts.temperature : preset.temperature),
-    lsdSteps: Math.max(1, Math.min(BENCHMARK_QUALITY_LSD_STEPS, steps)),
+    lsdSteps: DEFAULT_LSD_STEPS,
   };
 }
 
@@ -1338,12 +1334,72 @@ function prepareTextPrompt(text, opts = {}) {
   return { text: prompt, framesAfterEos };
 }
 
-const SENTENCE_SPLIT_RE = /[^.!?]+[.!?]+|[^.!?]+$/g;
+const SENTENCE_TERMINATORS = new Set([".", "!", "?"]);
+// Closing marks belong to the sentence they close. `...in?”` used to leave the
+// quotation mark behind as its own fragment.
+const SENTENCE_CLOSERS = new Set(['"', "'", "”", "’", ")", "]", "»"]);
+// A period here ends a title, not a sentence. Splitting on it put a chunk
+// boundary inside "Mr. Vale said" and inside initials like "J. R. R.".
+const SENTENCE_ABBREVIATIONS = new Set([
+  "mr", "mrs", "ms", "mx", "dr", "prof", "st", "sr", "jr", "rev", "hon", "capt",
+  "lt", "sgt", "col", "gen", "cmdr", "fr", "gov", "sen", "rep", "pres", "supt",
+  "vs", "etc", "inc", "ltd", "co", "approx", "est", "dept", "univ",
+]);
+// Deliberately NOT here: "no". "He said no." ends a sentence far more often in
+// prose than "No. 5" appears, and the numbered-abbreviation case is already
+// rewritten to "number 5" by normalizeForPocketTts before this runs.
 
+// The old implementation was /[^.!?]+[.!?]+|[^.!?]+$/g, which treated every run
+// of .!? as a sentence end. Two consequences the reader heard directly:
+//
+//  - Ellipses split sentences. normalizeForPocketTts rewrites "…" to "...", so
+//    every ellipsis in dialogue became a hard chunk boundary — a 0.25s gap AND
+//    a fresh flow-LM state (RESET_FLOW_STATE_EACH_CHUNK) mid-line. That is the
+//    "paragraphs cut in half, causing a pause" report.
+//  - A closing quote after the terminator became its own fragment, so a chunk
+//    could be nothing but `”` — a degenerate prompt for a zero-shot flow-LM,
+//    which is exactly when it produces a short distorted squeal.
+//
+// Sentence-ending punctuation now has to be followed by whitespace or the end
+// of the text, ellipses are treated as intra-sentence pauses, closers stay
+// attached, and abbreviations/decimals/initials do not split at all.
 function splitTextIntoSentences(text) {
-  const matches = text.match(SENTENCE_SPLIT_RE);
-  if (!matches) return [];
-  return matches.map((sentence) => sentence.trim()).filter(Boolean);
+  const s = String(text || "");
+  const out = [];
+  let start = 0;
+
+  for (let i = 0; i < s.length; i++) {
+    if (!SENTENCE_TERMINATORS.has(s[i])) continue;
+
+    // Consume the whole run: "...", "?!", "!!" are one terminator.
+    let end = i;
+    while (end + 1 < s.length && SENTENCE_TERMINATORS.has(s[end + 1])) end++;
+    const run = s.slice(i, end + 1);
+
+    // An ellipsis is a pause inside a sentence, not the end of one.
+    if (run.length >= 3 && /^\.+$/.test(run)) { i = end; continue; }
+
+    let j = end + 1;
+    while (j < s.length && SENTENCE_CLOSERS.has(s[j])) j++;
+
+    // Mid-token periods (3.5, e.g.) are not boundaries.
+    if (j < s.length && !/\s/.test(s[j])) { i = end; continue; }
+
+    if (run === ".") {
+      const word = (s.slice(start, i).match(/([A-Za-z.]+)$/) || [, ""])[1].replace(/\./g, "").toLowerCase();
+      // A single letter is an initial ("J. R. R. Tolkien").
+      if (word.length === 1 || SENTENCE_ABBREVIATIONS.has(word)) { i = end; continue; }
+    }
+
+    const piece = s.slice(start, j).trim();
+    if (piece) out.push(piece);
+    start = j;
+    i = j - 1;
+  }
+
+  const tail = s.slice(start).trim();
+  if (tail) out.push(tail);
+  return out;
 }
 
 function splitTokenIdsIntoChunks(tokenIds, maxTokens) {
@@ -1357,27 +1413,70 @@ function splitTokenIdsIntoChunks(tokenIds, maxTokens) {
   return chunks;
 }
 
+// True when `unit` ends on a clause mark, i.e. a place a reader would breathe.
+const CLAUSE_BOUNDARY_RE = /[,;:—–][\s"'”’)\]]*\s*$/;
+
+// Splits a sentence that is over the token cap.
+//
+// This used to break at whatever word happened to cross the cap, which is how a
+// long line of dialogue got cut mid-clause. Each piece is a separate render with
+// its own flow-LM state, so a piece that starts mid-clause gives the model no
+// prosodic footing: it re-anchors pitch on a fragment, which is the "high
+// pitched and/or distorted, often ending in a word being pronounced incorrectly"
+// the reader heard on long quotes. Breaking on a comma or semicolon instead
+// gives every piece a phrase a narrator could plausibly have started on.
 function splitLongTextSafely(text, maxTokens) {
   const units = String(text || "").match(/\S+\s*/g) || [];
   const chunks = [];
   let current = "";
-  const flush = () => {
-    const t = current.trim();
+  // Length of `current` at the most recent clause boundary, and how many units
+  // we have accreted since — so we can rewind to it when the cap is hit.
+  let clauseCut = 0;
+  let unitsSinceClause = 0;
+
+  const push = (value) => {
+    const t = String(value || "").trim();
     if (t) chunks.push(t);
+  };
+  const flush = () => {
+    push(current);
     current = "";
+    clauseCut = 0;
+    unitsSinceClause = 0;
   };
 
   for (const unit of units) {
     const candidate = current + unit;
     if (current && tokenizerProcessor.encodeIds(candidate).length > maxTokens) {
-      flush();
+      // Rewind to the last clause mark when there is one, and when it is not so
+      // early in the piece that the rewind would itself produce a stub. Below
+      // that, an arbitrary word break is still the least-bad option.
+      const rewindable = clauseCut > 0
+        && unitsSinceClause > 0
+        && clauseCut >= Math.floor(current.length * 0.4);
+      if (rewindable) {
+        const head = current.slice(0, clauseCut);
+        const tail = current.slice(clauseCut);
+        push(head);
+        current = tail;
+        clauseCut = 0;
+        unitsSinceClause = 0;
+      } else {
+        flush();
+      }
     }
     if (tokenizerProcessor.encodeIds(unit).length > maxTokens) {
+      flush();
       for (const piece of splitTokenIdsIntoChunks(tokenizerProcessor.encodeIds(unit), maxTokens)) {
-        if (piece) chunks.push(piece);
+        push(piece);
       }
     } else {
       current += unit;
+      unitsSinceClause += 1;
+      if (CLAUSE_BOUNDARY_RE.test(unit)) {
+        clauseCut = current.length;
+        unitsSinceClause = 0;
+      }
     }
   }
   flush();
@@ -1545,7 +1644,6 @@ function splitIntoBestSentences(text, opts) {
       temp:       stableProsody ? tuning.temperature : (expressive ? pros.temp : tuning.temperature),
       noiseClamp: stableProsody ? null : (expressive ? pros.noiseClamp : null),
       temperaturePreset: tuning.temperaturePreset,
-      qualityMode: tuning.qualityMode,
       lsdSteps: tuning.lsdSteps,
     });
   };
@@ -1561,7 +1659,7 @@ function splitIntoBestSentences(text, opts) {
         prev.explicit = true;
       } else {
         chunks.push("");
-        chunkMeta.push({ framesAfterEos: 0, pauseAfterSec: run.sec, explicit: true, pauseOnly: true, emotion: "neutral", temp: tuning.temperature, noiseClamp: null, temperaturePreset: tuning.temperaturePreset, qualityMode: tuning.qualityMode, lsdSteps: tuning.lsdSteps });
+        chunkMeta.push({ framesAfterEos: 0, pauseAfterSec: run.sec, explicit: true, pauseOnly: true, emotion: "neutral", temp: tuning.temperature, noiseClamp: null, temperaturePreset: tuning.temperaturePreset, lsdSteps: tuning.lsdSteps });
       }
       continue;
     }
@@ -1641,7 +1739,7 @@ function precomputeFlowBuffers() {
 }
 
 function getFlowStepTensors(lsdSteps = DEFAULT_LSD_STEPS) {
-  const steps = Math.max(1, Math.min(BENCHMARK_QUALITY_LSD_STEPS, Number(lsdSteps) || DEFAULT_LSD_STEPS));
+  const steps = Math.max(1, Number(lsdSteps) || DEFAULT_LSD_STEPS);
   if (stTensorCache.has(steps)) return stTensorCache.get(steps);
   const tensors = [];
   const dt = 1.0 / steps;
@@ -3415,7 +3513,7 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
     const framesAfterEos = meta.framesAfterEos != null ? meta.framesAfterEos : 0;
     const chunkTemp = meta.temp != null ? meta.temp : BASE_TEMP;
     const chunkNoiseClamp = meta.noiseClamp != null ? meta.noiseClamp : null;
-    const chunkLsdSteps = Math.max(1, Math.min(BENCHMARK_QUALITY_LSD_STEPS, Number(meta.lsdSteps) || DEFAULT_LSD_STEPS));
+    const chunkLsdSteps = Math.max(1, Number(meta.lsdSteps) || DEFAULT_LSD_STEPS);
     const flowStepTensors = getFlowStepTensors(chunkLsdSteps);
 
     // Pause-only unit (explicit [Ns] tag with no surrounding text): emit silence.

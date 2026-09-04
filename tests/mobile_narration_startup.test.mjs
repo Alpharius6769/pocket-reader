@@ -10,8 +10,8 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v165'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v92'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v177'\)/);
+  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v94'\)/);
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
@@ -95,8 +95,8 @@ test('a narration-resume fix advances the immutable module and service-worker re
     read('public/sw.js'),
     read('public/index.html'),
   ]);
-  assert.match(loader, /buffer_manager\.js\?v=buffer-v92/);
-  assert.match(worker, /buffer_manager\.js\?v=buffer-v92/);
+  assert.match(loader, /buffer_manager\.js\?v=buffer-v94/);
+  assert.match(worker, /buffer_manager\.js\?v=buffer-v94/);
   assert.match(worker, /pocket-reader-core-v\d+/);
   // Derived, not pinned: the shell must register whatever revision the service
   // worker actually ships. Hardcoding the number here only forced a mechanical
@@ -161,7 +161,7 @@ test('quality recovery never resets the shared engine while another synthesis is
   assert.match(generate, /catch \(e\)[\s\S]*?if \(canResetSharedEngine\(\)\)\s*\{[\s\S]*?_resetPocketEngineForBackend/);
 });
 
-test('a failed cache render gets one varied quality retry instead of three identical reruns', async () => {
+test('a failed cache render gets varied quality retries, never identical reruns', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   const buffer = await read('public/assets/js/buffer_manager.js');
   const generate = audio.match(/window\.generateChunk = async function[\s\S]*?\n};/)?.[0] || '';
@@ -170,7 +170,7 @@ test('a failed cache render gets one varied quality retry instead of three ident
   // The retry takes a RE-RESOLVED route: the reload between the two attempts
   // starts whatever engine is active now, and replaying the first attempt's
   // route sent a Kitten voice to a freshly built Pocket worker.
-  assert.match(generate, /_generatePocketAttempt\(null,\s*text,\s*retryRoute,\s*1\)/);
+  assert.match(generate, /_generatePocketAttempt\(null,\s*text,\s*retryRoute,\s*level\)/);
   assert.match(generate, /const retryEngine = _resolveActiveEngine\(\);/);
   assert.match(generate, /_lastPocketQualityFailure/);
   assert.match(buffer, /qualityFailure\?\.text === task\.text/);
@@ -181,6 +181,6 @@ test('every pronunciation consumer uses the current ruleset URL', async () => {
   for (const file of ['public/assets/js/audio_core.js', 'public/assets/js/settings_manager.js', 'public/assets/js/library_manager.js', 'public/assets/js/pocket_worker.js']) {
     const source = await read(file);
     assert.doesNotMatch(source, /tts_pronunciation_core\.js\?v=pron-v9/, `${file} still imports pron-v9`);
-    assert.match(source, /tts_pronunciation_core\.js\?v=pron-v26/, `${file} must import pron-v14`);
+    assert.match(source, /tts_pronunciation_core\.js\?v=pron-v32/, `${file} must import pron-v14`);
   }
 });

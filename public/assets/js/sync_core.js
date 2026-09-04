@@ -1,11 +1,11 @@
 import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v48';
-import { storyKeyFor } from './profile_merge.js?v=merge-v10';
+import { storyKeyFor } from './profile_merge.js?v=merge-v13';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 const PROFILE_SCHEMA_VERSION = 3;
 const DEVICE_SETTING_KEYS = new Set([
   'maxWorkers', 'enableManualWorkers', '_engineManuallySet',
-  'lowMemoryMode', 'cacheLimitMb', 'storageBudgetMb', 'pocketQualityMode',
+  'lowMemoryMode', 'cacheLimitMb', 'storageBudgetMb',
   'pocketBackend', 'dataSaver', 'lastDeviceProfile', 'diagnosticLevel',
 ]);
 const STORY_GROUP_FIELDS = Object.freeze({

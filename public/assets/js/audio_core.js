@@ -1,12 +1,12 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v33';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v36';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
-  DEFAULT_POCKET_QUALITY_MODE,
   DEFAULT_POCKET_VOICE_SEED,
+  DEFAULT_LSD_STEPS,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v26';
+} from './tts_pronunciation_core.js?v=pron-v32';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -189,35 +189,51 @@ const POCKET_VOICE_PACK_PATH = 'v2/';
 // edge cache, which key by full URL. r2 = pitch-matched anchors.
 // r3 = shorter anchor (2.4s) + longer emotion clip for more expressive states.
 const POCKET_VOICE_PACK_REV = 'r3';
-const POCKET_CHUNKING_VERSION = 'chunkv3';
+// chunkv4: sentence splitting no longer breaks on ellipses, abbreviations or
+// initials, closing quotes stay with their sentence, and an over-cap sentence
+// is cut at a clause mark instead of an arbitrary word. Every seam in a
+// paragraph moves, so cached audio from chunkv3 must not be replayed.
+const POCKET_CHUNKING_VERSION = 'chunkv4';
 const POCKET_ARTIFACT_GUARD_VERSION = 'agv3'; // agv3: fatal-only, single identity-preserving retry
 const POCKET_PAUSE_PROFILE_VERSION = 'pausev2';
 const POCKET_PARAGRAPH_PAUSE_SEC = 0.5;
 
+// Per-emotion sampling temperature. Stability outranks expressiveness here.
+//
+// These used to run 0.82-0.95, hard against the worker's 0.95 clamp at the top
+// end. A 20-30 minute desktop listen at those values reported exactly what a
+// too-hot zero-shot flow-LM does over long form: words repeated every few
+// paragraphs, pitch climbing inside long quotes, and a distorted tail that
+// usually took a word's pronunciation down with it. The whole table has come
+// down by roughly 0.08-0.12, and nothing reaches the clamp any more.
+//
+// The SPREAD is deliberately kept -- calm still sits well below shout, so the
+// emotion pass is still audible. It is the absolute ceiling that was the
+// problem, not the fact that emotions differ from each other.
 const POCKET_BALANCED_TEMP_CAPS = {
-  neutral: 0.84,
-  calm: 0.82,
-  sad: 0.88,
-  tired: 0.84,
-  worried: 0.91,
-  happy: 0.91,
-  surprised: 0.93,
-  frustrated: 0.93,
+  neutral: 0.74,
+  calm: 0.72,
+  sad: 0.77,
+  tired: 0.74,
+  worried: 0.79,
+  happy: 0.79,
+  surprised: 0.81,
+  frustrated: 0.81,
 };
 const POCKET_FULL_TEMP_CAPS = {
-  neutral: 0.86,
-  calm: 0.82,
-  sad: 0.88,
-  tired: 0.86,
-  confused: 0.90,
-  worried: 0.92,
-  happy: 0.93,
-  enthused: 0.94,
-  surprised: 0.94,
-  frustrated: 0.94,
-  excited: 0.95,
-  anger: 0.95,
-  shout: 0.95,
+  neutral: 0.76,
+  calm: 0.73,
+  sad: 0.78,
+  tired: 0.76,
+  confused: 0.80,
+  worried: 0.81,
+  happy: 0.82,
+  enthused: 0.84,
+  surprised: 0.84,
+  frustrated: 0.84,
+  excited: 0.86,
+  anger: 0.86,
+  shout: 0.87,
 };
 function _normalizeVoice(engine, voice) {
   if (engine !== 'pocket') return voice || '';
@@ -552,31 +568,18 @@ function _pocketTemperaturePresetName() {
   return getPocketTuningPreset(requested, mode).name;
 }
 
-function _pocketQualityMode() {
-  const s = window.userProfile?.settings || {};
-  return (s.pocketQualityMode === 'quality' && s.enablePocketBenchmarkQuality === true)
-    ? 'quality'
-    : DEFAULT_POCKET_QUALITY_MODE;
-}
-
 function _pocketTuningConfig() {
   const mode = _emotionMode();
   const preset = getPocketTuningPreset(_pocketTemperaturePresetName(), mode);
-  const qualityMode = _pocketQualityMode();
-  const allowBenchmarkQuality = qualityMode === 'quality';
-  // Standard and mobile audiobook playback uses 1 LSD step so that the fused
-  // 4-frame decode block (flow_lm_decode_block4_int8 / flow_lm_unified_block4_int8)
-  // or WebGPU R3 pipeline can run. Multi-step LSD is compute-heavy and disables
-  // the 4-frame WASM block session, falling back to unaccelerated per-frame flow
-  // sampling that degrades RTF to ~2.0+ on phones. Benchmark quality (4 steps)
-  // is reserved exclusively for explicit desktop benchmark quality mode.
-  const lsdSteps = allowBenchmarkQuality ? (preset.lsdSteps || 4) : 1;
+  // One LSD step, always, so the fused 4-frame decode block
+  // (flow_lm_decode_block4_int8 / flow_lm_unified_block4_int8) and the WebGPU R3
+  // pipeline can run. The four-step "benchmark quality" alternative is gone --
+  // see DEFAULT_LSD_STEPS in tts_pronunciation_core.js for why it never earned
+  // its keep.
   return {
     presetName: preset.name,
     temperature: preset.temperature,
-    qualityMode,
-    lsdSteps,
-    allowBenchmarkQuality,
+    lsdSteps: DEFAULT_LSD_STEPS,
   };
 }
 
@@ -676,7 +679,15 @@ function _artifactCappedTemperature(baseTemperature, emotion, retryLevel = 0) {
   const chosen = Number.isFinite(intended)
     ? intended
     : (Number.isFinite(base) ? base : 0.82);
-  return Number(Math.max(0.5, Math.min(0.95, chosen - (retryLevel ? 0.06 : 0))).toFixed(2));
+  // Retries step DOWN the temperature, and they now step down per level rather
+  // than once. A paragraph the guard rejected was almost always sampled too hot
+  // — that is what produces the repeats and the distorted tails — so a retry at
+  // the same heat mostly re-rolls the dice at the same odds. By the third retry
+  // this is a markedly colder, duller, but reliably intelligible read, which is
+  // the right trade for a paragraph that has already failed twice.
+  const retries = Math.max(0, Number(retryLevel) || 0);
+  const cooled = chosen - Math.min(0.18, retries * 0.06);
+  return Number(Math.max(0.5, Math.min(0.95, cooled)).toFixed(2));
 }
 
 // The route carries the engine it was resolved FOR, because everything
@@ -781,9 +792,7 @@ function _buildPocketProsodyOpts(selectedVoice, overrides = {}) {
     emotionMode: _emotionMode(),
     temperaturePreset: tuning.presetName,
     temperature,
-    qualityMode: tuning.qualityMode,
     lsdSteps: tuning.lsdSteps,
-    allowBenchmarkQuality: tuning.allowBenchmarkQuality,
     artifactGuardVersion: POCKET_ARTIFACT_GUARD_VERSION,
     retryLevel,
     throughputMode: throughput,
@@ -823,7 +832,6 @@ function _prosodyCacheTag(engine, throughputOverride = null) {
     s.expressiveProsody !== false ? 'ex' : 'nex',
     `m${_emotionMode()}`,
     `tp${_pocketTemperaturePresetName()}`,
-    `q${tuning.qualityMode}`,
     `lsd${tuning.lsdSteps}`,
     (s.pausePunctuation === true ? 'pp' : 'np'),
     s.pauseTags !== false ? 'pt' : 'nt',
@@ -883,7 +891,6 @@ window.getPocketTtsRuntimeConfig = function getPocketTtsRuntimeConfig() {
     performancePolicyVersion: POCKET_PERFORMANCE_POLICY_VERSION,
     pauseProfileVersion: POCKET_PAUSE_PROFILE_VERSION,
     paragraphPauseSec: POCKET_PARAGRAPH_PAUSE_SEC,
-    qualityMode: tuning.qualityMode,
     lsdSteps: tuning.lsdSteps,
     pausePunctuation: s.pausePunctuation === true,
     pauseTags: s.pauseTags !== false,
@@ -1520,9 +1527,9 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v34',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v23',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v89',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v38',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v27',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v95',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -2921,6 +2928,128 @@ function _hasRepeatedAudioPattern(samples, sampleRate) {
   return false;
 }
 
+// ── Repeated-speech guard ────────────────────────────────────────────────────
+//
+// _hasRepeatedAudioPattern above catches a STUCK decoder: adjacent 0.25s windows
+// that are near sample-identical, i.e. a frozen frame buzzing. It cannot catch
+// the thing a reader actually reported ("words will be repeated every few
+// paragraphs"), because a repeated word is re-synthesized — same phonemes, new
+// samples, not phase-aligned, and usually shorter than the 1.25s of consecutive
+// identity that detector needs.
+//
+// The first version of this correlated the log-energy envelope alone, and the
+// false-positive tests killed it: an envelope is periodic at the SYLLABLE rate,
+// so evenly-paced speech correlates ~1.0 at every integer multiple of that
+// period. Energy cannot tell "taking me in, taking me in" from any six
+// equally-stressed syllables.
+//
+// What distinguishes them is SPECTRUM. A repeated word repeats its phonemes, so
+// its band-energy pattern repeats; different words at the same rhythm do not
+// (a vowel and a sibilant are nothing alike across bands). So the feature here
+// is a 4-band log-energy vector per frame, and the search looks for a lag where
+// the whole vector sequence matches — a coarse self-similarity matrix peak.
+//
+// Bands come from three cascaded one-pole low-passes differenced against each
+// other: O(n), no FFT, and enough resolution to separate voiced energy from
+// fricative energy, which is all this needs.
+const REPEAT_ENVELOPE_HOP_SEC = 0.02;
+const REPEAT_MIN_LAG_SEC = 0.36;
+const REPEAT_MAX_LAG_SEC = 1.60;
+const REPEAT_MIN_CYCLES = 3;
+const REPEAT_CORRELATION = 0.93;
+const REPEAT_BAND_HZ = [500, 1500, 4000];
+
+// Per-frame 4-band log energies, flattened as [frame0band0..3, frame1band0..3, ...].
+function _speechBandFeatures(samples, sampleRate) {
+  const hop = Math.max(1, Math.floor(sampleRate * REPEAT_ENVELOPE_HOP_SEC));
+  const frames = Math.floor(samples.length / hop);
+  if (frames < 8) return null;
+
+  const bands = REPEAT_BAND_HZ.length + 1;
+  const coefficients = REPEAT_BAND_HZ.map((hz) => {
+    const rc = 1 / (2 * Math.PI * hz);
+    return (1 / sampleRate) / (rc + 1 / sampleRate);
+  });
+
+  const features = new Float32Array(frames * bands);
+  const lp = new Float64Array(REPEAT_BAND_HZ.length);
+  const sums = new Float64Array(bands);
+
+  for (let f = 0; f < frames; f++) {
+    sums.fill(0);
+    const start = f * hop;
+    for (let i = 0; i < hop; i++) {
+      const x = samples[start + i] || 0;
+      let previous = 0;
+      for (let b = 0; b < REPEAT_BAND_HZ.length; b++) {
+        lp[b] += coefficients[b] * (x - lp[b]);
+        const value = lp[b] - previous;   // band-pass = difference of low-passes
+        sums[b] += value * value;
+        previous = lp[b];
+      }
+      const top = x - previous;           // everything above the last cutoff
+      sums[bands - 1] += top * top;
+    }
+    for (let b = 0; b < bands; b++) {
+      // Log energy: speech dynamics are multiplicative, and a linear scale lets
+      // one loud syllable dominate the correlation.
+      features[f * bands + b] = Math.log(Math.sqrt(sums[b] / hop) + 1e-6);
+    }
+  }
+  return { features, frames, bands };
+}
+
+function _hasRepeatedSpeechSegment(samples, sampleRate) {
+  const sr = Number(sampleRate) || 24000;
+  const built = _speechBandFeatures(samples, sr);
+  if (!built) return false;
+  const { features, frames, bands } = built;
+
+  // Zero-mean each band independently, so the correlation measures pattern
+  // rather than the voice's fixed spectral tilt (which is identical everywhere
+  // and would otherwise push every lag toward 1.0).
+  for (let b = 0; b < bands; b++) {
+    let mean = 0;
+    for (let f = 0; f < frames; f++) mean += features[f * bands + b];
+    mean /= frames;
+    for (let f = 0; f < frames; f++) features[f * bands + b] -= mean;
+  }
+
+  let variance = 0;
+  for (let i = 0; i < features.length; i++) variance += features[i] * features[i];
+  variance /= features.length;
+  // Silence or a constant tone has no pattern to match, and is already covered
+  // by the rms and silence checks above.
+  if (variance < 1e-4) return false;
+
+  const framesPerSec = 1 / REPEAT_ENVELOPE_HOP_SEC;
+  const minLag = Math.floor(REPEAT_MIN_LAG_SEC * framesPerSec);
+  const maxLag = Math.floor(REPEAT_MAX_LAG_SEC * framesPerSec);
+
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    // Require the pattern to actually repeat, not merely echo once.
+    if (lag * REPEAT_MIN_CYCLES > frames) break;
+    const overlap = frames - lag;
+    if (overlap < lag * (REPEAT_MIN_CYCLES - 1)) continue;
+
+    let dot = 0;
+    let energyA = 0;
+    let energyB = 0;
+    const span = overlap * bands;
+    for (let i = 0; i < span; i++) {
+      const a = features[i];
+      const b = features[i + lag * bands];
+      dot += a * b;
+      energyA += a * a;
+      energyB += b * b;
+    }
+    if (energyA < 1e-6 || energyB < 1e-6) continue;
+    if (dot / Math.sqrt(energyA * energyB) >= REPEAT_CORRELATION) return true;
+  }
+  return false;
+}
+window._hasRepeatedSpeechSegment = _hasRepeatedSpeechSegment;
+
 // ── Pitch-consistency guard ──────────────────────────────────────────────────
 // The flow-LM occasionally renders a chunk noticeably higher/lower pitched than
 // the rest of the same voice state ("the narrator suddenly went up an octave").
@@ -3050,6 +3179,10 @@ function _inspectPocketAudioQuality(result, text, assetVoice = null) {
     fatal = true;
     reasons.push('repeated pattern');
   }
+  if (!fatal && durationSec > 1.2 && _hasRepeatedSpeechSegment(samples, sampleRate)) {
+    fatal = true;
+    reasons.push('repeated speech');
+  }
 
   // Pitch consistency vs the rolling baseline for this exact voice asset.
   // Baselines are per {voice}_{emotion} so legitimate emotional pitch ranges
@@ -3062,15 +3195,19 @@ function _inspectPocketAudioQuality(result, text, assetVoice = null) {
     if (pitchHz && pitchBaseHz) {
       const deviation = Math.abs(pitchHz - pitchBaseHz) / pitchBaseHz;
       // Questions and emphatic delivery legitimately raise median pitch ~3-5
-      // semitones (26-42% deviation), so the old 0.28 (~4 semitone) FATAL cut
-      // rejected ordinary dialogue lines — e.g. a two-question paragraph — which,
-      // with deterministic seeding, then failed every identical retry and was
-      // permanently skipped, leaving a gap in the story. Only an EXTREME shift
-      // (>0.50, ~7 semitones) reliably indicates a genuine squeaky/garbled
-      // artifact, so reserve fatal rejection for that; treat the in-between band
-      // as a soft warning (accepted, not baseline-fed). Gibberish prevention
-      // leans on the proactive worker recycle, not this detector.
-      if (deviation > 0.50) {
+      // semitones (26-42% deviation), so the original 0.28 (~4 semitone) FATAL
+      // cut rejected ordinary dialogue lines.
+      //
+      // That got relaxed to 0.50 for a reason that no longer holds: back then
+      // seeding was deterministic, so a rejected paragraph failed every
+      // identical retry and was permanently SKIPPED, leaving a gap in the story.
+      // Retries now re-roll the noise and sample cooler, and an all-attempts
+      // failure keeps the least-bad render instead of dropping the paragraph —
+      // so a false positive costs one re-render, not a hole in the book. 0.40
+      // (~6 semitones) is back inside the range where the reported "high pitched
+      // and/or distorted" quotes actually live, while still clearing an
+      // emphatic question.
+      if (deviation > 0.40) {
         fatal = true;
         reasons.push('pitch shift'); // extreme (~7+ semitones) — genuine artifact
       } else if (deviation > 0.30) {
@@ -3100,6 +3237,49 @@ function _inspectPocketAudioQuality(result, text, assetVoice = null) {
       pitchBaseHz: pitchBaseHz ? Number(pitchBaseHz.toFixed(1)) : null,
     },
   };
+}
+
+// How many re-renders a fatally-flagged paragraph gets before we keep the
+// least-bad one. Each costs wall time, but each also re-rolls the noise and
+// samples cooler, so the odds of a clean take compound; three attempts after
+// the first is where the added latency stops buying much.
+const POCKET_MAX_QUALITY_RETRIES = 3;
+
+// How bad each rejection reason is, for choosing between attempts that all
+// failed. Ordered by how audible the defect is over a long listen: a looping or
+// garbled render is unlistenable, whereas an over-long chunk or mild clipping is
+// merely imperfect.
+const POCKET_QUALITY_REASON_WEIGHT = {
+  'empty output': 100,
+  'invalid samples': 90,
+  'repeated pattern': 80,
+  'repeated speech': 75,
+  'very low rms': 70,
+  'excessive silence': 60,
+  'pitch shift': 50,
+  'duration too short': 40,
+  'duration too long': 20,
+  'pitch drift': 15,
+  clipping: 10,
+};
+
+function _pocketQualityPenalty(quality) {
+  const reasons = quality?.reasons || [];
+  let penalty = 0;
+  for (const reason of reasons) {
+    penalty += POCKET_QUALITY_REASON_WEIGHT[String(reason)] ?? 25;
+  }
+  return penalty;
+}
+
+// The attempt a listener would least mind hearing. Renders with no audio can
+// never win, because there is nothing to play.
+function _leastBadPocketAttempt(attempts) {
+  const playable = attempts.filter((a) => a?.result?.audio?.length);
+  const pool = playable.length ? playable : attempts;
+  return pool.reduce((best, attempt) => (
+    _pocketQualityPenalty(attempt.quality) < _pocketQualityPenalty(best.quality) ? attempt : best
+  ), pool[0]);
 }
 
 function _selectReadyPocketWorker() {
@@ -3356,6 +3536,7 @@ window.generateChunk = async function(text, voice) {
     const first = await _generatePocketAttempt(null, text, route, 0);
     let accepted = first;
     let retryUsed = false;
+    let keptBestEffort = false;
 
     // Background caching skips the full re-render retry: a second pass doubles
     // wall time on phones. Empty/fatal still fails the paragraph so the loop
@@ -3394,24 +3575,59 @@ window.generateChunk = async function(text, voice) {
           from: route.engine, to: retryEngine, fromVoice: route.voiceId, toVoice: retryRoute.voiceId,
         });
       }
-      const retry = await _generatePocketAttempt(null, text, retryRoute, 1);
-      retryUsed = true;
-      // A paragraph that needed a re-render is drift evidence regardless of
-      // whether the second pass succeeded.
-      _recordProsodyOutcome(false);
-      if (!retry.quality.fatal) {
-        accepted = retry;
-      } else {
-        _logPocketQuality('ERROR', 'Pocket synth quality guard rejected both attempts', retry, {
+      // Escalating retries, then best-effort.
+      //
+      // This used to be a single retry that returned null when it also failed,
+      // which DROPPED the paragraph — the reader loses a piece of the story with
+      // no indication it happened. That is the worst possible outcome for an
+      // audiobook, and it is what forced the detection thresholds to be loosened
+      // until they stopped catching real artifacts.
+      //
+      // Each attempt now re-rolls the latent noise (seedSalt from retryLevel)
+      // AND samples cooler (_artifactCappedTemperature steps down per level), so
+      // attempts are genuinely independent rather than reproducing the same
+      // rejected take. If every attempt still fails we keep the least-bad one
+      // instead of dropping content: a slightly artifacted paragraph is
+      // recoverable by ear, a missing one is not.
+      const attempts = [first];
+      for (let level = 1; level <= POCKET_MAX_QUALITY_RETRIES; level++) {
+        const attempt = await _generatePocketAttempt(null, text, retryRoute, level);
+        attempts.push(attempt);
+        retryUsed = true;
+        if (!attempt.quality.fatal) break;
+        _logPocketQuality('WARN', `Pocket synth quality guard attempt ${level + 1} rejected`, attempt, {
           retryUsed: true,
+          firstReason: first.quality.reasons.join(', '),
+        });
+      }
+      // ONE drift record per paragraph, not one per attempt. The guard demotes
+      // after three failures inside its window, so recording per attempt would
+      // let a single stubborn paragraph flatten the whole session's prosody by
+      // itself — a retry loop is evidence about one paragraph, not three.
+      _recordProsodyOutcome(false);
+
+      const clean = attempts.find((a) => !a.quality.fatal);
+      if (clean) {
+        accepted = clean;
+      } else {
+        const best = _leastBadPocketAttempt(attempts);
+        _logPocketQuality('ERROR', 'Pocket synth quality guard rejected every attempt; keeping the least-bad render', best, {
+          retryUsed: true,
+          attempts: attempts.length,
           firstReason: first.quality.reasons.join(', '),
         });
         window._lastPocketQualityFailure = {
           text,
           voice,
-          reason: retry.quality.reasons.join(', '),
+          reason: best.quality.reasons.join(', '),
+          attempts: attempts.length,
+          keptBestEffort: true,
         };
-        return null;
+        // Only a render with no audio at all is unusable. Anything else is
+        // played: the story stays complete.
+        if (!best.result?.audio?.length) return null;
+        accepted = best;
+        keptBestEffort = true;
       }
     } else if (first.quality.fatal) {
       const reason = _isPocketThroughputCache()
@@ -3464,6 +3680,13 @@ window.generateChunk = async function(text, voice) {
       fadeInSec: _onsetFadeSecFor(route.voiceId),
     });
     window.Diagnostics?.log('INFO', 'Pocket WAV encoded', { wavEncodingMs: Math.round(performance.now() - wavStartedAt), bytes: wav.size });
+    // A render we only kept because every attempt failed is good enough to PLAY
+    // — the story stays complete — but it must not be written to the cache, or
+    // the defect becomes permanent for that paragraph and the reader hears it
+    // on every future listen. Leaving it uncached costs one re-render next time
+    // and gives the paragraph fresh noise to succeed with. saveAudioChunk
+    // enforces this centrally so a new cache-writing call site cannot miss it.
+    if (keptBestEffort) wav.pocketBestEffort = true;
     return wav;
   } catch (e) {
     console.error('Pocket worker inference failed:', e);

@@ -3,10 +3,9 @@ import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v48';
 import {
   DEFAULT_POCKET_PLAYBACK_SPEED,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
-  DEFAULT_POCKET_QUALITY_MODE,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v26';
-import { profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit } from './profile_merge.js?v=merge-v10';
+} from './tts_pronunciation_core.js?v=pron-v32';
+import { profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit } from './profile_merge.js?v=merge-v13';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
@@ -248,9 +247,6 @@ function normalizePocketVoiceSetting(profile) {
   if (!['stable', 'balanced', 'expressive'].includes(settings.pocketTemperaturePreset)) {
     settings.pocketTemperaturePreset = DEFAULT_POCKET_TEMPERATURE_PRESET;
   }
-  if (!['mobile', 'quality'].includes(settings.pocketQualityMode)) {
-    settings.pocketQualityMode = DEFAULT_POCKET_QUALITY_MODE;
-  }
   if (!['auto', 'wasm', 'webgpu'].includes(settings.pocketBackend)) {
     settings.pocketBackend = 'auto';
   }
@@ -464,7 +460,6 @@ function _defaultProfile() {
       pauseTags: true,
       voiceEmotionMode: "balanced",
       pocketTemperaturePreset: DEFAULT_POCKET_TEMPERATURE_PRESET,
-      pocketQualityMode: DEFAULT_POCKET_QUALITY_MODE,
       pocketBackend: "auto",
       pronunciationOverrides: [],
       theme: "slate",

@@ -93,7 +93,7 @@ test('the quality-guard retry re-resolves the route after the engine reload', as
 
   const reloadAt = generate.indexOf('await _loadPocketEngine();');
   const resolveAt = generate.indexOf('const retryEngine = _resolveActiveEngine();');
-  const attemptAt = generate.indexOf('_generatePocketAttempt(null, text, retryRoute, 1)');
+  const attemptAt = generate.indexOf('_generatePocketAttempt(null, text, retryRoute, level)');
   assert.ok(reloadAt !== -1 && resolveAt !== -1 && attemptAt !== -1);
   assert.ok(reloadAt < resolveAt, 'resolved AFTER the reload, or it learns nothing');
   assert.ok(resolveAt < attemptAt);

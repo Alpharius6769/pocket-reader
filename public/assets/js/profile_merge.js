@@ -28,7 +28,7 @@ const MAX_HISTORY_ITEMS = 250;
 
 const DEVICE_ONLY_SETTINGS = new Set([
   'maxWorkers', 'enableManualWorkers', 'enableNvidiaWebGPU', 'enableAMDWorkarounds', '_engineManuallySet',
-  'lowMemoryMode', 'cacheLimitMb', 'storageBudgetMb', 'pocketQualityMode',
+  'lowMemoryMode', 'cacheLimitMb', 'storageBudgetMb',
   'dataSaver', 'lastDeviceProfile', 'diagnosticLevel',
 ]);
 

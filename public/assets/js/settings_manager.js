@@ -1,7 +1,7 @@
 // settings_manager.js — Worker detection, GPU-aware advanced settings, diagnostics
 import {
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v26';
+} from './tts_pronunciation_core.js?v=pron-v32';
 import {
   POCKET_MAX_CACHE_WORKERS,
   readPocketDeviceBackendPreference,
@@ -16,7 +16,7 @@ import {
   coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v48';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '288';
+export const NARRATION_SERVICE_WORKER_VERSION = '298';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1723,7 +1723,7 @@ export async function refreshPerfPanel() {
   const pocketRows = pocketCfg ? `
     <li><b>Pocket Speed:</b> ${Number(pocketCfg.speed || 1).toFixed(2)}x</li>
     <li><b>Pocket Temp:</b> ${_escapeSettingsHtml(pocketCfg.temperaturePreset)} (${Number(pocketCfg.temperature).toFixed(2)})</li>
-    <li><b>Pocket Quality:</b> ${_escapeSettingsHtml(pocketCfg.qualityMode)} / LSD ${pocketCfg.lsdSteps}</li>
+    <li><b>Pocket LSD Steps:</b> ${pocketCfg.lsdSteps}</li>
     <li><b>Pronunciation:</b> ${_escapeSettingsHtml(pocketCfg.pronunciationRulesetVersion)} (${pocketCfg.builtInPronunciationRuleCount || '?'} built-in, ${pocketCfg.pronunciationOverrideCount || 0} custom)</li>
     <li><b>Pocket Cache:</b> ${_escapeSettingsHtml(pocketCfg.cacheVersion)} / ${_escapeSettingsHtml(pocketCfg.chunkingVersion)}</li>
     <li><b>Narration Backend:</b> ${_escapeSettingsHtml(pocketCfg.selectedBackend)} (${_escapeSettingsHtml(pocketCfg.modelPrecision)})</li>

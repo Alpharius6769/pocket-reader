@@ -40,7 +40,57 @@ test("ambiguous 'd contractions are still left native (deliberate)", () => {
 });
 
 test("pronunciation ruleset version bumped so cached audio re-renders", () => {
-  assert.equal(PRONUNCIATION_RULESET_VERSION, 'pron-v14');
+  assert.equal(PRONUNCIATION_RULESET_VERSION, 'pron-v15');
+});
+
+// ── Typographic apostrophes ─────────────────────────────────────────────────
+//
+// Every test above this line types a straight quote, which is exactly why the
+// bug survived: AO3, Wattpad and Google Docs all ship U+2019, so on real story
+// text NOT ONE of these rules fired. A reader on a 20-30 minute listen heard
+// "wasn't" come out as "was" — the flow-LM eliding a tail the expansion should
+// have removed. Assert the curly forms specifically.
+
+const CURLY = '’';
+
+test("contractions expand with a typographic apostrophe, not just a straight one", () => {
+  assert.equal(normalizeForPocketTts(`He wasn${CURLY}t listening`), 'He was not listening');
+  assert.equal(normalizeForPocketTts(`I${CURLY}m here`), 'I am here');
+  assert.equal(normalizeForPocketTts(`won${CURLY}t and didn${CURLY}t`), 'will not and did not');
+  assert.equal(normalizeForPocketTts(`It${CURLY}s been raining`), 'It has been raining');
+  assert.equal(normalizeForPocketTts(`I can${CURLY}t do it`), 'I can not do it');
+});
+
+test("every apostrophe variant reaching the phonemizer is a straight quote", () => {
+  // U+02BC turns up in EPUB conversions, the primes in bad PDF extractions.
+  for (const mark of ['’', '‘', 'ʼ', '′', '‵']) {
+    const out = normalizeForPocketTts(`the wolf${mark}s ear`);
+    assert.equal(out, "the wolf's ear", `U+${mark.codePointAt(0).toString(16).toUpperCase()} survived normalization`);
+  }
+});
+
+// ── Heteronyms the long listen caught ───────────────────────────────────────
+
+test("narrative past-tense 'read' is not spoken as the present tense", () => {
+  // Fiction is overwhelmingly past tense, and the default used to be "reed".
+  assert.match(normalizeForPocketTts('Annoyance, it read to him.'), /\bred\b/);
+  assert.match(normalizeForPocketTts('He read the letter twice.'), /\bred\b/);
+  assert.match(normalizeForPocketTts('She had read it already.'), /\bred\b/);
+  // The present reading still has to be claimable by an explicit marker.
+  assert.match(normalizeForPocketTts('I can read it to you.'), /\breed\b/);
+  assert.match(normalizeForPocketTts('He will read it aloud.'), /\breed\b/);
+  // Words that merely start with "read" are untouched.
+  assert.match(normalizeForPocketTts('She was ready to start reading.'), /ready to start reading/);
+});
+
+test("the 'desert' noun keeps its natural spelling; only the verb is respelled", () => {
+  // 'dezert' encoded no stress, so the model said de-ZERT — "dessert" — every
+  // time, including in the title of the story being listened to.
+  assert.match(normalizeForPocketTts("The Desert's Truth"), /Desert's/);
+  assert.match(normalizeForPocketTts('They crossed the desert at dawn.'), /\bdesert\b/);
+  assert.doesNotMatch(normalizeForPocketTts('They crossed the desert at dawn.'), /dezert/);
+  // The verb (to abandon) genuinely is de-ZERT and still gets help.
+  assert.match(normalizeForPocketTts('He would desert his post.'), /dizzert/);
 });
 
 // ── #3 — seed-perturb on a failed paragraph's retry (worker) ──────────────────

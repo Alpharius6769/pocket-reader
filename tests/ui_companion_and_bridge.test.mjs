@@ -310,3 +310,45 @@ test('100% cached stories display cached badges and fast reverification feedback
   assert.match(buf, /this\._scheduleLoop\(gen, 0\)/);
 });
 
+
+test('the speech fitter measures text and box in the same coordinate space', async () => {
+  // A reader reported the "ready for high-quality narration" message rendering
+  // outside its bubble. Reproduced in-browser: the overlay sat at 16.92px with
+  // 71.9px of text in a 72.5px inner box and NO clamped-text class, i.e. the
+  // fitter believed it fitted. It did not — the container was mid-rise at
+  // scale(0.9), and:
+  //
+  //   Range.getBoundingClientRect()  -> viewport px, carries the transform
+  //   clientWidth / clientHeight     -> layout px, does not
+  //
+  // so 0.9x text was being compared against a 1.0x box. Unscaled, the text was
+  // 79.9px in a 72.5px box. Nothing corrected it afterwards either: a transform
+  // does not resize the layout box, so the ResizeObserver never fires once the
+  // animation settles. Every appearance runs `scale: [0.9, 1]`, so this was on
+  // the path every single time, and it bit hardest on the longest messages.
+  const source = await read('public/assets/js/virtue_controller.js');
+
+  // The rise animation is what guarantees a transform during fitting.
+  assert.match(source, /scale: \[0\.9, 1\]/,
+    'the rise animation is the transform this normalization exists for');
+
+  const overflows = source.slice(
+    source.indexOf('const overflows = ('),
+    source.indexOf('const applySize = ('),
+  );
+  assert.ok(overflows.length > 0, 'the overflow probe must still be findable');
+  assert.match(overflows, /scale\.x/, 'width must be normalized out of viewport space');
+  assert.match(overflows, /scale\.y/, 'height must be normalized out of viewport space');
+  assert.doesNotMatch(overflows, /text\.width > innerWidth/,
+    'a raw viewport-space comparison against layout-space dimensions is the bug');
+
+  // The scale helper has to survive a zero-sized or untransformed overlay
+  // rather than dividing by zero and reporting NaN as "fits".
+  const scaleHelper = source.slice(
+    source.indexOf('const overlayScale = ('),
+    source.indexOf('const overflows = ('),
+  );
+  assert.match(scaleHelper, /Number\.isFinite/);
+  assert.match(scaleHelper, /\? x : 1/);
+  assert.match(scaleHelper, /\? y : 1/);
+});

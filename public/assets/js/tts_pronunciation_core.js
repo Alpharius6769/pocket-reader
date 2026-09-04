@@ -6,22 +6,38 @@
 // not change when Kokoro was given access to them (keepClausePunctuation
 // defaults off, so Pocket's output is byte-identical). Bumping it would
 // re-render every cached Pocket paragraph for no audible difference.
-export const PRONUNCIATION_RULESET_VERSION = 'pron-v14'; // v14: Mulberry32 PRNG & voice seed consistency
+export const PRONUNCIATION_RULESET_VERSION = 'pron-v15'; // v15: typographic apostrophes, past-tense "read", desert respelling dropped
 export const DEFAULT_POCKET_PLAYBACK_SPEED = 1.0;
 export const DEFAULT_POCKET_TEMPERATURE_PRESET = 'balanced';
-export const DEFAULT_POCKET_QUALITY_MODE = 'mobile';
 // Folded into every Pocket latent-noise seed so cache jobs and live playback
 // share one speaker identity. An explicit settings.pocketVoiceSeed still wins.
 export const DEFAULT_POCKET_VOICE_SEED = 'pr-voice-1';
 
+// The step count is a hard runtime constraint, not a taste knob. The fused
+// 4-frame decode block (flow_lm_decode_block4_int8 / flow_lm_unified_block4_int8)
+// and the WebGPU R3 pipeline inline the one-step flow operator into the ONNX
+// graph, so they run ONLY at 1 step; anything higher silently drops to
+// unaccelerated per-frame AR decode and costs ~3x RTF.
+//
+// There is no second value. A four-step "benchmark quality" path existed here
+// and was deleted: it could not run on WebGPU at all (the R3 pipeline throws),
+// it disabled the decode block everywhere else, and the setting that would have
+// enabled it had no writer in the app, so it never ran in production. Quality on
+// this engine comes from temperature and segmentation, not from LSD steps.
+export const DEFAULT_LSD_STEPS = 1;
+
+// Sampling temperature per preset. Stability outranks expressiveness on Pocket:
+// this is a zero-shot flow-LM, and temperature is what makes a long listen come
+// apart -- repeated words, a pitch that climbs mid-quote, a distorted tail.
+// These sit deliberately below the 0.86/0.93 that shipped before, while keeping
+// real distance between the three so the setting still does something.
 export const POCKET_TTS_TUNING_PRESETS = Object.freeze({
-  stable: { temperature: 0.70, lsdSteps: 1, label: 'Stable audiobook' },
-  balanced: { temperature: 0.86, lsdSteps: 1, label: 'Balanced audiobook' },
-  expressive: { temperature: 0.93, lsdSteps: 1, label: 'Full expression' },
-  quality: { temperature: 0.86, lsdSteps: 4, label: 'Benchmark quality' },
+  stable: { temperature: 0.68, lsdSteps: DEFAULT_LSD_STEPS, label: 'Stable audiobook' },
+  balanced: { temperature: 0.76, lsdSteps: DEFAULT_LSD_STEPS, label: 'Balanced audiobook' },
+  expressive: { temperature: 0.84, lsdSteps: DEFAULT_LSD_STEPS, label: 'Full expression' },
 });
 
-const PRESET_RANK = Object.freeze({ stable: 0, balanced: 1, quality: 1, expressive: 2 });
+const PRESET_RANK = Object.freeze({ stable: 0, balanced: 1, expressive: 2 });
 
 const MAX_USER_OVERRIDES = 200;
 
@@ -68,7 +84,11 @@ const STRESS_HETERONYMS = Object.freeze([
   ['conduct', 'connduct', 'conduct'], ['conflict', 'confflict', 'conflict'], ['console', 'console', 'consoal'],
   ['contest', 'contest', 'cuntest'], ['contract', 'conntract', 'contract'], ['contrast', 'contrast', 'cuntrast'],
   ['convert', 'convert', 'cunvert'], ['decrease', 'decrease', 'dicrease'], ['defect', 'defect', 'difect'],
-  ['desert', 'dezert', 'dizzert'], ['discount', 'discount', 'dis count'], ['escort', 'escort', 'iscort'],
+  // 'desert' the noun keeps its natural spelling. The old 'dezert' respelling
+  // did not encode stress, so the model read it as de-ZERT -- the reader heard
+  // "dessert" every time, including in the title of the story they were on. The
+  // verb reading (to abandon) genuinely is de-ZERT and still gets respelled.
+  ['desert', 'desert', 'dizzert'], ['discount', 'discount', 'dis count'], ['escort', 'escort', 'iscort'],
   ['extract', 'exxtract', 'extract'], ['finance', 'finance', 'fy nance'], ['frequent', 'frequent', 'free kwent'],
   ['impact', 'impackt', 'impact'], ['object', 'obbject', 'ubject'], ['permit', 'permit', 'permitt'],
   ['present', 'prezzent', 'prezent'], ['produce', 'prodoos', 'produce'], ['progress', 'progress', 'prugress'],
@@ -200,8 +220,15 @@ function applyWildcardHeteronyms(text) {
     // occasionally wrong but natural pronunciation. Do not reintroduce spelling
     // hacks for these; per-word fixes belong in the user's pronunciation
     // overrides where they can be auditioned individually.
+    // "read" defaulted to the present tense ("reed"), which is the wrong half of
+    // the ambiguity for this app: narrative fiction is overwhelmingly past tense,
+    // so "he read the letter" and "Annoyance, it read to him" were both spoken as
+    // "reed". Past is now the default and the present reading is claimed by an
+    // explicit infinitive/modal ("to read", "can read", "will read") or by the
+    // past-participle context, which still resolves to "red" on its own.
     .replace(new RegExp(`(${pastContext})read\\b`, 'gi'), (match, p1) => p1 + match.slice(p1.length).replace(/read$/i, 'red'))
-    .replace(/\b(r)ead\b/gi, (match, r) => (r === 'R' ? 'R' : 'r') + 'eed')
+    .replace(new RegExp(`(${verbContext})read\\b`, 'gi'), (match, p1) => p1 + match.slice(p1.length).replace(/read$/i, 'reed'))
+    .replace(/\b(r)ead\b/gi, (match, r) => (r === 'R' ? 'R' : 'r') + 'ed')
     .replace(/\b(made of|heavy|pipe|pencil)(\s+)lead\b/gi, '$1$2led')
     .replace(/\b(l)ead(\s+)(pipe|pencil|weight|bullet|shot|paint|apron|lining)\b/gi, (match, l, s, rest) => `${l === 'L' ? 'Led' : 'led'}${s}${rest}`)
     .replace(/\b(l)ead\b/gi, (match, l) => (l === 'L' ? 'L' : 'l') + 'eed')
@@ -268,13 +295,12 @@ export function getPocketTuningPreset(name, emotionMode = 'neutral') {
   // The emotion profile is the user's expressiveness control. This argument
   // used to be ignored, so Settings → Expressive still sampled at balanced
   // 0.70 and the voices stayed flat. Escalate the preset to match the
-  // profile; never de-escalate an explicit hotter choice, and leave the
-  // quality LSD-4 path on its own temperature.
+  // profile; never de-escalate an explicit hotter choice.
   const mode = emotionMode === 'full' ? 'expressive' : String(emotionMode || 'neutral');
   const modeKey = mode === 'expressive' ? 'expressive'
     : mode === 'balanced' ? 'balanced'
     : null;
-  if (modeKey && key !== 'quality' && (PRESET_RANK[key] ?? 1) < (PRESET_RANK[modeKey] ?? 1)) {
+  if (modeKey && (PRESET_RANK[key] ?? 1) < (PRESET_RANK[modeKey] ?? 1)) {
     key = modeKey;
   }
 
@@ -308,6 +334,21 @@ export function normalizeForPocketTts(text, settings = {}) {
   const keepClausePunctuation = !Array.isArray(settings) && settings.keepClausePunctuation === true;
   const protectedText = protectSegments(text);
   let out = protectedText.text;
+
+  // Typographic apostrophes, BEFORE anything that matches one.
+  //
+  // Every rule below writes U+0027 ('), and web fiction ships U+2019 (’) --
+  // AO3, Wattpad and Google Docs all curl quotes by default. So on real story
+  // text the entire CONTRACTIONS table silently matched nothing: "wasn’t" was
+  // never expanded to "was not", and the flow-LM elided the unstressed tail
+  // until it sounded like "was". Same for every possessive the heteronym and
+  // plural rules key on. Fifty-odd rules that only ever fired on hand-typed
+  // straight quotes.
+  //
+  // U+02BC (modifier letter apostrophe) shows up in EPUB conversions; the
+  // primes (U+2032/U+2035) show up in badly-converted PDFs. All of them are an
+  // apostrophe as far as the phonemizer should be concerned.
+  out = out.replace(/[’‘ʼ′‵]/g, "'");
 
   for (const [pattern, expansion] of CONTRACTIONS) {
     out = out.replace(pattern, expansion);
@@ -351,7 +392,6 @@ if (typeof window !== 'undefined') {
   window.PRONUNCIATION_RULESET_VERSION = PRONUNCIATION_RULESET_VERSION;
   window.DEFAULT_POCKET_PLAYBACK_SPEED = DEFAULT_POCKET_PLAYBACK_SPEED;
   window.DEFAULT_POCKET_TEMPERATURE_PRESET = DEFAULT_POCKET_TEMPERATURE_PRESET;
-  window.DEFAULT_POCKET_QUALITY_MODE = DEFAULT_POCKET_QUALITY_MODE;
   window.DEFAULT_POCKET_VOICE_SEED = DEFAULT_POCKET_VOICE_SEED;
   window.POCKET_TTS_TUNING_PRESETS = POCKET_TTS_TUNING_PRESETS;
   window.getPocketTuningPreset = getPocketTuningPreset;

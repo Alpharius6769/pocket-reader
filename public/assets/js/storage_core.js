@@ -635,6 +635,12 @@ export async function saveAudioChunk(storyTitle, chapIdx, paraIdx, engine, voice
   if (!(audioBlob instanceof Blob) || audioBlob.size < 100) {
     throw new Error('Refusing to cache an invalid audio blob.');
   }
+  // A best-effort render is one the quality guard rejected on every attempt and
+  // we kept anyway so the reader does not lose the paragraph. It is fine to
+  // play once; caching it would make the defect permanent for that paragraph on
+  // every future listen. Silently skipped rather than thrown, because the
+  // caller's job (play it) succeeded — only persistence is declined.
+  if (audioBlob.pocketBestEffort) return null;
   const db = await initDB();
 
   _saveCount++;

@@ -15,7 +15,7 @@
    ONE 256-float vector per voice. Threading that through the live engine as a
    conditional would risk the tier that already works to save duplication.
 */
-import { normalizeForPocketTts } from './tts_pronunciation_core.js?v=pron-v26';
+import { normalizeForPocketTts } from './tts_pronunciation_core.js?v=pron-v32';
 
 self.postMessage({ type: 'status', status: 'Worker Thread Started', state: 'idle' });
 
