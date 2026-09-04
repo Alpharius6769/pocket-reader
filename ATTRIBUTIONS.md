@@ -56,8 +56,10 @@ Last reviewed: 2026-09-04.
   are indicated. This file and `NOTICE` carry that attribution; the exports are
   listed as modifications below.
 - Modifications made by this project: conversion of the upstream weights to
-  ONNX, dynamic INT8 quantization, an FP16 variant, a fused four-frame decode
-  block, and ORT-format repackaging.
+  ONNX, dynamic INT8 quantization (per-tensor originally, and a per-channel
+  re-quantization of the fused decode block built with
+  `tools/rebuild_pocket_block_int8.py`), an FP16 variant, a fused four-frame
+  decode block, and ORT-format repackaging.
 - Distribution note: these large model/voice assets are not part of this source
   tree. Attribution obligations travel with the bucket assets, so keep this
   entry in sync with what is actually served.

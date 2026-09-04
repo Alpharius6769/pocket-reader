@@ -393,7 +393,27 @@ let mimiDecoderSession = null;
 // per-frame path silently, so the runtime works before/without the B2 upload.
 let flowLmWasmBlockSession = null;
 let wasmBlockBosSequence = null;
-const WASM_BLOCK_FILE = 'flow_lm_decode_block4_int8.onnx';
+// Re-quantized decode block, PER-CHANNEL rather than per-tensor.
+//
+// The original export gives every weight matrix a single scalar scale, which on
+// this graph scores 9.89 dB latent SNR against the FP16 build of the same model.
+// The latents drive the vocoder, so that error is upstream of everything -- it
+// is the largest single quality loss in the pipeline. Rebuilt from the FP16
+// master with per-channel weight scales it scores 23.31 dB, a 4.7x reduction in
+// noise power, and the EOS logits go from 21.46 to 30.42 dB.
+//
+// It costs nothing anywhere. Measured in ORT Web WASM, cross-origin isolated,
+// 4 threads: loads in 465 ms against 848 ms, runs 46.30 ms/block against 47.16,
+// and the file is 86.4 MB against 88.2 MB.
+//
+// (Per-channel scales are also why the earlier attempts failed to load: ORT's
+// quantizer rewrites Gemm to MatMul itself and gets it wrong on this graph, so
+// the 92 Gemm nodes are folded to MatMul + Add before quantizing. See the
+// maintainer tool for the exact recipe.)
+const WASM_BLOCK_FILE = 'flow_lm_decode_block4_int8_pc.onnx';
+// The pre-rebuild asset. Kept as a fetch fallback so a bundle that does not
+// carry the new file (any non-English language bundle) still finds a block.
+const WASM_BLOCK_LEGACY_FILE = 'flow_lm_decode_block4_int8.onnx';
 const WASM_BLOCK_ORT_FILE = 'flow_lm_decode_block4_int8.ort';
 const WASM_UNIFIED_BLOCK_FILE = 'flow_lm_unified_block4_int8.onnx';
 const WASM_UNIFIED_BLOCK_ORT_FILE = 'flow_lm_unified_block4_int8.ort';
@@ -2578,9 +2598,12 @@ async function loadBundle(language, {
     }
   } else if (currentBackend === 'wasm' && !iosWebKit && resolveWasmThreadCount() >= 2) {
     try {
-      const blockResponse = await fetchFirstAvailable(
-        wasmModelPaths(language, wasmBlockFilename(false)),
-      );
+      const blockResponse = await fetchFirstAvailable([
+        ...wasmModelPaths(language, wasmBlockFilename(false)),
+        // Fall back to the pre-rebuild asset rather than dropping to the
+        // per-frame path, which is far slower than either block.
+        ...(useOrtFormatWasm ? [] : wasmModelPaths(language, WASM_BLOCK_LEGACY_FILE)),
+      ]);
       const blockBuffer = await blockResponse.arrayBuffer();
       const bosResponse = await fetchFirstAvailable([
         proxifyUrl(bundlePath(language, WASM_BLOCK_BOS_FILE, 'wasm')),

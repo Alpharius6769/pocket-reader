@@ -357,7 +357,7 @@ test('switching the vocoder busts the narration cache', async () => {
   const audio = await readFile(
     new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
   );
-  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv21'/);
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv22'/);
 });
 
 test('the Pocket TTS upstream license is recorded with its attribution terms', async () => {
@@ -370,4 +370,55 @@ test('the Pocket TTS upstream license is recorded with its attribution terms', a
   assert.match(attributions, /Modifications made by this project/);
   const notice = await readFile(new URL('../NOTICE', import.meta.url), 'utf8');
   assert.match(notice, /Pocket TTS is `kyutai\/pocket-tts`, licensed CC BY 4\.0/);
+});
+
+// ── Rebuilt decode block ────────────────────────────────────────────────────
+
+test('the WASM decode block is the per-channel rebuild, with a fallback', async () => {
+  // The original export gives every weight matrix ONE scalar scale and scores
+  // 9.89 dB latent SNR against the FP16 build of the same weights. The latents
+  // drive the vocoder, so that error is upstream of everything. Per-channel
+  // scales score 23.31 dB in a file that is smaller and loads twice as fast.
+  const worker = await readFile(
+    new URL('../public/assets/js/pocket_worker.js', import.meta.url), 'utf8',
+  );
+  assert.match(worker, /const WASM_BLOCK_FILE = 'flow_lm_decode_block4_int8_pc\.onnx';/);
+  assert.match(worker, /const WASM_BLOCK_LEGACY_FILE = 'flow_lm_decode_block4_int8\.onnx';/);
+
+  // A bundle without the rebuilt file must find the old block rather than
+  // dropping to the per-frame path, which is far slower than either.
+  // An earlier bosResponse fetch sits above this one in the file, so the end of
+  // the slice has to be searched for AFTER the block fetch or it comes out empty.
+  const blockAt = worker.indexOf('const blockResponse = await fetchFirstAvailable([');
+  const fetchBlock = worker.slice(
+    blockAt,
+    worker.indexOf('const bosResponse = await fetchFirstAvailable([', blockAt),
+  );
+  assert.ok(fetchBlock.length > 0, 'the block fetch must still be findable');
+  assert.match(fetchBlock, /wasmModelPaths\(language, wasmBlockFilename\(false\)\)/);
+  assert.match(fetchBlock, /wasmModelPaths\(language, WASM_BLOCK_LEGACY_FILE\)/);
+  // The .ort bundle has no rebuilt file, so it must not chase a legacy .onnx.
+  assert.match(fetchBlock, /useOrtFormatWasm \? \[\] :/);
+});
+
+test('new latents mean a new cache generation', async () => {
+  const audio = await readFile(
+    new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
+  );
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv22'/);
+});
+
+test('the decode-block rebuild is reproducible from a checked-in tool', async () => {
+  // A model asset nobody can rebuild is a model asset nobody can fix. The
+  // recipe, the Gemm workaround and the rejected variants live in the tool.
+  const tool = await readFile(
+    new URL('../tools/rebuild_pocket_block_int8.py', import.meta.url), 'utf8',
+  );
+  assert.match(tool, /per_channel=True/);
+  assert.match(tool, /def fold_gemms/);
+  assert.match(tool, /def score/);
+  // The measurements that justify the change have to travel with it.
+  assert.match(tool, /9\.89 dB/);
+  assert.match(tool, /23\.31 dB/);
+  assert.match(tool, /Variants that were measured and rejected/);
 });
