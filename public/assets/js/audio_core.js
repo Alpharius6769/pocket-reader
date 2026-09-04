@@ -1546,8 +1546,8 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v41',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v30',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v44',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v33',
           pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v117',
         };
         const workerScript = new URL(

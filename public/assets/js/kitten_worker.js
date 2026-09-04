@@ -72,6 +72,9 @@ let phonemize = null;
 let vocab = null;
 let isReady = false;
 let cancelRequested = false;
+// Filled by the last generate() and shipped with its result. See the note in
+// generate() for why a bare millisecond count was not enough.
+let lastGenerateTelemetry = null;
 const voiceCache = new Map();
 
 function log(level, message) {
@@ -581,6 +584,14 @@ async function generate(text, voiceId, opts = {}) {
   const { chunks, chunkMarks } = packUnitsIntoChunks(units, unitMarks);
   if (!chunks.length) return new Float32Array(0);
   let rendered = 0;
+  // A render reported only its wall-clock milliseconds, so a field report of
+  // "bad caching performance" carried no way to tell a slow device from a long
+  // paragraph, a single-threaded session from a threaded one, or work from
+  // waiting. An iPhone 13 Pro Max reporting "105358ms" for 274 characters could
+  // not be analysed at all: every field the Pocket pipeline fills -- frames,
+  // realTimeFactor, threads, backend -- is null for this engine.
+  const startedAt = (self.performance || Date).now();
+  let inferenceMs = 0;
   for (let index = 0; index < chunks.length; index += 1) {
     // Cancelling must FAIL the request, not resolve it short. Breaking out and
     // returning what had been produced so far reported generate_done with
@@ -588,7 +599,10 @@ async function generate(text, voiceId, opts = {}) {
     // caches it, so a paragraph interrupted once stays half-spoken forever.
     if (cancelRequested) throw new Error('Narration cancelled.');
     const mark = chunkMarks[index] || '';
+    const chunkStartedAt = (self.performance || Date).now();
     const audio = await runChunk(chunks[index], voiceData, speedForMark(speed, mark, expressive));
+    // Model time only, so pauses and merging do not read as slow inference.
+    inferenceMs += (self.performance || Date).now() - chunkStartedAt;
     pieces.push(audio);
     total += audio.length;
     rendered += 1;
@@ -602,6 +616,24 @@ async function generate(text, voiceId, opts = {}) {
     if (gap) { pieces.push(gap); total += gap.length; }
   }
   if (rendered !== chunks.length) throw new Error('Narration ended before every chunk was rendered.');
+  lastGenerateTelemetry = {
+    totalMs: Math.round((self.performance || Date).now() - startedAt),
+    inferenceMs: Math.round(inferenceMs),
+    audioDurationSec: Number((total / SAMPLE_RATE).toFixed(2)),
+    // The number that makes renders comparable across devices and paragraph
+    // lengths. Above 1.0 means synthesis is slower than listening, so caching
+    // can never build a lead and playback cannot help but stall.
+    realTimeFactor: total > 0
+      ? Number((((self.performance || Date).now() - startedAt) / (total / SAMPLE_RATE) / 1000).toFixed(3))
+      : null,
+    chunks: chunks.length,
+    phonemeChars: units.reduce((sum, unit) => sum + unit.length, 0),
+    chunkTokenCap: chunkTokenLimit(),
+    wasmThreads: ort?.env?.wasm?.numThreads || 1,
+    isolated: self.crossOriginIsolated === true,
+    speed,
+    expressive,
+  };
   if (pieces.length === 1) return pieces[0];
   const merged = new Float32Array(total);
   let offset = 0;
@@ -680,9 +712,16 @@ self.onmessage = async (event) => {
   if (type === 'generate') {
     cancelRequested = false;
     try {
+      lastGenerateTelemetry = null;
       const audio = await generate(data.text, data.voice, data.opts || {});
       self.postMessage(
-        { type: 'generate_done', id: data.id, audio, sampleRate: SAMPLE_RATE },
+        {
+          type: 'generate_done',
+          id: data.id,
+          audio,
+          sampleRate: SAMPLE_RATE,
+          telemetry: lastGenerateTelemetry,
+        },
         [audio.buffer],
       );
     } catch (error) {

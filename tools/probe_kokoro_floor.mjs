@@ -77,7 +77,7 @@ try {
     const measure = async () => { try { globalThis.gc?.(); } catch (_) {} return MB((await performance.measureUserAgentSpecificMemory()).bytes); };
     const out = [];
     for (const [cap, constrained] of configs) {
-      const worker = new Worker(`${base}/assets/js/kokoro_worker.js?v=kokoro-v41`, { type: 'module' });
+      const worker = new Worker(`${base}/assets/js/kokoro_worker.js?v=kokoro-v44`, { type: 'module' });
       const waitFor = (types, ms) => new Promise((s) => {
         const t = setTimeout(() => s({ type: 'timeout' }), ms);
         const h = (e) => { if (!types.includes(e.data?.type)) return; clearTimeout(t); worker.removeEventListener('message', h); s(e.data); };

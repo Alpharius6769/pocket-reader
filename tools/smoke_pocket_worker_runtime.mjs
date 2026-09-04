@@ -122,7 +122,7 @@ try {
   if (useLiveAssets) {
     await page.goto(`${productionOrigin}/__pocket_worker_smoke__?bootstrap=1`, { waitUntil: 'load' });
     await page.evaluate(async () => {
-      await navigator.serviceWorker.register('/sw.js?v=326', { scope: '/' });
+      await navigator.serviceWorker.register('/sw.js?v=328', { scope: '/' });
       await navigator.serviceWorker.ready;
       if (!navigator.serviceWorker.controller) {
         await new Promise((resolveController, rejectController) => {
