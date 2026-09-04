@@ -27,7 +27,7 @@ test('interrupt-retry skip also advances progress', async () => {
 
 test('a playback yield is counted and requeued separately from a recycle', async () => {
   const buf = await read('public/assets/js/buffer_manager.js');
-  assert.match(buf, /const yielded = err\?\.message === 'Pocket cache yielded to playback';/);
+  assert.match(buf, /const yielded = err\?\.message === 'Narration cache yielded to playback';/);
   assert.match(buf, /const counter = yielded \? 'yieldRetries' : 'resetRetries';/);
   assert.match(buf, /const limit = yielded \? 40 : 6;/);
   // Requeued at the BACK, or it just loses the race to the next playback render.
@@ -60,8 +60,13 @@ test('the Pocket worker prefers a priority job and preempts a cache render', asy
 test('the yield message is spelled identically on both sides', async () => {
   const worker = await read('public/assets/js/pocket_worker.js');
   const buf = await read('public/assets/js/buffer_manager.js');
-  assert.match(worker, /const POCKET_YIELDED_TO_PLAYBACK = 'Pocket cache yielded to playback';/);
-  assert.ok(buf.includes("'Pocket cache yielded to playback'"));
+  assert.match(worker, /const POCKET_YIELDED_TO_PLAYBACK = 'Narration cache yielded to playback';/);
+  assert.ok(buf.includes("'Narration cache yielded to playback'"));
+  // Three workers emit it now, so the string must not name one of them.
+  for (const w of ["kokoro_worker.js", "kitten_worker.js"]) {
+    const styled = await read(`public/assets/js/${w}`);
+    assert.match(styled, /const YIELDED_TO_PLAYBACK = 'Narration cache yielded to playback';/);
+  }
 });
 
 test('skippedCount is initialised and reset with the other counters', async () => {

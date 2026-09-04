@@ -492,7 +492,7 @@ let isGenerating = false;
 let cancelRequested = false;
 // Recognised by buffer_manager's cache loop, which requeues the paragraph and
 // carries on. Keep the two spellings in step.
-const POCKET_YIELDED_TO_PLAYBACK = 'Pocket cache yielded to playback';
+const POCKET_YIELDED_TO_PLAYBACK = 'Narration cache yielded to playback';
 let isReady = false;
 
 function generationShouldContinue() {

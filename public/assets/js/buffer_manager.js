@@ -1796,7 +1796,7 @@ export const BufferManager = {
           // paragraph got rendered instead, whereas a recycle interruption is a
           // symptom. Sharing the recycle budget would let ~6 seconds of normal
           // listening permanently skip a paragraph that was never in trouble.
-          const yielded = err?.message === 'Pocket cache yielded to playback';
+          const yielded = err?.message === 'Narration cache yielded to playback';
           if (yielded
               || err?.message === 'Pocket backend reset'
               || err?.message === 'Pocket memory-safe cache session released') {

@@ -75,6 +75,84 @@ let cancelRequested = false;
 // Filled by the last generate() and shipped with its result. See the note in
 // generate() for why a bare millisecond count was not enough.
 let lastGenerateTelemetry = null;
+
+// ── One render at a time, playback first ───────────────────────────────────
+//
+// This worker had NO mutual exclusion and no queue: `generate` ran straight out
+// of onmessage, so two requests arriving together both started, on one ONNX
+// session and one WASM heap. Their tensors were allocated at the same time and
+// each one's wall clock included the other's work, which is what a field log
+// from an iPhone 13 Pro Max looks like -- 199 characters in 18.4s next to 201
+// characters in 73.2s, a 4x spread at the same length. It also let the second
+// request reset cancelRequested out from under the first.
+//
+// Pocket grew a queue for exactly this and it was never brought across. Same
+// shape here: a live playback render (isPriority, someone is waiting on it now)
+// jumps ahead of queued cache work, and stands a cache render DOWN if one is
+// already running. generate() polls cancelRequested per chunk and throws, so a
+// preempted render discards its partial audio rather than caching a fragment of
+// a paragraph; the buffer manager knows this message and requeues the paragraph.
+const YIELDED_TO_PLAYBACK = 'Narration cache yielded to playback';
+let isGenerating = false;
+let generationQueue = [];
+let activeGenerationJobId = null;
+let activeGenerationIsPriority = false;
+let preemptedJobId = null;
+
+function enqueueGeneration(job) {
+  generationQueue.push(job);
+  if (job.isPriority && isGenerating && !activeGenerationIsPriority && !cancelRequested) {
+    preemptedJobId = activeGenerationJobId;
+    cancelRequested = true;
+  }
+  processGenerationQueue();
+}
+
+function drainGenerationQueue(reason) {
+  // Settle every queued job. The main thread parks a promise per dispatched id
+  // and would otherwise wait out its full timeout for work that will not run.
+  generationQueue.splice(0).forEach((job) => {
+    self.postMessage({ type: 'generate_error', id: job.jobId, error: reason });
+  });
+}
+
+async function processGenerationQueue() {
+  if (isGenerating || !generationQueue.length) return;
+  const next = generationQueue.findIndex((job) => job.isPriority);
+  const task = generationQueue.splice(next === -1 ? 0 : next, 1)[0];
+  isGenerating = true;
+  cancelRequested = false;
+  activeGenerationJobId = task.jobId;
+  activeGenerationIsPriority = task.isPriority === true;
+  try {
+    lastGenerateTelemetry = null;
+    const audio = await generate(task.text, task.voice, task.opts || {});
+    self.postMessage(
+      {
+        type: 'generate_done',
+        id: task.jobId,
+        audio,
+        sampleRate: SAMPLE_RATE,
+        telemetry: lastGenerateTelemetry,
+      },
+      [audio.buffer],
+    );
+  } catch (error) {
+    const preempted = preemptedJobId != null && preemptedJobId === task.jobId;
+    self.postMessage({
+      type: 'generate_error',
+      id: task.jobId,
+      error: preempted ? YIELDED_TO_PLAYBACK : (error?.message || String(error)),
+    });
+  } finally {
+    isGenerating = false;
+    cancelRequested = false;
+    activeGenerationJobId = null;
+    activeGenerationIsPriority = false;
+    preemptedJobId = null;
+    setTimeout(processGenerationQueue, 0);
+  }
+}
 const voiceCache = new Map();
 
 function log(level, message) {
@@ -705,36 +783,37 @@ self.onmessage = async (event) => {
   }
 
   if (type === 'cancel_generation') {
+    // Queued-but-unstarted jobs are dropped, so settle them here; the running
+    // one unwinds through the cancelRequested poll in generate().
+    const targetId = data.id;
+    if (targetId == null) drainGenerationQueue('Generation was cancelled.');
+    else {
+      const dropped = generationQueue.filter((job) => job.jobId === targetId);
+      generationQueue = generationQueue.filter((job) => job.jobId !== targetId);
+      dropped.forEach((job) => self.postMessage({
+        type: 'generate_error', id: job.jobId, error: 'Generation was cancelled.',
+      }));
+    }
     cancelRequested = true;
     return;
   }
 
   if (type === 'generate') {
-    cancelRequested = false;
-    try {
-      lastGenerateTelemetry = null;
-      const audio = await generate(data.text, data.voice, data.opts || {});
-      self.postMessage(
-        {
-          type: 'generate_done',
-          id: data.id,
-          audio,
-          sampleRate: SAMPLE_RATE,
-          telemetry: lastGenerateTelemetry,
-        },
-        [audio.buffer],
-      );
-    } catch (error) {
-      self.postMessage({
-        type: 'generate_error',
-        id: data.id,
-        error: error?.message || String(error),
-      });
-    }
+    enqueueGeneration({
+      text: data.text,
+      voice: data.voice,
+      opts: data.opts || {},
+      jobId: data.id,
+      // Sent on every generate by audio_core. Pocket read it; this worker did
+      // not exist to read it, because it had no queue to order.
+      isPriority: data.isPriority === true,
+    });
     return;
   }
 
   if (type === 'dispose_backend') {
+    // Nothing queued can run after the session goes away.
+    drainGenerationQueue('Narration backend was disposed.');
     try { await session?.release?.(); } catch (_) {}
     session = null;
     voiceCache.clear();
