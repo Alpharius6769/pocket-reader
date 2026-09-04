@@ -552,3 +552,48 @@ test('the rebuilt models keep the cache honest', async () => {
   );
   assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv23'/);
 });
+
+// ── Forced first-run reset ──────────────────────────────────────────────────
+
+test('the forced reset runs before any other script on both entry points', async () => {
+  // It wipes storage the rest of the app is about to read. If a module loaded
+  // first it could read stale state, or write it back mid-wipe.
+  for (const page of ['../public/index.html', '../public/standard-page.html']) {
+    const html = await readFile(new URL(page, import.meta.url), 'utf8');
+    const firstScript = html.indexOf('<script');
+    assert.ok(firstScript !== -1, `${page} has no scripts at all`);
+    // Search from the first <script>, not the whole file: the explanatory
+    // comment above the block names the token too.
+    const resetAt = html.indexOf('PR_RESET_TOKEN', firstScript);
+    const secondScript = html.indexOf('<script', firstScript + 1);
+    assert.ok(resetAt !== -1, `${page} is missing the reset block`);
+    assert.ok(secondScript === -1 || resetAt < secondScript,
+      `${page}: the reset must be inside the FIRST script, not a later one`);
+  }
+});
+
+test('the reset is idempotent, bounded, and records completion last', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const block = html.slice(html.indexOf('PR_RESET_TOKEN'), html.indexOf('</script>', html.indexOf('PR_RESET_TOKEN')));
+
+  // Fires once per token.
+  assert.match(block, /if \(done === PR_RESET_TOKEN\) return;/);
+  // A wipe that keeps failing must not trap the user in a reload loop.
+  assert.match(block, /attempts >= MAX_ATTEMPTS/);
+  // The completion marker is written AFTER the wipe, so an interrupted reset
+  // retries rather than leaving a half-wiped app marked done.
+  const wipeAt = block.indexOf('clearStorage()');
+  const markAt = block.indexOf('setItem(DONE_KEY, PR_RESET_TOKEN)', wipeAt);
+  assert.ok(wipeAt !== -1 && markAt > wipeAt, 'completion must be recorded after the wipe');
+
+  // Everything a returning user carries has to go.
+  for (const step of ['deleteDatabases', 'deleteCaches', 'unregisterWorkers', 'localStorage.clear', 'sessionStorage.clear']) {
+    assert.ok(block.includes(step), `reset is missing ${step}`);
+  }
+  // indexedDB.databases() is unsupported on Firefox/older Safari, so the known
+  // database name must be deleted unconditionally rather than by enumeration.
+  assert.match(block, /var names = \['PocketReaderDB'\]/);
+  // A blocked delete (another tab holding a connection) must not hang the boot.
+  assert.match(block, /onblocked/);
+  assert.match(block, /setTimeout\(resolve, \d+\)/);
+});
