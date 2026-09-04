@@ -14,7 +14,7 @@ below. Their licenses and obligations — notably OFL-1.1 bundled license texts,
 CC-BY-3.0 attribution for Game-Icons.net, and MPL-2.0 for pywebpush — continue
 to apply in full.
 
-Last reviewed: 2026-08-30.
+Last reviewed: 2026-09-04.
 
 ## Browser TTS and ML Runtime
 
@@ -42,14 +42,25 @@ Last reviewed: 2026-08-30.
 
 ### Pocket TTS model and voice asset bundles
 
-- Provider/maintainer: Project-controlled asset bucket unless otherwise stated
-  in the remote asset metadata.
+- Upstream: `kyutai/pocket-tts` (Kyutai), paper arXiv:2509.06926
+- License: **Creative Commons Attribution 4.0 International (CC BY 4.0)**
+- Source: https://huggingface.co/kyutai/pocket-tts
+- Catalog/code: https://github.com/kyutai-labs/pocket-tts
+- Provider/maintainer: Project-controlled asset bucket; the ONNX INT8 and FP16
+  bundles in that bucket are exports of the upstream Kyutai weights.
 - Location: Served through the Cloudflare Worker from Backblaze B2.
-- Used as: Optional premium browser-side TTS engine and precompiled voice
-  state files.
+- Used as: Highest browser-side TTS tier and precompiled voice state files.
+- Commercial use: permitted. CC BY 4.0 allows commercial use and the creation
+  and distribution of derivative works -- which is what the ONNX export and its
+  quantized and FP16 variants are -- provided attribution is given and changes
+  are indicated. This file and `NOTICE` carry that attribution; the exports are
+  listed as modifications below.
+- Modifications made by this project: conversion of the upstream weights to
+  ONNX, dynamic INT8 quantization, an FP16 variant, a fused four-frame decode
+  block, and ORT-format repackaging.
 - Distribution note: these large model/voice assets are not part of this source
-  tree. Their license and redistribution terms should be tracked with the
-  asset bucket metadata/release notes before mirroring or repackaging them.
+  tree. Attribution obligations travel with the bucket assets, so keep this
+  entry in sync with what is actually served.
 
 ### Kokoro-82M (narration engine)
 

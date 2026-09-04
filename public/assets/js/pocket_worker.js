@@ -70,6 +70,24 @@ const WEBGPU_BLOCK_FRAMES = 4;
 const WEBGPU_STEADY_SYNC_BLOCKS = 4;
 const WEBGPU_GRAPH_CAPTURE_SUPPORTED = false;
 const WEBGPU_MIMI_ROLE = 'mimi_decoder_fp16';
+// Mimi is the vocoder: it turns flow-LM latents into the actual waveform, so its
+// quantization error is heard directly as grain rather than as a subtle change
+// in wording or timing. Measured against the FP16 build on identical inputs, the
+// INT8 decoder lands at 16.6-25.9 dB SNR -- error at roughly a tenth of signal
+// amplitude, where 16-bit PCM is ~96 dB.
+//
+// The FP16 file costs nothing to prefer: it is SMALLER (20.9 MB vs 22.7 MB) and
+// loads faster (147 ms vs 253 ms measured in ORT Web WASM, cross-origin
+// isolated, 2 threads). It runs 19.6 ms/frame against 16.05, and a frame is
+// 80 ms of audio, so the vocoder stage moves from 0.20 to 0.245 RTF and the
+// flow-LM continues to dominate the paragraph.
+//
+// Constrained devices stay on INT8. ORT WASM has no native FP16 kernels, so the
+// weights are widened to FP32 in the heap; the file is smaller but the resident
+// session is larger, and that is the wrong trade on a phone whose jetsam limit
+// is already the binding constraint.
+const WASM_MIMI_FP16_FILE = 'mimi_decoder_fp16.onnx';
+const WASM_MIMI_FP16_BYTES = 20943707;
 const MODEL_ASSET_BYTES = {
   text_conditioner: 16388384,
   flow_lm_main: 76341079,
@@ -462,6 +480,16 @@ function directBundlePath(language, filename, backend = currentBackend) {
 
 function wasmModelFilename(role) {
   return useOrtFormatWasm ? ORT_FORMAT_MODEL_STEMS[role] : MODEL_STEMS[role];
+}
+
+// Whether this session should fetch the higher-fidelity Mimi decoder. There is
+// no FP16 build in the .ort bundle, so that path keeps INT8 regardless.
+function preferFp16Mimi() {
+  return currentBackend === 'wasm' && !useOrtFormatWasm && !constrainedMemoryMode;
+}
+
+function mimiWasmFilename() {
+  return preferFp16Mimi() ? WASM_MIMI_FP16_FILE : wasmModelFilename('mimi_decoder');
 }
 
 function wasmBlockFilename(unified = false) {
@@ -2362,7 +2390,16 @@ async function loadBundle(language, {
         preferUnifiedWasmCore
           ? { asset: 'flow_lm_unified_block4', target: 'flowLmUnifiedSession', filename: wasmBlockFilename(true), sourceBackend: 'wasm' }
           : { asset: 'flow_lm_main', target: 'flowLmMainSession', filename: wasmModelFilename('flow_lm_main'), sourceBackend: 'wasm' },
-        { asset: 'mimi_decoder', target: 'mimiDecoderSession', filename: wasmModelFilename('mimi_decoder'), sourceBackend: 'wasm' },
+        {
+          asset: 'mimi_decoder',
+          target: 'mimiDecoderSession',
+          filename: mimiWasmFilename(),
+          // If the FP16 decoder cannot be fetched or built on this device, fall
+          // back to the INT8 one rather than failing narration outright. The
+          // fidelity gain is worth having; it is not worth a silent engine.
+          fallbackFilename: preferFp16Mimi() ? wasmModelFilename('mimi_decoder') : null,
+          sourceBackend: 'wasm',
+        },
       ];
   if (modelDescriptors.some((descriptor) => !descriptor.filename)) {
     throw new Error('The selected Pocket bundle is missing a required model filename.');
@@ -2370,7 +2407,9 @@ async function loadBundle(language, {
   currentModelAssetBytes = Object.fromEntries(modelDescriptors.map((descriptor) => {
     const metadata = descriptor.sourceBackend === 'webgpu' ? webGpuBundleMetadata : bundleMetadata;
     const fallbackSizes = useOrtFormatWasm ? ORT_FORMAT_MODEL_ASSET_BYTES : MODEL_ASSET_BYTES;
-    const size = Number(metadata?.artifacts?.[descriptor.filename]?.bytes || fallbackSizes[descriptor.asset] || 0);
+    const declared = metadata?.artifacts?.[descriptor.filename]?.bytes;
+    const byFile = descriptor.filename === WASM_MIMI_FP16_FILE ? WASM_MIMI_FP16_BYTES : 0;
+    const size = Number(declared || byFile || fallbackSizes[descriptor.asset] || 0);
     return [descriptor.asset, size];
   }));
   currentModelDownloadTotalBytes = Math.max(1, Object.values(currentModelAssetBytes).reduce((sum, size) => sum + size, 0));
@@ -2379,7 +2418,17 @@ async function loadBundle(language, {
 
   let completedBytes = 0;
   let sessionCreationMs = 0;
-  const loadModelDescriptor = async ({ asset, target, filename, sourceBackend }) => {
+  const loadModelDescriptor = async (descriptor) => {
+    const { asset, target, filename, sourceBackend, fallbackFilename } = descriptor;
+    if (fallbackFilename) {
+      try {
+        return await loadModelDescriptor({ asset, target, filename, sourceBackend });
+      } catch (error) {
+        postMessage({ type: 'log', level: 'warn',
+          message: `${asset}: ${filename} unavailable (${error?.message || error}); falling back to ${fallbackFilename}.` });
+        return await loadModelDescriptor({ asset, target, filename: fallbackFilename, sourceBackend });
+      }
+    }
     const modelUrls = sourceBackend === 'wasm'
       ? wasmModelPaths(language, filename)
       : [

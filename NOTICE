@@ -56,7 +56,10 @@ Notable license-sensitive items:
 
 - `pywebpush` is MPL-2.0.
 - Achievement icons from Game-Icons.net are CC-BY-3.0.
-- Pocket TTS model assets retain their upstream model licenses.
+- Pocket TTS is `kyutai/pocket-tts`, licensed CC BY 4.0 (Kyutai). Commercial
+  use and derivative works are permitted with attribution and an indication of
+  changes; the ONNX, INT8 and FP16 exports served from the asset bucket are
+  such derivatives. See ATTRIBUTIONS.md.
 - Kokoro-82M, the middle narration tier, is Apache-2.0 (hexgrad/Kokoro-82M;
   ONNX build onnx-community/Kokoro-82M-v1.0-ONNX). It is a StyleTTS2 model
   finetuned from yl4579/StyleTTS2-LJSpeech. See ATTRIBUTIONS.md.
@@ -95,4 +98,4 @@ Curated bundled PDFs are included for app presentation and reader convenience;
 authors retain full rights and may request removal by contacting the
 maintainer.
 
-Last updated: 2026-08-13
+Last updated: 2026-09-04

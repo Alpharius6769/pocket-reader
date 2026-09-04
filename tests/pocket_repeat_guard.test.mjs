@@ -318,3 +318,56 @@ test('a retry loop counts as one drift signal, not one per attempt', () => {
   assert.match(block.slice(lastInLoop, recordAt), /\r?\n {6}\}\r?\n/,
     'the drift record must sit outside the retry loop');
 });
+
+// ── FP16 Mimi vocoder ───────────────────────────────────────────────────────
+
+test('unconstrained WASM devices decode through the FP16 Mimi vocoder', async () => {
+  // Measured against the FP16 build on identical inputs, the INT8 Mimi decoder
+  // lands at 16.6-25.9 dB SNR. It is the vocoder, so that error is heard as
+  // grain. FP16 is smaller (20.9 vs 22.7 MB) and loaded faster in ORT Web.
+  const worker = await readFile(
+    new URL('../public/assets/js/pocket_worker.js', import.meta.url), 'utf8',
+  );
+  assert.match(worker, /const WASM_MIMI_FP16_FILE = 'mimi_decoder_fp16\.onnx';/);
+
+  const prefer = worker.slice(
+    worker.indexOf('function preferFp16Mimi()'),
+    worker.indexOf('function mimiWasmFilename()'),
+  );
+  assert.ok(prefer.length > 0, 'the FP16 preference must be findable');
+  // Constrained devices keep INT8: ORT WASM has no native FP16 kernels, so the
+  // weights widen to FP32 in the heap and the resident session grows.
+  assert.match(prefer, /!constrainedMemoryMode/);
+  // There is no FP16 build in the .ort bundle.
+  assert.match(prefer, /!useOrtFormatWasm/);
+  assert.match(prefer, /currentBackend === 'wasm'/);
+
+  // The descriptor must carry a fallback, or a device that cannot fetch or build
+  // the FP16 decoder loses narration entirely rather than losing fidelity.
+  assert.match(worker, /fallbackFilename: preferFp16Mimi\(\) \? wasmModelFilename\('mimi_decoder'\) : null,/);
+  assert.match(worker, /return await loadModelDescriptor\(\{ asset, target, filename: fallbackFilename, sourceBackend \}\);/);
+
+  // Download progress has to size the file actually being fetched.
+  assert.match(worker, /descriptor\.filename === WASM_MIMI_FP16_FILE \? WASM_MIMI_FP16_BYTES : 0/);
+});
+
+test('switching the vocoder busts the narration cache', async () => {
+  // The waveform genuinely changes, so previously cached paragraphs must not be
+  // replayed as if nothing happened.
+  const audio = await readFile(
+    new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
+  );
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv21'/);
+});
+
+test('the Pocket TTS upstream license is recorded with its attribution terms', async () => {
+  // CC BY 4.0 permits commercial use and derivatives (the ONNX/INT8/FP16
+  // exports are derivatives) but REQUIRES attribution and an indication of
+  // changes. Both have to be stated where the obligation is tracked.
+  const attributions = await readFile(new URL('../ATTRIBUTIONS.md', import.meta.url), 'utf8');
+  assert.match(attributions, /kyutai\/pocket-tts/);
+  assert.match(attributions, /CC BY 4\.0/);
+  assert.match(attributions, /Modifications made by this project/);
+  const notice = await readFile(new URL('../NOTICE', import.meta.url), 'utf8');
+  assert.match(notice, /Pocket TTS is `kyutai\/pocket-tts`, licensed CC BY 4\.0/);
+});

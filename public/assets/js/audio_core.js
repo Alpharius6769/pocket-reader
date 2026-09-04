@@ -144,7 +144,9 @@ const POCKET_EMOTION_PATTERN = new RegExp(`_(${POCKET_ALL_EMOTIONS.join('|')})$`
 // change plays the wrong paragraph with nothing to detect it. Bump on any
 // change to how a paragraph is rendered as well, so cached audio re-renders
 // rather than mixing engines.
-const POCKET_NARRATION_CACHE_VERSION = 'narrv20';
+// narrv21: unconstrained devices decode through the FP16 Mimi vocoder instead
+// of the INT8 one, so the waveform genuinely differs from anything cached before.
+const POCKET_NARRATION_CACHE_VERSION = 'narrv21';
 const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // Kokoro's render-shape version. Bump whenever anything that changes the audio
 // for the same (text, voice) changes: the chunk cap, the clause rejoin, the
@@ -1529,7 +1531,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v38',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v27',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v95',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v98',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
