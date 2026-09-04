@@ -99,12 +99,19 @@ const KNOWN_MODEL_FILE_BYTES = Object.freeze({
   'flow_lm_flow_int8_pc.onnx': 10059081,
   'flow_lm_decode_block4_int8_pc.onnx': 86421636,
 });
+// Verified against what B2 actually serves from english_2026-04. Two were
+// wrong: flow_lm_unified_block4 held 87264376, which is the size of the .ort
+// build of that model (see ORT_FORMAT_MODEL_ASSET_BYTES below, same number) --
+// the .onnx is 88818684 -- and flow_lm_decode_block4 had no entry here at all
+// while the .ort map had one. The WASM bundle.json carries no `artifacts`
+// block, so this map is the ONLY source for these figures.
 const MODEL_ASSET_BYTES = {
   text_conditioner: 16388384,
   flow_lm_main: 76341079,
   flow_lm_flow: 9962530,
   mimi_decoder: 22684077,
-  flow_lm_unified_block4: 87264376,
+  flow_lm_decode_block4: 88173753,
+  flow_lm_unified_block4: 88818684,
 };
 const ORT_FORMAT_MODEL_ASSET_BYTES = {
   text_conditioner: 16389816,
@@ -863,7 +870,17 @@ async function fetchSingleModelWithProgress(url, asset, completedBytes) {
       throw new Error(`Failed to download ${asset}: HTTP ${response.status}`);
     }
 
-    const expectedAssetBytes = Number(response.headers.get("Content-Length")) || currentModelAssetBytes[asset] || MODEL_ASSET_BYTES[asset] || 0;
+    // Two different jobs, and they must not share a number. The header is
+    // authoritative and can size the buffer; the local maps are estimates and
+    // may only drive the progress bar.
+    //
+    // They were the same expression, so a stale constant became a download
+    // failure rather than a wrong percentage: with no Content-Length the buffer
+    // was allocated at the estimate, and the overflow check below turns one
+    // byte of shortfall into "exceeded its declared Content-Length". The
+    // unified block's estimate was 1.5 MB short for exactly this reason.
+    const headerAssetBytes = Number(response.headers.get("Content-Length")) || 0;
+    const expectedAssetBytes = headerAssetBytes || currentModelAssetBytes[asset] || MODEL_ASSET_BYTES[asset] || 0;
     if (!response.body?.getReader) {
       const buffer = await response.arrayBuffer();
       const loadedBytes = completedBytes + buffer.byteLength;
@@ -887,7 +904,10 @@ async function fetchSingleModelWithProgress(url, asset, completedBytes) {
     // Allocate once when the server supplies a length. The previous chunk-list
     // implementation briefly held both the chunks and a second assembled copy,
     // adding roughly 76 MiB of avoidable peak memory for the largest model.
-    let output = expectedAssetBytes > 0 ? new Uint8Array(expectedAssetBytes) : null;
+    // Preallocate ONLY from the header. Without one this falls back to the
+    // chunk list, which costs a second assembled copy at the end but cannot be
+    // defeated by a constant drifting away from the file it describes.
+    let output = headerAssetBytes > 0 ? new Uint8Array(headerAssetBytes) : null;
     const chunks = output ? null : [];
     let assetLoadedBytes = 0;
     while (true) {

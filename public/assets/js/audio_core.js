@@ -1548,7 +1548,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v47',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v36',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v120',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v123',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -3662,7 +3662,31 @@ window.generateChunk = async function(text, voice) {
     // wall time on phones. Empty/fatal still fails the paragraph so the loop
     // can resurface the error instead of storing silence.
     const qualityRetryNeeded = shouldRetryPocketQuality(first.quality);
-    const allowQualityRetry = qualityRetryNeeded && canResetSharedEngine();
+    // Only Pocket can render this paragraph differently a second time.
+    //
+    // The retry chain re-rolls the noise seed and cools the temperature, and
+    // Kokoro and Kitten read NEITHER -- their workers take speed, expressive and
+    // the pronunciation overrides, all identical across attempts. They are one
+    // deterministic forward pass, so a re-render of the same text in the same
+    // voice returns the same samples, and a guard verdict about that audio
+    // ("repeated speech", "pitch shift", "clipping") is guaranteed to repeat.
+    //
+    // The cost was not small. Up to POCKET_MAX_QUALITY_RETRIES further renders
+    // of byte-identical audio, and the first of them tears down and rebuilds an
+    // 86 MB ONNX session first -- about 7 seconds on the iPhone 13 Pro Max whose
+    // paragraphs already take 20-100s.
+    //
+    // A retry still earns its place when the FIRST attempt produced no audio to
+    // judge: an error, a timeout, a backend reset mid-render. That is a broken
+    // attempt rather than a verdict, and a fresh worker really can fix it.
+    const deterministicEngine = _isStyleTts2Engine(route.engine);
+    const hadNothingToJudge = Boolean(first.error) || !(first.result?.audio?.length > 0);
+    const retryCouldDiffer = !deterministicEngine || hadNothingToJudge;
+    if (qualityRetryNeeded && !retryCouldDiffer) {
+      _logPocketQuality('INFO', `${_synthEngineLabel()} synth quality guard kept the first render (a retry renders identical audio)`,
+        first, { retryUsed: false });
+    }
+    const allowQualityRetry = qualityRetryNeeded && retryCouldDiffer && canResetSharedEngine();
     if (allowQualityRetry) {
       // Re-render once with clean worker state at lower temperature.
       const throughputRetry = _isPocketThroughputCache();
