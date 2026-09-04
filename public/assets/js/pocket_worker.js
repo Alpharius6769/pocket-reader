@@ -536,8 +536,21 @@ function hasMeasuredHeadroom() {
 
 // Whether this session should fetch the higher-fidelity Mimi decoder. There is
 // no FP16 build in the .ort bundle, so that path keeps INT8 regardless.
+//
+// This used to disqualify the WebGPU backend outright (`currentBackend !==
+// 'wasm'`), and the WebGPU descriptor list did not consult it anyway -- it
+// named MODEL_STEMS.mimi_decoder, the INT8 file, directly. The result was a
+// fidelity cliff that only WebGPU users fell off: the WASM-side vocoder in a
+// GPU session was INT8 (22.72 dB against the FP32 master, per-channel) while
+// the FP16 build in the very same shared bundle measures 64.20 dB. A GPU
+// session reaches that vocoder whenever the GPU Mimi candidate is not adopted
+// -- it loses the speed benchmark, it fails to build, or it is now rejected on
+// fidelity -- and quantisation noise in the VOCODER is heard directly as grain.
+//
+// WebGPU is also the least likely place to be short of memory: it is desktops
+// and flagship phones, and the FP16 weights land in the WASM heap either way.
 function preferFp16Mimi() {
-  if (currentBackend !== 'wasm' || useOrtFormatWasm) return false;
+  if (useOrtFormatWasm) return false;
   // A measured-roomy device gets the better vocoder even in constrained mode:
   // ORT WASM widens FP16 weights to FP32 in the heap, ~19 MB more resident than
   // INT8, which is noise against a device that measured 704 MB.
@@ -568,6 +581,18 @@ function wasmBlockFilename(unified = false) {
 // Sizes barely move -- per-channel adds one scale per output channel -- and the
 // rebuilt Mimi is 6 MB SMALLER. FP16 Mimi still beats every INT8 build of it by
 // a mile (64.20 dB), so this only matters where FP16 is not affordable.
+// Two renders that differ only in which Mimi ran should agree closely: the two
+// decoders carry the same weights, and FP16 rounding against a threaded-WASM
+// reference is a small perturbation. 20 dB is far below anything rounding
+// explains and around where INT8 vocoders sit (the per-tensor Mimi measures
+// 20.49 dB against its FP32 master, and that build is audibly grainy), so a GPU
+// decoder under it is not a rounding difference -- it is a different signal.
+const MIMI_FIDELITY_MIN_SNR_DB = 20;
+// ...but only when the same configuration rendered twice agrees better than
+// that. If it does not, this GPU is not reproducible run to run and the A/B
+// cannot tell the decoder apart from the noise floor.
+const MIMI_FIDELITY_MIN_CONTROL_DB = 30;
+
 const PER_CHANNEL_MODEL_STEMS = Object.freeze({
   'flow_lm_main_int8.onnx': 'flow_lm_main_int8_pc.onnx',
   'flow_lm_flow_int8.onnx': 'flow_lm_flow_int8_pc.onnx',
@@ -2471,7 +2496,15 @@ async function loadBundle(language, {
     ? [
         { asset: 'text_conditioner', target: 'textConditionerSession', filename: MODEL_STEMS.text_conditioner, sourceBackend: 'wasm' },
         { asset: 'flow_lm_main', target: 'flowLmMainSession', filename: MODEL_STEMS.flow_lm_main, sourceBackend: 'wasm' },
-        { asset: 'mimi_decoder', target: 'mimiDecoderSession', filename: MODEL_STEMS.mimi_decoder, sourceBackend: 'wasm' },
+        {
+          asset: 'mimi_decoder',
+          target: 'mimiDecoderSession',
+          // Same choice the WASM branch makes. Naming the INT8 file directly
+          // here is what pinned every GPU session to the grainy vocoder.
+          filename: mimiWasmFilename(),
+          fallbackFilename: preferFp16Mimi() ? wasmModelFilename('mimi_decoder') : null,
+          sourceBackend: 'wasm',
+        },
         { asset: WEBGPU_BLOCK_ROLE, target: 'flowLmDecodeBlockSession', filename: gpuBlockFilename, sourceBackend: 'webgpu' },
       ]
     : [
@@ -2876,7 +2909,10 @@ async function switchMimiProvider(provider = 'wasm-threaded') {
   const asset = requested === 'webgpu-mixed' ? WEBGPU_MIMI_ROLE : 'mimi_decoder';
   const filename = requested === 'webgpu-mixed'
     ? webGpuBundleMetadata?.model_files?.[WEBGPU_MIMI_ROLE]
-    : MODEL_STEMS.mimi_decoder;
+    // Switching BACK to the WASM vocoder must land on the same file the
+    // descriptor list would have loaded, or falling back off the GPU decoder
+    // silently downgrades the session from FP16 to INT8.
+    : mimiWasmFilename();
   if (!filename) throw new Error(`The ${requested} Mimi model is unavailable.`);
 
   const response = await fetchFirstAvailable([
@@ -2921,6 +2957,52 @@ function inspectCalibrationAudio(chunks) {
   };
 }
 
+// Signal-to-noise between two renders of the SAME sentence, in dB.
+//
+// inspectCalibrationAudio above measures level and clipping, which is all you
+// can say about ONE waveform in isolation. It is structurally unable to detect
+// the way a vocoder fails: broadband grain leaves duration identical, RMS
+// within a percent or two, and clipping at zero. A field render that listeners
+// described as "very crunchy" reported peak 0.687, clipRatio 0, rms 0.075 --
+// every number the guards look at, entirely normal.
+//
+// Two renders of one sentence, differing only in which Mimi ran, ARE
+// comparable, and the difference between them is exactly the thing that has no
+// other measurement here.
+function compareWaveforms(reference, candidate) {
+  if (!reference || !candidate || !reference.length || !candidate.length) return null;
+  const length = Math.min(reference.length, candidate.length);
+  const lengthRatio = Math.min(reference.length, candidate.length)
+    / Math.max(reference.length, candidate.length);
+  // Different lengths mean the two runs did not decode the same number of
+  // frames, so a sample-aligned comparison is meaningless rather than merely
+  // noisy. Say so instead of returning a number that looks like a measurement.
+  if (lengthRatio < 0.98) return { snrDb: null, lengthRatio, aligned: false };
+  let signal = 0;
+  let noise = 0;
+  for (let i = 0; i < length; i += 1) {
+    const r = reference[i];
+    const difference = candidate[i] - r;
+    signal += r * r;
+    noise += difference * difference;
+  }
+  if (!(signal > 0)) return { snrDb: null, lengthRatio, aligned: false };
+  // Identical output is the ceiling, not an error; report it as such.
+  const snrDb = noise > 0 ? 10 * Math.log10(signal / noise) : Infinity;
+  return { snrDb, lengthRatio, aligned: true };
+}
+
+function concatSamples(chunks) {
+  const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const out = new Float32Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
 async function runCalibrationTrial(voiceName) {
   const chunks = [];
   const start = performance.now();
@@ -2936,6 +3018,7 @@ async function runCalibrationTrial(voiceName) {
     firstSegmentMs: telemetry.firstSegmentMs,
     realTimeFactor: telemetry.realTimeFactor,
     quality: inspectCalibrationAudio(chunks),
+    samples: concatSamples(chunks),
   };
 }
 
@@ -2948,6 +3031,11 @@ async function benchmarkCurrentBackend(voiceName, maxTimedMs) {
     const timings = [];
     const firstSegmentTimings = [];
     const realTimeFactors = [];
+    // The same config rendered twice. On hardware whose reductions are not
+    // bit-reproducible this floor is low, and a later A/B against it has to be
+    // read as inconclusive rather than as a fault.
+    let referenceSamples = null;
+    let selfSnrDb = null;
     const durationSeconds = [];
     const rmsValues = [];
     const peakValues = [];
@@ -2957,6 +3045,11 @@ async function benchmarkCurrentBackend(voiceName, maxTimedMs) {
     for (let run = 0; run < 3; run += 1) {
       if (performance.now() - benchmarkStart > maxTimedMs) throw new Error('Backend calibration exceeded its 90-second inference budget.');
       const trial = await runCalibrationTrial(voiceName);
+      if (!referenceSamples) referenceSamples = trial.samples;
+      else if (selfSnrDb === null) {
+        const control = compareWaveforms(referenceSamples, trial.samples);
+        selfSnrDb = control && control.aligned ? control.snrDb : null;
+      }
       timings.push(trial.elapsedMs);
       firstSegmentTimings.push(trial.firstSegmentMs);
       realTimeFactors.push(trial.realTimeFactor);
@@ -2985,6 +3078,8 @@ async function benchmarkCurrentBackend(voiceName, maxTimedMs) {
       peak: Math.max(...peakValues),
       clippingRatio: percentile(clippingRatios, 0.5),
       sessionCreationMs: Number(lastBackendTelemetry?.sessionCreationMs || 0),
+      referenceSamples,
+      selfSnrDb,
     };
   } finally {
     isGenerating = previousGenerating;
@@ -3120,12 +3215,48 @@ async function calibrateBackends(voiceName) {
         mimiProvider: 'webgpu-mixed',
         gpuSyncGroupBlocks: WEBGPU_STEADY_SYNC_BLOCKS,
       };
-      webGpuVariants.push(gpuMimiVariant);
       benchmarkElapsedMs += performance.now() - started;
-      variantSelection = selectWebGpuVariant([selectedVariant, gpuMimiVariant], {
-        baselineCandidate: selectedVariant,
-      });
-      selectedVariant = variantSelection.variant || selectedVariant;
+
+      // FIDELITY, then speed. Everything below this point used to be a speed
+      // contest: selectWebGpuVariant compares latency, and the only quality
+      // veto in this function (durationDelta / rmsDelta / clippingRatio, below)
+      // is blind to how a vocoder actually fails -- grain leaves duration
+      // identical, RMS within a percent, and clipping at zero. So a GPU decoder
+      // that was faster AND audibly worse won, silently, and stayed won.
+      //
+      // The two variants just rendered the SAME sentence with the same voice,
+      // the same seed and the same GPU core; only the Mimi differed. Their
+      // waveforms are therefore directly comparable, and the difference between
+      // them is the only direct measurement of the GPU decoder available on the
+      // machine that has to live with it.
+      const fidelity = compareWaveforms(selectedVariant.referenceSamples, gpuMimiVariant.referenceSamples);
+      const controlDb = Number.isFinite(selectedVariant.selfSnrDb) ? selectedVariant.selfSnrDb : null;
+      gpuMimiVariant.mimiFidelitySnrDb = fidelity && Number.isFinite(fidelity.snrDb) ? fidelity.snrDb : null;
+      gpuMimiVariant.mimiFidelityControlDb = controlDb;
+      webGpuVariants.push(gpuMimiVariant);
+
+      // Reject only on evidence. Unmeasurable (frame counts diverged, silence,
+      // no comparison possible) keeps the old speed-only behaviour rather than
+      // discarding a working decoder on a missing number. And a control that is
+      // itself poor means this GPU is not bit-reproducible run to run, so the
+      // A/B cannot separate the decoder from the noise floor -- also not a
+      // verdict.
+      const measured = Number.isFinite(gpuMimiVariant.mimiFidelitySnrDb);
+      const controlUsable = controlDb === null || controlDb >= MIMI_FIDELITY_MIN_CONTROL_DB;
+      if (measured && controlUsable && gpuMimiVariant.mimiFidelitySnrDb < MIMI_FIDELITY_MIN_SNR_DB) {
+        gpuMimiVariant.qualityRejected = true;
+        postMessage({
+          type: 'diagnostic',
+          level: 'WARN',
+          message: `GPU Mimi rejected on fidelity: ${gpuMimiVariant.mimiFidelitySnrDb.toFixed(1)} dB against the WASM decoder`
+            + `${controlDb === null ? '' : ` (run-to-run control ${controlDb === Infinity ? 'exact' : `${controlDb.toFixed(1)} dB`})`}`,
+        });
+      } else {
+        variantSelection = selectWebGpuVariant([selectedVariant, gpuMimiVariant], {
+          baselineCandidate: selectedVariant,
+        });
+        selectedVariant = variantSelection.variant || selectedVariant;
+      }
     } catch (error) {
       postMessage({ type: 'diagnostic', level: 'INFO', message: `GPU Mimi was rejected: ${error?.message || error}` });
     }
@@ -3146,8 +3277,17 @@ async function calibrateBackends(voiceName) {
     result.webgpuVariants = webGpuVariants.map((variant) => ({
       ...variant,
       timings: undefined,
+      // Megabytes of Float32 per variant, and structured-cloned on every
+      // postMessage that carries the result. They exist only for the
+      // comparison above.
+      referenceSamples: undefined,
     }));
-    result.webgpu = selectedVariant;
+    result.mimiFidelitySnrDb = selectedVariant.mimiFidelitySnrDb
+      ?? webGpuVariants.find((variant) => variant.mimiProvider === 'webgpu-mixed')?.mimiFidelitySnrDb
+      ?? null;
+    result.mimiFidelityControlDb = webGpuVariants
+      .find((variant) => variant.mimiProvider === 'webgpu-mixed')?.mimiFidelityControlDb ?? null;
+    result.webgpu = { ...selectedVariant, referenceSamples: undefined };
     result.graphCapture = selectedVariant.graphCapture === true;
     result.mimiProvider = selectedVariant.mimiProvider || 'wasm-threaded';
     result.gpuSyncGroupBlocks = selectedVariant.gpuSyncGroupBlocks || WEBGPU_STEADY_SYNC_BLOCKS;
@@ -3187,6 +3327,10 @@ async function calibrateBackends(voiceName) {
     });
     await restoreVoiceForBackend(voiceName);
   }
+  // The comparison waveforms have served their purpose. They are megabytes of
+  // Float32 and this object is structured-cloned to the main thread and then
+  // held as lastBackendTelemetry for the life of the worker.
+  if (result.wasm) result.wasm = { ...result.wasm, referenceSamples: undefined };
   lastBackendTelemetry = {
     ...(lastBackendTelemetry || {}),
     ...result,

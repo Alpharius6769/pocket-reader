@@ -340,10 +340,35 @@ test('unconstrained WASM devices decode through the FP16 Mimi vocoder', async ()
   // (~19 MB more than INT8) — which matters on a 4 GB phone and is noise on one
   // that measured 704 MB.
   assert.match(prefer, /!constrainedMemoryMode \|\| hasMeasuredHeadroom\(\)/);
-  // There is no FP16 build in the .ort bundle, and this is WASM-only — the
-  // WebGPU path picks its Mimi through switchMimiProvider instead.
-  assert.match(prefer, /currentBackend !== 'wasm' \|\| useOrtFormatWasm/);
-  assert.match(prefer, /return false;/);
+  // There is no FP16 build in the .ort bundle, so that path keeps INT8.
+  assert.match(prefer, /if \(useOrtFormatWasm\) return false;/);
+
+  // The BACKEND must not disqualify it. This read `currentBackend !== 'wasm' ||
+  // useOrtFormatWasm`, on the belief that "the WebGPU path picks its Mimi
+  // through switchMimiProvider instead" -- true only when the GPU decoder is
+  // actually adopted. A GPU session falls back to the WASM vocoder whenever
+  // that candidate loses the benchmark, fails to build, or is rejected on
+  // fidelity, and it was landing on INT8 (22.72 dB against the FP32 master)
+  // while the FP16 build in the same shared bundle measures 64.20 dB. In the
+  // vocoder that gap is heard directly as grain.
+  assert.ok(
+    !/currentBackend !== 'wasm'/.test(prefer),
+    'the WebGPU backend must not be disqualified from the FP16 vocoder',
+  );
+  // ...and the WebGPU descriptor list has to consult it rather than naming the
+  // INT8 file, which is what actually pinned GPU sessions to the grainy build.
+  const webgpuDescriptors = worker.slice(
+    worker.indexOf('const modelDescriptors = currentBackend === \'webgpu\''),
+    worker.indexOf('asset: WEBGPU_BLOCK_ROLE'),
+  );
+  assert.ok(webgpuDescriptors.length > 0, 'the WebGPU descriptor list must be findable');
+  assert.match(webgpuDescriptors, /filename: mimiWasmFilename\(\),/);
+  assert.ok(
+    !/filename: MODEL_STEMS\.mimi_decoder,/.test(webgpuDescriptors),
+    'the WebGPU descriptor must not name the INT8 vocoder directly',
+  );
+  // Falling back off the GPU decoder must land on the same file too.
+  assert.match(worker, /: mimiWasmFilename\(\);/);
 
   // The descriptor must carry a fallback, or a device that cannot fetch or build
   // the FP16 decoder loses narration entirely rather than losing fidelity.

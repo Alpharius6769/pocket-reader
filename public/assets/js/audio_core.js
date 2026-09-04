@@ -925,6 +925,8 @@ window.getPocketTtsRuntimeConfig = function getPocketTtsRuntimeConfig() {
     operatorFallbackCount: _pocketBackendRuntime.operatorFallbackCount ?? null,
     graphCapture: _pocketBackendRuntime.graphCapture === true,
     mimiProvider: _pocketBackendRuntime.mimiProvider || 'wasm-threaded',
+    mimiFidelitySnrDb: _pocketBackendRuntime.mimiFidelitySnrDb ?? null,
+    mimiFidelityControlDb: _pocketBackendRuntime.mimiFidelityControlDb ?? null,
     gpuSyncGroupBlocks: Number(_pocketBackendRuntime.gpuSyncGroupBlocks || 1),
     medianMs: selectedCalibration?.medianMs ?? null,
     p95Ms: selectedCalibration?.p95Ms ?? null,
@@ -1535,7 +1537,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v38',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v27',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v112',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v115',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -1721,6 +1723,15 @@ async function _loadPocketEngine() {
             _pocketBackendRuntime.gpuSyncGroupBlocks = _pocketBackendRuntime.selectedBackend === 'webgpu'
               ? Number(result.gpuSyncGroupBlocks || 4)
               : 1;
+            // How far the GPU vocoder's own output sits from the WASM one on
+            // this machine, and how reproducible that machine is run to run.
+            // Recorded because it cannot be measured anywhere else: a GPU that
+            // decodes badly is not reproducible off the device it happens on,
+            // and every other quality number here is blind to it.
+            _pocketBackendRuntime.mimiFidelitySnrDb = Number.isFinite(result.mimiFidelitySnrDb)
+              ? result.mimiFidelitySnrDb : null;
+            _pocketBackendRuntime.mimiFidelityControlDb = Number.isFinite(result.mimiFidelityControlDb)
+              ? result.mimiFidelityControlDb : null;
             writePocketCalibration(localStorage, _pocketBackendContext, result);
             window.updatePocketBackendControl?.();
             window.refreshPerfPanel?.();

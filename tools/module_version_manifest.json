@@ -4,8 +4,8 @@
     "sha256": "c184754b096cacdf"
   },
   "audio_core.js": {
-    "version": "audio-v200",
-    "sha256": "3336b97f26cc10a2"
+    "version": "audio-v203",
+    "sha256": "b4d0b674a2e87dbf"
   },
   "buffer_manager.js": {
     "version": "buffer-v101",
@@ -36,7 +36,7 @@
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-320",
+    "version": "sw-322",
     "sha256": "143c9f568e6fcfa8"
   },
   "experience_coordinator.js": {
@@ -76,19 +76,19 @@
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-320",
+    "version": "sw-322",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v115",
-    "sha256": "e3541b9016cd0d12"
+    "version": "narration-loader-v117",
+    "sha256": "384aec6a8fb5c67d"
   },
   "native_app_key.js": {
     "version": "native-key-v1",
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-320",
+    "version": "sw-322",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -104,8 +104,8 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v112",
-    "sha256": "b0c5608e87c0089a"
+    "version": "pocket-worker-v115",
+    "sha256": "ae9465ccc94a4b9d"
   },
   "profile_merge.js": {
     "version": "merge-v13",
@@ -120,8 +120,8 @@
     "sha256": "a969697ffb428a6d"
   },
   "settings_manager.js": {
-    "version": "settings-v192",
-    "sha256": "7547b3e7c93869c7"
+    "version": "settings-v193",
+    "sha256": "f7f817a62222abbb"
   },
   "storage_core.js": {
     "version": "storage-v41",
@@ -140,15 +140,15 @@
     "sha256": "0d5594353439250b"
   },
   "ui_controller.js": {
-    "version": "ui-v223",
-    "sha256": "59626dc0f2fe8168"
+    "version": "ui-v224",
+    "sha256": "f03f842b2f7ec2cb"
   },
   "virtue_controller.js": {
     "version": "virtue-v45",
     "sha256": "9e7b25d345163542"
   },
   "sw.js": {
-    "version": "sw-320",
-    "sha256": "f765fdf1a86767f5"
+    "version": "sw-322",
+    "sha256": "b1e90b5d21813771"
   }
 }
