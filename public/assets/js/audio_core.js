@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v41';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v43';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -24,6 +24,7 @@ import {
   KITTEN_DEFAULT_VOICE,
   KITTEN_ENGINE,
   voicesForEngine,
+  voiceGender,
   coerceVoiceForEngine,
   NARRATION_ENGINE_TIERS,
   KOKORO_VOICES,
@@ -54,7 +55,7 @@ import {
   readPocketDeviceSetup,
   wasmThreadCandidates,
   readMeasuredHeadroomMb,
-} from './pocket_backend_policy.js?v=backend-v51';
+} from './pocket_backend_policy.js?v=backend-v54';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -973,8 +974,18 @@ window.resolveVoiceForEngine = function resolveVoiceForEngine(engine, voice) {
   const requested = String(voice || '').toLowerCase().trim();
   if (allowed.some((v) => v.id === requested)) return requested;
   const settings = window.userProfile?.settings || {};
-  const saved = engine === KITTEN_ENGINE ? settings.kittenVoice : settings.kokoroVoice;
-  return coerceVoiceForEngine(engine, String(saved || '').toLowerCase().trim());
+  const saved = String((engine === KITTEN_ENGINE ? settings.kittenVoice : settings.kokoroVoice) || '')
+    .toLowerCase().trim();
+  // The saved voice is this reader's own earlier pick for the target engine, so
+  // it is the right answer for an empty or unrecognisable request. It is the
+  // WRONG answer when they have just deliberately chosen a specific narrator
+  // and a tier step-down is carrying that choice across: asking for George and
+  // being read to by af_bella is the app plainly contradicting the control the
+  // reader just used. Honour the gender they picked; fall back to the saved
+  // voice whenever it does not conflict, or nothing is known.
+  const wanted = voiceGender(requested);
+  if (wanted && voiceGender(saved) !== wanted) return coerceVoiceForEngine(engine, requested);
+  return coerceVoiceForEngine(engine, saved);
 };
 
 
@@ -1535,9 +1546,9 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v38',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v27',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v115',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v41',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v30',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v117',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -1938,6 +1949,12 @@ async function _loadPocketEngine() {
           // but a message that names the wrong engine is a trap for the next
           // thing that does -- and this whole file's history is that trap.
           voiceEngine: engine,
+          // ...and the voices that engine owns, from the single catalog rather
+          // than a copy inside the worker. A StyleTTS2 worker builds a URL
+          // straight from the id it is given, so one belonging to another
+          // engine becomes a 404 per paragraph rather than an error anybody can
+          // read. Empty for Pocket, which validates its own packs.
+          voiceIds: (typeof voicesForEngine === 'function' ? voicesForEngine(engine) : []).map((v) => v.id),
           backendPreference: backendPlan.preference,
           selectedBackend: backendPlan.selectedBackend,
           wasmThreadCount: backendPlan.threadCount,

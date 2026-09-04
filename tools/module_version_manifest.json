@@ -4,12 +4,12 @@
     "sha256": "c184754b096cacdf"
   },
   "audio_core.js": {
-    "version": "audio-v203",
-    "sha256": "b4d0b674a2e87dbf"
+    "version": "audio-v206",
+    "sha256": "11818b0285c722d3"
   },
   "buffer_manager.js": {
-    "version": "buffer-v101",
-    "sha256": "eac3e6b40a58aa5b"
+    "version": "buffer-v104",
+    "sha256": "a06084e25a549761"
   },
   "cinematic_ui.js": {
     "version": "cinematic-v8",
@@ -28,16 +28,16 @@
     "sha256": "b901b67834d643d7"
   },
   "device_setup.js": {
-    "version": "device-setup-v43",
-    "sha256": "82aea9880454db1c"
+    "version": "device-setup-v45",
+    "sha256": "f223427b0eb1bdac"
   },
   "diagnostics.js": {
     "version": "diag-v9",
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-322",
-    "sha256": "143c9f568e6fcfa8"
+    "version": "sw-324",
+    "sha256": "fe864729d433ee84"
   },
   "experience_coordinator.js": {
     "version": "experience-v17",
@@ -60,40 +60,40 @@
     "sha256": "f4c9755b6b44b491"
   },
   "kitten_worker.js": {
-    "version": "kitten-v27",
-    "sha256": "ff8582652b84828a"
+    "version": "kitten-v30",
+    "sha256": "e9c270ab300a8f63"
   },
   "kokoro_worker.js": {
-    "version": "kokoro-v38",
-    "sha256": "a120518a64816d96"
+    "version": "kokoro-v41",
+    "sha256": "95900f9d078d2ed6"
   },
   "library_manager.js": {
-    "version": "library-v82",
-    "sha256": "f9c7fde1749c0f07"
+    "version": "library-v84",
+    "sha256": "20603935a55f6fdf"
   },
   "memory_headroom_worker.js": {
     "version": "memory-probe-v1",
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-322",
+    "version": "sw-324",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v117",
-    "sha256": "384aec6a8fb5c67d"
+    "version": "narration-loader-v119",
+    "sha256": "14d0ffef391c3815"
   },
   "native_app_key.js": {
     "version": "native-key-v1",
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-322",
+    "version": "sw-324",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
-    "version": "backend-v51",
-    "sha256": "9edf09e21a1b1fa9"
+    "version": "backend-v54",
+    "sha256": "0e89be0378a490ef"
   },
   "pocket_pcm_worklet.js": {
     "version": "pcm-v1",
@@ -104,51 +104,51 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v115",
-    "sha256": "ae9465ccc94a4b9d"
+    "version": "pocket-worker-v117",
+    "sha256": "ffdd91a8236ae93e"
   },
   "profile_merge.js": {
     "version": "merge-v13",
     "sha256": "c4cfe658d8ab33b4"
   },
   "reader_features.js": {
-    "version": "features-v35",
-    "sha256": "004de8a4d348a4fb"
+    "version": "features-v37",
+    "sha256": "f495abe909470310"
   },
   "safe_storage.js": {
     "version": "safe-storage-v1",
     "sha256": "a969697ffb428a6d"
   },
   "settings_manager.js": {
-    "version": "settings-v193",
-    "sha256": "f7f817a62222abbb"
+    "version": "settings-v195",
+    "sha256": "481fe7bef4a11377"
   },
   "storage_core.js": {
-    "version": "storage-v41",
-    "sha256": "4123f5ad7a7352d7"
+    "version": "storage-v43",
+    "sha256": "c8027706b573c8b1"
   },
   "supabase_bridge.js": {
     "version": "supabase-v15",
     "sha256": "519aea600bdea3f5"
   },
   "sync_core.js": {
-    "version": "sync-v38",
-    "sha256": "63deebae7cf387be"
+    "version": "sync-v40",
+    "sha256": "2d4072bd1d286c6a"
   },
   "tts_pronunciation_core.js": {
     "version": "pron-v32",
     "sha256": "0d5594353439250b"
   },
   "ui_controller.js": {
-    "version": "ui-v224",
-    "sha256": "f03f842b2f7ec2cb"
+    "version": "ui-v225",
+    "sha256": "41117257eb58ac1e"
   },
   "virtue_controller.js": {
-    "version": "virtue-v45",
-    "sha256": "9e7b25d345163542"
+    "version": "virtue-v47",
+    "sha256": "a343ef43584e2478"
   },
   "sw.js": {
-    "version": "sw-322",
-    "sha256": "b1e90b5d21813771"
+    "version": "sw-324",
+    "sha256": "1ea94b75e9b59e8b"
   }
 }

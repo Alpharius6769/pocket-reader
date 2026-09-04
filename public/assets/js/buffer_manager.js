@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v41';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v43';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -8,7 +8,7 @@ import {
   detectMobilePlatform,
   isMobileLikePlatform,
   voicesForEngine,
-} from './pocket_backend_policy.js?v=backend-v51';
+} from './pocket_backend_policy.js?v=backend-v54';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
@@ -43,6 +43,25 @@ function _isNeuralEngine(engine) {
 // neural engine. Only an explicit 'webspeech' is non-neural.
 function _isNeuralControlValue(value) {
   return value !== 'webspeech';
+}
+
+// The voice id an engine can actually load, given a requested one.
+//
+// Every neural engine namespaces its voices, and handing one engine's id to
+// another is not a soft failure: Kokoro turns any string into
+// `voices/<id>.bin`, so a Pocket id arriving there 404s on every paragraph of
+// the story. Pocket has no allow-list here (it validates its own packs), so it
+// gets the canonicalisation POCKET_VOICES supports instead.
+function _voiceForEngine(engine, requested) {
+  if (voicesForEngine(engine).length) {
+    return window.resolveVoiceForEngine
+      ? window.resolveVoiceForEngine(engine, requested)
+      : (requested || '');
+  }
+  const cleanVoice = typeof window.canonicalPocketVoice === 'function'
+    ? window.canonicalPocketVoice(requested)
+    : String(requested || POCKET_DEFAULT_VOICE).toLowerCase().trim();
+  return POCKET_VOICES.includes(cleanVoice) ? cleanVoice : POCKET_DEFAULT_VOICE;
 }
 
 function _isolationReady() {
@@ -998,19 +1017,7 @@ export const BufferManager = {
     // describes what happens otherwise, and it applies verbatim to Kitten: the
     // id is canonicalised against POCKET_VOICES, rewritten to donald_malone, and
     // every paragraph 404s on a voice file that engine does not have.
-    if (voicesForEngine(engine).length) {
-      const selected = document.getElementById('voice-selector')?.value;
-      voice = window.resolveVoiceForEngine
-        ? window.resolveVoiceForEngine(engine, selected)
-        : (selected || '');
-    } else {
-      const defaultVoice = POCKET_DEFAULT_VOICE;
-      voice = document.getElementById('voice-selector')?.value || defaultVoice;
-      const cleanVoice = typeof window.canonicalPocketVoice === 'function'
-        ? window.canonicalPocketVoice(voice)
-        : String(voice || defaultVoice).toLowerCase().trim();
-      voice = POCKET_VOICES.includes(cleanVoice) ? cleanVoice : defaultVoice;
-    }
+    voice = _voiceForEngine(engine, document.getElementById('voice-selector')?.value);
     for (let c = 0; c < window.currentStory.chapters.length; c++) {
       const chap = window.currentStory.chapters[c];
       if (!chap.paragraphs) continue;
@@ -1640,6 +1647,29 @@ export const BufferManager = {
     const task = this.queue.shift();
     this.activeWorkers++;
     try {
+      // The queue carries the engine that was live when the story was enqueued
+      // -- ONE value stamped onto hundreds of tasks, and a persisted job
+      // (CACHE_JOB_RESUME_KEY) carries it into an entirely new session.
+      //
+      // A narration engine can step down MID-JOB: _degradeNarrationEngine puts
+      // the replacement in memory only, deliberately, so one transient failure
+      // does not rewrite the reader's saved preference. From that moment
+      // task.engine names an engine that is no longer running, and every
+      // remaining paragraph resolves its voice through the OLD engine's routing
+      // before being dispatched to the NEW engine's worker. A Pocket id
+      // ("george_neutral", emotion suffix and all) arriving at the Kokoro
+      // worker becomes voices/george_neutral.bin -- HTTP 404, on every
+      // paragraph, until the circuit breaker skips the whole chapter. Live
+      // playback never had this problem because it re-reads the engine per
+      // paragraph; only the queue remembered.
+      const liveEngine = typeof _resolveActiveEngine === 'function' ? _resolveActiveEngine() : null;
+      if (liveEngine && liveEngine !== task.engine && _isNeuralEngine(liveEngine)) {
+        window.Diagnostics?.log('WARN', 'Cache job re-pointed at the engine that is actually running', {
+          queuedEngine: task.engine, liveEngine, queuedVoice: task.voice,
+        });
+        task.engine = liveEngine;
+        task.voice = _voiceForEngine(liveEngine, task.voice);
+      }
       // Resolve the final synthesizable voice asset for this chunk. When
       // expressive narration is enabled, the cache key includes both the
       // detected emotion asset and the prosody settings tag. The position ctx

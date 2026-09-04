@@ -296,9 +296,18 @@ async function loadModel() {
   progress(90);
 }
 
+// Supplied by the main thread at init, from the one voice catalog. Empty means
+// "not told", and the check below is skipped rather than guessed at.
+let ownVoiceIds = null;
+
 async function loadVoice(voiceId) {
   const id = String(voiceId || '').toLowerCase().trim();
   if (!id) throw new Error('No voice requested.');
+  // An id from another engine is not a missing file. Reporting it as one turns
+  // a routing bug into a 404 per paragraph that reads as a network problem.
+  if (ownVoiceIds && ownVoiceIds.size && !ownVoiceIds.has(id)) {
+    throw new Error(`'${id}' is not a Kitten voice -- this worker was handed another engine's voice id.`);
+  }
   if (voiceCache.has(id)) return voiceCache.get(id);
   const buffer = await fetchBuffer(`${KITTEN_BASE}/voices/${id}.bin`, `voice ${id}`);
   const data = new Float32Array(buffer);
@@ -610,6 +619,12 @@ self.onmessage = async (event) => {
   if (type === 'init') {
     try {
       cancelRequested = false;
+      // The voices this engine owns, from the main thread's single catalog.
+      // Absent (an older page, a test harness) leaves the check in loadVoice
+      // disabled rather than guessing at the list.
+      ownVoiceIds = Array.isArray(data.voiceIds) && data.voiceIds.length
+        ? new Set(data.voiceIds.map((v) => String(v || '').toLowerCase().trim()).filter(Boolean))
+        : null;
       // An explicit cap wins (the measurement tools sweep it). Otherwise take
       // the device class the main thread sends: constrainedMemoryMode was
       // already in every init message and was being dropped on the floor here,

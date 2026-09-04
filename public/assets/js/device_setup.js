@@ -12,7 +12,7 @@ import {
   POCKET_DEVICE_SETUP_KEY,
   isIosLikePlatform,
   detectMobilePlatform,
-} from './pocket_backend_policy.js?v=backend-v51';
+} from './pocket_backend_policy.js?v=backend-v54';
 import {
   androidClassForModel,
   geometryKey,

@@ -1415,12 +1415,35 @@ export function migrateRetiredVoice(engine, voiceId) {
   return KITTEN_RETIRED_VOICES[String(voiceId || '').toLowerCase().trim()] || voiceId;
 }
 
+// The gender a voice id is known to have, in ANY engine's catalog, or null.
+// Used only to make a cross-engine substitution less jarring; nothing branches
+// on it otherwise.
+export function voiceGender(voiceId) {
+  const id = String(voiceId || '').toLowerCase().trim();
+  if (!id) return null;
+  const pocket = (globalThis.POCKET_VOICE_PACK?.voices || []).find((voice) => voice.id === id);
+  if (pocket?.gender) return pocket.gender;
+  const styled = [...KOKORO_VOICES, ...KITTEN_VOICES].find((voice) => voice.id === id);
+  return styled?.gender || null;
+}
+
 export function coerceVoiceForEngine(engine, voiceId) {
   // Try the retirement map before falling back to the engine default: a reader
   // who picked expr-voice-2-f should land on its nearest surviving sibling, not
   // be silently reset to whatever the engine happens to default to.
   const migrated = migrateRetiredVoice(engine, voiceId);
-  return isVoiceValidForEngine(engine, migrated) ? migrated : defaultVoiceForEngine(engine);
+  if (isVoiceValidForEngine(engine, migrated)) return migrated;
+  // Falling across engines -- a tier stepped down, or a stale queue was
+  // re-pointed. The engine default is a coin flip on gender, and landing a
+  // reader who deliberately chose a male narrator on a female one reads as the
+  // app ignoring them. Keep the gender when the catalogue knows it; the choice
+  // within a gender is still arbitrary, but it is no longer contradictory.
+  const wanted = voiceGender(migrated) || voiceGender(voiceId);
+  if (wanted) {
+    const match = voicesForEngine(engine).find((voice) => voice.gender === wanted);
+    if (match) return match.id;
+  }
+  return defaultVoiceForEngine(engine);
 }
 
 export function isKokoroVoice(voiceId) {
