@@ -581,13 +581,22 @@ test('the split WASM core is scoped to iOS and cannot regress other platforms', 
     /const preferUnifiedWasmCore = currentBackend === 'wasm'\s*\n\s*&& language === DEFAULT_LANGUAGE\s*\n\s*&& constrainedMemoryMode\s*\n\s*&& !iosWebKit;/,
   );
 
-  // The regression this scoping prevents: a constrained Android on the split
-  // path would ALSO pick up the optional decode block, because only iOS is
-  // barred from it. That guard has to stay exactly as it is.
+  // The decode block is no longer barred by platform. iOS is admitted when the
+  // memory probe actually measured Pocket-class headroom -- the blanket veto
+  // dated from when 4 GB iPhones still ran Pocket, and they no longer do.
+  //
+  // What must NOT change is every other platform: `!iosWebKit` short-circuits
+  // the disjunction, so non-iOS behaviour is bit-identical to before.
   assert.match(
     worker,
-    /\} else if \(currentBackend === 'wasm' && !iosWebKit && resolveWasmThreadCount\(\) >= 2\) \{/,
-    'the optional decode block must remain excluded on iOS only',
+    /\} else if \(currentBackend === 'wasm' && resolveWasmThreadCount\(\) >= 2\s+&& \(!iosWebKit \|\| hasMeasuredHeadroom\(\)\)\) \{/,
+    'the decode block must be gated on measured headroom, with non-iOS unchanged',
+  );
+  // And a constrained non-iOS device still cannot take both paths: unified is
+  // an if, the decode block its else-if.
+  assert.ok(
+    worker.indexOf('const preferUnifiedWasmCore') < worker.indexOf("} else if (currentBackend === 'wasm' && resolveWasmThreadCount() >= 2"),
+    'unified must remain the if-branch that the decode block is the else of',
   );
 
   // With no unified and no decode block, the 10 MB per-frame flow session must

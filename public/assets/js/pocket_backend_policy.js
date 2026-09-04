@@ -1466,6 +1466,21 @@ export const ENGINE_HEADROOM_MB = Object.freeze({
   [POCKET_ENGINE]: 704,
 });
 
+// The bar for loading the heaviest thing Pocket has: the fused decode block,
+// which costs ~86 MB resident on top of the prefill core and roughly double
+// that at the moment ORT builds the session.
+//
+// It asks for the MEASURED number rather than trusting that a Pocket device
+// must have had it. Being on Pocket does not prove the measurement cleared:
+// resolveTierByHeadroom falls back to candidates[0] when nothing clears, and a
+// declared device sets a ceiling rather than an answer. So a phone can arrive
+// here on a claim. The fused block is the one place where being wrong costs a
+// jetsam kill instead of a slow paragraph, so it wants the probe's own figure.
+//
+// Same bar as Pocket itself: a device that genuinely measured 704 MB has ~2.4x
+// the peak this path needs.
+export const FUSED_BLOCK_MIN_HEADROOM_MB = ENGINE_HEADROOM_MB[POCKET_ENGINE];
+
 // The iOS ladder lives in device_catalog.js now.
 //
 // It used to be a geometry table here: each logical screen size mapped to a

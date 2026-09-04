@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v36';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v38';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -53,7 +53,8 @@ import {
   readPocketDeviceBackendPreference,
   readPocketDeviceSetup,
   wasmThreadCandidates,
-} from './pocket_backend_policy.js?v=backend-v48';
+  readMeasuredHeadroomMb,
+} from './pocket_backend_policy.js?v=backend-v51';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -1534,7 +1535,7 @@ async function _loadPocketEngine() {
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v38',
           kitten: 'assets/js/kitten_worker.js?v=kitten-v27',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v101',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v104',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -1934,6 +1935,11 @@ async function _loadPocketEngine() {
           mimiProvider: _pocketBackendRuntime.mimiProvider,
           gpuSyncGroupBlocks: _pocketBackendRuntime.gpuSyncGroupBlocks,
           constrainedMemoryMode: window.isPocketDeviceMemorySafeMode?.() !== false,
+          // The probe's own figure, not a tier assignment. The worker uses it to
+          // decide whether this device can afford the fused decode block and the
+          // FP16 vocoder -- questions that "is this iOS" was standing in for, and
+          // answered wrongly once 4 GB iPhones stopped reaching Pocket at all.
+          measuredHeadroomMb: readMeasuredHeadroomMb(localStorage),
           // Resolved here because WorkerNavigator has no maxTouchPoints, so the
           // worker cannot distinguish an iPad from a Mac on its own.
           clientPlatform: detectMobilePlatform(navigator.userAgent || ''),

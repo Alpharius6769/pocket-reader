@@ -6,6 +6,7 @@ import {
   normalizeForPocketTts,
 } from './tts_pronunciation_core.js?v=pron-v32';
 import {
+  FUSED_BLOCK_MIN_HEADROOM_MB,
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
   POCKET_ACCELERATION_VERSION,
@@ -21,7 +22,7 @@ import {
   selectWebGpuVariant,
   shouldDemoteWebGpuSustained,
   POCKET_WEBGPU_WASM_PARITY_RATIO,
-} from './pocket_backend_policy.js?v=backend-v48';
+} from './pocket_backend_policy.js?v=backend-v51';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   computePocketFrameBudget,
@@ -458,6 +459,9 @@ const MAX_CONDITIONED_VOICES = 4;
 // runGenerationPipeline is actively reading.
 let generatingVoiceName = null;
 let constrainedMemoryMode = false;
+// The memory probe's measured figure, forwarded by the main thread. 0 means the
+// probe never ran, which is treated as "unknown", not as "plenty".
+let measuredHeadroomMb = 0;
 // Platform resolved by the main thread and delivered in the init message.
 // The worker must NOT re-sniff this: WorkerNavigator exposes no maxTouchPoints,
 // so a worker-side check cannot tell a stock iPad (desktop "Macintosh" UA) from
@@ -504,8 +508,27 @@ function wasmModelFilename(role) {
 
 // Whether this session should fetch the higher-fidelity Mimi decoder. There is
 // no FP16 build in the .ort bundle, so that path keeps INT8 regardless.
+// Enough MEASURED working memory to afford the heavy, higher-fidelity path.
+//
+// This exists because "is this iOS" was doing the job and had stopped being the
+// right question. The iOS exclusions were written when 4 GB iPhones still ran
+// Pocket; they no longer do -- the RAM ladder sends 4 GB to Kitten and 6 GB to
+// Kokoro, so every iPhone that reaches this worker is 8 GB or better. The gate
+// was excluding precisely the phones that can afford the good path.
+//
+// constrainedMemoryMode stays on for iOS regardless: the yields between session
+// creations and the largest-session-first ordering are cheap insurance and are
+// not what this decides.
+function hasMeasuredHeadroom() {
+  return measuredHeadroomMb >= FUSED_BLOCK_MIN_HEADROOM_MB;
+}
+
 function preferFp16Mimi() {
-  return currentBackend === 'wasm' && !useOrtFormatWasm && !constrainedMemoryMode;
+  if (currentBackend !== 'wasm' || useOrtFormatWasm) return false;
+  // A measured-roomy device gets the better vocoder even in constrained mode:
+  // ORT WASM widens FP16 weights to FP32 in the heap, ~19 MB more resident than
+  // INT8, which is noise against a device that measured 704 MB.
+  return !constrainedMemoryMode || hasMeasuredHeadroom();
 }
 
 function mimiWasmFilename() {
@@ -2596,7 +2619,8 @@ async function loadBundle(language, {
       await ensureFlowLmMainSession();
       sessionCreationMs += performance.now() - mainStart;
     }
-  } else if (currentBackend === 'wasm' && !iosWebKit && resolveWasmThreadCount() >= 2) {
+  } else if (currentBackend === 'wasm' && resolveWasmThreadCount() >= 2
+             && (!iosWebKit || hasMeasuredHeadroom())) {
     try {
       const blockResponse = await fetchFirstAvailable([
         ...wasmModelPaths(language, wasmBlockFilename(false)),
@@ -2612,6 +2636,15 @@ async function loadBundle(language, {
       const bosTensor = parseNpyFloat32(await bosResponse.arrayBuffer());
       if (bosTensor.shape.join(',') !== `1,1,${currentLatentDim}`) {
         throw new Error('WASM block BOS tensor has an incompatible shape.');
+      }
+      if (constrainedMemoryMode) {
+        // Same protection loadModelDescriptor gives the other sessions, which
+        // this branch sits outside of. It matters more here than anywhere else:
+        // the fetch above has just written ~86 MB to the durable cache (a second
+        // copy WebKit has had no chance to collect), and the next statement asks
+        // ORT for a third inside the WASM heap. A macrotask between them is the
+        // difference between a collection opportunity and three live copies.
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
       flowLmWasmBlockSession = await withTimeout(
         ort.InferenceSession.create(blockBuffer, sessionOptionsFor('flow_lm_main')),
@@ -3139,6 +3172,7 @@ self.onmessage = async (e) => {
         ? data.clientPlatform
         : detectMobilePlatform(self.navigator?.userAgent || '');
       constrainedMemoryMode = data.constrainedMemoryMode === true || isIosClient();
+      measuredHeadroomMb = Number(data.measuredHeadroomMb) || 0;
       requestedBackend = normalizePocketBackend(data.backendPreference);
       requestedWasmThreadCount = Number(data.wasmThreadCount) || 0;
       wasmReferenceRtf = Number(data.wasmReferenceRtf) || 0;

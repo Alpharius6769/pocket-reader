@@ -335,12 +335,15 @@ test('unconstrained WASM devices decode through the FP16 Mimi vocoder', async ()
     worker.indexOf('function mimiWasmFilename()'),
   );
   assert.ok(prefer.length > 0, 'the FP16 preference must be findable');
-  // Constrained devices keep INT8: ORT WASM has no native FP16 kernels, so the
-  // weights widen to FP32 in the heap and the resident session grows.
-  assert.match(prefer, /!constrainedMemoryMode/);
-  // There is no FP16 build in the .ort bundle.
-  assert.match(prefer, /!useOrtFormatWasm/);
-  assert.match(prefer, /currentBackend === 'wasm'/);
+  // Constrained devices keep INT8 UNLESS the probe measured real headroom: ORT
+  // WASM has no native FP16 kernels, so the weights widen to FP32 in the heap
+  // (~19 MB more than INT8) — which matters on a 4 GB phone and is noise on one
+  // that measured 704 MB.
+  assert.match(prefer, /!constrainedMemoryMode \|\| hasMeasuredHeadroom\(\)/);
+  // There is no FP16 build in the .ort bundle, and this is WASM-only — the
+  // WebGPU path picks its Mimi through switchMimiProvider instead.
+  assert.match(prefer, /currentBackend !== 'wasm' \|\| useOrtFormatWasm/);
+  assert.match(prefer, /return false;/);
 
   // The descriptor must carry a fallback, or a device that cannot fetch or build
   // the FP16 decoder loses narration entirely rather than losing fidelity.
@@ -421,4 +424,74 @@ test('the decode-block rebuild is reproducible from a checked-in tool', async ()
   assert.match(tool, /9\.89 dB/);
   assert.match(tool, /23\.31 dB/);
   assert.match(tool, /Variants that were measured and rejected/);
+});
+
+// ── iOS reaches the good path ───────────────────────────────────────────────
+
+test('the fused decode block is gated on measured memory, not on being iOS', async () => {
+  // The iOS exclusions were written when 4 GB iPhones still ran Pocket. They no
+  // longer do: the RAM ladder sends 4 GB to Kitten and 6 GB to Kokoro, so every
+  // iPhone reaching this worker is 8 GB or better — precisely the phones the
+  // gate was excluding from the fused block and the FP16 vocoder.
+  const worker = await readFile(
+    new URL('../public/assets/js/pocket_worker.js', import.meta.url), 'utf8',
+  );
+  const policy = await readFile(
+    new URL('../public/assets/js/pocket_backend_policy.js', import.meta.url), 'utf8',
+  );
+
+  assert.match(policy, /export const FUSED_BLOCK_MIN_HEADROOM_MB = ENGINE_HEADROOM_MB\[POCKET_ENGINE\]/);
+  assert.match(worker, /function hasMeasuredHeadroom\(\) \{[\s\S]*?measuredHeadroomMb >= FUSED_BLOCK_MIN_HEADROOM_MB/);
+
+  // A blanket platform veto must not be what decides it any more.
+  assert.match(worker, /\(!iosWebKit \|\| hasMeasuredHeadroom\(\)\)/);
+  // An unmeasured device reads as unknown, never as roomy.
+  assert.match(worker, /measuredHeadroomMb = Number\(data\.measuredHeadroomMb\) \|\| 0;/);
+
+  // …and the main thread has to actually send the probe's figure.
+  const audio = await readFile(
+    new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
+  );
+  assert.match(audio, /measuredHeadroomMb: readMeasuredHeadroomMb\(localStorage\)/);
+  assert.match(audio, /readMeasuredHeadroomMb,/, 'the helper must be imported');
+});
+
+test('a roomy device gets the FP16 vocoder even in memory-safe mode', async () => {
+  const worker = await readFile(
+    new URL('../public/assets/js/pocket_worker.js', import.meta.url), 'utf8',
+  );
+  const prefer = worker.slice(
+    worker.indexOf('function preferFp16Mimi()'),
+    worker.indexOf('function mimiWasmFilename()'),
+  );
+  assert.ok(prefer.length > 0);
+  assert.match(prefer, /!constrainedMemoryMode \|\| hasMeasuredHeadroom\(\)/);
+  // The .ort bundle still has no FP16 build.
+  assert.match(prefer, /useOrtFormatWasm/);
+});
+
+test('the block session build keeps its memory-safe yield', async () => {
+  // iOS now takes this branch, and it sits outside loadModelDescriptor's own
+  // protection. Three live copies of an 86 MB model is how a tab gets jetsammed.
+  const worker = await readFile(
+    new URL('../public/assets/js/pocket_worker.js', import.meta.url), 'utf8',
+  );
+  const blockAt = worker.indexOf('const blockResponse = await fetchFirstAvailable([');
+  const createAt = worker.indexOf('WASM decode-block session initialization');
+  assert.ok(blockAt !== -1 && createAt > blockAt);
+  const between = worker.slice(blockAt, createAt);
+  assert.match(between, /if \(constrainedMemoryMode\) \{[\s\S]*?setTimeout\(resolve, 0\)/);
+});
+
+test('only 8GB-and-up iPhones reach Pocket in the first place', async () => {
+  // This is the fact that makes the change above safe, so it is asserted rather
+  // than assumed. If the boundary ever drops, the gate above needs revisiting.
+  const { RAM_TIER_BOUNDARIES, tierForRamGb } = await import(
+    '../public/assets/js/device_catalog.js'
+  );
+  assert.equal(RAM_TIER_BOUNDARIES.pocketMinGb, 8);
+  assert.equal(tierForRamGb(4), 'kitten');
+  assert.equal(tierForRamGb(6), 'kokoro');
+  assert.equal(tierForRamGb(8), 'pocket');
+  assert.equal(tierForRamGb(12), 'pocket');
 });
