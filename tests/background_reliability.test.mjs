@@ -72,9 +72,17 @@ test('TTS worker generation timeout is patient while backgrounded, fast while fo
   assert.match(audio, /const currentTimeoutMs = \(\) => \(typeof document !== 'undefined' && document\.hidden\)\s*\n\s*\? BACKGROUND_TIMEOUT_MS : adaptiveForegroundMs;/);
   // The deadline check must call currentTimeoutMs() live inside the poll tick,
   // not capture a fixed value once before the wait begins.
-  const checkFn = audio.slice(audio.indexOf('const check = () => {'), audio.indexOf('timerObj = setTimeout(check, Math.min(POLL_MS, currentTimeoutMs()));'));
-  assert.match(checkFn, /const timeoutMs = currentTimeoutMs\(\);/);
+  //
+  // Since 2026-09-10 the check reads budgetMs(), which adds one rule on top: a
+  // job that has not STARTED only times out as a dead worker. It still calls
+  // currentTimeoutMs() on every tick, so backgrounding mid-render still gets
+  // the patient budget.
+  const end = audio.indexOf('timerObj = setTimeout(check, Math.min(POLL_MS, budgetMs()));');
+  assert.ok(end > 0, 'the poll loop must be findable');
+  const checkFn = audio.slice(audio.indexOf('const check = () => {'), end);
+  assert.match(checkFn, /const timeoutMs = budgetMs\(\);/);
   assert.match(checkFn, /cancel_generation/);
+  assert.match(audio, /const budgetMs = \(\) => \(started\s*\n\s*\? currentTimeoutMs\(\)/);
 });
 
 test('local-file-path intercept in loadStory does not swallow the app\'s own internal reference URLs', async () => {

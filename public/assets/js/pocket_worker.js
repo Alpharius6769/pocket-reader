@@ -2570,7 +2570,10 @@ async function loadBundle(language, {
       try {
         return await loadModelDescriptor({ asset, target, filename, sourceBackend });
       } catch (error) {
-        postMessage({ type: 'log', level: 'warn',
+        // 'diagnostic', not 'log': the main thread has never handled 'log', so
+        // this -- the FP16 vocoder failing and the session dropping to INT8, the
+        // exact downgrade that is heard as grain -- was reported to nobody.
+        postMessage({ type: 'diagnostic', level: 'WARN',
           message: `${asset}: ${filename} unavailable (${error?.message || error}); falling back to ${fallbackFilename}.` });
         return await loadModelDescriptor({ asset, target, filename: fallbackFilename, sourceBackend });
       }
@@ -2899,19 +2902,12 @@ async function loadBundle(language, {
   postMessage({ type: 'progress', info: { status: 'progress', progress: 100 } });
 
   postMessage({
-    type: "voices_loaded",
-    voices: availablePredefinedVoices,
-    defaultVoice,
-    language,
-  });
-  postMessage({
     type: "bundle_loaded",
     language,
     sampleRate: currentSampleRate,
     initialLoad,
   });
   postMessage({ type: "status", status: "Ready", state: "idle" });
-  postMessage({ type: "model_status", status: "ready", text: `Ready (${language})` });
   postMessage({ type: 'backend_selected', telemetry: lastBackendTelemetry });
   if (initialLoad) {
     postMessage({ type: "loaded" });
@@ -3457,7 +3453,6 @@ self.onmessage = async (e) => {
       // drop the mutual exclusion that keeps two generations off the shared
       // ONNX sessions; the loops poll cancelRequested and unwind on their own.
       if (targetId == null || targetId === activeGenerationJobId) cancelRequested = true;
-      postMessage({ type: 'generation_cancelled', id: targetId ?? null });
       return;
     }
 
@@ -3526,9 +3521,19 @@ self.onmessage = async (e) => {
     // A generate must settle as generate_error, carrying its id. A bare 'error'
     // with no id is one the main thread cannot match to the promise it parked in
     // ttsQueue, so the paragraph hangs until the generation timeout.
+    // Each request that someone is WAITING on gets its own reply type, so the
+    // waiter can tell its failure from anybody else's. calibrate_backend
+    // replied with a bare 'error', and the main thread could only claim it by
+    // matching the message text against /calibrat|backend|webgpu/ -- so a
+    // calibration that died on a model download or a session build ("HTTP 503
+    // from ...", "... session initialization timed out") matched nothing, and
+    // backend optimisation sat on its 20-minute timeout instead of falling
+    // back to WASM.
     const errorType = data?.type === "init"
       ? "init_error"
-      : (data?.type === "generate" ? "generate_error" : "error");
+      : data?.type === "generate"
+        ? "generate_error"
+        : data?.type === "calibrate_backend" ? "calibration_error" : "error";
     postMessage({ type: errorType, id: data?.id, error: err?.message || String(err) });
   }
 };
@@ -3559,7 +3564,9 @@ async function startGeneration(text, voiceName, jobId, opts, isPriority = false)
     postMessage({ type: 'generate_error', id: jobId, error: String(error) });
   };
   postMessage({ type: "status", status: "Generating...", state: "running" });
-  postMessage({ type: "generation_started", data: { time: performance.now() } });
+  // With the id, so the main thread can restart this job's timeout here rather
+  // than at dispatch. It was posted without one, and nothing listened.
+  postMessage({ type: "generation_started", id: jobId });
 
   const allChunks = [];
 

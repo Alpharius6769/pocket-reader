@@ -52,7 +52,9 @@ test('a generation failure settles the job rather than posting a bare error', as
   // (This also covered a second 'stream_generate' entry point, removed in the
   // 2026-09-04 audit: nothing had ever posted it. Streaming is a generate with
   // opts.streamSegments.)
-  assert.match(handler, /data\?\.type === "generate" \? "generate_error" : "error"/);
+  // Nested since 2026-09-10, when calibrate_backend got its own
+  // calibration_error arm; the generate arm is what this test protects.
+  assert.match(handler, /data\?\.type === "generate"\s*\n\s*\? "generate_error"/);
   assert.ok(
     !/type === ['"]stream_generate['"]/.test(worker),
     'the dead streaming entry point must stay gone',

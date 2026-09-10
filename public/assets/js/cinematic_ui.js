@@ -43,7 +43,7 @@ function motionAllowed() {
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   return !synthesisSuppressed && !document.hidden && settings.motionPreset !== 'off' &&
     settings.motionPreset !== 'reduced' && !MOTION_QUERY?.matches && !settings.lowMemoryMode &&
-    !settings.dataSaver && !connection?.saveData;
+    !connection?.saveData;
 }
 
 function applyMotionState() {

@@ -1546,9 +1546,9 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v50',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v39',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v126',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v53',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v42',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v129',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -1904,6 +1904,9 @@ async function _loadPocketEngine() {
                 }
               }
             }
+          } else if (data.type === 'generation_started') {
+            // The worker has STARTED this job, as opposed to queued it.
+            ttsQueue[data.id]?.onStarted?.();
           } else if (data.type === 'generate_done' || data.type === 'complete') {
             // activeTasks is released in _runPocketWorkerGeneration's finally,
             // which covers this path AND the timeout path. Decrementing here too
@@ -2792,7 +2795,11 @@ async function _ensurePocketBackendOptimizedForVoice(voiceName) {
         if (data.type === 'calibration_result') {
           cleanup();
           resolve(data.result || _pocketBackendRuntime);
-        } else if (data.type === 'error' && /calibrat|backend|webgpu/i.test(data.error || '')) {
+        // calibration_error is unambiguous. The pattern match stays for a bare
+        // 'error' from anything calibration itself triggers, which is the only
+        // reason it ever existed.
+        } else if (data.type === 'calibration_error'
+            || (data.type === 'error' && /calibrat|backend|webgpu/i.test(data.error || ''))) {
           cleanup();
           reject(new Error(data.error || 'Backend optimization failed.'));
         }
@@ -3443,6 +3450,28 @@ async function _runPocketWorkerGeneration(workerObj, text, workerVoice, opts, ha
       new Promise((_, reject) => {
         let start = Date.now();
         let lastTick = start;
+        // The budget is for RENDERING, and every worker now runs one job at a
+        // time, so a job can wait behind another before it starts. Counting
+        // that wait meant a cache paragraph queued behind a slow playback render
+        // could time out without ever having run -- and the cancel that follows
+        // is exactly what a worker must not misapply to the render it waited on.
+        //
+        // Restarting the clock is not enough on its own. The render budget is
+        // sized to THIS job's text, and what it waits behind is sized to
+        // something else: a 100-character cache job gets ~60s on a phone, and
+        // the playback paragraph ahead of it can take 90s+. So until the worker
+        // says the job has started, the only failure worth detecting is a dead
+        // worker, and that gets the patient budget. The render budget applies
+        // from the moment rendering begins.
+        //
+        // This matters beyond one lost paragraph: a timeout routes through the
+        // quality guard's retry, which resets the engine -- and that tears down
+        // the render the job was waiting behind.
+        let started = false;
+        if (ttsQueue[id]) ttsQueue[id].onStarted = () => { started = true; start = Date.now(); };
+        const budgetMs = () => (started
+          ? currentTimeoutMs()
+          : Math.max(currentTimeoutMs(), BACKGROUND_TIMEOUT_MS));
         const check = () => {
           const now = Date.now();
           const sinceLastTick = now - lastTick;
@@ -3458,17 +3487,17 @@ async function _runPocketWorkerGeneration(workerObj, text, workerVoice, opts, ha
             return;
           }
           const elapsed = now - start;
-          const timeoutMs = currentTimeoutMs();
+          const timeoutMs = budgetMs();
           if (elapsed >= timeoutMs) {
             try {
               workerObj?.worker?.postMessage({ type: 'cancel_generation', id });
             } catch (_) {}
-            reject(new Error(`TTS worker timeout after ${Math.round(elapsed / 1000)}s`));
+            reject(new Error(`TTS worker timeout after ${Math.round(elapsed / 1000)}s${started ? '' : ' (never started)'}`));
             return;
           }
           timerObj = setTimeout(check, Math.min(POLL_MS, timeoutMs - elapsed));
         };
-        timerObj = setTimeout(check, Math.min(POLL_MS, currentTimeoutMs()));
+        timerObj = setTimeout(check, Math.min(POLL_MS, budgetMs()));
       }),
     ]);
   } finally {

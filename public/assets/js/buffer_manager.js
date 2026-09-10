@@ -1765,7 +1765,6 @@ export const BufferManager = {
               window.triggerVirtue('virtue_annoyed_bubble');
               window.virtueSpeak('The neural engine failed to load. You can switch to Device voice in Settings.', 7000);
             }
-            this._maybeAmdHint();
             this.updateUI();
             this.activeWorkers = Math.max(0, this.activeWorkers - 1);
             return;
@@ -1837,7 +1836,6 @@ export const BufferManager = {
           this.isActive = false;
           this._showModalStatus('Neural engine failed: ' + err.message);
           if (this.cachingModalDismiss) this.cachingModalDismiss.style.display = 'block';
-          this._maybeAmdHint();
           this.updateUI();
           this.activeWorkers = Math.max(0, this.activeWorkers - 1);
           return;
@@ -1908,7 +1906,6 @@ export const BufferManager = {
             }
             this._showModalStatus('Could not synthesize audio. Neural engine unavailable.');
             if (this.cachingModalDismiss) this.cachingModalDismiss.style.display = 'block';
-            this._maybeAmdHint();
             this.updateUI();
             this.activeWorkers = Math.max(0, this.activeWorkers - 1);
             return;
@@ -1978,7 +1975,6 @@ export const BufferManager = {
           window.triggerVirtue('virtue_annoyed_bubble');
           window.virtueSpeak('I had to pause background caching. The neural engine might be overloaded.', 5000);
         }
-        this._maybeAmdHint();
         this.activeWorkers = Math.max(0, this.activeWorkers - 1);
         return;
       }
@@ -1990,20 +1986,6 @@ export const BufferManager = {
 
   _showModalStatus(msg) {
     if (this.cachingModalText) this.cachingModalText.innerText = msg;
-  },
-
-  // When caching fails while the AMD GPU workaround is enabled, that toggle is
-  // by far the most likely culprit (its WebGPU fp32 path is flaky on some
-  // setups). Point the user straight at it. No-op when the toggle is off.
-  _maybeAmdHint() {
-    if (!window.userProfile?.settings?.enableAMDWorkarounds) return false;
-    this._showModalStatus('Caching failed - the AMD GPU workaround is the likely cause. Turn it OFF in Settings > Advanced GPU / Worker settings, then load a new story or restart the app.');
-    if (typeof window.triggerVirtue === 'function') {
-      window.triggerVirtue('virtue_annoyed_bubble');
-      if (typeof window.virtueSpeak === 'function')
-        window.virtueSpeak('Caching failed with the AMD GPU workaround on. Try turning it off in Settings, then load a new story or restart the app.', 9000);
-    }
-    return true;
   },
 
   _isMetaParagraph(text, storyTitle = null, chapterTitle = null, storyAuthor = null) {

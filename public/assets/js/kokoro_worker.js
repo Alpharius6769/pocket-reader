@@ -158,6 +158,10 @@ async function processGenerationQueue() {
   cancelRequested = false;
   activeGenerationJobId = task.jobId;
   activeGenerationIsPriority = task.isPriority === true;
+  // The main thread's timeout for this job started when it was DISPATCHED.
+  // Tell it when the job actually begins, so time spent queued behind another
+  // render is not charged against this one's budget.
+  self.postMessage({ type: 'generation_started', id: task.jobId });
   try {
     lastGenerateTelemetry = null;
     const audio = await generate(task.text, task.voice, task.opts || {});
@@ -829,7 +833,13 @@ self.onmessage = async (event) => {
         type: 'generate_error', id: job.jobId, error: 'Generation was cancelled.',
       }));
     }
-    cancelRequested = true;
+    // Only the job that was named. This was unconditional -- harmless while
+    // the worker could only ever hold one job, wrong the moment it got a
+    // queue: the one thing that posts cancel_generation is the main thread's
+    // per-job timeout, and cancelling a job still WAITING behind a long render
+    // stopped the render instead. On a phone doing 100s+ paragraphs, a cache
+    // job timing out behind a playback render killed the playback render.
+    if (targetId == null || targetId === activeGenerationJobId) cancelRequested = true;
     return;
   }
 

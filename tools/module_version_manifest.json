@@ -4,16 +4,16 @@
     "sha256": "c184754b096cacdf"
   },
   "audio_core.js": {
-    "version": "audio-v221",
-    "sha256": "8a8320d965f688ee"
+    "version": "audio-v224",
+    "sha256": "72f25cae95ec394b"
   },
   "buffer_manager.js": {
-    "version": "buffer-v109",
-    "sha256": "7b06586e6c1f5aae"
+    "version": "buffer-v112",
+    "sha256": "b6c3bd5ebbf0bb69"
   },
   "cinematic_ui.js": {
-    "version": "cinematic-v8",
-    "sha256": "79d2bec5a8123b1f"
+    "version": "cinematic-v11",
+    "sha256": "a56c4ccf59f39401"
   },
   "data_transfer.js": {
     "version": "transfer-v5",
@@ -36,7 +36,7 @@
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-337",
+    "version": "sw-339",
     "sha256": "707cef065f6ae196"
   },
   "experience_coordinator.js": {
@@ -60,12 +60,12 @@
     "sha256": "7aafc2d5bb77c364"
   },
   "kitten_worker.js": {
-    "version": "kitten-v39",
-    "sha256": "5ac7eda740192a8c"
+    "version": "kitten-v42",
+    "sha256": "721121dc63fe922a"
   },
   "kokoro_worker.js": {
-    "version": "kokoro-v50",
-    "sha256": "ce26fc4ed2b43c72"
+    "version": "kokoro-v53",
+    "sha256": "2725198cd1429d02"
   },
   "library_manager.js": {
     "version": "library-v87",
@@ -76,19 +76,19 @@
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-337",
+    "version": "sw-339",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v129",
-    "sha256": "d137065e1f829901"
+    "version": "narration-loader-v131",
+    "sha256": "85d517d11bf3c015"
   },
   "native_app_key.js": {
     "version": "native-key-v1",
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-337",
+    "version": "sw-339",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -104,8 +104,8 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v126",
-    "sha256": "064b659f3750c0c7"
+    "version": "pocket-worker-v129",
+    "sha256": "e8441de63aabb4de"
   },
   "profile_merge.js": {
     "version": "merge-v13",
@@ -120,8 +120,8 @@
     "sha256": "a969697ffb428a6d"
   },
   "settings_manager.js": {
-    "version": "settings-v202",
-    "sha256": "b918bb2a6713fe0c"
+    "version": "settings-v203",
+    "sha256": "1f23a3c3590e5c1b"
   },
   "storage_core.js": {
     "version": "storage-v45",
@@ -140,15 +140,15 @@
     "sha256": "0d5594353439250b"
   },
   "ui_controller.js": {
-    "version": "ui-v232",
-    "sha256": "ff0e5c39647bbb9e"
+    "version": "ui-v233",
+    "sha256": "adf8e2f53a0d7ed5"
   },
   "virtue_controller.js": {
     "version": "virtue-v49",
     "sha256": "6696f958e7598ef1"
   },
   "sw.js": {
-    "version": "sw-337",
-    "sha256": "a37d4670f46ec7f1"
+    "version": "sw-339",
+    "sha256": "4658c34d0221f5a5"
   }
 }
