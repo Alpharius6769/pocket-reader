@@ -89,8 +89,7 @@ function installAccountGateway() {
     gateway.id = 'setup-account-gateway';
     gateway.className = 'account-gateway';
     gateway.innerHTML = `
-      <button class="account-option primary" type="button" onclick="window._setupCloudLogin()">${icon('log-in')}<span><strong>Continue with Google</strong><small>Choose Google in the secure account window.</small></span></button>
-      <button class="account-option" type="button" onclick="window._setupCloudLogin()">${icon('mail')}<span><strong>Use email</strong><small>Create an account or sign in with email and password.</small></span></button>
+      <button class="account-option primary" type="button" onclick="window._setupCloudLogin()">${icon('log-in')}<span><strong>Continue with Google</strong><small>Sign in with your Google account to back up and sync.</small></span></button>
       <label class="account-remember-login"><input id="setup-remember-login" type="checkbox" checked>Remember this device and resume this account when you return.</label>
       <button class="account-option quiet" type="button" onclick="window.continueSetupAsGuest()">${icon('user')}<span><strong>Continue as guest</strong><small>Everything stays on this device until you sign in.</small></span></button>`;
     cloudButton.after(gateway);
@@ -106,7 +105,7 @@ window.continueSetupAsGuest = () => {
   const status = document.getElementById('setup-cloud-status');
   if (status) {
     status.style.display = 'block';
-    status.textContent = 'Guest mode selected. You can create an account later from Profile.';
+    status.textContent = 'Guest mode selected. You can sign in with Google later from Profile.';
   }
   document.getElementById('setup-complete-btn')?.scrollIntoView({ behavior: motionAllowed() ? 'smooth' : 'auto', block: 'center' });
 };
@@ -138,7 +137,7 @@ function renderAccountCenter() {
     ${syncStatusMarkup()}
     <dl class="account-facts"><div><dt>Identity</dt><dd>${escapeHtml(loggedIn ? (data.cloudEmail || 'Signed in') : 'Guest reader')}</dd></div><div><dt>Cloud revision</dt><dd>${Number(data.revision) || 0}</dd></div><div><dt>Device</dt><dd>${escapeHtml(String(data.deviceId || window.getPocketReaderDeviceId?.() || '').slice(-10) || 'Local')}</dd></div></dl>
     <div class="button-row">
-      ${loggedIn ? `<button class="pr-btn-primary" onclick="window.triggerCloudSync()">${icon('refresh-cw')}<span>Sync now</span></button><button class="pr-btn-sub" onclick="window.triggerCloudLogout()">${icon('log-out')}<span>Log out</span></button>` : `<button class="pr-btn-primary" onclick="window.triggerCloudLogin()">${icon('log-in')}<span>Google or email</span></button>`}
+      ${loggedIn ? `<button class="pr-btn-primary" onclick="window.triggerCloudSync()">${icon('refresh-cw')}<span>Sync now</span></button><button class="pr-btn-sub" onclick="window.triggerCloudLogout()">${icon('log-out')}<span>Log out</span></button>` : `<button class="pr-btn-primary" onclick="window.triggerCloudLogin()">${icon('log-in')}<span>Sign in with Google</span></button>`}
       <button class="pr-btn-sub" onclick="window.exportPocketProfile()">${icon('download')}<span>Export profile</span></button>
       ${loggedIn ? `<button class="pr-btn-danger" onclick="window.openDeleteAccountDialog()">${icon('trash-2')}<span>Delete account data</span></button>` : ''}
     </div>

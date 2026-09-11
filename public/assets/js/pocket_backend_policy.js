@@ -8,7 +8,7 @@ import {
   tierCeilingForDevice,
   tierSpanForModels,
   tiersForGeometry,
-} from './device_catalog.js?v=catalog-v1';
+} from './device_catalog.js?v=catalog-v5';
 
 export const POCKET_ORT_VERSION = '1.27.0';
 export const POCKET_CALIBRATION_VERSION = 'cal-v12';

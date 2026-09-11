@@ -28,6 +28,24 @@ function pending() {
   return [...out.matchAll(/^\s+(\S+\.js)\s+still at\s+\?v=(\S+)$/gm)].map((m) => ({ mod: m[1], ver: m[2] }));
 }
 
+// Replace `from` only where it stands as a whole token. A bare substring
+// replacement bumped `catalog-v1` inside `hmofa-catalog-v1` as well -- another
+// cache's name -- and would turn `buffer-v115` into `buffer-v125` when bumping
+// `buffer-v11`. So the characters either side of a match must not be ones that
+// could belong to a longer token. Still an exact literal, never a pattern.
+function replaceToken(src, from, to) {
+  let out = '';
+  let at = 0;
+  for (let i = src.indexOf(from); i !== -1; i = src.indexOf(from, i + from.length)) {
+    const before = i > 0 ? src[i - 1] : '';
+    const after = src[i + from.length] || '';
+    if (/[A-Za-z0-9_-]/.test(before) || /[A-Za-z0-9_]/.test(after)) continue;
+    out += src.slice(at, i) + to;
+    at = i + from.length;
+  }
+  return out + src.slice(at);
+}
+
 const all = await files();
 
 // Bump against the ORIGINAL manifest until the reported set stops growing, then
@@ -61,7 +79,9 @@ for (let round = 1; round <= 12; round++) {
     for (const f of all) {
       const src = await readFile(f, 'utf8');
       if (!src.includes(from)) continue;
-      await writeFile(f, src.split(from).join(to));
+      const next = replaceToken(src, from, to);
+      if (next === src) continue;
+      await writeFile(f, next);
       touched++;
     }
     console.log(`  ${mod}: ${from} -> ${to} (${touched} files)`);

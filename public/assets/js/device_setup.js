@@ -12,12 +12,12 @@ import {
   POCKET_DEVICE_SETUP_KEY,
   isIosLikePlatform,
   detectMobilePlatform,
-} from './pocket_backend_policy.js?v=backend-v57';
+} from './pocket_backend_policy.js?v=backend-v60';
 import {
   androidClassForModel,
   geometryKey,
   pickerOptions,
-} from './device_catalog.js?v=catalog-v1';
+} from './device_catalog.js?v=catalog-v5';
 
 const SETTINGS_RISK_ACK_KEY = 'pr_settings_risk_ack_v1';
 const SUPPORT_NOTICE_KEY = 'pr_device_support_notice_v2';

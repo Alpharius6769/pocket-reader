@@ -49,32 +49,14 @@ function storeSession(next) {
   } catch (_) { /* private mode: session stays in memory only */ }
 }
 
-// Where GoTrue should send the user after they click a confirmation or reset
-// link. Without it the link lands on whatever the project's Site URL happens to
-// be, which for a GitHub Pages sub-path deploy is usually not this app. GoTrue
-// only honours a redirect_to that the project's redirect allow-list already
-// permits, so this can never point the link somewhere the project has not
-// approved.
-function appRedirectUrl() {
-  try {
-    const here = new URL(window.location.href);
-    return here.origin + here.pathname;
-  } catch (_) {
-    return undefined;
-  }
-}
-
 const authHeaders = (token) => ({
   apikey: SUPABASE_KEY,
   Authorization: `Bearer ${token || SUPABASE_KEY}`,
   'Content-Type': 'application/json',
 });
 
-async function gotrue(path, { method = 'POST', body, token, redirect } = {}) {
-  // GoTrue reads redirect_to from the QUERY STRING; passing it in the JSON body
-  // is silently ignored.
-  const query = redirect ? `${path.includes('?') ? '&' : '?'}redirect_to=${encodeURIComponent(redirect)}` : '';
-  const res = await fetch(`${SUPABASE_URL}/auth/v1${path}${query}`, {
+async function gotrue(path, { method = 'POST', body, token } = {}) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1${path}`, {
     method,
     headers: authHeaders(token),
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -148,7 +130,13 @@ async function rest(path, { method = 'GET', body, headers = {} } = {}) {
  * The standalone site needs its own login UI, so this builds a
  * minimal modal. Resolves to an email on success, or null if dismissed --
  * matching the old contract, where a cancelled login was null rather than a
- * thrown error.
+ * thrown error. Google leaves the page, so a successful sign-in completes in
+ * consumeOAuthFragment after the redirect back.
+ *
+ * Google is the only way in (product decision, 2026-09-10). Email and password
+ * sign-up was removed: it depended on a confirmation mail that never reliably
+ * arrived, so accounts could be created and then never used. Guest mode needs
+ * no account at all.
  */
 function showLoginForm() {
   return new Promise((resolve) => {
@@ -156,7 +144,9 @@ function showLoginForm() {
     backdrop.style.cssText = 'position:fixed;inset:0;z-index:2147483100;display:flex;align-items:center;'
       + 'justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(3px)';
 
-    const card = document.createElement('form');
+    const card = document.createElement('div');
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
     card.setAttribute('aria-label', 'Sign in to Pocket Reader');
     card.style.cssText = 'width:min(92vw,360px);padding:22px;border-radius:14px;background:#16181c;color:#e8e8ea;'
       + "border:1px solid #2c3038;font:14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
@@ -168,99 +158,21 @@ function showLoginForm() {
     sub.textContent = 'Sync your library across devices. Optional — the app works fully offline without an account.';
     sub.style.cssText = 'margin:0 0 16px;opacity:.75;font-size:13px';
 
-    const field = (type, placeholder, autocomplete) => {
-      const i = document.createElement('input');
-      i.type = type; i.placeholder = placeholder; i.required = true; i.autocomplete = autocomplete;
-      i.style.cssText = 'width:100%;box-sizing:border-box;margin-bottom:10px;padding:11px 12px;border-radius:9px;'
-        + 'background:#0f1114;color:#e8e8ea;border:1px solid #3a3f49;font:inherit';
-      return i;
-    };
-    const email = field('email', 'Email', 'email');
-    const password = field('password', 'Password', 'current-password');
-
-    const status = document.createElement('p');
-    status.setAttribute('aria-live', 'polite');
-    status.style.cssText = 'margin:8px 0 0;min-height:1.2em;font-size:13px;color:#ff9d9d';
-
-    const btn = (label, primary, type = 'button') => {
+    const btn = (label, primary) => {
       const b = document.createElement('button');
-      b.type = type; b.textContent = label;
+      b.type = 'button'; b.textContent = label;
       b.style.cssText = 'flex:1;padding:11px;border-radius:9px;cursor:pointer;font:inherit;font-weight:600;'
         + (primary ? 'background:#4a9eff;color:#08111c;border:1px solid #4a9eff'
                    : 'background:transparent;color:#e8e8ea;border:1px solid #3a3f49');
       return b;
     };
-    const signIn = btn('Sign in', true, 'submit');
-    const signUp = btn('Create account');
-    const google = btn('Continue with Google');
-    google.style.flex = '1 1 100%';
+    const google = btn('Continue with Google', true);
     const cancel = btn('Cancel');
     cancel.style.flex = '0 0 auto';
 
-    // Supabase provides password recovery and confirmation resend. Without
-    // these a user who forgets a password, or loses the confirmation email, is
-    // permanently locked out with no self-service path.
-    const helpers = document.createElement('div');
-    helpers.style.cssText = 'display:flex;gap:14px;margin:12px 0 0;font-size:12.5px';
-    const linkBtn = (label) => {
-      const a = document.createElement('button');
-      a.type = 'button';
-      a.textContent = label;
-      a.style.cssText = 'background:none;border:0;padding:0;color:#8fc4ff;cursor:pointer;'
-        + 'font:inherit;text-decoration:underline';
-      return a;
-    };
-    const forgot = linkBtn('Forgot password?');
-    const resend = linkBtn('Resend confirmation');
-    helpers.append(forgot, resend);
-
-    const needEmail = () => {
-      if (email.value.trim()) return true;
-      status.style.color = '#ff9d9d';
-      status.textContent = 'Enter your email address first.';
-      email.focus();
-      return false;
-    };
-
-    forgot.addEventListener('click', async () => {
-      if (!needEmail()) return;
-      busy(true);
-      try {
-        await gotrue('/recover', {
-          body: { email: email.value.trim() },
-          redirect: appRedirectUrl(),
-        });
-        status.style.color = '#9ae6a0';
-        // Deliberately not confirming whether the address exists.
-        status.textContent = 'If that address has an account, a reset link is on its way.';
-      } catch (err) {
-        status.style.color = '#ff9d9d';
-        status.textContent = String(err.message || err);
-      } finally { busy(false); }
-    });
-
-    resend.addEventListener('click', async () => {
-      if (!needEmail()) return;
-      busy(true);
-      try {
-        await gotrue('/resend', {
-          body: { type: 'signup', email: email.value.trim() },
-          redirect: appRedirectUrl(),
-        });
-        status.style.color = '#9ae6a0';
-        status.textContent = 'Confirmation email sent again. Check your inbox and spam folder.';
-      } catch (err) {
-        status.style.color = '#ff9d9d';
-        status.textContent = String(err.message || err);
-      } finally { busy(false); }
-    });
-
-    const row1 = document.createElement('div');
-    row1.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
-    row1.append(signIn, signUp);
-    const row2 = document.createElement('div');
-    row2.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
-    row2.append(google, cancel);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+    row.append(google, cancel);
 
     // Every exit path runs through close(), so the Escape handler is detached
     // whichever way the form goes away. It used to be removed only when Escape
@@ -271,59 +183,6 @@ function showLoginForm() {
       backdrop.remove();
       resolve(value);
     };
-    const busy = (on) => [signIn, signUp, google].forEach((b) => { b.disabled = on; });
-
-    const attempt = async (fn, okMessage) => {
-      if (!email.value || !password.value) { status.textContent = 'Email and password are required.'; return; }
-      busy(true);
-      status.style.color = '#ff9d9d';
-      status.textContent = '';
-      try {
-        const result = await fn();
-        if (result === 'confirm') {
-          status.style.color = '#9ae6a0';
-          status.textContent = okMessage;
-          busy(false);
-          return;
-        }
-        close(result);
-      } catch (err) {
-        let msg = String(err.message || err);
-        if (msg.includes('Invalid login credentials')) {
-          msg = 'Incorrect email or password. Please check your details and try again.';
-        } else if (msg.includes('Email not confirmed')) {
-          msg = 'Your email address has not been confirmed yet. Check your inbox for the confirmation link.';
-        } else if (msg.includes('User already registered')) {
-          msg = 'An account with this email already exists. Click "Sign in" instead.';
-        }
-        status.style.color = '#ff9d9d';
-        status.textContent = msg;
-        busy(false);
-      }
-    };
-
-    card.addEventListener('submit', (e) => {
-      e.preventDefault();
-      attempt(async () => {
-        const next = await gotrue('/token?grant_type=password', {
-          body: { email: email.value.trim(), password: password.value },
-        });
-        storeSession(next);
-        return next.user?.email || email.value.trim();
-      });
-    });
-
-    signUp.addEventListener('click', () => attempt(async () => {
-      const next = await gotrue('/signup', {
-        body: { email: email.value.trim(), password: password.value },
-        redirect: appRedirectUrl(),
-      });
-      // Email confirmation is required on this project, so signup returns a user
-      // without a session. Say so instead of appearing to hang.
-      if (next?.access_token) { storeSession(next); return next.user?.email || email.value.trim(); }
-      return 'confirm';
-    }, 'Check your email to confirm the account, then sign in.'));
-
     google.addEventListener('click', () => {
       // Full-page redirect, not a popup: COOP is not applied to ordinary
       // navigations here, but a redirect avoids the popup-blocker and
@@ -337,10 +196,10 @@ function showLoginForm() {
     backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(null); });
     document.addEventListener('keydown', onKeyDown);
 
-    card.append(h, sub, email, password, row1, row2, helpers, status);
+    card.append(h, sub, row);
     backdrop.appendChild(card);
     document.body.appendChild(backdrop);
-    email.focus();
+    google.focus();
   });
 }
 

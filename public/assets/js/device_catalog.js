@@ -19,7 +19,7 @@
 // only decides how HIGH the measurement is allowed to reach, which is why an
 // entry being slightly wrong costs quality rather than a crashed tab.
 
-export const CATALOG_VERSION = 'catalog-v1';
+export const CATALOG_VERSION = 'catalog-v5';
 
 // RAM -> tier. The boundaries come from ENGINE_HEADROOM_MB in the policy
 // (kitten 96, kokoro 448, pocket 704) and from what those figures cost in
@@ -36,6 +36,13 @@ export function tierForRamGb(ramGb) {
   if (gb >= RAM_TIER_BOUNDARIES.pocketMinGb) return 'pocket';
   if (gb >= RAM_TIER_BOUNDARIES.kokoroMinGb) return 'kokoro';
   return 'kitten';
+}
+
+// The tier a catalogue entry reaches. RAM decides, unless the entry records a
+// tier of its own: a product decision about one model that its RAM figure
+// would not reach.
+export function tierForEntry(entry) {
+  return entry?.tier || tierForRamGb(entry?.ramGb);
 }
 
 // ── iPhone ──────────────────────────────────────────────────────────────────
@@ -69,7 +76,13 @@ const IPHONES = [
   { id: 'iphone-13-mini', label: 'iPhone 13 mini', ramGb: 4, geometry: '375x812', promotion: false, year: 2021 },
   { id: 'iphone-13', label: 'iPhone 13', ramGb: 4, geometry: '390x844', promotion: false, year: 2021 },
   { id: 'iphone-13-pro', label: 'iPhone 13 Pro', ramGb: 6, geometry: '390x844', promotion: true, year: 2021 },
-  { id: 'iphone-13-pro-max', label: 'iPhone 13 Pro Max', ramGb: 6, geometry: '428x926', promotion: true, year: 2021 },
+  // 6 GB, but Pocket anyway (product decision, 2026-09-10) -- the one model
+  // given a tier its RAM does not reach. The memory probe can still veto it.
+  // The 12 Pro Max and 14 Plus share its screen and stay Kokoro-first, so an
+  // undeclared phone at 428x926 reaches Pocket only on a confirmed 120 Hz
+  // panel (which only the 13 Pro Max has) or a measurement that clears
+  // Pocket's bar.
+  { id: 'iphone-13-pro-max', label: 'iPhone 13 Pro Max', ramGb: 6, tier: 'pocket', geometry: '428x926', promotion: true, year: 2021 },
 
   { id: 'iphone-14', label: 'iPhone 14', ramGb: 6, geometry: '390x844', promotion: false, year: 2022 },
   { id: 'iphone-14-plus', label: 'iPhone 14 Plus', ramGb: 6, geometry: '428x926', promotion: false, year: 2022 },
@@ -178,7 +191,7 @@ export function deviceById(id) {
 // its own -- see the ceiling rule in selectNarrationEngine.
 export function tierCeilingForDevice(id) {
   const entry = deviceById(id);
-  return entry ? tierForRamGb(entry.ramGb) : '';
+  return entry ? tierForEntry(entry) : '';
 }
 
 export function geometryKey(width, height) {
@@ -205,7 +218,7 @@ export function tierSpanForModels(models, allTiers = ['kitten', 'kokoro', 'pocke
   let low = allTiers.length - 1;
   let high = 0;
   for (const entry of models) {
-    const index = allTiers.indexOf(tierForRamGb(entry.ramGb));
+    const index = allTiers.indexOf(tierForEntry(entry));
     if (index < 0) continue;
     if (index < low) low = index;
     if (index > high) high = index;

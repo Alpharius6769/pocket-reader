@@ -42,6 +42,11 @@ test('RAM maps to the ladder, and the 13 is a Kitten device', () => {
   assert.equal(catalog.tierCeilingForDevice('iphone-13-mini'), 'kitten');
   assert.equal(catalog.tierCeilingForDevice('iphone-13'), 'kitten');
   assert.equal(catalog.tierCeilingForDevice('iphone-13-pro'), 'kokoro');
+  // 6 GB, but Pocket by product decision -- and only this model. The two
+  // phones sharing its screen and its RAM are not included.
+  assert.equal(catalog.tierCeilingForDevice('iphone-13-pro-max'), 'pocket');
+  assert.equal(catalog.tierCeilingForDevice('iphone-12-pro-max'), 'kokoro');
+  assert.equal(catalog.tierCeilingForDevice('iphone-14-plus'), 'kokoro');
   // 15 Pro is the first 8 GB iPhone, which is why "15 Pro and above -> Pocket"
   // was the right boundary all along.
   assert.equal(catalog.tierCeilingForDevice('iphone-15'), 'kokoro');
@@ -69,7 +74,7 @@ test('geometry candidates are derived from RAM, not hand-written', () => {
   const span = (key) => catalog.tiersForGeometry(key).candidates.join(',');
   assert.equal(span('375x812'), 'kitten', 'X, XS, 11 Pro, 12 mini, 13 mini are all <= 4 GB');
   assert.equal(span('414x896'), 'kitten');
-  assert.equal(span('428x926'), 'kokoro', '12 Pro Max, 13 Pro Max, 14 Plus are all 6 GB');
+  assert.equal(span('428x926'), 'kokoro,pocket', '12 Pro Max and 14 Plus are Kokoro; the 13 Pro Max is Pocket');
   assert.equal(span('393x852'), 'kokoro,pocket', '14 Pro and 15 are 6 GB; 15 Pro and 16 are 8 GB');
   assert.equal(span('440x956'), 'pocket');
   // An unrecognised size opens the whole ladder and lets the measurement speak.
@@ -455,7 +460,13 @@ test('every size that existed before the catalogue behaves as it did', () => {
   assert.equal(at(430, 932, 900), 'pocket');
   assert.equal(at(430, 932, 500), 'kokoro');
   assert.equal(at(375, 812, 900), 'kitten');
-  assert.equal(at(428, 926, 900), 'kokoro');
+  // 428x926 is the one deliberate change: the 13 Pro Max moved to Pocket
+  // (product decision, 2026-09-10), so the size now spans Kokoro..Pocket and a
+  // measurement that clears Pocket's bar reaches it. Unmeasured, it floors at
+  // Kokoro exactly as before.
+  assert.equal(at(428, 926, 900), 'pocket');
+  assert.equal(at(428, 926, 500), 'kokoro');
+  assert.equal(at(428, 926, 0), 'kokoro');
   assert.equal(at(402, 874, 0), 'pocket');
 });
 

@@ -83,18 +83,20 @@ test('exact geometries, not ranges -- a 15 Plus must not read as a 16 Pro', () =
 test('an unmeasured ambiguous device resolves DOWNWARD and says so', () => {
   // Being wrong downward costs voice quality. Being wrong upward costs the tab.
   // Sizes whose models still span more than one tier.
-  for (const [w, h] of [[393, 852], [430, 932], [390, 844]]) {
+  for (const [w, h] of [[393, 852], [430, 932], [390, 844], [428, 926]]) {
     const r = ios(w, h);
     assert.equal(r.confident, false, `${w}x${h} must not claim confidence it lacks`);
     assert.match(r.reason, /identical|device test/i);
   }
   assert.equal(ios(393, 852).engine, 'kokoro', 'the 15 Pro bucket floors at Kokoro');
   assert.equal(ios(390, 844).engine, 'kitten', 'the 13 bucket floors at Kitten');
+  assert.equal(ios(428, 926).engine, 'kokoro', 'the 13 Pro Max bucket floors at Kokoro');
 
   // Sizes the catalogue resolves outright, because every model sharing them
-  // lands on one tier. 375x812 and 428x926 joined this group when RAM replaced
-  // the hand-written candidate lists.
-  for (const [w, h, engine] of [[414, 896, 'kitten'], [375, 812, 'kitten'], [428, 926, 'kokoro']]) {
+  // lands on one tier. 375x812 joined this group when RAM replaced the
+  // hand-written candidate lists; 428x926 left it when the 13 Pro Max was
+  // moved to Pocket.
+  for (const [w, h, engine] of [[414, 896, 'kitten'], [375, 812, 'kitten']]) {
     const r = ios(w, h);
     assert.equal(r.confident, true, `${w}x${h} is a single-tier size`);
     assert.equal(r.engine, engine, `${w}x${h}`);
