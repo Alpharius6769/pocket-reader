@@ -2210,13 +2210,22 @@ export function showStorageInfo() {
 window.showStorageInfo = showStorageInfo;
 
 export function downloadBackup() {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(window.userProfile));
+  // The open story's library entry carries its full text (currentStory IS that
+  // entry), and the avatar is a base64 image. Restore drops both, so exporting
+  // them only made the file big -- and this used to be a data: URL, which
+  // Chrome refuses to download past roughly 2 MB. With a long story open in
+  // the reader, "Download backup" failed without a word.
+  const { avatar, ...rest } = window.userProfile || {};
+  const backup = { ...rest, library: (rest.library || []).map(({ chapters, ...story }) => story) };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
   const dlAnchorElem = document.createElement('a');
-  dlAnchorElem.setAttribute("href", dataStr);
+  dlAnchorElem.setAttribute("href", url);
   dlAnchorElem.setAttribute("download", `PocketReader_Backup_${new Date().toISOString().slice(0, 10)}.json`);
   document.body.appendChild(dlAnchorElem);
   dlAnchorElem.click();
   dlAnchorElem.remove();
+  // Revoke late: revoking before the download commits cancels it in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 window.downloadBackup = downloadBackup;
 

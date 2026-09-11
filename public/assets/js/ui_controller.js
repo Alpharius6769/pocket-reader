@@ -402,6 +402,11 @@ export function jumpToBookmark(c, p) {
     if (libStory) {
       libStory.progressChapter = c;
       libStory.progressParagraph = p;
+      // Unstamped, this jump carried the progress clock of the LAST paragraph
+      // played. Any other device that had played since then held a newer clock,
+      // so the merge kept its position and the synced profile moved this reader
+      // back to where they had jumped away from.
+      window.stampStorySyncField?.(libStory, 'progress');
       if (typeof window.saveLocalData === 'function') window.saveLocalData();
     }
   }
@@ -1731,7 +1736,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=339', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=341', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

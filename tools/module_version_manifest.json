@@ -8,8 +8,8 @@
     "sha256": "72f25cae95ec394b"
   },
   "buffer_manager.js": {
-    "version": "buffer-v112",
-    "sha256": "b6c3bd5ebbf0bb69"
+    "version": "buffer-v115",
+    "sha256": "bbcfda11f2e0ac57"
   },
   "cinematic_ui.js": {
     "version": "cinematic-v11",
@@ -36,7 +36,7 @@
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-339",
+    "version": "sw-341",
     "sha256": "707cef065f6ae196"
   },
   "experience_coordinator.js": {
@@ -68,27 +68,27 @@
     "sha256": "2725198cd1429d02"
   },
   "library_manager.js": {
-    "version": "library-v87",
-    "sha256": "cb1a7237f01e28d2"
+    "version": "library-v90",
+    "sha256": "b34336eabdb98a26"
   },
   "memory_headroom_worker.js": {
     "version": "memory-probe-v1",
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-339",
+    "version": "sw-341",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v131",
-    "sha256": "85d517d11bf3c015"
+    "version": "narration-loader-v133",
+    "sha256": "bc76cff20396918a"
   },
   "native_app_key.js": {
     "version": "native-key-v1",
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-339",
+    "version": "sw-341",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -120,8 +120,8 @@
     "sha256": "a969697ffb428a6d"
   },
   "settings_manager.js": {
-    "version": "settings-v203",
-    "sha256": "1f23a3c3590e5c1b"
+    "version": "settings-v204",
+    "sha256": "2d69948164e6459c"
   },
   "storage_core.js": {
     "version": "storage-v45",
@@ -140,15 +140,15 @@
     "sha256": "0d5594353439250b"
   },
   "ui_controller.js": {
-    "version": "ui-v233",
-    "sha256": "adf8e2f53a0d7ed5"
+    "version": "ui-v236",
+    "sha256": "bab77eb185facfdb"
   },
   "virtue_controller.js": {
     "version": "virtue-v49",
     "sha256": "6696f958e7598ef1"
   },
   "sw.js": {
-    "version": "sw-339",
-    "sha256": "4658c34d0221f5a5"
+    "version": "sw-341",
+    "sha256": "f02082ac42d267ca"
   }
 }

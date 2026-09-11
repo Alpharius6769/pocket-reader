@@ -1281,9 +1281,12 @@ export const BufferManager = {
       const storyTitle = story.title;
       let chapters = story.chapters;
       if (!chapters && typeof window._loadStoryChapters === 'function') {
-        chapters = await window._loadStoryChapters(stableRef, story);
+        // A storage failure is a miss, as initDB documents for every caller.
+        // Thrown out of this loop, it left the button disabled on "Preparing
+        // Away Mode..." with nothing running and no message.
+        chapters = await window._loadStoryChapters(stableRef, story).catch(() => null);
         if (!chapters && stableRef !== storyTitle) {
-          chapters = await window._loadStoryChapters(storyTitle, story);
+          chapters = await window._loadStoryChapters(storyTitle, story).catch(() => null);
           if (chapters) window._saveStoryChapters?.(stableRef, chapters, story).catch(() => {});
         }
       }
