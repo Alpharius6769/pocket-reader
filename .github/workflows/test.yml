@@ -10,7 +10,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The curated_library PDFs are the only LFS objects in this repo and
           # no test reads them. Leaving LFS off keeps CI off the metered
@@ -21,11 +21,11 @@ jobs:
           # against backend/, which is the source of truth.
           submodules: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
