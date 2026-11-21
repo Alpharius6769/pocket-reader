@@ -29,7 +29,7 @@ test('WASM uses the CPU-only runtime and relaxed SIMD with immutable fallback', 
 test('English WASM uses the reduced ORT-format runtime with capability fallback', async () => {
   const worker = await read('public/assets/js/pocket_worker.js');
   assert.match(worker, /1\.27\.0-relaxed-minimal/);
-  assert.match(worker, /english_2026-04-ort-r1/);
+  assert.match(worker, /english_2026-10/);
   assert.match(worker, /relaxed-simd-minimal-ort/);
   assert.match(worker, /supportsRelaxedSimd\(\)/);
   assert.match(worker, /ORT_FORMAT_MODEL_STEMS/);
@@ -168,7 +168,7 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(audio, /wasmReferenceRtf: _pocketBackendRuntime\.wasmReferenceRtf/);
   // Full ?v= form on purpose: a bare version string is invisible to
   // check_module_versions.mjs, so this pin silently rotted past a bump.
-  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v131/);
+  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v133/);
   assert.match(worker, /wasmReferenceRtf/);
   assert.match(worker, /releaseAllSessions/);
   assert.match(worker, /wasm_rtf_sample/);
@@ -214,12 +214,12 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
 test('narration isolation and streamed PCM assets are versioned together', async () => {
   const serviceWorker = await read('public/sw.js');
   assert.match(serviceWorker, /pocket-reader-core-v\d+/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v239/);
+  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v244/);
   assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
   assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
-  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v131/);
-  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v60/);
-  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v50/);
+  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v133/);
+  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v62/);
+  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v51/);
   assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
   const shell = await read('public/index.html');
   const swRevision = serviceWorker.match(/pocket-reader-core-v(\d+)/)?.[1];
@@ -347,16 +347,16 @@ test('calibration quality compares medians across all timed trials', async () =>
   assert.match(policy, /POCKET_CALIBRATION_VERSION = 'cal-v12'/);
 });
 
-test('WebGPU auto-selection targets the certified R3 bundle', async () => {
+test('WebGPU auto-selection targets the english_2026-10 FP16 bundle', async () => {
   const policy = await read('public/assets/js/pocket_backend_policy.js');
-  assert.match(policy, /english_2026-04-webgpu-fp16-r3/);
-  assert.doesNotMatch(policy, /POCKET_WEBGPU_BUNDLE\s*=\s*'english_2026-04-webgpu-fp16';/);
+  assert.match(policy, /english_2026-10-webgpu-fp16-r1/);
+  assert.doesNotMatch(policy, /POCKET_WEBGPU_BUNDLE\s*=\s*'english_2026-04-webgpu-fp16/);
 });
 
-test('Cloudflare publishes immutable R3 assets with revision metadata', async () => {
+test('Cloudflare publishes immutable 2026-10 assets with revision metadata', async () => {
   const worker = await read('worker/cloudflare_worker.js');
-  assert.match(worker, /english_2026-04-webgpu-fp16-r3/);
-  assert.match(worker, /X-Asset-Revision", "english-2026-04-fp16-r3/);
+  assert.match(worker, /english_2026-10-webgpu-fp16-r1/);
+  assert.match(worker, /X-Asset-Revision", "english-2026-10-fp16-r1/);
   assert.match(worker, /max-age=31536000, immutable/);
 });
 

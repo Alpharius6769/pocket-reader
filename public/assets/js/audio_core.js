@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v47';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v48';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -6,7 +6,7 @@ import {
   DEFAULT_LSD_STEPS,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v32';
+} from './tts_pronunciation_core.js?v=pron-v34';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -55,7 +55,7 @@ import {
   readPocketDeviceSetup,
   wasmThreadCandidates,
   readMeasuredHeadroomMb,
-} from './pocket_backend_policy.js?v=backend-v60';
+} from './pocket_backend_policy.js?v=backend-v62';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -151,7 +151,8 @@ const POCKET_EMOTION_PATTERN = new RegExp(`_(${POCKET_ALL_EMOTIONS.join('|')})$`
 // WASM decode block is the per-channel rebuild (23.31 dB latent SNR against the
 // FP16 master, where the original per-tensor export scored 9.89). Both change
 // the waveform, so nothing cached under an older generation may be replayed.
-const POCKET_NARRATION_CACHE_VERSION = 'narrv23';
+// narrv24: english_2026-10 (~110M) ready-made Kyutai voices, preset temp 0.3.
+const POCKET_NARRATION_CACHE_VERSION = 'narrv24';
 const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // Kokoro's render-shape version. Bump whenever anything that changes the audio
 // for the same (text, voice) changes: the chunk cap, the clause rejoin, the
@@ -169,7 +170,7 @@ const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';
 // Kitten renders are versioned on their own axis: a different model produces
 // different audio for the same (text, voice), so the two must not share a key.
-const KITTEN_NARRATION_CACHE_VERSION = 'kittenv2';
+const KITTEN_NARRATION_CACHE_VERSION = 'kittenv3';
 const NEURAL_CACHE_VERSIONS = Object.freeze({
   kokoro: KOKORO_NARRATION_CACHE_VERSION,
   kitten: KITTEN_NARRATION_CACHE_VERSION,
@@ -191,11 +192,11 @@ function _isStyleTts2Engine(engine) {
 // Every v2 emotion state shares a neutral identity anchor, so emotion switches keep
 // the same perceived speaker. Loader falls back to the legacy v1 files when a v2
 // asset is missing (e.g. before/during upload).
-const POCKET_VOICE_PACK_PATH = 'v2/';
+const POCKET_VOICE_PACK_PATH = 'v3/';
 // Bump when v2 files are rebuilt in place on B2: busts Cache Storage + the CF
 // edge cache, which key by full URL. r2 = pitch-matched anchors.
 // r3 = shorter anchor (2.4s) + longer emotion clip for more expressive states.
-const POCKET_VOICE_PACK_REV = 'r3';
+const POCKET_VOICE_PACK_REV = 'r1';
 // chunkv4: sentence splitting no longer breaks on ellipses, abbreviations or
 // initials, closing quotes stay with their sentence, and an over-cap sentence
 // is cut at a clause mark instead of an arbitrary word. Every seam in a
@@ -217,30 +218,33 @@ const POCKET_PARAGRAPH_PAUSE_SEC = 0.5;
 // The SPREAD is deliberately kept -- calm still sits well below shout, so the
 // emotion pass is still audible. It is the absolute ceiling that was the
 // problem, not the fact that emotions differ from each other.
+// Per-emotion sampling temps around Kyutai's 0.3 default. These USED to sit
+// at 0.72-0.87 and silently overrode the preset; they are now the small
+// expressive offsets on top of that recipe, not a second hot band.
 const POCKET_BALANCED_TEMP_CAPS = {
-  neutral: 0.74,
-  calm: 0.72,
-  sad: 0.77,
-  tired: 0.74,
-  worried: 0.79,
-  happy: 0.79,
-  surprised: 0.81,
-  frustrated: 0.81,
+  neutral: 0.30,
+  calm: 0.28,
+  sad: 0.31,
+  tired: 0.29,
+  worried: 0.32,
+  happy: 0.32,
+  surprised: 0.33,
+  frustrated: 0.33,
 };
 const POCKET_FULL_TEMP_CAPS = {
-  neutral: 0.76,
-  calm: 0.73,
-  sad: 0.78,
-  tired: 0.76,
-  confused: 0.80,
-  worried: 0.81,
-  happy: 0.82,
-  enthused: 0.84,
-  surprised: 0.84,
-  frustrated: 0.84,
-  excited: 0.86,
-  anger: 0.86,
-  shout: 0.87,
+  neutral: 0.30,
+  calm: 0.28,
+  sad: 0.31,
+  tired: 0.30,
+  confused: 0.32,
+  worried: 0.33,
+  happy: 0.34,
+  enthused: 0.35,
+  surprised: 0.35,
+  frustrated: 0.35,
+  excited: 0.36,
+  anger: 0.36,
+  shout: 0.38,
 };
 function _normalizeVoice(engine, voice) {
   if (engine !== 'pocket') return voice || '';
@@ -693,8 +697,10 @@ function _artifactCappedTemperature(baseTemperature, emotion, retryLevel = 0) {
   // this is a markedly colder, duller, but reliably intelligible read, which is
   // the right trade for a paragraph that has already failed twice.
   const retries = Math.max(0, Number(retryLevel) || 0);
-  const cooled = chosen - Math.min(0.18, retries * 0.06);
-  return Number(Math.max(0.5, Math.min(0.95, cooled)).toFixed(2));
+  const cooled = chosen - Math.min(0.12, retries * 0.04);
+  // Floor is below Kyutai's 0.3 default so retries can cool further; the old
+  // 0.5 floor made every "set temperature to 0.3" request impossible.
+  return Number(Math.max(0.15, Math.min(0.5, cooled)).toFixed(2));
 }
 
 // The route carries the engine it was resolved FOR, because everything
@@ -1546,9 +1552,9 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v53',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v42',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v131',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v54',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v44',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v133',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -2506,7 +2512,7 @@ function _sameBaseFallbackVoiceIds(targetVoice) {
     ? window.resolvePocketAssetVoiceId(POCKET_DEFAULT_VOICE, 'neutral')
     : `${POCKET_DEFAULT_VOICE}_neutral`;
   if (defaultAsset && defaultAsset !== targetVoice && !fallbacks.includes(defaultAsset)) fallbacks.push(defaultAsset);
-  if (!fallbacks.includes('rob_neutral')) fallbacks.push('rob_neutral');
+  if (!fallbacks.includes('alba_neutral')) fallbacks.push('alba_neutral');
   return fallbacks;
 }
 
@@ -4061,8 +4067,7 @@ export async function playCurrentParagraph() {
   _syncProsodyDriftToPosition();
 
   const engine = _resolveActiveEngine();
-  const defaultVoice = _defaultVoiceForEngine(engine);
-  const voice = document.getElementById('voice-selector')?.value || defaultVoice;
+  const voice = _effectiveVoiceForEngine(engine);
 
   try {
     // THE playback dispatch. Testing for the literal 'pocket' sent every Kokoro
@@ -4265,7 +4270,7 @@ async function _ensurePlaybackLookahead() {
     const engine = _resolveActiveEngine();
     const title = story.title;
     const storyRef = story.storyKey || window.getStoryStableKey?.(story) || title;
-    const selVoice = document.getElementById('voice-selector')?.value || _defaultVoiceForEngine(engine);
+    const selVoice = _effectiveVoiceForEngine(engine);
     let c = window.currentChapterIndex, p = window.currentParagraphIndex;
     for (let i = 0; i < POCKET_PLAYBACK_LOOKAHEAD; i++) {
       if (_lookaheadShouldYield()) break;
@@ -4994,6 +4999,25 @@ function _defaultVoiceForEngine(engine) {
   }
   return engine === 'pocket' ? POCKET_DEFAULT_VOICE : '';
 }
+
+// Story narration presets store a voice id that used to be ignored at play
+// time (only emotion/speed/pronunciations applied). Prefer that id when it
+// belongs to the active engine; otherwise fall through to the playbar.
+function _effectiveVoiceForEngine(engine) {
+  const presetVoice = window.currentStory?.narrationPreset?.voice;
+  const selectorVoice = document.getElementById('voice-selector')?.value;
+  const requested = (presetVoice && String(presetVoice).trim())
+    || selectorVoice
+    || _defaultVoiceForEngine(engine);
+  if (typeof window.resolveVoiceForEngine === 'function') {
+    return window.resolveVoiceForEngine(engine, requested);
+  }
+  if (voicesForEngine(engine).length) {
+    return coerceVoiceForEngine(engine, requested);
+  }
+  return requested || _defaultVoiceForEngine(engine);
+}
+window._effectiveVoiceForEngine = _effectiveVoiceForEngine;
 
 function _voiceEngineControlValue() {
   // settings.voiceEngine is 'pocket' for Kitten, Kokoro, AND Pocket TTS.

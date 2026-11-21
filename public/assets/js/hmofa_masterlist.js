@@ -1173,6 +1173,28 @@ function bindControls() {
   $('hmofa-clear-filters')?.addEventListener('click', clearAllFilters);
   $('hmofa-refresh-catalog')?.addEventListener('click', () => refreshHmofaCatalog());
 
+  const filtersSheet = $('hmofa-filters-sheet');
+  const openFiltersSheet = () => {
+    if (!filtersSheet) return;
+    filtersSheet.hidden = false;
+    filtersSheet.classList.add('is-open');
+  };
+  const closeFiltersSheet = () => {
+    if (!filtersSheet) return;
+    filtersSheet.classList.remove('is-open');
+    filtersSheet.hidden = true;
+  };
+  $('hmofa-open-facets')?.addEventListener('click', openFiltersSheet);
+  $('hmofa-close-facets')?.addEventListener('click', closeFiltersSheet);
+  filtersSheet?.addEventListener('click', (event) => {
+    if (event.target === filtersSheet) closeFiltersSheet();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && filtersSheet?.classList.contains('is-open')) {
+      closeFiltersSheet();
+    }
+  });
+
   $('hmofa-open-preferences')?.addEventListener('click', () => {
     openHmofaPreferencesDialog((preferences) => {
       state.preferences = preferences;

@@ -135,9 +135,12 @@ test('the durable model cache name honours both lifecycle contracts', async () =
 
   // clearNeuralEngineCache must still be able to free it from the settings UI.
   const clearBlock = settings.slice(settings.indexOf('export async function clearNeuralEngineCache'));
-  const clearTokens = [...clearBlock.matchAll(/name\.includes\('([^']+)'\)/g)].map((match) => match[1]);
-  assert.ok(clearTokens.some((token) => name.includes(token)),
-    `clearNeuralEngineCache cannot delete '${name}'; it matches ${clearTokens.join(', ')}`);
+  const clearRegex = clearBlock.match(/\/([^/\n]+)\/i\.test\(name\)/)?.[1];
+  assert.ok(clearRegex, 'clearNeuralEngineCache must use a cache-name regex');
+  assert.ok(new RegExp(clearRegex, 'i').test(name),
+    `clearNeuralEngineCache cannot delete '${name}'; regex /${clearRegex}/i does not match`);
+  assert.match(clearBlock, /!\/pocket-reader-core\/i\.test\(name\)/,
+    'clearNeuralEngineCache must refuse to delete the app shell cache');
 });
 
 test('model cache helpers degrade instead of throwing', async () => {

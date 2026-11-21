@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v47';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v48';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -8,7 +8,7 @@ import {
   detectMobilePlatform,
   isMobileLikePlatform,
   voicesForEngine,
-} from './pocket_backend_policy.js?v=backend-v60';
+} from './pocket_backend_policy.js?v=backend-v62';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
@@ -1017,7 +1017,11 @@ export const BufferManager = {
     // describes what happens otherwise, and it applies verbatim to Kitten: the
     // id is canonicalised against POCKET_VOICES, rewritten to donald_malone, and
     // every paragraph 404s on a voice file that engine does not have.
-    voice = _voiceForEngine(engine, document.getElementById('voice-selector')?.value);
+    const presetVoice = window.currentStory?.narrationPreset?.voice;
+    const selectorVoice = document.getElementById('voice-selector')?.value;
+    voice = typeof window._effectiveVoiceForEngine === 'function'
+      ? window._effectiveVoiceForEngine(engine)
+      : _voiceForEngine(engine, presetVoice || selectorVoice);
     for (let c = 0; c < window.currentStory.chapters.length; c++) {
       const chap = window.currentStory.chapters[c];
       if (!chap.paragraphs) continue;

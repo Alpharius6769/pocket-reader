@@ -133,7 +133,7 @@ function renderAccountCenter() {
   }
   const loggedIn = !!data.isLoggedIn;
   center.innerHTML = `
-    <header class="section-heading"><div><span class="eyebrow">Private by design</span><h2>Account Center</h2></div>${icon(loggedIn ? 'cloud' : 'cloud-off', 'heading-icon')}</header>
+    <header class="section-heading"><div><h2>Account</h2></div>${icon(loggedIn ? 'cloud' : 'cloud-off', 'heading-icon')}</header>
     ${syncStatusMarkup()}
     <dl class="account-facts"><div><dt>Identity</dt><dd>${escapeHtml(loggedIn ? (data.cloudEmail || 'Signed in') : 'Guest reader')}</dd></div><div><dt>Cloud revision</dt><dd>${Number(data.revision) || 0}</dd></div><div><dt>Device</dt><dd>${escapeHtml(String(data.deviceId || window.getPocketReaderDeviceId?.() || '').slice(-10) || 'Local')}</dd></div></dl>
     <div class="button-row">
@@ -201,61 +201,12 @@ function installAccountCenter() {
 
 function installSettingsSystem() {
   const view = document.getElementById('settings-view');
-  const grid = view?.querySelector('.settings-grid');
-  if (!view || !grid || document.getElementById('settings-section-nav')) return;
+  // Advanced disclosure hosts the legacy masonry grid; main Settings is
+  // Narration / Display / Account via .settings-stack.
+  const grid = view?.querySelector('#advanced-settings-section .settings-grid')
+    || view?.querySelector('.settings-grid');
+  if (!view || !grid || document.getElementById('reader-width-control')) return;
   view.querySelector('h1')?.classList.add('page-title');
-  const nav = document.createElement('nav');
-  nav.id = 'settings-section-nav';
-  nav.className = 'settings-section-nav';
-  nav.setAttribute('aria-label', 'Settings sections');
-  // "Offline Storage" was removed: the only main-grid card it targeted is the
-  // Away Mode Cache Queue status panel; the actual storage tools (clear caches,
-  // backup/restore, permanent caches) live in the Advanced Settings & Info
-  // section, so a top-level Offline Storage pill was redundant and misleading.
-  const groups = [
-    ['reading', 'Reading', 'book-open'], ['narration', 'Narration', 'volume-2'],
-    ['appearance', 'Appearance', 'sparkles'], ['companion', 'Companion', 'user'],
-    ['accessibility', 'Accessibility', 'shield-check'], ['advanced', 'Advanced Diagnostics', 'sliders-horizontal'],
-  ];
-  // Phones open the settings sections collapsed so the long list is scannable at
-  // a glance; desktop, laptop, and tablet (wider than the phone breakpoint) open
-  // every section expanded. The collapse toggle itself is only shown at this
-  // same breakpoint (see theme.css), so wider viewports always read expanded.
-  const collapseByDefault = window.matchMedia?.('(max-width: 700px)')?.matches === true;
-  nav.innerHTML = groups.map(([id, label, glyph], index) => `<button class="${index ? '' : 'active'}" data-settings-target="${id}">${icon(glyph)}<span>${label}</span></button>`).join('');
-  grid.before(nav);
-  const cards = [...grid.querySelectorAll('.settings-card')];
-  const classify = (title) => /narration|playback|voice|expressive|pronunciation/i.test(title) ? 'narration' : /font|reading|reader|text/i.test(title) ? 'reading' : /theme|appearance|color/i.test(title) ? 'appearance' : /companion|app/i.test(title) ? 'companion' : /storage|cache|offline/i.test(title) ? 'storage' : /access|motion|haptic|hint/i.test(title) ? 'accessibility' : 'advanced';
-  const decorateCard = (card, index) => {
-    const section = classify(card.querySelector('h3')?.textContent || '');
-    card.dataset.settingsSection = section;
-    card.id ||= `settings-card-${section}-${index}`;
-    const title = card.querySelector('h3');
-    if (title && !title.querySelector('.settings-card-toggle')) {
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'settings-card-toggle';
-      toggle.setAttribute('aria-label', `Toggle ${title.textContent.trim()}`);
-      toggle.innerHTML = icon('chevron-down');
-      toggle.addEventListener('click', () => {
-        const collapsed = card.classList.toggle('collapsed');
-        toggle.setAttribute('aria-expanded', String(!collapsed));
-      });
-      title.appendChild(toggle);
-      if (collapseByDefault) card.classList.add('collapsed');
-      toggle.setAttribute('aria-expanded', String(!card.classList.contains('collapsed')));
-    }
-  };
-  cards.forEach(decorateCard);
-  nav.addEventListener('click', (event) => {
-    const button = event.target.closest('[data-settings-target]');
-    if (!button) return;
-    nav.querySelectorAll('button').forEach((item) => item.classList.toggle('active', item === button));
-    const target = grid.querySelector(`[data-settings-section="${button.dataset.settingsTarget}"]`);
-    target?.scrollIntoView({ behavior: motionAllowed() ? 'smooth' : 'auto', block: 'start' });
-  });
-
-
 
   const personalization = document.createElement('section');
   personalization.className = 'settings-card';
@@ -276,14 +227,12 @@ function installSettingsSystem() {
     <p class="settings-help">Decorative motion pauses automatically during narration synthesis, low-memory mode, data saver, reduced-motion preference, and hidden-page operation.</p>`;
   grid.appendChild(experience);
 
-  [personalization, experience].forEach((card, index) => decorateCard(card, cards.length + index));
-  setTimeout(() => grid.querySelectorAll('.settings-card').forEach(decorateCard), 0);
-
   const settings = profile().settings || {};
   setControlValue('reader-width-control', settings.readerWidth || 78);
   setControlValue('reader-line-control', settings.readerLineHeight || 1.7);
   setControlValue('reader-spacing-control', settings.paragraphSpacing || 1.15);
-  setControlValue('reader-alignment-control', settings.readerAlignment || 'left');  setControlValue('motion-preset-control', settings.motionPreset || 'standard');
+  setControlValue('reader-alignment-control', settings.readerAlignment || 'left');
+  setControlValue('motion-preset-control', settings.motionPreset || 'standard');
   setControlValue('companion-frequency-control', settings.companionFrequency || 'contextual');
   const bindRange = (id, field, output, suffix = '') => document.getElementById(id)?.addEventListener('input', (event) => {
     const value = Number(event.target.value);
@@ -295,9 +244,12 @@ function installSettingsSystem() {
   bindRange('reader-line-control', 'readerLineHeight', 'reader-line-output');
   bindRange('reader-spacing-control', 'paragraphSpacing', 'reader-spacing-output', 'em');
   [['reader-alignment-control', 'readerAlignment'], ['motion-preset-control', 'motionPreset'], ['companion-frequency-control', 'companionFrequency']].forEach(([id, field]) => document.getElementById(id)?.addEventListener('change', (event) => saveSetting(field, event.target.value)));
-  document.getElementById('reader-width-output').value = `${settings.readerWidth || 78}ch`;
-  document.getElementById('reader-line-output').value = String(settings.readerLineHeight || 1.7);
-  document.getElementById('reader-spacing-output').value = `${settings.paragraphSpacing || 1.15}em`;
+  const widthOut = document.getElementById('reader-width-output');
+  const lineOut = document.getElementById('reader-line-output');
+  const spacingOut = document.getElementById('reader-spacing-output');
+  if (widthOut) widthOut.value = `${settings.readerWidth || 78}ch`;
+  if (lineOut) lineOut.value = String(settings.readerLineHeight || 1.7);
+  if (spacingOut) spacingOut.value = `${settings.paragraphSpacing || 1.15}em`;
 }
 
 function installReaderDrawers() {

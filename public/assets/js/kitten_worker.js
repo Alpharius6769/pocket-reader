@@ -1,29 +1,27 @@
-/* kitten_worker.js - KittenTTS Nano narration worker for the lightest tier.
+/* kitten_worker.js - KittenTTS 2 Nano narration worker for the lightest tier.
 
    WHY THIS EXISTS
    Measured on the 4 GB rig (tests/android-oom): Kokoro's session costs +275 MB
-   resident, Kitten Nano's costs +23 MB - 12x less, on a model that builds its
-   session in 640 ms rather than 1690 ms. That is the difference between fitting
-   an iPhone 13's ~400-450 MB budget and not.
+   resident, Kitten Nano 0.1's costs +23 MB - 12x less. KittenTTS 2 Nano is the
+   same role with a smaller English graph (16.6 MB int8) and Kokoro-style
+   (510, 256) voice tables.
 
    WHY IT IS A SEPARATE FILE RATHER THAN A FLAG ON kokoro_worker
    The two are close but not the same, and Kokoro is the currently-working path.
    KittenTTS is StyleTTS2 like Kokoro, with IDENTICAL graph inputs (input_ids,
-   style, speed) and near-identical phoneme ids - of 103 shared symbols, 101
-   match. But the VOICE FORMAT differs in kind: Kokoro ships a (510, 1, 256)
-   table indexed by the token count of the chunk being spoken, while Kitten ships
-   ONE 256-float vector per voice. Threading that through the live engine as a
-   conditional would risk the tier that already works to save duplication.
+   style, speed). KittenTTS 2 now also ships a (510, 256) style table, but its
+   vocab, voice ids and model path differ, and threading that through the live
+   Kokoro engine as a conditional would risk the tier that already works.
 */
-import { normalizeForPocketTts } from './tts_pronunciation_core.js?v=pron-v32';
+import { normalizeForPocketTts } from './tts_pronunciation_core.js?v=pron-v34';
 
 self.postMessage({ type: 'status', status: 'Worker Thread Started', state: 'idle' });
 
 const PROXY_BASE_URL = self.PR_PROXY_BASE || 'https://pocket-reader-proxy.alpharius67.workers.dev';
-const KITTEN_BASE = `${PROXY_BASE_URL}/models/kitten/v0.1`;
-// Deliberately the SAME espeak bundle Kokoro uses, not a copy: both engines
-// are StyleTTS2 and their vocabularies agree on 101 of 103 shared symbols, so
-// a reader who switches tiers pays no second 890 KB download.
+const KITTEN_BASE = `${PROXY_BASE_URL}/models/kitten/v2.0`;
+// Deliberately the SAME espeak bundle Kokoro uses, not a copy: KittenTTS 2's
+// English vocab still covers the IPA espeak emits, so a reader who switches
+// tiers pays no second 890 KB download.
 const PHONEMIZER_URL = `${PROXY_BASE_URL}/models/kokoro/phonemizer/1.2.1/phonemizer.js`;
 const ORT_BASE = `${PROXY_BASE_URL}/models/onnxruntime/1.27.0/`;
 
@@ -31,21 +29,15 @@ const SAMPLE_RATE = 24000;
 // Upper bound on tokens handed to one inference. Longer phoneme runs are split
 // rather than truncated, so no audio is ever silently dropped.
 //
-// INHERITED FROM KOKORO AND NOT MEASURED HERE. Kokoro's 512 comes from its voice
-// table having 510 rows, which its style lookup indexes by token count; Kitten
-// has no such table, so nothing about this number is derived from this model.
-// input_ids is [1, sequence_length] with a dynamic axis in both exports, so it
-// is a chosen cap rather than a graph limit. It is kept because a bound is worth
-// having, not because it is the right bound.
+// 512 matches the voice table: KittenTTS 2 ships (510, 256) style rows indexed
+// by token count, the same contract as Kokoro. input_ids is [1, sequence_length]
+// with a dynamic axis, so this is the voice-table bound rather than a graph limit.
 const MAX_TOKENS = 512;
-// Kitten's style vector is 256 floats, one per voice - no per-length table.
 const STYLE_DIM = 256;
+const VOICE_ROWS = 510;
 
-// The only export onnx-community publishes for Kitten Nano, and the one that was
-// measured: +23 MB resident against Kokoro's +275 MB. It carries no f16 in its
-// name and needs none - ORT's wasm CPU backend cannot execute float16, which is
-// why the equivalent Kokoro swap was tried and reverted (see kokoro_worker.js).
-const MODEL_FILE = 'model_quantized.onnx';
+// KittenTTS 2 Nano English int8 graph (KittenML/kitten-tts-2-nano).
+const MODEL_FILE = 'kitten_tts_2_nano_en.onnx';
 
 const MODEL_TIMEOUT_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 90000;
@@ -396,15 +388,13 @@ async function loadVoice(voiceId) {
   if (voiceCache.has(id)) return voiceCache.get(id);
   const buffer = await fetchBuffer(`${KITTEN_BASE}/voices/${id}.bin`, `voice ${id}`);
   const data = new Float32Array(buffer);
-  // THE difference from Kokoro. Kitten ships one 256-float style vector per
-  // voice (1024 bytes), not a (510, 1, 256) table indexed by token count. Any
-  // other length means a Kokoro asset has been pointed at this engine - exactly
-  // the cross-engine leak the voice contract in pocket_backend_policy exists to
-  // prevent - so it fails loudly rather than emitting noise.
-  if (data.length !== STYLE_DIM) {
+  // KittenTTS 2 ships the same (510, 256) table Kokoro does: one 256-float
+  // style vector per possible token length. Nano 0.1 was a single vector; a
+  // file of that old length is the wrong generation and fails loudly.
+  if (data.length !== VOICE_ROWS * STYLE_DIM) {
     throw new Error(
-      `voice ${id} has ${data.length} floats, expected ${STYLE_DIM}. `
-      + 'That length is a Kokoro voice table; Kitten voices are a single vector.',
+      `voice ${id} has ${data.length} floats, expected ${VOICE_ROWS * STYLE_DIM} `
+      + `(${VOICE_ROWS} x ${STYLE_DIM}). KittenTTS 2 voices are a length-indexed table.`,
     );
   }
   voiceCache.clear();
@@ -412,11 +402,11 @@ async function loadVoice(voiceId) {
   return data;
 }
 
-// Kokoro picks a style row by the chunk's token count. Kitten has exactly one
-// vector per voice, so the count is irrelevant; the signature is kept only so
-// the call site below reads the same in both workers.
-function styleForTokenCount(voiceData, _tokenCount) {
-  return voiceData;
+// Pick the style row for this chunk's token count. Row 0 is unused padding in
+// the upstream table; tokens are clamped into [1, VOICE_ROWS-1].
+function styleForTokenCount(voiceData, tokenCount) {
+  const row = Math.max(1, Math.min(VOICE_ROWS - 1, Number(tokenCount) || 1));
+  return voiceData.subarray(row * STYLE_DIM, (row + 1) * STYLE_DIM);
 }
 
 function tokenizePhonemes(phonemeString) {
@@ -764,7 +754,7 @@ self.onmessage = async (event) => {
         telemetry: {
           selectedBackend: 'wasm',
           precision: 'q8f16',
-          modelRevision: 'kitten-nano-v0.1',
+          modelRevision: 'kitten-tts-2-nano',
           sampleRate: SAMPLE_RATE,
           // Report what ORT was actually configured with. This was hardcoded to
           // 1 while the line above logs numThreads, so an isolated session that
@@ -778,7 +768,7 @@ self.onmessage = async (event) => {
       // name and the size, since Kitten's model is roughly 12x smaller. This
       // is the ONLY line that confirms Kitten actually started, so anyone
       // debugging it was being told to look at the wrong engine.
-      log('INFO', `Kitten engine ready (KittenTTS Nano 0.1, non-autoregressive, chunk cap ${chunkTokenLimit()})`);
+      log('INFO', `Kitten engine ready (KittenTTS 2 Nano, non-autoregressive, chunk cap ${chunkTokenLimit()})`);
     } catch (error) {
       isReady = false;
       self.postMessage({ type: 'init_error', error: error?.message || String(error) });

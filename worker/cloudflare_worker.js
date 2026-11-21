@@ -178,7 +178,8 @@ function cacheControlForModelAsset(url, response) {
   if (response.status === 206) {
     return "public, max-age=86400";
   }
-  if (url.pathname.includes("/english_2026-04-webgpu-fp16-r3/")) {
+  if (url.pathname.includes("/english_2026-10-webgpu-fp16-r1/")
+      || url.pathname.includes("/english_2026-04-webgpu-fp16-r3/")) {
     return "public, max-age=31536000, immutable";
   }
   if (url.pathname.endsWith("/sentencepiece.js") || url.pathname.endsWith("/bundle.json")) {
@@ -561,6 +562,7 @@ const handlers = {
         const assetIntegrity = response.headers.get("X-Bz-Info-Sha256") || response.headers.get("X-Bz-Content-Sha1") || response.headers.get("ETag");
         if (assetIntegrity) newResponse.headers.set("X-Asset-Integrity", assetIntegrity.replace(/^\"|\"$/g, ""));
         if (url.pathname.includes("/onnxruntime/1.27.0/")) newResponse.headers.set("X-Asset-Revision", "onnxruntime-web-1.27.0");
+        else if (url.pathname.includes("/english_2026-10-webgpu-fp16-r1/")) newResponse.headers.set("X-Asset-Revision", "english-2026-10-fp16-r1");
         else if (url.pathname.includes("/english_2026-04-webgpu-fp16-r3/")) newResponse.headers.set("X-Asset-Revision", "english-2026-04-fp16-r3");
 
         // Dynamic Range Caching Guard: avoid caching partial byte ranges as

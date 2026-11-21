@@ -1,10 +1,10 @@
 import { animate, stagger } from './motion_lite.js';
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v60';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v62';
 import {
   DEFAULT_POCKET_PLAYBACK_SPEED,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v32';
+} from './tts_pronunciation_core.js?v=pron-v34';
 import { profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit } from './profile_merge.js?v=merge-v13';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 

@@ -26,15 +26,15 @@ export const DEFAULT_POCKET_VOICE_SEED = 'pr-voice-1';
 // this engine comes from temperature and segmentation, not from LSD steps.
 export const DEFAULT_LSD_STEPS = 1;
 
-// Sampling temperature per preset. Stability outranks expressiveness on Pocket:
-// this is a zero-shot flow-LM, and temperature is what makes a long listen come
-// apart -- repeated words, a pitch that climbs mid-quote, a distorted tail.
-// These sit deliberately below the 0.86/0.93 that shipped before, while keeping
-// real distance between the three so the setting still does something.
+// Sampling temperature per preset. Kyutai ships every Pocket TTS model at a
+// default of 0.3 (english_2026-04 onward). The 0.68-0.84 band we used before
+// was fighting that recipe and is what produced the long-listen repeats the
+// retry path works around. All three presets sit at 0.3; emotion tables below
+// keep only a few hundredths of headroom for expressive steering.
 export const POCKET_TTS_TUNING_PRESETS = Object.freeze({
-  stable: { temperature: 0.68, lsdSteps: DEFAULT_LSD_STEPS, label: 'Stable audiobook' },
-  balanced: { temperature: 0.76, lsdSteps: DEFAULT_LSD_STEPS, label: 'Balanced audiobook' },
-  expressive: { temperature: 0.84, lsdSteps: DEFAULT_LSD_STEPS, label: 'Full expression' },
+  stable: { temperature: 0.3, lsdSteps: DEFAULT_LSD_STEPS, label: 'Stable audiobook' },
+  balanced: { temperature: 0.3, lsdSteps: DEFAULT_LSD_STEPS, label: 'Balanced audiobook' },
+  expressive: { temperature: 0.3, lsdSteps: DEFAULT_LSD_STEPS, label: 'Full expression' },
 });
 
 const PRESET_RANK = Object.freeze({ stable: 0, balanced: 1, expressive: 2 });

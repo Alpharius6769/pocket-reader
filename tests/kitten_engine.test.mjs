@@ -180,16 +180,19 @@ test('voices cannot leak across engines', () => {
   // The concrete failure this prevents: an unknown id reaching the worker, which
   // previously resolved to a Pocket voice pack and hung for 60 s.
   assert.equal(policy.isKittenVoice('af_heart'), false);
-  assert.equal(policy.isKokoroVoice('expr-voice-3-f'), false);
+  assert.equal(policy.isKokoroVoice('eleanor'), false);
   assert.equal(policy.isVoiceValidForEngine('kitten', 'af_heart'), false);
-  assert.equal(policy.isVoiceValidForEngine('kokoro', 'expr-voice-3-f'), false);
-  assert.equal(policy.isVoiceValidForEngine('kitten', 'expr-voice-3-f'), true);
+  assert.equal(policy.isVoiceValidForEngine('kokoro', 'eleanor'), false);
+  assert.equal(policy.isVoiceValidForEngine('kitten', 'eleanor'), true);
   assert.equal(policy.isVoiceValidForEngine('kokoro', 'af_heart'), true);
+  // Retired Kitten ids are not live, but coerce migrates them.
+  assert.equal(policy.isVoiceValidForEngine('kitten', 'expr-voice-3-f'), false);
 
   // Coercion returns the engine's own default rather than passing junk through.
   assert.equal(policy.coerceVoiceForEngine('kitten', 'af_heart'), policy.KITTEN_DEFAULT_VOICE);
-  assert.equal(policy.coerceVoiceForEngine('kokoro', 'expr-voice-3-f'), policy.KOKORO_DEFAULT_VOICE);
-  assert.equal(policy.coerceVoiceForEngine('kitten', 'expr-voice-5-m'), 'expr-voice-5-m');
+  assert.equal(policy.coerceVoiceForEngine('kokoro', 'eleanor'), policy.KOKORO_DEFAULT_VOICE);
+  assert.equal(policy.coerceVoiceForEngine('kitten', 'expr-voice-5-m'), 'danny');
+  assert.equal(policy.coerceVoiceForEngine('kitten', 'expr-voice-3-f'), 'eleanor');
 
   // Pocket manages its own packs and must be left alone.
   assert.equal(policy.voicesForEngine('pocket').length, 0);
@@ -217,17 +220,17 @@ test('both engine selects offer the same engines and share one handler', async (
   assert.match(settings, /\['voice-engine-select', 'reader-engine-select'\]/);
 });
 
-test('the Kitten worker loads Kitten assets and rejects a Kokoro voice table', async () => {
+test('the Kitten worker loads KittenTTS 2 assets and rejects a wrong-shaped voice table', async () => {
   const w = await read('public/assets/js/kitten_worker.js');
   const code = w.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  assert.match(code, /models\/kitten\/v0\.1/);
-  assert.match(code, /const MODEL_FILE = 'model_quantized\.onnx';/);
+  assert.match(code, /models\/kitten\/v2\.0/);
+  assert.match(code, /const MODEL_FILE = 'kitten_tts_2_nano_en\.onnx';/);
 
-  // Kitten voices are ONE 256-float vector; Kokoro's are a (510,1,256) table.
-  // The wrong asset must fail loudly, not emit noise.
-  assert.match(code, /data\.length !== STYLE_DIM/);
-  assert.doesNotMatch(code, /VOICE_ROWS/);
-  assert.match(w, /Kokoro voice table; Kitten voices are a single vector/);
+  // KittenTTS 2 ships Kokoro-style (510, 256) tables; a single-vector 0.1 bin
+  // must fail loudly rather than emit noise.
+  assert.match(code, /VOICE_ROWS = 510/);
+  assert.match(code, /data\.length !== VOICE_ROWS \* STYLE_DIM/);
+  assert.match(w, /KittenTTS 2 voices are a length-indexed table/);
 
   // It must identify itself as kitten, or diagnostics attribute its runs to Kokoro.
   assert.match(code, /engine: 'kitten'/);
@@ -237,14 +240,14 @@ test('the Kitten worker loads Kitten assets and rejects a Kokoro voice table', a
 test('every engine routes to its own worker, and Kitten counts as neural', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   const sw = await read('public/sw.js');
-  assert.match(audio, /kitten: 'assets\/js\/kitten_worker\.js\?v=kitten-v42'/);
+  assert.match(audio, /kitten: 'assets\/js\/kitten_worker\.js\?v=kitten-v44'/);
   assert.match(audio, /kokoro: 'assets\/js\/kokoro_worker\.js/);
   assert.match(audio, /pocket: 'assets\/js\/pocket_worker\.js/);
   // Omitting Kitten here would make every narration gate treat it as device speech.
   const at = audio.indexOf('function _isNeuralEngine');
   assert.match(audio.slice(at, at + 400), /KITTEN_ENGINE/);
   // The SW must precache it, and its name has to end _worker.js to be stamped.
-  assert.match(sw, /assets\/js\/kitten_worker\.js\?v=kitten-v42/);
+  assert.match(sw, /assets\/js\/kitten_worker\.js\?v=kitten-v44/);
 });
 
 test('overriding UPWARD warns; overriding downward does not nag', async () => {

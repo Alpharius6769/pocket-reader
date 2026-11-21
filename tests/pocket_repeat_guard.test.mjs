@@ -231,8 +231,8 @@ test('a fatally-flagged paragraph is retried several times, cooling each pass', 
     source.indexOf('function _artifactCappedTemperature'),
     source.indexOf('// The route carries the engine it was resolved FOR'),
   );
-  assert.match(cooling, /retries \* 0\.06/, 'retries must step the temperature down per level');
-  assert.doesNotMatch(cooling, /retryLevel \? 0\.06 : 0/, 'the one-shot step-down was the old behaviour');
+  assert.match(cooling, /retries \* 0\.04/, 'retries must step the temperature down per level');
+  assert.doesNotMatch(cooling, /retryLevel \? 0\.0[46] : 0/, 'the one-shot step-down was the old behaviour');
 });
 
 test('when every attempt fails the least-bad render is kept, not dropped', () => {
@@ -383,11 +383,11 @@ test('unconstrained WASM devices decode through the FP16 Mimi vocoder', async ()
     worker.indexOf('const KNOWN_MODEL_FILE_BYTES'),
     worker.indexOf('const MODEL_ASSET_BYTES'),
   );
-  for (const file of ['mimi_decoder_fp16.onnx', 'mimi_decoder_int8_pc.onnx',
-                      'flow_lm_main_int8_pc.onnx', 'flow_lm_decode_block4_int8_pc.onnx']) {
-    assert.ok(sizes.includes(`'${file}':`),
-      `${file} needs a declared size or progress reports the per-tensor one`);
-  }
+  // english_2026-10 only needs the FP16 Mimi size override; the old _pc rebuild
+  // sizes were for english_2026-04 and are no longer fetched.
+  assert.ok(sizes.includes("'mimi_decoder_fp16.onnx':"),
+    'mimi_decoder_fp16.onnx needs a declared size or progress reports the per-tensor one');
+  assert.doesNotMatch(sizes, /_int8_pc\.onnx/);
 });
 
 test('switching the vocoder busts the narration cache', async () => {
@@ -396,7 +396,7 @@ test('switching the vocoder busts the narration cache', async () => {
   const audio = await readFile(
     new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
   );
-  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv23'/);
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv24'/);
 });
 
 test('the Pocket TTS upstream license is recorded with its attribution terms', async () => {
@@ -413,21 +413,16 @@ test('the Pocket TTS upstream license is recorded with its attribution terms', a
 
 // ── Rebuilt decode block ────────────────────────────────────────────────────
 
-test('the WASM decode block is the per-channel rebuild, with a fallback', async () => {
-  // The original export gives every weight matrix ONE scalar scale and scores
-  // 9.89 dB latent SNR against the FP16 build of the same weights. The latents
-  // drive the vocoder, so that error is upstream of everything. Per-channel
-  // scales score 23.31 dB in a file that is smaller and loads twice as fast.
+test('the WASM decode block uses the english_2026-10 base INT8 file', async () => {
+  // english_2026-10 ships the base INT8 decode block only. The _pc name was the
+  // english_2026-04 per-channel rebuild; chasing it here would 404 twice per load.
   const worker = await readFile(
     new URL('../public/assets/js/pocket_worker.js', import.meta.url), 'utf8',
   );
-  assert.match(worker, /const WASM_BLOCK_FILE = 'flow_lm_decode_block4_int8_pc\.onnx';/);
+  assert.match(worker, /const WASM_BLOCK_FILE = 'flow_lm_decode_block4_int8\.onnx';/);
   assert.match(worker, /const WASM_BLOCK_LEGACY_FILE = 'flow_lm_decode_block4_int8\.onnx';/);
+  assert.doesNotMatch(worker, /const WASM_BLOCK_FILE = 'flow_lm_decode_block4_int8_pc\.onnx';/);
 
-  // A bundle without the rebuilt file must find the old block rather than
-  // dropping to the per-frame path, which is far slower than either.
-  // An earlier bosResponse fetch sits above this one in the file, so the end of
-  // the slice has to be searched for AFTER the block fetch or it comes out empty.
   const blockAt = worker.indexOf('const blockResponse = await fetchFirstAvailable([');
   const fetchBlock = worker.slice(
     blockAt,
@@ -435,8 +430,6 @@ test('the WASM decode block is the per-channel rebuild, with a fallback', async 
   );
   assert.ok(fetchBlock.length > 0, 'the block fetch must still be findable');
   assert.match(fetchBlock, /wasmModelPaths\(language, wasmBlockFilename\(false\)\)/);
-  assert.match(fetchBlock, /wasmModelPaths\(language, WASM_BLOCK_LEGACY_FILE\)/);
-  // The .ort bundle has no rebuilt file, so it must not chase a legacy .onnx.
   assert.match(fetchBlock, /useOrtFormatWasm \? \[\] :/);
 });
 
@@ -444,7 +437,7 @@ test('new latents mean a new cache generation', async () => {
   const audio = await readFile(
     new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
   );
-  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv23'/);
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv24'/);
 });
 
 test('the decode-block rebuild is reproducible from a checked-in tool', async () => {
@@ -534,48 +527,29 @@ test('only 8GB-and-up iPhones reach Pocket in the first place', async () => {
 
 // ── Per-channel rebuilds of the remaining INT8 models ───────────────────────
 
-test('every per-tensor model has a per-channel rebuild preferred ahead of it', async () => {
-  // Scored against the REAL FP32 masters this time, not an FP16 proxy: the
-  // deployed flow_lm_main_int8 is byte-identical to the one published beside
-  // those masters, so the FP32 there is literally its source.
-  //
-  //                   per-tensor   per-channel
-  //   flow_lm_main      15.66 dB     26.06 dB
-  //   flow_lm_flow      24.14 dB     33.15 dB
-  //   mimi_decoder      20.49 dB     22.72 dB   (and 6 MB smaller)
+test('english_2026-10 skips per-channel rebuild filenames that 2026-04 used', async () => {
+  // Per-channel rebuilds were measured for english_2026-04 only. english_2026-10
+  // ships the base INT8 files; offering _pc names would spend two 404s per model.
   const worker = await readFile(
     new URL('../public/assets/js/pocket_worker.js', import.meta.url), 'utf8',
   );
-  const map = worker.slice(
-    worker.indexOf('const PER_CHANNEL_MODEL_STEMS'),
-    worker.indexOf('function wasmModelPaths'),
-  );
-  assert.ok(map.length > 0, 'the rebuild map must be findable');
-  for (const stem of ['flow_lm_main', 'flow_lm_flow', 'mimi_decoder']) {
-    assert.match(map, new RegExp(`'${stem}_int8\.onnx': '${stem}_int8_pc\.onnx'`));
-  }
+  assert.match(worker, /DEFAULT_LANGUAGE = "english_2026-10"/);
 
   const paths = worker.slice(
     worker.indexOf('function wasmModelPaths'),
     worker.indexOf('// Mobile networks fail transiently'),
   );
-  // The rebuild is tried first, the original is the fallback, and both hosts are
-  // tried for each — so a bundle without the rebuild still resolves.
+  assert.match(paths, /const upgraded = null;/);
   assert.match(paths, /const names = upgraded \? \[upgraded, filename\] : \[filename\];/);
   assert.match(paths, /names\.flatMap/);
-  // Only english_2026-04 carries the rebuilds. Offering them anywhere else costs
-  // two 404 round-trips per model AND a "Model host unavailable" WARN for each,
-  // before reaching the file that was always going to serve it. The .ort bundle
-  // has no rebuilds either.
-  assert.match(paths, /\(useOrtFormatWasm \|\| bundle !== DEFAULT_LANGUAGE\)/);
-  assert.match(paths, /PER_CHANNEL_MODEL_STEMS\[filename\]/);
+  assert.doesNotMatch(paths, /PER_CHANNEL_MODEL_STEMS\[filename\]/);
 });
 
 test('the rebuilt models keep the cache honest', async () => {
   const audio = await readFile(
     new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
   );
-  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv23'/);
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv24'/);
 });
 
 // ── Forced first-run reset ──────────────────────────────────────────────────

@@ -15,7 +15,7 @@
 ========================================== -->
 <script>
 (function () {
-  var PR_RESET_TOKEN = 'reset-2026-09-04';
+  var PR_RESET_TOKEN = 'reset-2026-11-21-tts';
   var DONE_KEY = 'pr_forced_reset_v1';
   var TRY_KEY = 'pr_forced_reset_attempts_v1';
   var MAX_ATTEMPTS = 2;
@@ -148,7 +148,10 @@
 2. GLOBAL STYLESHEET
 ========================================== -->
 <!-- Links the optimized CSS file we just created -->
-<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v40">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v42">
 
 <!-- ==========================================
 2a. FAST-NARRATION RELOAD MASK (anti-flash)
@@ -247,22 +250,22 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/native_app_key.js?v=native-key-v1">
 <link rel="modulepreload" href="assets/js/diagnostics.js?v=diag-v9">
 <link rel="modulepreload" href="assets/js/motion_lite.js">
-<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v47">
-<link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v44">
+<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v48">
+<link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v45">
 <link rel="modulepreload" href="assets/js/engine_utils.js">
-<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v134">
+<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v135">
 <link rel="modulepreload" href="assets/js/api_core.js?v=search-v28">
 <link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v17">
-<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v51">
+<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v52">
 <link rel="modulepreload" href="assets/js/device_catalog.js?v=catalog-v5">
-<link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v60">
+<link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v62">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
-<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v50">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v207">
-<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v92">
-<link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v15">
-<link rel="modulepreload" href="assets/js/reader_features.js?v=features-v41">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v239">
+<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v51">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v210">
+<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v93">
+<link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v16">
+<link rel="modulepreload" href="assets/js/reader_features.js?v=features-v43">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v244">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v19">
 
 <!-- ==========================================
@@ -279,7 +282,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.indexOf('/debug/') !== -1 || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=346', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=350', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -378,79 +381,31 @@ Playback-only modules remain deferred so they do not compete with first paint.
   <div class="pr-layout-001" id="first-time-setup-modal" role="dialog" aria-modal="true" aria-labelledby="first-time-setup-title" aria-hidden="true">
     <div class="pr-card pr-layout-002">
       <h2 class="pr-layout-003" id="first-time-setup-title" tabindex="-1">Welcome to Pocket Reader!</h2>
-      <p class="pr-layout-004">Let's set up your profile. Everything here is optional - you can change any of it later in Settings.</p>
+      <p class="pr-layout-004">Quick start: account, theme, and narrator. You can fill in the rest later from Profile.</p>
 
-      <!-- Cloud account leads: signing in first means the rest of this form is
-           saved to the account rather than stranded on one device, and a
-           returning reader can stop here because their profile already exists. -->
+      <!-- Cloud account leads: signing in first restores an existing profile. -->
       <div class="settings-item pr-layout-017">
         <label class="pr-layout-018">Cloud Account <span class="pr-layout-019">(optional)</span></label>
-        <p class="pr-layout-020">Back up your library, settings, and progress. Access them on any device. Signing in first also restores an existing profile, so you can skip the rest.</p>
+        <p class="pr-layout-020">Back up your library and progress across devices. Signing in first also restores an existing profile.</p>
         <div class="pr-layout-021" id="setup-cloud-status"></div>
         <button class="pr-btn-outline pr-layout-022" id="setup-cloud-btn" onclick="window._setupCloudLogin()">Sign in with Google</button>
-        <p class="pr-layout-023">Uses your Google account. You can always do this later from Settings.</p>
+        <p class="pr-layout-023">Uses your Google account. You can always do this later from Profile.</p>
       </div>
 
       <div class="settings-item pr-layout-005">
-        <label for="setup-avatar-upload">Profile picture</label>
-        <div class="pr-layout-006">
-          <img loading="lazy" decoding="async" class="pr-layout-007" id="setup-avatar-preview" src="assets/img/profile%20512.png" alt="">
-          <button class="pr-btn-sub" onclick="document.getElementById('setup-avatar-upload').click()">Upload picture...</button>
-          <input class="pr-layout-008" id="setup-avatar-upload" type="file" accept="image/*" onchange="window._setupAvatarUpload(event)">
-        </div>
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-username">Username</label>
+        <label for="setup-username">Display name</label>
         <input class="pr-layout-009" type="text" id="setup-username" name="setup-username" placeholder="Guest">
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-usertype">I am a...</label>
-        <select class="pr-layout-009" id="setup-usertype" name="setup-usertype">
-          <option value="">Prefer not to say</option>
-          <option value="Reader/Fan">Reader / Fan</option>
-          <option value="Writer">Writer</option>
-          <option value="Artist">Artist</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-companion">Companion</label>
-        <select class="pr-layout-009" id="setup-companion" name="setup-companion">
-          <option value="virtue">Virtue - Maned Wolf</option>
-          <option class="pr-layout-010" value="jade" disabled>Jade - Spotted Hyena (Coming Later)</option>
-          <option value="none">None</option>
-        </select>
       </div>
 
       <div class="settings-item pr-layout-005">
         <label for="setup-theme">App theme</label>
         <select class="pr-layout-009" id="setup-theme" name="setup-theme">
-          <option value="slate" selected>Anthrostate</option>
-          <option value="dark">Midnight</option>
+          <option value="dark" selected>Midnight</option>
+          <option value="slate">Anthrostate</option>
           <option value="light">Paper</option>
           <option value="high-contrast">High Contrast</option>
           <option value="colorblind">Colorblind Safe</option>
         </select>
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-reader-font">Reader font &amp; size</label>
-        <select class="pr-layout-009" id="setup-reader-font" name="setup-reader-font" onchange="window._setupPreview()">
-          <option value="'Literata Local', Georgia, serif" selected>Literata</option>
-          <option value="system-ui, -apple-system, sans-serif">System Default</option>
-          <option value="'Courier New', Courier, monospace">Courier New</option>
-          <option value="'Times New Roman', Times, serif">Times New Roman</option>
-          <option value="Georgia, serif">Georgia</option>
-          <option value="Arial, Helvetica, sans-serif">Arial</option>
-        </select>
-        <label class="pr-layout-011" for="setup-reader-size">Reading text size <span class="pr-layout-012" id="setup-reader-size-label">13pt</span></label>
-        <input class="pr-layout-013" id="setup-reader-size" type="range" min="10" max="20" value="13" oninput="window._setupPreview()">
-        <label class="pr-layout-011" for="setup-app-size">App text size <span class="pr-layout-012" id="setup-app-size-label">13pt</span></label>
-        <input class="pr-layout-013" id="setup-app-size" type="range" min="10" max="18" value="13" oninput="window._setupPreview()">
-        <div class="pr-layout-014" id="setup-preview">The quick brown fox leapt over the sleeping hound, and the story began...</div>
       </div>
 
       <div class="settings-item pr-layout-005">
@@ -460,74 +415,6 @@ Playback-only modules remain deferred so they do not compete with first paint.
           <option value="Male">Male</option>
           <option value="Female">Female</option>
         </select>
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-currently">Currently reading</label>
-        <input class="pr-layout-009" type="text" id="setup-currently" name="setup-currently" placeholder="What's on your nightstand?">
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-character">Favorite story relationship</label>
-        <input class="pr-layout-009" type="text" id="setup-character" name="setup-character" placeholder="Who do you love reading about?">
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-fandom">Favorite fandom / universe</label>
-        <input class="pr-layout-009" type="text" id="setup-fandom" name="setup-fandom" placeholder="e.g. HMOFA, Original Work">
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-length">Preferred length</label>
-        <select class="pr-layout-009" id="setup-length" name="setup-length">
-          <option value="">No preference</option>
-          <option value="One-shots">One-shots</option>
-          <option value="Short reads">Short reads</option>
-          <option value="Novellas">Novellas</option>
-          <option value="Epic sagas">Epic sagas</option>
-        </select>
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-mood">Reading vibe</label>
-        <select class="pr-layout-009" id="setup-mood" name="setup-mood">
-          <option value="">Surprise me</option>
-          <option value="Cozy &amp; wholesome">Cozy &amp; wholesome</option>
-          <option value="Adventurous">Adventurous</option>
-          <option value="Slow burn romance">Slow burn romance</option>
-          <option value="Dark &amp; gritty">Dark &amp; gritty</option>
-          <option value="Funny">Funny</option>
-        </select>
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-genre">Favorite genre (optional)</label>
-        <input class="pr-layout-009" type="text" id="setup-genre" name="setup-genre" placeholder="e.g. Sci-Fi, Romance, Adventure">
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-fav-1">Favorite stories - up to 5 (optional)</label>
-        <input class="pr-layout-015" type="text" id="setup-fav-1" placeholder="Favorite story #1">
-        <input class="pr-layout-016" type="text" id="setup-fav-2" aria-label="Favorite story 2" placeholder="Favorite story #2">
-        <input class="pr-layout-016" type="text" id="setup-fav-3" aria-label="Favorite story 3" placeholder="Favorite story #3">
-        <input class="pr-layout-016" type="text" id="setup-fav-4" aria-label="Favorite story 4" placeholder="Favorite story #4">
-        <input class="pr-layout-016" type="text" id="setup-fav-5" aria-label="Favorite story 5" placeholder="Favorite story #5">
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-goal-weekly-minutes">Goals &amp; Streaks</label>
-        <div style="display:grid;gap:8px;margin-top:6px;">
-          <label style="font-size:13px;color:var(--text-muted);">Weekly listening goal (minutes)
-            <input class="pr-layout-009" type="number" id="setup-goal-weekly-minutes" min="0" max="10000" value="120" style="margin-top:4px;">
-          </label>
-          <label style="font-size:13px;color:var(--text-muted);">Weekly chapter goal
-            <input class="pr-layout-009" type="number" id="setup-goal-weekly-chapters" min="0" max="1000" value="0" style="margin-top:4px;">
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-main);cursor:pointer;margin-top:2px;">
-            <input type="checkbox" id="setup-goal-streak-enabled" checked>
-            Track daily reading streaks
-          </label>
-        </div>
       </div>
 
       <div class="pr-layout-024">
@@ -665,6 +552,10 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <img class="nav-icon" src="assets/img/reader%20192.png" alt="">
       <span>Reader</span>
     </button>
+    <button class="nav-btn" onclick="showView('hmofa-view')">
+      <img class="nav-icon" src="assets/img/hmofa%20192.png" alt="">
+      <span>HMOFA</span>
+    </button>
     <button class="nav-btn" onclick="showView('profile-view')">
       <img class="nav-icon" src="assets/img/profile%20192.png" alt="">
       <span>Profile</span>
@@ -674,21 +565,13 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <span>More</span>
     </button>
     <div class="nav-more-group" id="nav-more-group">
-      <button class="nav-btn" onclick="showView('search-view')">
-        <img class="nav-icon" src="assets/img/search%20192.png" alt="">
-        <span>AO3 Search</span>
-      </button>
-      <button class="nav-btn" onclick="showView('hmofa-view')">
-        <img class="nav-icon" src="assets/img/hmofa%20192.png" alt="">
-        <span>HMOFA Masterlist</span>
-      </button>
-      <button class="nav-btn" onclick="showView('away-mode-view')">
-        <img class="nav-icon" src="assets/img/away_mode_192.png" alt="">
-        <span>Away Cache</span>
-      </button>
       <button class="nav-btn" onclick="showView('settings-view')">
         <img class="nav-icon" src="assets/img/settings%20192.png" alt="">
         <span>Settings</span>
+      </button>
+      <button class="nav-btn nav-btn-secondary" onclick="showView('search-view')">
+        <img class="nav-icon" src="assets/img/search%20192.png" alt="">
+        <span>AO3 Search</span>
       </button>
       <button class="nav-btn" onclick="showView('about-view')">
         <img class="nav-icon" src="assets/img/about%20192.png" alt="">
@@ -993,7 +876,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
                   <optgroup label="Male voices">
                     <option value="charles">Charles - English</option>
                     <option value="george">George - American, New England</option>
-                    <option value="noah">Noah - American, Florida</option>
+                    <option value="paul">Paul - American</option>
                   </optgroup>
                 </select>
               </div>
@@ -1004,9 +887,8 @@ Playback-only modules remain deferred so they do not compete with first paint.
                 <button class="control-btn" title="Next Paragraph" onclick="window.skipParagraph(1)">&gt;</button>
                 <button class="control-btn" title="Jump to End" onclick="window.skipChapter(999)">&gt;&gt;</button>
               </div>
-              <div class="pr-layout-090">
-                <button class="pr-btn-sub pr-layout-091" onclick="saveBookmark()">Bookmark</button>
-                <button class="pr-btn-sub pr-layout-091" onclick="if(window.currentStory && typeof window.toggleFavorite === 'function') { const fav = window.toggleFavorite(window.currentStory.title); alert(fav ? 'Added to favorites.' : 'Removed from favorites.'); }">Favorite</button>
+              <div class="pr-layout-090 playback-bar-secondary">
+                <button class="pr-btn-sub pr-layout-091" type="button" onclick="saveBookmark()">Bookmark</button>
               </div>
             </div>
           </main>
@@ -1020,8 +902,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
             HMOFA Masterlist
           </h1>
           <div class="pr-layout-094" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <button id="hmofa-open-facets" class="pr-btn-outline" type="button" style="font-size:0.85rem;padding:6px 14px;height:36px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1;" title="Tag and facet filters">
+              <span>Filters</span>
+            </button>
             <button id="hmofa-open-preferences" class="pr-btn-outline" style="font-size:0.85rem;padding:6px 14px;height:36px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1;" title="Content preferences and blocked tags">
-              <span>Filters &amp; Content</span>
+              <span>Content prefs</span>
             </button>
             <button id="hmofa-open-lists" class="pr-btn-outline" style="font-size:0.85rem;padding:6px 14px;height:36px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;gap:6px;line-height:1;" title="Saved filter lists">
               <span>My Lists</span>
@@ -1040,7 +925,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
         <!-- HMOFA Pocket Reader Interceptor & Fetch Bar -->
         <div class="hmofa-interceptor-bar">
           <div class="hmofa-interceptor-info">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple, #9d4edd)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
             <span id="hmofa-bridge-status"><strong>Tap any story below</strong> to load it straight into Pocket Reader. Something not in the catalog? Paste its link here instead.</span>
           </div>
           <div class="hmofa-interceptor-controls">
@@ -1076,7 +961,15 @@ Playback-only modules remain deferred so they do not compete with first paint.
         </div>
 
         <div class="hmofa-layout">
-          <aside id="hmofa-facets" class="hmofa-facet-rail" aria-label="Filter the archive"></aside>
+          <div id="hmofa-filters-sheet" class="hmofa-filters-sheet" hidden>
+            <div class="hmofa-filters-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="hmofa-filters-title">
+              <div class="hmofa-filters-sheet-head">
+                <h2 id="hmofa-filters-title">Filters</h2>
+                <button id="hmofa-close-facets" class="pr-btn-outline" type="button">Done</button>
+              </div>
+              <aside id="hmofa-facets" class="hmofa-facet-rail" aria-label="Filter the archive"></aside>
+            </div>
+          </div>
           <div class="hmofa-results-wrap">
             <div class="hmofa-results-head">
               <span id="hmofa-results-count"></span>
@@ -1104,8 +997,8 @@ Playback-only modules remain deferred so they do not compete with first paint.
           </div>
         </div>
 
-        <!-- Centerpiece Cloud Sync Card -->
-        <div id="cloud-sync-card" class="pr-card pr-layout-099">
+        <!-- Hidden legacy card; cinematic_ui installs #account-center after it. -->
+        <div id="cloud-sync-card" class="pr-card pr-layout-099" hidden>
           <div class="pr-layout-100">
             <div class="pr-layout-101">
               <h3 class="pr-layout-102">Cloud Synchronization</h3>
@@ -1155,50 +1048,40 @@ Playback-only modules remain deferred so they do not compete with first paint.
       </div>
 
       <div id="settings-view" class="view">
-        <h1 class="pr-layout-115">Application Settings</h1>
-        <div class="settings-grid settings-grid-masonry">
-          <div class="settings-card">
-            <h3>Companion & App</h3>
-            <p class="pr-layout-116">Your name, picture, and reading profile now live on your <a class="pr-layout-117" href="#" onclick="showView('profile-view');return false;">Profile page</a></p>
+        <h1 class="pr-layout-115">Settings</h1>
+        <div class="settings-stack">
 
-            <label class="settings-label" for="companion-select">Companion</label>
-            <select id="companion-select" name="companion-select" class="settings-control" onchange="applySettings()">
-              <option value="virtue">Virtue - Maned Wolf</option>
-              <option value="none">None</option>
-              <option value="jade" disabled="true">Jade - Spotted Hyena - Coming Later</option>
-            </select>
-            <p class="settings-label pr-layout-118">Plan</p>
-            <p class="pr-layout-119">Pocket Reader - Web</p>
-            <span class="settings-label pr-layout-118">Tips</span>
-            <button class="pr-btn-sub" onclick="if(window.resetTips) window.resetTips()">Re-enable first-time tips</button>
-            <!-- "Don't show again" on the install banner is otherwise a one-way
-                 door: showIOSInstallPrompt() clears that flag and re-shows the
-                 banner, and it existed with nothing to call it. -->
-            <span class="settings-label pr-layout-118">Install</span>
-            <button class="pr-btn-sub" onclick="if(window.showIOSInstallPrompt) window.showIOSInstallPrompt()">Show the install prompt again</button>
-          </div>
-
-          <div class="settings-card">
-            <h3>Narration & Playback</h3>
-            <label class="settings-label" for="voice-engine-select">Voice Engine</label>
+          <section class="settings-block" aria-labelledby="settings-narration-heading">
+            <h2 id="settings-narration-heading" class="settings-block-title">Narration</h2>
+            <label class="settings-label" for="voice-engine-select">Voice engine</label>
             <select id="voice-engine-select" name="voice-engine-select" class="settings-control" onchange="onNarrationEngineSelect(this.value)">
-              <option value="auto">Automatic - best for this device</option>
-              <option value="pocket">Pocket TTS - Premium (High End)</option>
-              <option value="kokoro">Kokoro - Lighter (mid-range phones)</option>
-              <option value="kitten">Kitten - Lightest (older phones)</option>
-              <option value="webspeech">Device Voice - Fallback</option>
+              <option value="auto">Automatic — best for this device</option>
+              <option value="pocket">Pocket TTS</option>
+              <option value="kokoro">Kokoro</option>
+              <option value="kitten">Kitten</option>
+              <option value="webspeech">Device voice</option>
             </select>
-            <!-- One control, not two. Narration engine and voice engine were
-                 separate selects saying overlapping things; the neural choice is
-                 now part of the list above and only the Kokoro voice picker and
-                 the recommendation line live here. -->
             <div id="narration-engine-controls" class="pr-layout-118"></div>
-            <label class="settings-label pr-layout-118" for="haptics-toggle">Haptic feedback</label>
-            <input id="haptics-toggle" name="haptics-toggle" type="checkbox" onchange="applySettings()">
-            <label class="settings-label pr-layout-118" for="push-updates-toggle">Get updates for subscribed stories</label>
-            <input id="push-updates-toggle" name="push-updates-toggle" type="checkbox" onchange="initPushNotifications(this)">
-            <label class="settings-label pr-layout-118" for="ui-hints-toggle">Show UI Hints</label>
-            <input id="ui-hints-toggle" name="ui-hints-toggle" type="checkbox" onchange="applySettings()">
+
+            <div id="expressive-narration-card">
+              <label class="settings-label pr-layout-118" for="expressive-prosody-toggle">Emotion-aware delivery</label>
+              <input id="expressive-prosody-toggle" name="expressive-prosody-toggle" type="checkbox" onchange="applySettings()">
+              <label class="settings-label pr-layout-118" for="voice-emotion-mode-select">Emotion</label>
+              <select id="voice-emotion-mode-select" name="voice-emotion-mode-select" class="settings-control" onchange="applySettings()">
+                <option value="balanced" selected>Balanced</option>
+                <option value="expressive">Expressive</option>
+              </select>
+            </div>
+
+            <label class="settings-label pr-layout-118" for="playback-speed-slider">Speed</label>
+            <div class="pr-layout-084">
+              <span class="pr-layout-085">0.5x</span>
+              <input id="playback-speed-slider" name="playback-speed-slider" class="pr-layout-086" type="range"
+                     min="0.5" max="2" step="0.05" value="1" aria-describedby="playback-speed-label"
+                     oninput="window.onNarrationSpeedChange(this.value, false)"
+                     onchange="window.onNarrationSpeedChange(this.value)">
+              <span class="pr-layout-087" id="playback-speed-label">1.00x</span>
+            </div>
 
             <label class="settings-label pr-layout-118" for="sleep-timer-select">Sleep timer</label>
             <select id="sleep-timer-select" name="sleep-timer-select" class="settings-control" onchange="applySleepTimer()">
@@ -1208,72 +1091,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
               <option value="60">60 min</option>
             </select>
             <p class="pr-layout-120" id="sleep-timer-status">Timer disabled.</p>
-          </div>
+          </section>
 
-          <!-- Pocket-only. Hidden by _syncPocketOnlySettings() when the resolved
-               engine is Kokoro or the device voice: Kokoro ships one voice per
-               speaker with no emotional references, so every control in here is
-               inert there. -->
-          <div class="settings-card" id="expressive-narration-card">
-            <h3>Expressive Narration <span class="pr-layout-121">(Pocket TTS only)</span></h3>
-            <p class="pr-layout-122">These tuning options apply to Pocket TTS. They have no effect on Kokoro or Device voices.</p>
-
-            <label class="settings-label" for="expressive-prosody-toggle">Emotion-aware delivery</label>
-            <input id="expressive-prosody-toggle" name="expressive-prosody-toggle" type="checkbox" onchange="applySettings()">
-            <p class="pr-layout-123">Uses one same-voice emotional reference per paragraph for stable audiobook narration.</p>
-
-            <label class="settings-label pr-layout-118" for="voice-emotion-mode-select">Voice emotion profile</label>
-            <select id="voice-emotion-mode-select" name="voice-emotion-mode-select" class="settings-control" onchange="applySettings()">
-              <option value="neutral">Neutral only</option>
-              <option value="balanced" selected>Balanced emotional references (Recommended)</option>
-              <option value="expressive">Expressive — widest emotional range</option>
-            </select>
-            <p class="pr-layout-123">Balanced follows sustained scene emotion and raises sampling temperature so delivery has more energy. Expressive widens the range further and runs hotter still; if a long listen starts producing artifacts it steps itself back down automatically, then recovers. Neutral keeps one tone throughout.</p>
-
-            <label class="settings-label pr-layout-118" for="playback-speed-slider">Narration speed</label>
-            <div class="pr-layout-084">
-              <span class="pr-layout-085">0.5x</span>
-              <input id="playback-speed-slider" name="playback-speed-slider" class="pr-layout-086" type="range"
-                     min="0.5" max="2" step="0.05" value="1" aria-describedby="playback-speed-label"
-                     oninput="window.onNarrationSpeedChange(this.value, false)"
-                     onchange="window.onNarrationSpeedChange(this.value)">
-              <span class="pr-layout-087" id="playback-speed-label">1.00x</span>
-            </div>
-            <p class="pr-layout-123">Applies to every story that has no speed of its own. A story's narration preset overrides it.</p>
-
-            <label class="settings-label pr-layout-118" for="punct-pause-toggle">Punctuation pauses (slower; off by default)</label>
-            <input id="punct-pause-toggle" name="punct-pause-toggle" type="checkbox" onchange="applySettings()">
-            <p class="pr-layout-123">Adds silence after punctuation without changing narrator or emotion route.</p>
-
-            <label class="settings-label pr-layout-118" for="pause-tags-toggle">Honor inline pause tags</label>
-            <input id="pause-tags-toggle" name="pause-tags-toggle" type="checkbox" onchange="applySettings()" checked>
-            <p class="pr-layout-123">Insert a custom silence where you type <code>[1.2s]</code> or <code>[10s]</code> in the text.</p>
-
-            <label class="settings-label pr-layout-118" for="pronunciation-term-input">Pronunciation overrides</label>
-            <div class="pr-layout-124">
-              <input id="pronunciation-term-input" class="settings-control" type="text" placeholder="Word or name" autocomplete="off">
-              <input id="pronunciation-sounds-input" class="settings-control" type="text" aria-label="Replacement pronunciation" placeholder="Sounds like" autocomplete="off">
-              <button class="pr-btn-sub" type="button" onclick="addPronunciationOverride()">Add</button>
-            </div>
-            <div class="pr-layout-125" id="pronunciation-overrides-list"></div>
-            <p class="pr-layout-123">Example: basically = bay sick lee. Changes force fresh Pocket audio cache entries.</p>
-
-            <label class="settings-label pr-layout-118" for="chunk-mode-select">Chunking</label>
-            <select id="chunk-mode-select" name="chunk-mode-select" class="settings-control" onchange="onChunkModeChange()">
-              <option value="sentence" selected>Auto (by sentence)</option>
-              <option value="words">By word count</option>
-            </select>
-            <div class="pr-layout-126" id="chunk-words-container">
-              <label class="settings-label" for="chunk-min-words">Min words / chunk <span class="pr-layout-127" id="chunk-min-label">8</span></label>
-              <input id="chunk-min-words" name="chunk-min-words" type="range" min="3" max="60" value="8" oninput="applySettings()">
-              <label class="settings-label pr-layout-128" for="chunk-max-words">Max words / chunk <span class="pr-layout-127" id="chunk-max-label">40</span></label>
-              <input id="chunk-max-words" name="chunk-max-words" type="range" min="10" max="120" value="40" oninput="applySettings()">
-            </div>
-          </div>
-
-          <div class="settings-card">
-            <h3>Display & Themes</h3>
-            <label class="settings-label" for="app-theme-select">App theme</label>
+          <section class="settings-block" aria-labelledby="settings-display-heading">
+            <h2 id="settings-display-heading" class="settings-block-title">Display</h2>
+            <label class="settings-label" for="app-theme-select">Theme</label>
             <select id="app-theme-select" name="app-theme-select" class="settings-control" onchange="applySettings()">
               <option value="dark">Midnight</option>
               <option value="light">Paper</option>
@@ -1283,58 +1105,39 @@ Playback-only modules remain deferred so they do not compete with first paint.
             </select>
             <label class="settings-label pr-layout-118" for="app-font-slider">App text size <span class="pr-layout-127" id="app-font-label">11pt</span></label>
             <input id="app-font-slider" name="app-font-slider" type="range" min="10" max="18" value="11" oninput="applySettings()">
-            <label class="settings-label" for="reading-font-select">Reader Font</label>
+            <label class="settings-label" for="reading-font-select">Reader font</label>
             <select id="reading-font-select" name="reading-font-select" class="settings-control" onchange="applySettings()">
-              <option value="'Literata Local', Georgia, serif">Literata</option>
+              <option value="'Literata Local', Georgia, serif" selected>Literata</option>
               <option value="system-ui, -apple-system, sans-serif">System Default</option>
               <option value="'Courier New', Courier, monospace">Courier New</option>
               <option value="'Times New Roman', Times, serif">Times New Roman</option>
               <option value="Georgia, serif">Georgia</option>
               <option value="Arial, Helvetica, sans-serif">Arial</option>
             </select>
-            <label class="settings-label pr-layout-118" for="reader-font-slider">Reading font size <span class="pr-layout-127" id="reader-font-label">13pt</span></label>
+            <label class="settings-label pr-layout-118" for="reader-font-slider">Reading size <span class="pr-layout-127" id="reader-font-label">13pt</span></label>
             <input id="reader-font-slider" name="reader-font-slider" type="range" min="10" max="20" value="13" oninput="applySettings()">
-          </div>
-
-          <div class="settings-card">
-            <h3>Accessibility & Accommodations</h3>
-            <label class="settings-label" for="touch-target-size-toggle">Larger buttons & touch controls</label>
+            <label class="settings-label pr-layout-118" for="touch-target-size-toggle">Larger touch targets</label>
             <input id="touch-target-size-toggle" name="touch-target-size-toggle" type="checkbox" onchange="applySettings()">
-            <p class="pr-layout-123">Increases hitboxes and spacing for navigation buttons, sliders, and stars to assist with motor control.</p>
-
-            <label class="settings-label pr-layout-118" for="scroll-behavior-select">Auto-scroll behavior</label>
+            <label class="settings-label pr-layout-118" for="scroll-behavior-select">Auto-scroll</label>
             <select id="scroll-behavior-select" name="scroll-behavior-select" class="settings-control" onchange="applySettings()">
-              <option value="smooth">Smooth Scroll (Default)</option>
-              <option value="auto">Instant Jump</option>
-              <option value="none">Disabled (Manual scroll only)</option>
+              <option value="smooth">Smooth</option>
+              <option value="auto">Instant</option>
+              <option value="none">Off</option>
             </select>
-            <p class="pr-layout-123">Configures how the reader highlights and tracks spoken text. Instant or disabled options can reduce motion sickness.</p>
-          </div>
+          </section>
 
-          <div class="settings-card">
-            <h3>Performance</h3>
-            <p class="settings-help">Current narration engine, worker state, GPU mode, and backend latency. These values are diagnostic signals, not permanent settings.</p>
-            <div id="perf-panel"></div>
-            <button class="pr-btn-sub pr-layout-129" data-settings-safe-action="true" onclick="refreshPerfPanel()">Refresh</button>
-          </div>
+          <section class="settings-block" aria-labelledby="settings-account-heading">
+            <h2 id="settings-account-heading" class="settings-block-title">Account</h2>
+            <p class="pr-layout-116">Name, picture, cloud sync, and reading profile live on your <a class="pr-layout-117" href="#" onclick="showView('profile-view');return false;">Profile</a> page.</p>
+            <label class="settings-label pr-layout-118" for="push-updates-toggle">Story update notifications</label>
+            <input id="push-updates-toggle" name="push-updates-toggle" type="checkbox" onchange="initPushNotifications(this)">
+            <button class="pr-btn-sub pr-layout-129" type="button" onclick="if(window.showIOSInstallPrompt) window.showIOSInstallPrompt()">Show install prompt</button>
+            <button class="pr-btn-sub" type="button" onclick="if(window.resetTips) window.resetTips()">Re-enable tips</button>
+          </section>
 
+        </div>
 
-
-          <form class="settings-card" onsubmit="event.preventDefault(); saveSiteCookies();">
-            <h3>Connect Accounts</h3>
-            <p class="pr-layout-130">
-              <b>How to find your cookies:</b> Press F12 or open Developer Tools, go to the <b>Application</b> tab (Storage in Firefox), select <b>Cookies</b>, click the site URL, and copy the values for 'a' and 'b' (for FA) or the PHPSESSID (for SoFurry).
-            </p>
-            <label class="settings-label" for="fa-cookie-a">FurAffinity cookie a</label>
-            <input id="fa-cookie-a" name="fa-cookie-a" class="settings-control" type="password" autocomplete="off">
-            <label class="settings-label" for="fa-cookie-b">FurAffinity cookie b</label>
-            <input id="fa-cookie-b" name="fa-cookie-b" class="settings-control" type="password" autocomplete="off">
-            <label class="settings-label" for="sofurry-cookie-session">SoFurry session</label>
-            <input id="sofurry-cookie-session" name="sofurry-cookie-session" class="settings-control" type="password" autocomplete="off">
-            <button class="pr-btn-sub pr-layout-129" type="submit">Save account cookies</button>
-          </form>
-
-        </div><details id="advanced-settings-section" class="adv-settings-section">
+        <details id="advanced-settings-section" class="adv-settings-section">
           <summary class="adv-settings-summary">
             <span>Advanced Settings &amp; Info</span>
             <span class="adv-settings-arrow">></span>
@@ -1347,10 +1150,64 @@ Playback-only modules remain deferred so they do not compete with first paint.
           <div class="settings-grid settings-grid-masonry pr-layout-029">
 
             <div class="settings-card">
+              <h3>Companion & extras</h3>
+              <label class="settings-label" for="companion-select">Companion</label>
+              <select id="companion-select" name="companion-select" class="settings-control" onchange="applySettings()">
+                <option value="virtue">Virtue</option>
+                <option value="none">None</option>
+              </select>
+              <label class="settings-label pr-layout-118" for="haptics-toggle">Haptic feedback</label>
+              <input id="haptics-toggle" name="haptics-toggle" type="checkbox" onchange="applySettings()">
+              <label class="settings-label pr-layout-118" for="ui-hints-toggle">Show UI hints</label>
+              <input id="ui-hints-toggle" name="ui-hints-toggle" type="checkbox" onchange="applySettings()">
+              <label class="settings-label pr-layout-118" for="punct-pause-toggle">Punctuation pauses</label>
+              <input id="punct-pause-toggle" name="punct-pause-toggle" type="checkbox" onchange="applySettings()">
+              <label class="settings-label pr-layout-118" for="pause-tags-toggle">Honor inline pause tags</label>
+              <input id="pause-tags-toggle" name="pause-tags-toggle" type="checkbox" onchange="applySettings()" checked>
+              <label class="settings-label pr-layout-118" for="pronunciation-term-input">Pronunciation overrides</label>
+              <div class="pr-layout-124">
+                <input id="pronunciation-term-input" class="settings-control" type="text" placeholder="Word or name" autocomplete="off">
+                <input id="pronunciation-sounds-input" class="settings-control" type="text" aria-label="Replacement pronunciation" placeholder="Sounds like" autocomplete="off">
+                <button class="pr-btn-sub" type="button" onclick="addPronunciationOverride()">Add</button>
+              </div>
+              <div class="pr-layout-125" id="pronunciation-overrides-list"></div>
+              <label class="settings-label pr-layout-118" for="chunk-mode-select">Chunking</label>
+              <select id="chunk-mode-select" name="chunk-mode-select" class="settings-control" onchange="onChunkModeChange()">
+                <option value="sentence" selected>Auto (by sentence)</option>
+                <option value="words">By word count</option>
+              </select>
+              <div class="pr-layout-126" id="chunk-words-container">
+                <label class="settings-label" for="chunk-min-words">Min words / chunk <span class="pr-layout-127" id="chunk-min-label">8</span></label>
+                <input id="chunk-min-words" name="chunk-min-words" type="range" min="3" max="60" value="8" oninput="applySettings()">
+                <label class="settings-label pr-layout-128" for="chunk-max-words">Max words / chunk <span class="pr-layout-127" id="chunk-max-label">40</span></label>
+                <input id="chunk-max-words" name="chunk-max-words" type="range" min="10" max="120" value="40" oninput="applySettings()">
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <h3>Performance</h3>
+              <p class="settings-help">Diagnostic signals for the current narration engine.</p>
+              <div id="perf-panel"></div>
+              <button class="pr-btn-sub pr-layout-129" data-settings-safe-action="true" onclick="refreshPerfPanel()">Refresh</button>
+            </div>
+
+            <form class="settings-card" onsubmit="event.preventDefault(); saveSiteCookies();">
+              <h3>Site cookies</h3>
+              <p class="pr-layout-130">Optional FurAffinity / SoFurry session cookies for fetches that need them.</p>
+              <label class="settings-label" for="fa-cookie-a">FurAffinity cookie a</label>
+              <input id="fa-cookie-a" name="fa-cookie-a" class="settings-control" type="password" autocomplete="off">
+              <label class="settings-label" for="fa-cookie-b">FurAffinity cookie b</label>
+              <input id="fa-cookie-b" name="fa-cookie-b" class="settings-control" type="password" autocomplete="off">
+              <label class="settings-label" for="sofurry-cookie-session">SoFurry session</label>
+              <input id="sofurry-cookie-session" name="sofurry-cookie-session" class="settings-control" type="password" autocomplete="off">
+              <button class="pr-btn-sub pr-layout-129" type="submit">Save account cookies</button>
+            </form>
+
+            <div class="settings-card">
               <h3>Storage & Backup</h3>
               <button class="pr-btn-sub pr-layout-131" data-settings-safe-action="true" onclick="openManagePermanentCaches()">Manage permanent caches</button>
               <button class="pr-btn-sub pr-layout-131" data-settings-safe-action="true" onclick="clearAudioCache(false)">Clear generated audio cache</button>
-              <button class="pr-btn-sub pr-layout-131" data-settings-safe-action="true" onclick="clearNeuralEngineCache()">Clear ONNX Neural Engine (80MB Model)</button>
+              <button class="pr-btn-sub pr-layout-131" data-settings-safe-action="true" onclick="clearNeuralEngineCache()">Clear ONNX Neural Engine cache</button>
               <button class="pr-btn-sub pr-layout-131" data-settings-safe-action="true" onclick="resetAllCacheDecisions()">Reset cache prompts</button>
               <button class="pr-btn-sub pr-layout-131" onclick="downloadBackup()">Download backup</button>
               <button class="pr-btn-sub pr-layout-131" onclick="triggerRestoreBackup()">Restore backup</button>
@@ -1640,23 +1497,23 @@ Playback-only modules remain deferred so they do not compete with first paint.
     </div>
     <script src='assets/js/native_app_key.js?v=native-key-v1' type='module'></script>
     <script src='assets/js/diagnostics.js?v=diag-v9' type='module'></script>
-    <script src='assets/js/storage_core.js?v=storage-v47' type='module'></script>
-    <script src='assets/js/sync_core.js?v=sync-v44' type='module'></script>
+    <script src='assets/js/storage_core.js?v=storage-v48' type='module'></script>
+    <script src='assets/js/sync_core.js?v=sync-v45' type='module'></script>
     <script src='assets/js/api_core.js?v=search-v28' type='module'></script>
     <script src='assets/js/experience_coordinator.js?v=experience-v17' type='module'></script>
-    <script src='assets/js/virtue_controller.js?v=virtue-v51' type='module'></script>
+    <script src='assets/js/virtue_controller.js?v=virtue-v52' type='module'></script>
     <script src='assets/js/engine_utils.js' type='module'></script>
-    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v134' type='module'></script>
-    <script src='assets/js/tts_pronunciation_core.js?v=pron-v32' type='module'></script>
-    <script src='assets/js/library_manager.js?v=library-v92' type='module'></script>
+    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v135' type='module'></script>
+    <script src='assets/js/tts_pronunciation_core.js?v=pron-v34' type='module'></script>
+    <script src='assets/js/library_manager.js?v=library-v93' type='module'></script>
     <!-- Pulls in hmofa_catalog_core.js via a versioned import. The catalog
          itself is only downloaded when the masterlist view is opened. -->
-    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v14' type='module'></script>
-    <script src='assets/js/device_setup.js?v=device-setup-v50' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v207' type='module'></script>
-    <script src='assets/js/cinematic_ui.js?v=cinematic-v15' type='module'></script>
-    <script src='assets/js/reader_features.js?v=features-v41' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v239' type='module'></script>
+    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v15' type='module'></script>
+    <script src='assets/js/device_setup.js?v=device-setup-v51' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v210' type='module'></script>
+    <script src='assets/js/cinematic_ui.js?v=cinematic-v16' type='module'></script>
+    <script src='assets/js/reader_features.js?v=features-v43' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v244' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v19' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v5' type='module'></script>
   </div>

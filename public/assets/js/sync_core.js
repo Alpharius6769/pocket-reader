@@ -1,4 +1,4 @@
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v60';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v62';
 import { storyKeyFor } from './profile_merge.js?v=merge-v13';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 

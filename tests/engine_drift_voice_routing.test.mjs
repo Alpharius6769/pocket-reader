@@ -89,7 +89,7 @@ test('a voice the engine already owns is never substituted', () => {
   for (const id of ['af_bella', 'am_puck', 'af_heart']) {
     assert.equal(policy.coerceVoiceForEngine('kokoro', id), id);
   }
-  assert.equal(policy.coerceVoiceForEngine('kitten', 'expr-voice-3-m'), 'expr-voice-3-m');
+  assert.equal(policy.coerceVoiceForEngine('kitten', 'expr-voice-3-m'), 'otis');
 });
 
 test('an unknown id still falls back to the engine default', () => {

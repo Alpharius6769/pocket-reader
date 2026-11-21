@@ -1,7 +1,7 @@
 // settings_manager.js — Worker detection, GPU-aware advanced settings, diagnostics
 import {
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v32';
+} from './tts_pronunciation_core.js?v=pron-v34';
 import {
   POCKET_MAX_CACHE_WORKERS,
   readPocketDeviceBackendPreference,
@@ -14,9 +14,9 @@ import {
   NARRATION_ENGINE_TIERS,
   voicesForEngine,
   coerceVoiceForEngine,
-} from './pocket_backend_policy.js?v=backend-v60';
+} from './pocket_backend_policy.js?v=backend-v62';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '346';
+export const NARRATION_SERVICE_WORKER_VERSION = '350';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -515,7 +515,6 @@ export function initSettingsUI() {
   const manualToggle    = el('manual-workers-toggle');
   const manualContainer = el('manual-workers-container');
   const maxInput        = el('max-workers-input');
-  const detailsEl       = el('advanced-worker-details');
 
   if (manualToggle) {
     manualToggle.checked  = !!settings.enableManualWorkers;
@@ -531,17 +530,18 @@ export function initSettingsUI() {
     const label = document.querySelector('label[for="max-workers-input"]');
     if (label) label.textContent = `Max narration workers (1-${NARRATION_WORKER_CEILING})`;
   }
-  if (detailsEl && isStrongDevice) detailsEl.open = true;
+  // Keep Advanced collapsed by default — bury diagnostics behind the disclosure.
 
   // ── Cache button states ────────────────────────────────────────────────────
   setTimeout(() => {
     caches.keys().then(keys => {
-      const hasNeural = keys.some(k => k.includes('pocket') || k.includes('onnx'));
+      const hasNeural = keys.some((k) =>
+        /onnx|pocket-tts|kokoro|kitten|voices|neural/i.test(k) && !/pocket-reader-core/i.test(k));
       const neuralBtn = document.querySelector('button[onclick*="clearNeuralEngineCache"]');
       if (neuralBtn) {
         neuralBtn.disabled    = !hasNeural;
         neuralBtn.style.opacity = hasNeural ? '1' : '0.5';
-        neuralBtn.innerText   = hasNeural ? 'Clear ONNX Neural Engine (80MB Model)' : 'Neural Engine (Not Cached)';
+        neuralBtn.innerText   = hasNeural ? 'Clear ONNX Neural Engine cache' : 'Neural Engine (Not Cached)';
       }
     });
     try {
@@ -926,16 +926,18 @@ window.handleAvatarUpload = handleAvatarUpload;
 
 // ── clearNeuralEngineCache ───────────────────────────────────────────────────
 export async function clearNeuralEngineCache() {
-  if (confirm("This will delete the 80MB Neural Engine from your browser's hidden cache. You will need to redownload it next time you press Play. Continue?")) {
+  if (confirm("This will delete cached narration model files from your browser. You will need to redownload them next time you press Play. Continue?")) {
     // Deleting the ONNX CacheStorage entries can take a beat; show working
     // feedback so the button does not feel dead after the user confirms. The
     // overlay self-suppresses for sub-300ms clears, so a fast delete won't flash.
+    // Match model/voice caches only — never pocket-reader-core-* (the SW app shell).
     window.showLoadingOverlay?.('Clearing Neural Engine cache…', 'Removing cached model files');
     try {
       const cacheNames = await caches.keys();
       let deleted = false;
       for (const name of cacheNames) {
-        if (name.includes('pocket') || name.includes('onnx')) {
+        if (/pocket.*(?:model|webgpu|onnx|voices)|(?:^|-)onnx/i.test(name)
+            && !/pocket-reader-core/i.test(name)) {
           await caches.delete(name);
           deleted = true;
         }

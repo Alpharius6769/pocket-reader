@@ -1,4 +1,4 @@
-import { isMobileLikePlatform, KOKORO_VOICES, voicesForEngine } from './pocket_backend_policy.js?v=backend-v60';
+import { isMobileLikePlatform, KOKORO_VOICES, voicesForEngine } from './pocket_backend_policy.js?v=backend-v62';
 
 function esc(value) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -319,9 +319,9 @@ window.saveStoryNarrationPreset = saveStoryNarrationPreset;
 
 export function saveWeeklyGoals() {
   const data = ensureReaderFeatures();
-  data.goals.weeklyMinutes = Math.max(0, Number((document.getElementById('profile-edit-goal-minutes') || document.getElementById('setup-goal-weekly-minutes'))?.value) || 0);
-  data.goals.weeklyChapters = Math.max(0, Number((document.getElementById('profile-edit-goal-chapters') || document.getElementById('setup-goal-weekly-chapters'))?.value) || 0);
-  data.goals.streakEnabled = !!(document.getElementById('profile-edit-goal-streak') || document.getElementById('setup-goal-streak-enabled'))?.checked;
+  data.goals.weeklyMinutes = Math.max(0, Number(document.getElementById('profile-edit-goal-minutes')?.value) || 0);
+  data.goals.weeklyChapters = Math.max(0, Number(document.getElementById('profile-edit-goal-chapters')?.value) || 0);
+  data.goals.streakEnabled = !!document.getElementById('profile-edit-goal-streak')?.checked;
   data.goals.updatedAt = Date.now();
   save('goals');
 }

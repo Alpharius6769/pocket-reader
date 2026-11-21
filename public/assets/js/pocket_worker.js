@@ -4,7 +4,7 @@ import {
   DEFAULT_LSD_STEPS,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v32';
+} from './tts_pronunciation_core.js?v=pron-v34';
 import {
   FUSED_BLOCK_MIN_HEADROOM_MB,
   POCKET_ORT_VERSION,
@@ -22,7 +22,7 @@ import {
   selectWebGpuVariant,
   shouldDemoteWebGpuSustained,
   POCKET_WEBGPU_WASM_PARITY_RATIO,
-} from './pocket_backend_policy.js?v=backend-v60';
+} from './pocket_backend_policy.js?v=backend-v62';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   computePocketFrameBudget,
@@ -52,8 +52,8 @@ let activeGpuDevice = null;
 let currentModelAssetBytes = {};
 let currentModelDownloadTotalBytes = 1;
 
-const DEFAULT_LANGUAGE = "english_2026-04";
-const LANGUAGE_BUNDLES = ["english_2026-04", "german", "italian", "portuguese", "spanish"];
+const DEFAULT_LANGUAGE = "english_2026-10";
+const LANGUAGE_BUNDLES = ["english_2026-10", "german", "italian", "portuguese", "spanish"];
 const MODEL_STEMS = {
   text_conditioner: "text_conditioner_int8.onnx",
   flow_lm_main: "flow_lm_main_int8.onnx",
@@ -93,11 +93,7 @@ const WASM_MIMI_FP16_FILE = 'mimi_decoder_fp16.onnx';
 // Byte sizes for the files that are not the per-tensor originals, keyed by
 // filename so download progress reports what is actually being fetched.
 const KNOWN_MODEL_FILE_BYTES = Object.freeze({
-  'mimi_decoder_fp16.onnx': 20943707,
-  'mimi_decoder_int8_pc.onnx': 16673300,
-  'flow_lm_main_int8_pc.onnx': 76622780,
-  'flow_lm_flow_int8_pc.onnx': 10059081,
-  'flow_lm_decode_block4_int8_pc.onnx': 86421636,
+  'mimi_decoder_fp16.onnx': 20947866,
 });
 // Verified against what B2 actually serves from english_2026-04. Two were
 // wrong: flow_lm_unified_block4 held 87264376, which is the size of the .ort
@@ -110,7 +106,7 @@ const MODEL_ASSET_BYTES = {
   flow_lm_main: 76341079,
   flow_lm_flow: 9962530,
   mimi_decoder: 22684077,
-  flow_lm_decode_block4: 88173753,
+  flow_lm_decode_block4: 88173526,
   flow_lm_unified_block4: 88818684,
 };
 const ORT_FORMAT_MODEL_ASSET_BYTES = {
@@ -168,12 +164,12 @@ const BASE_TEMP = getPocketTuningPreset(DEFAULT_POCKET_TEMPERATURE_PRESET).tempe
 // expressive mode is on. Negative = snap off sooner (high-energy emotions);
 // positive = let it settle (quiet/fearful emotions). Applied in pushChunk.
 const EMOTION_PROSODY = {
-  neutral:  { temp: 0.80, noiseClamp: null, eosBonus:  0 },
-  sadness:  { temp: 0.86, noiseClamp: null, eosBonus:  1 },
-  fear:     { temp: 0.90, noiseClamp: null, eosBonus:  1 },
-  joy:      { temp: 0.93, noiseClamp: null, eosBonus: -1 },
-  surprise: { temp: 0.94, noiseClamp: null, eosBonus: -1 },
-  anger:    { temp: 0.95, noiseClamp: null, eosBonus: -1 },
+  neutral:  { temp: 0.30, noiseClamp: null, eosBonus:  0 },
+  sadness:  { temp: 0.31, noiseClamp: null, eosBonus:  1 },
+  fear:     { temp: 0.32, noiseClamp: null, eosBonus:  1 },
+  joy:      { temp: 0.34, noiseClamp: null, eosBonus: -1 },
+  surprise: { temp: 0.35, noiseClamp: null, eosBonus: -1 },
+  anger:    { temp: 0.36, noiseClamp: null, eosBonus: -1 },
 };
 
 // ── PRNG & Gaussian Latent Generator (Mulberry32 + Box-Muller) ───────────────
@@ -250,7 +246,8 @@ const PUNCT_PAUSE_SEC = {
 function clampPocketTemperature(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return BASE_TEMP;
-  return Math.max(0.5, Math.min(0.95, n));
+  // Kyutai's default is 0.3; the old [0.5, 0.95] band made that unreachable.
+  return Math.max(0.15, Math.min(0.5, n));
 }
 
 function resolveWorkerTuning(opts = {}) {
@@ -305,7 +302,9 @@ const SENTENCEPIECE_MODULE_VERSION = "sp-1371cb5e";
 const POCKET_ORT_WASM_RUNTIME_VERSION = '1.27.0-wasm';
 const POCKET_ORT_RELAXED_RUNTIME_VERSION = '1.27.0-relaxed';
 const POCKET_ORT_MINIMAL_RUNTIME_VERSION = '1.27.0-relaxed-minimal';
-const POCKET_ORT_FORMAT_BUNDLE = 'english_2026-04-ort-r1';
+// No certified .ort pack for english_2026-10 yet. Leaving this empty keeps
+// useOrtFormatWasm false so the worker stays on the .onnx files we ship.
+const POCKET_ORT_FORMAT_BUNDLE = '';
 const PINNED_MODULE_SHA256 = Object.freeze({
   sentencepiece: '1371cb5e2ee08c7faca8ad53f7cad5a5c41759530f6ade52156dbd8c13059860',
   ortCustomWasm: '9608e98a3fba9716f0cbd0bca0c94808b71dae2e9265ca3fe742ddc393a53ebc',
@@ -428,9 +427,10 @@ let wasmBlockBosSequence = null;
 // quantizer rewrites Gemm to MatMul itself and gets it wrong on this graph, so
 // the 92 Gemm nodes are folded to MatMul + Add before quantizing. See the
 // maintainer tool for the exact recipe.)
-const WASM_BLOCK_FILE = 'flow_lm_decode_block4_int8_pc.onnx';
-// The pre-rebuild asset. Kept as a fetch fallback so a bundle that does not
-// carry the new file (any non-English language bundle) still finds a block.
+// english_2026-10 ships the base INT8 block only. The _pc name was the
+// english_2026-04 per-channel rebuild; prefer the base file so we do not spend
+// a 404 on every cold start.
+const WASM_BLOCK_FILE = 'flow_lm_decode_block4_int8.onnx';
 const WASM_BLOCK_LEGACY_FILE = 'flow_lm_decode_block4_int8.onnx';
 const WASM_BLOCK_ORT_FILE = 'flow_lm_decode_block4_int8.ort';
 const WASM_UNIFIED_BLOCK_FILE = 'flow_lm_unified_block4_int8.onnx';
@@ -614,13 +614,10 @@ function wasmModelPaths(language, filename) {
   // rather than at each call site means every loader -- the descriptor list,
   // ensureFlowLmMainSession, ensureFlowLmFlowSession -- gets both for free.
   //
-  // Only english_2026-04 carries the rebuilds. Offering them for a bundle that
-  // does not have them is not free: fetchFirstAvailable would spend two 404
-  // round-trips per model AND post a "Model host unavailable" WARN for each
-  // before reaching the file that was always going to serve it.
-  const upgraded = (useOrtFormatWasm || bundle !== DEFAULT_LANGUAGE)
-    ? null
-    : PER_CHANNEL_MODEL_STEMS[filename];
+  // Per-channel rebuilds were measured for english_2026-04 only. english_2026-10
+  // ships the base INT8 files; offering the _pc names would spend two 404s per
+  // model before landing on the file that was always going to serve.
+  const upgraded = null;
   const names = upgraded ? [upgraded, filename] : [filename];
   return names.flatMap((name) => [
     `${MODEL_BASE_URL}Pocket%20TTS%20Onnx/${bundle}/${name}`,
@@ -2402,7 +2399,8 @@ async function loadBundle(language, {
   // Ask for .ort whenever a custom runtime could plausibly serve it. Fixed SIMD
   // is the wider gate: relaxed SIMD implies it, and a device with only fixed
   // SIMD previously lost .ort for no reason other than the probe it failed.
-  useOrtFormatWasm = selectedBackend === 'wasm'
+  useOrtFormatWasm = Boolean(POCKET_ORT_FORMAT_BUNDLE)
+    && selectedBackend === 'wasm'
     && language === DEFAULT_LANGUAGE
     && (supportsRelaxedSimd() || supportsFixedSimd());
   await loadOrt(selectedBackend, { preferMinimalOrt: useOrtFormatWasm });

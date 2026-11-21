@@ -4,7 +4,7 @@ import {
   isMobileLikePlatform,
   selectNarrationEngine,
   NARRATION_ENGINE_TIERS,
-} from './pocket_backend_policy.js?v=backend-v60';
+} from './pocket_backend_policy.js?v=backend-v62';
 
 const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 2) : 2;
 // Routed through the shared platform helper so a stock iPad — which reports a
@@ -160,17 +160,17 @@ window.POCKET_VOICE_PACK = {
       fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
     },
     {
-      id: 'noah',
-      displayName: 'Noah',
+      id: 'paul',
+      displayName: 'Paul',
       gender: 'male',
-      accent: 'American, Florida',
+      accent: 'American',
       recommended: true,
-      recommendedUse: 'American male narrator; younger southern read.',
-      sourceName: 'VCTK p345',
-      sourceFolder: 'vctk',
-      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p345_023_enhanced.wav',
-      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
-      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
+      recommendedUse: 'American male narrator; Kyutai ready-made 2026-10 reference.',
+      sourceName: 'Kyutai paul',
+      sourceFolder: 'embeddings',
+      sourceUrl: 'https://huggingface.co/kyutai/pocket-tts/tree/main/languages/english_2026-10/embeddings',
+      originUrl: 'https://github.com/kyutai-labs/pocket-tts',
+      license: 'CC BY 4.0 via Kyutai TTS voices',
       availableEmotions: ['neutral'],
       fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
     }
@@ -181,10 +181,12 @@ window.POCKET_VOICE_PACK = {
 // be recognised as retired and migrated to a live voice, rather than being
 // handed to the worker as an unknown id -- which is what previously resolved to
 // a Pocket voice pack that does not exist and hung for 60 s on every attempt.
+// Noah had no ready-made 2026-10 embedding; stored settings naming him land on
+// Paul, the replacement American male from Kyutai's shipped catalog.
 window.POCKET_RETIRED_VOICES = Object.freeze([
   'donald_malone', 'bill_boerst', 'jason_mayoff',
   'kristin_hughes', 'jodi_krangle_expressive', 'karen_savage',
-  'jane', 'michael', 'rayne',
+  'jane', 'michael', 'rayne', 'noah',
 ]);
 
 window.POCKET_VOICES = window.POCKET_VOICE_PACK.voices.map((voice) => voice.id);
@@ -203,8 +205,8 @@ window.POCKET_VOICE_ALIASES = {
   rob: 'charles',
   dan: 'george',
   caden: 'george',
-  dave: 'noah',
-  ian: 'noah',
+  dave: 'paul',
+  ian: 'paul',
   jodi: 'alba',
   'jodi_krangle-expressive': 'alba',
   reeses: 'eve',
@@ -214,14 +216,15 @@ window.POCKET_VOICE_ALIASES = {
   // Retired Voice-Zero voices, migrated by gender.
   donald_malone: 'charles',
   bill_boerst: 'george',
-  jason_mayoff: 'noah',
+  jason_mayoff: 'paul',
   kristin_hughes: 'mary',
   jodi_krangle_expressive: 'alba',
   karen_savage: 'eve',
-  // Retired Kyutai duplicates and the personal clone.
+  // Retired Kyutai duplicates, the personal clone, and Noah (no 2026-10 embedding).
   jane: 'alba',
   michael: 'charles',
-  rayne: 'alba'
+  rayne: 'alba',
+  noah: 'paul',
 };
 window.POCKET_VOICE_ASSET_IDS = [];
 window.POCKET_VOICE_PACK.voices.forEach((voice) => {

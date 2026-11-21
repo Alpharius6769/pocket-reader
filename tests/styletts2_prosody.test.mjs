@@ -168,6 +168,6 @@ test('the prosody change is versioned, or cached flat audio would be replayed', 
   // who had already listened, and silently.
   const audio = await readFile(path.join(ROOT, 'public/assets/js/audio_core.js'), 'utf8');
   assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';/);
-  assert.match(audio, /const KITTEN_NARRATION_CACHE_VERSION = 'kittenv2';/);
+  assert.match(audio, /const KITTEN_NARRATION_CACHE_VERSION = 'kittenv3';/);
   assert.match(audio, /if \(_isStyleTts2Engine\(engine\)\) return `#\$\{NEURAL_CACHE_VERSIONS\[engine\]\}`;/);
 });

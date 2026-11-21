@@ -22,9 +22,9 @@ export const POCKET_ACCELERATION_VERSION = 'accel-v5';
 export const POCKET_MOBILE_OPTIMISTIC_WEBGPU = false;
 // Bump to retire sticky demotions recorded under an older runtime/policy.
 export const POCKET_DEMOTION_EPOCH = 'e3';
-export const POCKET_WASM_MODEL_REVISION = 'english-2026-04-int8-r1';
-export const POCKET_WEBGPU_MODEL_REVISION = 'english-2026-04-fp16-r3';
-export const POCKET_WEBGPU_BUNDLE = 'english_2026-04-webgpu-fp16-r3';
+export const POCKET_WASM_MODEL_REVISION = 'english-2026-10-int8-r1';
+export const POCKET_WEBGPU_MODEL_REVISION = 'english-2026-10-fp16-r1';
+export const POCKET_WEBGPU_BUNDLE = 'english_2026-10-webgpu-fp16-r1';
 export const POCKET_GPU_RESIDENT_STATE_BYTES = 65_645_212;
 export const POCKET_BACKEND_VALUES = Object.freeze(['auto', 'wasm', 'webgpu']);
 export const POCKET_IOS_WEBGPU_MIN_GENERATION = 14;
@@ -1350,29 +1350,32 @@ export const KOKORO_VOICES = Object.freeze([
 ]);
 export const KOKORO_DEFAULT_VOICE = 'af_heart';
 
-export const KITTEN_MODEL_REVISION = 'kitten-nano-v0.1';
-// KittenTTS publishes no quality grades, so none are invented here. Trimmed to
-// three per gender to match Kokoro and Pocket: the expr-voice-2 pair came last
-// in the upstream preference order and was the pair carrying no distinct
-// character of its own next to 3, 4 and 5. Both remain in B2 -- this is a
-// picker decision, not a deletion -- so restoring one is a one-line change.
+export const KITTEN_MODEL_REVISION = 'kitten-tts-2-nano-en';
+// KittenTTS 2 Nano English voices. Upstream publishes ten; we keep three per
+// gender to match Kokoro and Pocket. Labels come from KittenML's own
+// descriptions. No quality grades are published, so none are invented here.
 export const KITTEN_VOICES = Object.freeze([
-  { id: 'expr-voice-3-f', label: 'Expr 3 - female, warm',   gender: 'female' },
-  { id: 'expr-voice-4-f', label: 'Expr 4 - female, bright', gender: 'female' },
-  { id: 'expr-voice-5-f', label: 'Expr 5 - female, soft',   gender: 'female' },
-  { id: 'expr-voice-3-m', label: 'Expr 3 - male, warm',     gender: 'male'   },
-  { id: 'expr-voice-4-m', label: 'Expr 4 - male, bright',   gender: 'male'   },
-  { id: 'expr-voice-5-m', label: 'Expr 5 - male, soft',     gender: 'male'   },
+  { id: 'eleanor', label: 'Eleanor - female, somber',   gender: 'female' },
+  { id: 'serena',  label: 'Serena - female, gentle',    gender: 'female' },
+  { id: 'grace',   label: 'Grace - female, soothing',   gender: 'female' },
+  { id: 'otis',    label: 'Otis - male, rumbling',      gender: 'male'   },
+  { id: 'vincent', label: 'Vincent - male, hushed',     gender: 'male'   },
+  { id: 'danny',   label: 'Danny - male, cheerful',     gender: 'male'   },
 ]);
 
-// Retired from the picker but still valid assets. A stored setting naming one
-// must resolve to a live voice rather than reaching the worker as an unknown
-// id, which is the failure that hangs synthesis for 60 seconds.
+// Retired Nano 0.1 ids. A stored setting naming one must resolve to a live
+// voice of the same gender rather than reaching the worker as an unknown id.
 export const KITTEN_RETIRED_VOICES = Object.freeze({
-  'expr-voice-2-f': 'expr-voice-3-f',
-  'expr-voice-2-m': 'expr-voice-3-m',
+  'expr-voice-2-f': 'eleanor',
+  'expr-voice-3-f': 'eleanor',
+  'expr-voice-4-f': 'serena',
+  'expr-voice-5-f': 'grace',
+  'expr-voice-2-m': 'otis',
+  'expr-voice-3-m': 'otis',
+  'expr-voice-4-m': 'vincent',
+  'expr-voice-5-m': 'danny',
 });
-export const KITTEN_DEFAULT_VOICE = 'expr-voice-3-f';
+export const KITTEN_DEFAULT_VOICE = 'eleanor';
 
 export function isKittenVoice(voiceId) {
   const id = String(voiceId || '').toLowerCase().trim();
@@ -1381,9 +1384,9 @@ export function isKittenVoice(voiceId) {
 
 // The single place that answers "which voices may this engine use". Every
 // selector, default and validation path goes through here, so a voice id cannot
-// leak across engines: Kokoro's af_heart names a (510, 1, 256) table, Kitten's
-// expr-voice-3-f names one 256-float vector, and Pocket's are a different asset
-// family again. Handing one to the wrong worker is what previously resolved an
+// leak across engines: Kokoro and KittenTTS 2 both ship a (510, 256) style
+// table indexed by token count, and Pocket's are a different asset family
+// again. Handing one to the wrong worker is what previously resolved an
 // unknown id to a Pocket voice pack and hung for 60 s.
 export function voicesForEngine(engine) {
   if (engine === KITTEN_ENGINE) return KITTEN_VOICES;

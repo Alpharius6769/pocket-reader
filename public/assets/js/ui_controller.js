@@ -1725,7 +1725,7 @@ window._initMasterlistStickyScrollbar = _initMasterlistStickyScrollbar;
 if ('serviceWorker' in navigator) {
   // The app runs standalone on Pages; no host-shell frame escape is needed.
 
-  const isDebug = window.location.pathname.startsWith('/debug/');
+  const isDebug = window.location.pathname.indexOf('/debug/') !== -1;
   if (isDebug) {
     navigator.serviceWorker.getRegistrations()
       .then(regs => regs.forEach(r => r.unregister()))
@@ -1736,7 +1736,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=346', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=350', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)
@@ -1766,35 +1766,13 @@ window._setupAvatarUpload = async function(ev) {
           reader.onerror = () => reject(reader.error || new Error('Could not read avatar image.'));
           reader.readAsDataURL(f);
         });
-    const img = document.getElementById('setup-avatar-preview');
-    if (img) img.src = prepared;
   } catch (error) {
     console.error('[Setup] Failed to prepare avatar:', error);
   }
 };
 
-// Live preview of the reader font/size (and app text-size labels) in the wizard,
-// so users see their choice before committing.
-window._setupPreview = function() {
-  const prev = document.getElementById('setup-preview');
-  const font = document.getElementById('setup-reader-font');
-  const rsize = document.getElementById('setup-reader-size');
-  const asize = document.getElementById('setup-app-size');
-  const rLbl = document.getElementById('setup-reader-size-label');
-  const aLbl = document.getElementById('setup-app-size-label');
-  if (rsize && rLbl) rLbl.innerText = rsize.value + 'pt';
-  if (asize && aLbl) aLbl.innerText = asize.value + 'pt';
-  if (asize) {
-    const appSize = Math.max(10, Math.min(18, Number(asize.value) || 13));
-    // The setup picker should preview the application scale immediately, not
-    // just update its label. applySettings() persists the same value on save.
-    document.documentElement.style.setProperty('--app-font-size', `${appSize}pt`);
-  }
-  if (prev) {
-    if (font) prev.style.fontFamily = font.value;
-    if (rsize) prev.style.fontSize = rsize.value + 'pt';
-  }
-};
+// Setup no longer previews fonts/sizes; Profile / Settings own those controls.
+window._setupPreview = function() {};
 
 function _readFavInputs(prefix) {
   const out = [];
@@ -1809,10 +1787,7 @@ const SETUP_DRAFT_STORAGE_KEY = 'pr_setup_draft_v1';
 const SETUP_AUTH_STORAGE_KEY = 'pr_setup_auth_v1';
 const DEVICE_PROFILE_HANDOFF_KEY = 'pr_device_profile_handoff_v1';
 const SETUP_DRAFT_FIELD_IDS = [
-  'setup-username', 'setup-usertype', 'setup-companion', 'setup-theme',
-  'setup-reader-font', 'setup-reader-size', 'setup-app-size', 'setup-genre',
-  'setup-fandom', 'setup-length', 'setup-mood',
-  'setup-fav-1', 'setup-fav-2', 'setup-fav-3', 'setup-fav-4', 'setup-fav-5',
+  'setup-username', 'setup-theme', 'setup-narrator-pref',
 ];
 
 function _readSetupDraft() {
@@ -1821,11 +1796,9 @@ function _readSetupDraft() {
     const element = document.getElementById(id);
     if (element) values[id] = element.value;
   });
-  const avatar = document.getElementById('setup-avatar-preview')?.src || '';
   const rememberLogin = document.getElementById('setup-remember-login')?.checked;
   return {
     values,
-    avatar: avatar.startsWith('data:') ? avatar : '',
     rememberLogin: rememberLogin !== false,
   };
 }
@@ -1842,11 +1815,8 @@ function _restoreSetupDraft() {
       const element = document.getElementById(id);
       if (element && value != null) element.value = String(value);
     });
-    const avatar = document.getElementById('setup-avatar-preview');
-    if (avatar && saved.avatar?.startsWith('data:')) avatar.src = saved.avatar;
     const remember = document.getElementById('setup-remember-login');
     if (remember && typeof saved.rememberLogin === 'boolean') remember.checked = saved.rememberLogin;
-    window._setupPreview?.();
     return true;
   } catch (_) {
     return false;
@@ -1963,52 +1933,18 @@ window.completeFirstTimeSetup = () => {
   p.settings = p.settings || {};
 
   const username = (document.getElementById('setup-username')?.value || '').trim() || 'Guest Reader';
-  const avatar = document.getElementById('setup-avatar-preview')?.src || '';
-  const userCategory = document.getElementById('setup-usertype')?.value || '';
-  const rawCompanion = document.getElementById('setup-companion')?.value || 'virtue';
-  const companion = ['virtue', 'none', 'jade'].includes(rawCompanion) ? rawCompanion : 'virtue';
-  const theme = document.getElementById('setup-theme')?.value || 'slate';
-  const readerFont = document.getElementById('setup-reader-font')?.value || '';
-  const readerSize = parseInt(document.getElementById('setup-reader-size')?.value || '13', 10);
-  const appSize = parseInt(document.getElementById('setup-app-size')?.value || '13', 10);
-  const favoriteGenre = (document.getElementById('setup-genre')?.value || '').trim();
-  const currentlyReading = (document.getElementById('setup-currently')?.value || '').trim();
-  const favoriteCharacter = (document.getElementById('setup-character')?.value || '').trim();
+  const companion = 'virtue';
+  const theme = document.getElementById('setup-theme')?.value || 'dark';
   const narratorPref = document.getElementById('setup-narrator-pref')?.value || '';
-  const favoriteStories = _readFavInputs('setup-fav-');
 
-  // Canonical profile fields — these are what the rest of the app reads.
+  // Canonical profile fields — about-you / goals live on Profile Edit now.
   p.displayName = username;
-  if (avatar && avatar.startsWith('data:')) p.avatar = avatar;
-  if (avatar && avatar.startsWith('data:') && window._cloudPushAllowed && typeof window.pocketCloud?.saveAvatar === 'function') {
-    window.pocketCloud.saveAvatar(avatar).catch((error) => console.warn('[CloudSync] Setup avatar upload failed:', error));
-  }
-  p.userCategory = userCategory;
   p.companion = companion;
-  p.favoriteGenre = favoriteGenre;
-  p.currentlyReading = currentlyReading;
-  p.favoriteCharacter = favoriteCharacter;
-  // Same canonical property names the profile editor writes, so a value entered
-  // at setup shows up pre-filled when the reader later opens Edit Profile
-  // instead of appearing to have been discarded.
-  p.favoriteFandom = (document.getElementById('setup-fandom')?.value || '').trim();
-  p.preferredLength = document.getElementById('setup-length')?.value || '';
-  p.readingMood = document.getElementById('setup-mood')?.value || '';
-  p.favoriteStories = favoriteStories;
-  p.goals = p.goals || {};
-  const setupGoalMins = parseInt(document.getElementById('setup-goal-weekly-minutes')?.value || '120', 10);
-  p.goals.weeklyMinutes = isNaN(setupGoalMins) ? 120 : setupGoalMins;
-  const setupGoalChaps = parseInt(document.getElementById('setup-goal-weekly-chapters')?.value || '0', 10);
-  p.goals.weeklyChapters = isNaN(setupGoalChaps) ? 0 : setupGoalChaps;
-  p.goals.streakEnabled = document.getElementById('setup-goal-streak-enabled')?.checked !== false;
-  p.goals.updatedAt = Date.now();
   p.settings.theme = theme;
   p.settings.companion = companion;
-  if (readerFont) p.settings.readerFontFamily = readerFont;
-  p.settings.readerFontSize = readerSize;
-  p.settings.appFontSize = appSize;
-  ['displayName', 'userCategory', 'companion', 'favoriteGenre', 'currentlyReading', 'favoriteCharacter', 'favoriteStories'].forEach((field) => window.stampProfileField?.(field));
-  ['theme', 'companion', 'readerFontFamily', 'readerFontSize', 'appFontSize'].forEach((field) => window.stampSyncedSetting?.(field));
+  if (!p.settings.readerFontFamily) p.settings.readerFontFamily = "'Literata Local', Georgia, serif";
+  ['displayName', 'companion'].forEach((field) => window.stampProfileField?.(field));
+  ['theme', 'companion', 'readerFontFamily'].forEach((field) => window.stampSyncedSetting?.(field));
 
   if (narratorPref === 'Male' || narratorPref === 'Female') {
     const defaultVoice = narratorPref === 'Male' ? 'charles' : 'alba';
@@ -2022,17 +1958,12 @@ window.completeFirstTimeSetup = () => {
   }
 
   // Sync the matching Settings controls so they reflect the wizard choices.
-  // (Profile fields — name/category/genre/favorites — live on the Profile page
-  // now and are filled by renderProfileExtras() below.)
   const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined && val !== '') el.value = val; };
   set('app-theme-select', theme);
   set('companion-select', companion);
-  set('reading-font-select', readerFont);
-  set('reader-font-slider', readerSize);
-  set('app-font-slider', appSize);
+  set('reading-font-select', p.settings.readerFontFamily);
 
   if (typeof window.updateDisplayName === 'function') window.updateDisplayName(username);
-  if (p.avatar) ['topbar-avatar-img', 'profile-avatar-img', 'settings-avatar-img'].forEach((id) => { const el = document.getElementById(id); if (el) el.src = p.avatar; });
   if (typeof window.applySettings === 'function') window.applySettings();
   if (typeof window.renderProfileExtras === 'function') window.renderProfileExtras();
   // The wizard is a deliberate settings choice — stamp it so it wins over an

@@ -66,19 +66,17 @@ Last reviewed: 2026-08-30.
 - Distribution note: the model and voice tables are served through the
   Cloudflare Worker from Backblaze B2 rather than stored in this source tree.
 
-### KittenTTS Nano 0.1 (narration engine)
+### KittenTTS 2 Nano (narration engine)
 
-- Upstream: KittenML/kitten-tts-nano-0.1, ONNX build
-  `onnx-community/kitten-tts-nano-0.1-ONNX`
+- Upstream: KittenML/kitten-tts-2-nano (English int8)
 - License: Apache-2.0
-- Source: https://huggingface.co/KittenML/kitten-tts-nano-0.1
+- Source: https://huggingface.co/KittenML/kitten-tts-2-nano
 - Used as: the lightest narration tier, for devices that cannot hold Kokoro.
-  15M parameters; roughly 12x less resident memory than Kokoro.
-- Shipped voices: `expr-voice-3-f`, `expr-voice-4-f`, `expr-voice-5-f`,
-  `expr-voice-3-m`, `expr-voice-4-m`, `expr-voice-5-m`. Each voice is a single
-  256-float style vector, unlike Kokoro's (510, 1, 256) table.
+  ~16.6 MB int8 English graph with (510, 256) style tables.
+- Shipped voices: `eleanor`, `serena`, `grace`, `otis`, `vincent`, `danny`.
+  Legacy `expr-voice-*` ids migrate to these.
 - Distribution note: served through the Cloudflare Worker from Backblaze B2
-  rather than stored in this source tree.
+  under `kitten/v2.0/` rather than stored in this source tree.
 
 ### Voice-Zero Emotional Pack
 
@@ -100,26 +98,19 @@ Last reviewed: 2026-08-30.
   of the same gender. The converted assets remain in the bucket, so the
   attribution above still applies and is kept for that reason.
 
-### Kyutai Pocket TTS catalog voices (Alba, Jane, Charles, Michael, George, Noah, Mary, Eve)
+### Kyutai Pocket TTS ready-made voices (english_2026-10)
 
-- Upstream: Kyutai Pocket TTS voice catalog
-- Sources:
-  - Alba: https://huggingface.co/kyutai/tts-voices/blob/main/alba-mackenna/casual.wav (CC BY 4.0, Alba MacKenna)
-  - Jane: https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p339_023_enhanced.wav (CC BY 4.0, VCTK p339)
-  - Charles: https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p254_023_enhanced.wav (CC BY 4.0, VCTK p254)
-  - Michael: https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p360_023_enhanced.wav (CC BY 4.0, VCTK p360)
-  - George: https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p315_023_enhanced.wav (CC BY 4.0, VCTK p315, American New England)
-  - Noah: https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p345_023_enhanced.wav (CC BY 4.0, VCTK p345, American Florida)
-  - Mary: https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p333_023_enhanced.wav (CC BY 4.0, VCTK p333, American Indiana)
-  - Eve: https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p361_023_enhanced.wav (CC BY 4.0, VCTK p361, American New Jersey)
-- Catalog: https://github.com/kyutai-labs/pocket-tts
-- Used as: Additional Pocket TTS narrator voices. Each has a single official
-  reference, so only the `_neutral` conditioning file is shipped.
-- Runtime asset names: `alba_neutral`, `jane_neutral`, `charles_neutral`,
-  `michael_neutral`, `george_neutral`, `noah_neutral`, `mary_neutral`,
-  `eve_neutral`.
-- Distribution note: converted `.safetensors` files live on B2 under `voices/v2/`
-  and are served through the Cloudflare Worker. Not stored in this source tree.
+- Upstream: Kyutai `pocket-tts` ready-made embeddings for `english_2026-10`
+  (~109.5M checkpoint; default temperature 0.3).
+- Source embeddings:
+  https://huggingface.co/kyutai/pocket-tts/tree/main/languages/english_2026-10/embeddings
+- Catalog/code: https://github.com/kyutai-labs/pocket-tts
+- License: CC BY 4.0
+- Shipped narrator set: Alba, Mary, Eve, Charles, George, Paul
+  (`*_neutral.safetensors`). Noah has no 2026-10 embedding and migrates to
+  Paul; Jane/Michael/Rayne and earlier custom clones remain retired aliases.
+- Distribution note: `.safetensors` files live on B2 under `voices/v3/` and are
+  served through the Cloudflare Worker. Not stored in this source tree.
 
 ### Rayne (Personal Clone)
 

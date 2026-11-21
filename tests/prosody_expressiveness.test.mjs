@@ -230,7 +230,7 @@ test('Pocket ships three female and three male Kyutai voices, each neutral-only'
     eve: ['female', 'American, New Jersey'],
     charles: ['male', 'English'],
     george: ['male', 'American, New England'],
-    noah: ['male', 'American, Florida'],
+    paul: ['male', 'American'],
   };
   const pack = source.slice(
     source.indexOf('window.POCKET_VOICE_PACK = {'),
@@ -262,7 +262,7 @@ test('every retired voice migrates to a LIVE voice of the same gender', async ()
     source.indexOf('window.POCKET_VOICE_ASSET_IDS = []'),
   );
   const female = ['alba', 'mary', 'eve'];
-  const male = ['charles', 'george', 'noah'];
+  const male = ['charles', 'george', 'paul'];
   const live = [...female, ...male];
   const pairs = [...aliases.matchAll(/([a-z_'-]+):\s*'([a-z_]+)'/g)]
     .map((m) => [m[1].replace(/'/g, ''), m[2]]);
@@ -375,27 +375,17 @@ test('getPocketTuningPreset allows expressive temperature tuning without forced 
   assert.doesNotMatch(ttsCore, /if \(key === 'expressive'\) key = DEFAULT_POCKET_TEMPERATURE_PRESET;/);
 });
 
-test('preset temperatures buy stability without flattening the three presets', () => {
-  // Pocket is the quality tier, and on a zero-shot flow-LM quality over a
-  // 20-30 minute listen means STABILITY: the reported repeats, climbing pitch
-  // inside long quotes and distorted tails were what 0.86/0.93 sampling bought.
-  // The presets came down accordingly.
+test('preset temperatures follow Kyutai english_2026-10 default of 0.3', () => {
+  // Human evals preferred english_2026-10 at 0.3. All three named presets share
+  // that sampling temp; emotion still varies via the per-emotion cap tables.
   const { stable, balanced, expressive } = POCKET_TTS_TUNING_PRESETS;
-  assert.equal(stable.temperature, 0.68);
-  assert.equal(balanced.temperature, 0.76);
-  assert.equal(expressive.temperature, 0.84);
+  assert.equal(stable.temperature, 0.3);
+  assert.equal(balanced.temperature, 0.3);
+  assert.equal(expressive.temperature, 0.3);
   assert.equal(balanced.lsdSteps, DEFAULT_LSD_STEPS);
   assert.equal(DEFAULT_LSD_STEPS, 1);
-
-  // But they must stay three distinguishable presets, not three names for the
-  // same flat voice — the previous 0.70-everywhere era is the other failure.
-  assert.ok(expressive.temperature - stable.temperature >= 0.12,
-    'the presets must stay audibly apart');
-  assert.ok(stable.temperature < balanced.temperature && balanced.temperature < expressive.temperature,
-    'presets must stay monotonic');
-  // And nothing may sit at the worker's 0.95 clamp again.
-  assert.ok(expressive.temperature <= 0.88,
-    'the hottest preset must keep real headroom below the 0.95 clamp');
+  assert.ok(expressive.temperature <= 0.5,
+    'presets must stay inside the worker clamp that now tops out at 0.5');
 });
 
 test('getPocketTuningPreset escalates with the emotion profile and never de-escalates', () => {
@@ -403,22 +393,22 @@ test('getPocketTuningPreset escalates with the emotion profile and never de-esca
   // so this function returned 0.70 and the voices stayed flat.
   const expressive = getPocketTuningPreset('balanced', 'expressive');
   assert.equal(expressive.name, 'expressive');
-  assert.equal(expressive.temperature, 0.84);
+  assert.equal(expressive.temperature, 0.3);
 
   const fullAlias = getPocketTuningPreset('balanced', 'full');
   assert.equal(fullAlias.name, 'expressive');
 
   const balanced = getPocketTuningPreset('balanced', 'balanced');
   assert.equal(balanced.name, 'balanced');
-  assert.equal(balanced.temperature, 0.76);
+  assert.equal(balanced.temperature, 0.3);
 
   const keepHot = getPocketTuningPreset('expressive', 'neutral');
   assert.equal(keepHot.name, 'expressive');
-  assert.equal(keepHot.temperature, 0.84);
+  assert.equal(keepHot.temperature, 0.3);
 
   const keepStable = getPocketTuningPreset('stable', 'neutral');
   assert.equal(keepStable.name, 'stable');
-  assert.equal(keepStable.temperature, 0.68);
+  assert.equal(keepStable.temperature, 0.3);
 
   // An unknown preset name falls back to the default rather than resolving to a
   // deleted one. 'quality' used to be a real entry; it must not resurrect.
@@ -449,13 +439,13 @@ test('per-emotion temperature tables are the sampling temps, not a ceiling on 0.
   const allTemps = [...Object.keys(EMOTION_KEYS.balanced).map((k) => num(balanced, k)),
                     ...Object.keys(EMOTION_KEYS.full).map((k) => num(full, k))].filter(Number.isFinite);
   assert.ok(allTemps.length >= 15, 'both cap tables must still be parsed');
-  assert.ok(Math.max(...allTemps) <= 0.88,
-    `hottest emotion ${Math.max(...allTemps)} leaves no headroom below the 0.95 clamp`);
-  assert.ok(Math.min(...allTemps) >= 0.68,
-    `coldest emotion ${Math.min(...allTemps)} is back at the flat-voice era`);
+  assert.ok(Math.max(...allTemps) <= 0.5,
+    `hottest emotion ${Math.max(...allTemps)} must stay inside the 0.5 worker clamp`);
+  assert.ok(Math.min(...allTemps) >= 0.25,
+    `coldest emotion ${Math.min(...allTemps)} drifted too far below Kyutai's 0.3`);
 
-  // Emotion must still be audible: calm and shout cannot converge.
-  assert.ok(num(full, 'shout') - num(full, 'calm') >= 0.10,
+  // Emotion must still vary around 0.3: calm and shout cannot converge.
+  assert.ok(num(full, 'shout') - num(full, 'calm') >= 0.06,
     'the expressive profile has flattened — calm and shout must stay apart');
   assert.ok(num(full, 'happy') > num(balanced, 'happy'), 'expressive profile must run hotter than balanced');
   assert.ok(num(balanced, 'surprised') > num(balanced, 'calm'), 'the balanced profile must still vary');
@@ -463,7 +453,7 @@ test('per-emotion temperature tables are the sampling temps, not a ceiling on 0.
 
 test('a change in how audio is rendered busts the Pocket audio cache', async () => {
   const source = await read('public/assets/js/audio_core.js');
-  assert.match(source, /const POCKET_NARRATION_CACHE_VERSION = 'narrv23'/);
+  assert.match(source, /const POCKET_NARRATION_CACHE_VERSION = 'narrv24'/);
 });
 
 test('cache and live share one Pocket take: seed, token cap, pause, decode batch', async () => {

@@ -9,7 +9,8 @@
   --accent-blue: #326496;
   --accent-blue-hover: #295582;
   --accent-blue-text: #6eb5e6;
-  --accent-purple: #7A58EC;
+  /* Teal/green alias — purple retired as the checkbox/play accent. */
+  --accent-purple: var(--accent-green);
   --accent-yellow: #f5c518;
   --accent-red: #d94141;
   /* Foreground for filled primary/success buttons (bg = --accent-green). Default
@@ -29,13 +30,18 @@
   /* Default app text size (new/unset profiles). Users can still change it in
      Settings; applySettings() then overrides this via an inline --app-font-size. */
   --app-font-size: 11pt;
-  --reader-font-family: 'Courier New', Courier, monospace;
+  --ui-font-family: 'Source Sans 3', 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --reader-font-family: 'Literata Local', Georgia, serif;
   --reader-font-size: 13pt;
 }
 
 html {
   font-size: var(--app-font-size);
   background-color: var(--app-bg);
+  background-image:
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(50, 100, 150, 0.22), transparent 55%),
+    linear-gradient(180deg, #162033 0%, var(--app-bg) 42%, #101722 100%);
+  background-attachment: fixed;
   min-height: 100%;
   height: 100%;
   height: 100dvh;
@@ -43,8 +49,8 @@ html {
 
 body {
   margin: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background-color: var(--app-bg);
+  font-family: var(--ui-font-family);
+  background: transparent;
   color: var(--text-main);
   min-height: 100%;
   height: 100%;
@@ -55,7 +61,7 @@ body {
 
 input[type="checkbox"],
 input[type="radio"] {
-  accent-color: var(--accent-purple, #9d4edd);
+  accent-color: var(--accent-green);
   cursor: pointer;
 }
 
@@ -74,16 +80,16 @@ input[type="radio"] {
 }
 
 .sidebar {
-  width: 100px;
-  min-width: 100px;
-  max-width: 100px;
+  width: 88px;
+  min-width: 88px;
+  max-width: 88px;
   flex-shrink: 0;
-  background-color: var(--sidebar-bg);
+  background-color: color-mix(in srgb, var(--sidebar-bg) 92%, transparent);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: calc(20px + env(safe-area-inset-top, 0px));
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
   padding-bottom: 10px;
   padding-left: calc(0px + env(safe-area-inset-left, 0px));
   z-index: 100;
@@ -100,21 +106,27 @@ input[type="radio"] {
   border: none;
   color: var(--text-muted);
   width: 100%;
-  padding: 15px 0;
+  padding: 12px 0;
   cursor: pointer;
   transition: background-color var(--transition-speed) ease, color var(--transition-speed) ease,
-    border-color var(--transition-speed) ease;
-  font-size: 0.8em;
+    border-color var(--transition-speed) ease, opacity 180ms ease;
+  font-size: 0.72em;
   font-weight: 600;
+  letter-spacing: 0.01em;
   border-left: 3px solid transparent;
   box-sizing: border-box;
 }
 
 .nav-btn span {
-  max-width: 90px;
+  max-width: 78px;
   word-break: break-word;
   text-align: center;
-  line-height: 1.2;
+  line-height: 1.15;
+}
+
+.nav-btn-secondary {
+  opacity: 0.78;
+  font-weight: 500;
 }
 
 .nav-icon {
@@ -674,7 +686,7 @@ input[type="radio"] {
 .hmofa-toggle-btn.active {
   background: var(--accent-purple, #9d4edd);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(157, 78, 221, 0.3);
+  box-shadow: 0 2px 8px rgba(94, 189, 147, 0.28);
 }
 .hmofa-interceptor-bar {
   display: flex;
@@ -872,24 +884,63 @@ input[type="radio"] {
 
 .hmofa-layout {
   display: grid;
-  grid-template-columns: minmax(210px, 250px) 1fr;
+  grid-template-columns: 1fr;
   gap: 18px;
   align-items: start;
   min-height: 0;
 }
+.hmofa-filters-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 240;
+  display: none;
+  align-items: stretch;
+  justify-content: flex-end;
+  background: rgba(8, 12, 20, 0.55);
+}
+.hmofa-filters-sheet.is-open {
+  display: flex;
+}
+.hmofa-filters-sheet-panel {
+  width: min(360px, 92vw);
+  height: 100%;
+  background: var(--panel-bg);
+  border-left: 1px solid var(--border-color);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(12px);
+  opacity: 0.96;
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+.hmofa-filters-sheet.is-open .hmofa-filters-sheet-panel {
+  transform: translateX(0);
+  opacity: 1;
+}
+.hmofa-filters-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border-color);
+}
+.hmofa-filters-sheet-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
 .hmofa-facet-rail {
-  position: sticky;
-  top: 12px;
-  max-height: min(calc(100vh - 80px), calc(100dvh - 80px));
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-right: 6px;
+  padding: 12px 14px 24px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-  scrollbar-color: rgba(157, 78, 221, 0.45) transparent;
+  scrollbar-color: color-mix(in srgb, var(--accent-green) 45%, transparent) transparent;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
@@ -901,11 +952,11 @@ input[type="radio"] {
   background: transparent;
 }
 .hmofa-facet-rail::-webkit-scrollbar-thumb {
-  background: rgba(157, 78, 221, 0.35);
+  background: color-mix(in srgb, var(--accent-green) 40%, transparent);
   border-radius: 6px;
 }
 .hmofa-facet-rail::-webkit-scrollbar-thumb:hover {
-  background: rgba(157, 78, 221, 0.65);
+  background: color-mix(in srgb, var(--accent-green) 70%, transparent);
 }
 .hmofa-facet-group-collapsible {
   width: 100%;
@@ -940,7 +991,7 @@ input[type="radio"] {
   content: '+';
   font-size: 1.2rem;
   font-weight: 700;
-  color: var(--accent-purple, #9d4edd);
+  color: var(--accent-green);
   margin-left: auto;
   padding-left: 8px;
 }
@@ -956,7 +1007,7 @@ input[type="radio"] {
 .hmofa-facet-group-badge {
   font-size: 0.72rem;
   font-weight: 600;
-  background: var(--accent-purple, #9d4edd);
+  background: var(--accent-green);
   color: #fff;
   padding: 2px 7px;
   border-radius: 999px;
@@ -1207,17 +1258,10 @@ input[type="radio"] {
 
 @media (max-width: 860px) {
   .hmofa-layout {
-    grid-template-columns: 1fr;
     gap: 14px;
   }
-  .hmofa-facet-rail {
-    position: static;
-    max-height: none;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-    padding-right: 0;
+  .hmofa-filters-sheet-panel {
+    width: min(100vw, 420px);
   }
   .hmofa-facet {
     width: 100%;
@@ -2182,17 +2226,21 @@ select:focus {
 }
 
 .playback-bar {
-  background: var(--panel-bg);
-  border-radius: 10px;
-  padding: 10px;
+  background: color-mix(in srgb, var(--panel-bg) 94%, transparent);
+  border-radius: 8px;
+  padding: 8px 10px;
   border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   max-width: min(1120px, 100%);
   box-sizing: border-box;
   align-self: center;
+  transition: opacity 180ms ease, border-color 180ms ease;
+}
+.playback-bar-secondary {
+  opacity: 0.85;
 }
 
 .playback-dropdown {
@@ -2224,22 +2272,21 @@ select:focus {
 }
 
 .play-btn {
-  background: var(--accent-purple);
-  color: white;
+  background: var(--accent-green);
+  color: #06140f;
   border: none;
-  border-radius: 50px;
-  padding: 10px 24px;
-  font-size: 1.05rem;
-  font-weight: bold;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-size: 1.02rem;
+  font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 15px rgba(122, 88, 236, 0.4);
-  transition: all var(--transition-speed);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+  transition: background-color var(--transition-speed), transform 120ms ease;
 }
 
 .play-btn:hover {
-  background: #8b6df0;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(122, 88, 236, 0.6);
+  background: var(--accent-green-hover);
+  transform: translateY(-1px);
 }
 
 /* --- Profile View Elements --- */
@@ -4523,4 +4570,37 @@ html[data-motion='reduced'] *::after { animation-duration: 1ms !important; anima
     height: 22px;
     flex-shrink: 0;
   }
+}
+
+/* Settings stack — Narration / Display / Account as vertical blocks */
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 640px;
+  margin-bottom: 18px;
+}
+.settings-block {
+  padding: 18px 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel-bg) 92%, transparent);
+}
+.settings-block-title {
+  margin: 0 0 14px;
+  font-size: 1.15rem;
+  font-weight: 650;
+  font-family: var(--ui-font-family);
+  letter-spacing: 0.01em;
+}
+.view {
+  animation: pr-view-fade 220ms ease;
+}
+@keyframes pr-view-fade {
+  from { opacity: 0.72; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .view { animation: none; }
+  .hmofa-filters-sheet-panel { transition: none; }
 }

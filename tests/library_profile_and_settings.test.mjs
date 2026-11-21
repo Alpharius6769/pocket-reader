@@ -53,26 +53,25 @@ test('the welcome modal leads with the cloud account', async () => {
   const html = await read('public/index.html');
   const modal = html.slice(html.indexOf('id="first-time-setup-title"'), html.indexOf('id="setup-complete-btn"'));
   const cloudAt = modal.indexOf('setup-cloud-btn');
-  const avatarAt = modal.indexOf('setup-avatar-upload');
   const usernameAt = modal.indexOf('setup-username');
+  const themeAt = modal.indexOf('setup-theme');
   assert.ok(cloudAt > 0, 'the cloud account block must be inside the modal');
-  assert.ok(cloudAt < avatarAt && cloudAt < usernameAt,
+  assert.ok(cloudAt < usernameAt && cloudAt < themeAt,
     'signing in first is what makes the rest of the form save to an account');
 });
 
-test('every profile field is offered at setup, and actually saved', async () => {
+test('profile deep fields live on Edit Profile; setup stays short', async () => {
   const html = await read('public/index.html');
   const ui = await read('public/assets/js/ui_controller.js');
-  for (const id of ['setup-fandom', 'setup-length', 'setup-mood']) {
-    assert.match(html, new RegExp(`id="${id}"`), `${id} missing from the setup modal`);
+  // First-time setup is account + theme + narrator; about-you fields are Profile Edit.
+  for (const id of ['profile-edit-fandom', 'profile-edit-character', 'profile-edit-genre']) {
+    assert.match(html, new RegExp(`id="${id}"`), `${id} missing from profile edit`);
   }
-  // Collected but never persisted would be worse than not asking at all, and
-  // the property names must match what the profile editor reads back.
-  assert.match(ui, /p\.favoriteFandom = \(document\.getElementById\('setup-fandom'\)/);
-  assert.match(ui, /p\.preferredLength = document\.getElementById\('setup-length'\)/);
-  assert.match(ui, /p\.readingMood = document\.getElementById\('setup-mood'\)/);
-  // And they must survive a reload of a half-finished setup.
-  assert.match(ui, /'setup-fandom', 'setup-length', 'setup-mood'/);
+  assert.match(html, /id="setup-theme"/);
+  assert.match(html, /id="setup-narrator-pref"/);
+  assert.doesNotMatch(html, /id="setup-fandom"/, 'setup no longer asks for fandom');
+  assert.doesNotMatch(html, /id="setup-mood"/, 'setup no longer asks for mood');
+  assert.match(ui, /setup-narrator-pref/);
 });
 
 test('cache manager pin and delete scan one story, not the whole store', async () => {

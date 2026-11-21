@@ -110,9 +110,9 @@ const kitten = idsIn(policy, 'export const KITTEN_VOICES', ']);');
 const pocket = idsIn(engineUtils, '  voices: [', 'window.POCKET_RETIRED_VOICES');
 
 const voiceUrls = [
-  ...pocket.map((v) => [`pocket/${v}`, `${WORKER}/models/voices/v2/${v}_neutral.safetensors?rev=r3`]),
+  ...pocket.map((v) => [`pocket/${v}`, `${WORKER}/models/voices/v3/${v}_neutral.safetensors?rev=r1`]),
   ...kokoro.map((v) => [`kokoro/${v}`, `${WORKER}/models/kokoro/v1.0/voices/${v}.bin`]),
-  ...kitten.map((v) => [`kitten/${v}`, `${WORKER}/models/kitten/v0.1/voices/${v}.bin`]),
+  ...kitten.map((v) => [`kitten/${v}`, `${WORKER}/models/kitten/v2.0/voices/${v}.bin`]),
 ];
 await Promise.all(voiceUrls.map(async ([label, url]) => {
   const response = await fetch(url, { method: 'HEAD', headers: { Origin: WEB_ORIGIN } });
