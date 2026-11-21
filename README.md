@@ -3,7 +3,7 @@ title: Alpharius' Pocket Reader
 colorFrom: blue
 colorTo: purple
 sdk: docker
-python_version: '3.10'
+python_version: '3.12'
 app_file: app.py
 pinned: false
 license: other

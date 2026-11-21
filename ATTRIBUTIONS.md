@@ -203,15 +203,7 @@ Pinned backend dependencies are listed in `requirements.txt`.
 - Maintainer: pypdfium2 project
 - License: Apache-2.0/BSD-3-Clause; bundles PDFium under BSD-style terms
 - Source: https://github.com/pypdfium2-team/pypdfium2
-- Used as: PDF text extraction, page counting, metadata extraction, and cover
-  rendering.
-
-### Pillow
-
-- Maintainer: Pillow contributors
-- License: HPND/MIT-CMU style license
-- Source: https://github.com/python-pillow/Pillow
-- Used as: Image encoding for rendered PDF covers.
+- Used as: PDF text extraction, page counting, and metadata extraction.
 
 ### python-docx
 

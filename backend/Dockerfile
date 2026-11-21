@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Create a non-root user with UID 1000 (Required for HF Spaces)
 RUN useradd -m -u 1000 user
