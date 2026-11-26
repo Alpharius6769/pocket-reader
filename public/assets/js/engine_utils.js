@@ -26,9 +26,9 @@ const POCKET_GATED_EMOTIONS = ['anger', 'excited', 'enthused', 'shout'];
 const POCKET_EXTRA_EMOTIONS = ['confused'];
 const POCKET_ALL_EMOTIONS = [...POCKET_PRIMARY_EMOTIONS, ...POCKET_GATED_EMOTIONS, ...POCKET_EXTRA_EMOTIONS];
 
-// The general emotion fallback graph: where each state degrades to when a voice
-// has no reference built for it. Unused while every voice is neutral-only, and
-// kept because it is the contract a multi-state voice would rejoin.
+// The general emotion fallback graph: where each state degrades to when the
+// emotion mode gates it (anger -> frustrated outside Expressive) or a voice does
+// not offer it.
 const baseFallbacks = {
   neutral: 'neutral',
   calm: 'neutral',
@@ -45,13 +45,24 @@ const baseFallbacks = {
   shout: 'surprised'
 };
 
-// Every Kyutai voice is a single official reference recording, so an emotion
-// the router picks must land on neutral rather than on a state with no file
-// behind it. Requesting a missing state is what makes the worker fetch a 404
-// and stall, so this is a correctness contract, not a nicety.
-const NEUTRAL_ONLY_FALLBACKS = Object.freeze(
-  Object.fromEntries(POCKET_ALL_EMOTIONS.map((emotion) => [emotion, 'neutral'])),
-);
+// Two different questions, answered by two fields on each voice.
+//
+//   availableEmotions -- the states the router may pick for this voice. The
+//     state travels in the voice id (alba_happy) to every consumer and is what
+//     selects the per-emotion sampling temperature in audio_core. For Pocket,
+//     emotion IS that synthesis-time control.
+//   referenceEmotions -- the states that have a real reference recording on B2.
+//     Every Kyutai voice is one official neutral recording, so this is
+//     ['neutral'], and resolvePocketReferenceVoiceId() maps any state onto it.
+//     Requesting a missing file is what makes the worker fetch a 404 and stall,
+//     so every fetch goes through that resolver: a correctness contract.
+//
+// These used to be one field, availableEmotions: ['neutral'], which kept the
+// 404 contract by deleting the router: _resolveEmotionForVoice could only ever
+// return neutral, so expressive narration ran every paragraph at the neutral
+// temperature whatever the prose said (measured: 43 of 43 paragraphs neutral at
+// 0.30 with expressive ON, tools/longform_bench.mjs).
+const KYUTAI_REFERENCE_EMOTIONS = Object.freeze(['neutral']);
 
 // Three male and three female, all from Kyutai's own catalog.
 //
@@ -96,8 +107,9 @@ window.POCKET_VOICE_PACK = {
       sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/alba-mackenna/casual.wav',
       originUrl: 'https://github.com/kyutai-labs/pocket-tts',
       license: 'CC BY 4.0 via Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
+      availableEmotions: POCKET_ALL_EMOTIONS,
+      referenceEmotions: KYUTAI_REFERENCE_EMOTIONS,
+      fallbackEmotions: baseFallbacks
     },
     {
       id: 'mary',
@@ -111,8 +123,9 @@ window.POCKET_VOICE_PACK = {
       sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p333_023_enhanced.wav',
       originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
       license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
+      availableEmotions: POCKET_ALL_EMOTIONS,
+      referenceEmotions: KYUTAI_REFERENCE_EMOTIONS,
+      fallbackEmotions: baseFallbacks
     },
     {
       id: 'eve',
@@ -126,8 +139,9 @@ window.POCKET_VOICE_PACK = {
       sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p361_023_enhanced.wav',
       originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
       license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
+      availableEmotions: POCKET_ALL_EMOTIONS,
+      referenceEmotions: KYUTAI_REFERENCE_EMOTIONS,
+      fallbackEmotions: baseFallbacks
     },
     {
       id: 'charles',
@@ -141,8 +155,9 @@ window.POCKET_VOICE_PACK = {
       sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p254_023_enhanced.wav',
       originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
       license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
+      availableEmotions: POCKET_ALL_EMOTIONS,
+      referenceEmotions: KYUTAI_REFERENCE_EMOTIONS,
+      fallbackEmotions: baseFallbacks
     },
     {
       id: 'george',
@@ -156,8 +171,9 @@ window.POCKET_VOICE_PACK = {
       sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p315_023_enhanced.wav',
       originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
       license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
+      availableEmotions: POCKET_ALL_EMOTIONS,
+      referenceEmotions: KYUTAI_REFERENCE_EMOTIONS,
+      fallbackEmotions: baseFallbacks
     },
     {
       id: 'paul',
@@ -171,8 +187,9 @@ window.POCKET_VOICE_PACK = {
       sourceUrl: 'https://huggingface.co/kyutai/pocket-tts/tree/main/languages/english_2026-10/embeddings',
       originUrl: 'https://github.com/kyutai-labs/pocket-tts',
       license: 'CC BY 4.0 via Kyutai TTS voices',
-      availableEmotions: ['neutral'],
-      fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
+      availableEmotions: POCKET_ALL_EMOTIONS,
+      referenceEmotions: KYUTAI_REFERENCE_EMOTIONS,
+      fallbackEmotions: baseFallbacks
     }
   ]
 };
@@ -282,6 +299,21 @@ window.resolvePocketAssetVoiceId = function resolvePocketAssetVoiceId(voiceName,
   const emotion = _cleanPocketToken(emotionName || window.POCKET_DEFAULT_EMOTION);
   if (voice && voice.availableEmotions.includes(emotion)) return `${base}_${emotion}`;
   return `${base}_${window.POCKET_DEFAULT_EMOTION}`;
+};
+
+// The reference recording to FETCH for a voice id. Any emotion state without
+// its own recording (every state but neutral, for every shipped voice) lands on
+// the voice's own neutral reference -- same base voice, never another speaker.
+// The worker is conditioned on this file; the emotion itself is carried in the
+// route and applied at synthesis time.
+window.resolvePocketReferenceVoiceId = function resolvePocketReferenceVoiceId(voiceName) {
+  const id = window.resolvePocketAssetVoiceId(voiceName);
+  const match = id.match(/_(neutral|calm|happy|sad|worried|surprised|tired|frustrated|anger|excited|enthused|shout|confused)$/);
+  const base = match ? id.slice(0, -match[0].length) : id;
+  const voice = _voiceById(base) || _voiceById(window.POCKET_DEFAULT_VOICE);
+  const references = voice?.referenceEmotions?.length ? voice.referenceEmotions : [window.POCKET_DEFAULT_EMOTION];
+  const emotion = match && references.includes(match[1]) ? match[1] : references[0];
+  return `${voice ? voice.id : window.POCKET_DEFAULT_VOICE}_${emotion}`;
 };
 
 window.getPocketVoiceLabel = function getPocketVoiceLabel(voiceName) {

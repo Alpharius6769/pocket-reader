@@ -2498,19 +2498,34 @@ function _resetPocketVoiceRegistry() {
   _pocketVoiceLoadPromises.clear();
 }
 
+// The reference recording to fetch and register for a voice id. Emotion states
+// are a synthesis-time control (temperature, via the route) and have no file of
+// their own, so alba_happy is conditioned on alba_neutral. Every fetch below goes
+// through this: asking B2 for a state that has no recording is a 404 and a stall.
+// The fallback covers a cached engine_utils.js that predates the resolver, which
+// is safe because that version only ever produced neutral ids.
+function _pocketReferenceVoiceId(voiceName, emotionName) {
+  if (typeof window.resolvePocketReferenceVoiceId === 'function') {
+    const routed = emotionName && typeof window.resolvePocketAssetVoiceId === 'function'
+      ? window.resolvePocketAssetVoiceId(voiceName, emotionName)
+      : voiceName;
+    return window.resolvePocketReferenceVoiceId(routed);
+  }
+  if (typeof window.resolvePocketAssetVoiceId === 'function') {
+    return window.resolvePocketAssetVoiceId(voiceName, emotionName);
+  }
+  return String(voiceName || `${POCKET_DEFAULT_VOICE}_neutral`).toLowerCase();
+}
+
 function _sameBaseFallbackVoiceIds(targetVoice) {
   const baseVoice = _baseVoiceId(targetVoice);
   const emotions = ['neutral', 'calm', 'tired', 'happy', 'sad', 'worried'];
   const fallbacks = [];
   emotions.forEach((emotion) => {
-    const asset = typeof window.resolvePocketAssetVoiceId === 'function'
-      ? window.resolvePocketAssetVoiceId(baseVoice, emotion)
-      : `${baseVoice}_${emotion}`;
+    const asset = _pocketReferenceVoiceId(baseVoice, emotion);
     if (asset && asset !== targetVoice && !fallbacks.includes(asset)) fallbacks.push(asset);
   });
-  const defaultAsset = typeof window.resolvePocketAssetVoiceId === 'function'
-    ? window.resolvePocketAssetVoiceId(POCKET_DEFAULT_VOICE, 'neutral')
-    : `${POCKET_DEFAULT_VOICE}_neutral`;
+  const defaultAsset = _pocketReferenceVoiceId(POCKET_DEFAULT_VOICE, 'neutral');
   if (defaultAsset && defaultAsset !== targetVoice && !fallbacks.includes(defaultAsset)) fallbacks.push(defaultAsset);
   if (!fallbacks.includes('alba_neutral')) fallbacks.push('alba_neutral');
   return fallbacks;
@@ -2518,9 +2533,7 @@ function _sameBaseFallbackVoiceIds(targetVoice) {
 
 async function ensurePocketVoiceLoaded(voiceName) {
   const fileExt = 'safetensors';
-  let targetVoice = typeof window.resolvePocketAssetVoiceId === 'function'
-    ? window.resolvePocketAssetVoiceId(voiceName)
-    : String(voiceName || `${POCKET_DEFAULT_VOICE}_neutral`).toLowerCase();
+  let targetVoice = _pocketReferenceVoiceId(voiceName);
   // A previously-resolved request may have landed on a different asset (this
   // emotion state 404s). Return the asset actually registered in the workers,
   // otherwise generation would be dispatched with a voice name they don't know.
@@ -2716,11 +2729,7 @@ async function ensurePocketVoiceLoaded(voiceName) {
 // model download or active synthesis for bandwidth. Registration/encoding
 // still happens lazily in ensurePocketVoiceLoaded, which matches these URLs.
 async function prefetchPocketVoiceAssets(voiceIds = []) {
-  const unique = [...new Set((voiceIds || []).map((id) => (
-    typeof window.resolvePocketAssetVoiceId === 'function'
-      ? window.resolvePocketAssetVoiceId(id)
-      : String(id || '').toLowerCase().trim()
-  )))].filter(Boolean);
+  const unique = [...new Set((voiceIds || []).map((id) => _pocketReferenceVoiceId(id)))].filter(Boolean);
   if (!unique.length) return 0;
   let cache = null;
   try { cache = await caches.open('pocket-voices'); } catch (_) { return 0; }

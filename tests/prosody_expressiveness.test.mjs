@@ -222,7 +222,7 @@ test('the retired voices are gone from every surface, not just the picker', asyn
   }
 });
 
-test('Pocket ships three female and three male Kyutai voices, each neutral-only', async () => {
+test('Pocket ships three female and three male Kyutai voices, each with one neutral reference', async () => {
   const source = await read('public/assets/js/engine_utils.js');
   const expected = {
     alba: ['female', 'English'],
@@ -241,8 +241,12 @@ test('Pocket ships three female and three male Kyutai voices, each neutral-only'
 
   for (const [id, [gender, accent]] of Object.entries(expected)) {
     const block = pack.match(new RegExp(`id: '${id}',[\\s\\S]*?\\n    \\}`))?.[0] || '';
-    assert.match(block, /availableEmotions: \['neutral'\]/,
-      `${id} must not claim emotion states Kyutai did not ship`);
+    // Only the neutral recording exists on B2; claiming another reference file
+    // is a 404 and a worker stall. Emotion states are synthesis-time, not files.
+    assert.match(block, /referenceEmotions: KYUTAI_REFERENCE_EMOTIONS/,
+      `${id} must not claim reference recordings Kyutai did not ship`);
+    assert.doesNotMatch(block, /availableEmotions: \['neutral'\]/,
+      `${id} must let the router pick emotion states (neutral-only silences expressive narration)`);
     assert.match(block, new RegExp(`gender: '${gender}'`));
     assert.match(block, new RegExp(`accent: '${accent}'`));
   }
