@@ -10,7 +10,7 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v228'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v230'\)/);
   assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v118'\)/);
 });
 
@@ -181,6 +181,6 @@ test('every pronunciation consumer uses the current ruleset URL', async () => {
   for (const file of ['public/assets/js/audio_core.js', 'public/assets/js/settings_manager.js', 'public/assets/js/library_manager.js', 'public/assets/js/pocket_worker.js']) {
     const source = await read(file);
     assert.doesNotMatch(source, /tts_pronunciation_core\.js\?v=pron-v9/, `${file} still imports pron-v9`);
-    assert.match(source, /tts_pronunciation_core\.js\?v=pron-v34/, `${file} must import pron-v14`);
+    assert.match(source, /tts_pronunciation_core\.js\?v=pron-v37/, `${file} must import pron-v14`);
   }
 });

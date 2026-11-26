@@ -230,7 +230,9 @@ function applyWildcardHeteronyms(text) {
     .replace(new RegExp(`(${verbContext})read\\b`, 'gi'), (match, p1) => p1 + match.slice(p1.length).replace(/read$/i, 'reed'))
     .replace(/\b(r)ead\b/gi, (match, r) => (r === 'R' ? 'R' : 'r') + 'ed')
     .replace(/\b(made of|heavy|pipe|pencil)(\s+)lead\b/gi, '$1$2led')
-    .replace(/\b(l)ead(\s+)(pipe|pencil|weight|bullet|shot|paint|apron|lining)\b/gi, (match, l, s, rest) => `${l === 'L' ? 'Led' : 'led'}${s}${rest}`)
+    // Plurals too ("lead pipes", "lead weights"): the trailing \b used to fail
+    // on the "s", so every plural fell through to the "leed" default below.
+    .replace(/\b(l)ead(\s+)(pipe|pencil|weight|bullet|shot|paint|apron|lining)(s?)\b/gi, (match, l, s, rest, plural) => `${l === 'L' ? 'Led' : 'led'}${s}${rest}${plural}`)
     .replace(/\b(l)ead\b/gi, (match, l) => (l === 'L' ? 'L' : 'l') + 'eed')
     .replace(/\b(paper|apart|up|down)(\s+)tear\b/gi, '$1$2tare')
     .replace(new RegExp(`(${verbContext})tear\\b`, 'gi'), (match, p1) => p1 + match.slice(p1.length).replace(/tear$/i, 'tare'))

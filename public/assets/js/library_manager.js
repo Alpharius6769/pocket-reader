@@ -4,7 +4,7 @@ import {
   DEFAULT_POCKET_PLAYBACK_SPEED,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v34';
+} from './tts_pronunciation_core.js?v=pron-v37';
 import { profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit } from './profile_merge.js?v=merge-v13';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 

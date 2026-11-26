@@ -6,7 +6,7 @@ import {
   DEFAULT_LSD_STEPS,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v34';
+} from './tts_pronunciation_core.js?v=pron-v37';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -1552,9 +1552,9 @@ async function _loadPocketEngine() {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v54',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v44',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v133',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v56',
+          kitten: 'assets/js/kitten_worker.js?v=kitten-v46',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v135',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,

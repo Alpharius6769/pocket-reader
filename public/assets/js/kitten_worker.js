@@ -13,7 +13,7 @@
    vocab, voice ids and model path differ, and threading that through the live
    Kokoro engine as a conditional would risk the tier that already works.
 */
-import { normalizeForPocketTts } from './tts_pronunciation_core.js?v=pron-v34';
+import { normalizeForPocketTts } from './tts_pronunciation_core.js?v=pron-v37';
 
 self.postMessage({ type: 'status', status: 'Worker Thread Started', state: 'idle' });
 
