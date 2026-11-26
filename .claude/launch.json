@@ -4,8 +4,20 @@
     {
       "name": "pocket-reader",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tools/serve_public.mjs", "4173"],
+      "runtimeArgs": [
+        "tools/serve_public.mjs",
+        "4173"
+      ],
       "port": 4173
+    },
+    {
+      "name": "pocket-reader-v2",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 5180
     }
   ]
 }

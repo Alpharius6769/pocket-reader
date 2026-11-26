@@ -1,0 +1,411 @@
+/*
+ * Pocket Reader v2 tokens.
+ * Direction: a bedside reading lamp. Warm paper by day, warm near-black (OLED) by
+ * night, one accent taken from Virtue's coat. Type is the system face so Dynamic
+ * Type and SF optical sizes come for free; stories are set in Literata.
+ */
+
+@font-face {
+  font-family: 'Literata';
+  src: url('/assets/fonts/literata-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Literata';
+  src: url('/assets/fonts/literata-600.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Literata';
+  src: url('/assets/fonts/literata-700.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+  --bg: #f6f1e9;
+  --bg-elev: #fffcf7;
+  --bg-elev-2: #f0e9de;
+  --bg-sunk: #ebe3d6;
+  --bg-glass: rgb(250 246 239 / 0.78);
+  --ink: #1f1a15;
+  --ink-2: #5b5248;
+  --ink-3: #776c60;
+  --line: rgb(31 26 21 / 0.12);
+  --line-strong: rgb(31 26 21 / 0.22);
+  --accent: #b94a22;
+  --accent-ink: #9e3d18;
+  --accent-on: #ffffff;
+  --accent-soft: #f5ddd0;
+  --hoodie: #4f6f9f;
+  --hoodie-soft: #dde6f2;
+  --ok: #2f7a47;
+  --warn: #9a6512;
+  --danger: #b3261e;
+  --highlight: rgb(185 74 34 / 0.12);
+  --scrim: rgb(20 16 12 / 0.38);
+  --shadow-1: 0 1px 2px rgb(40 28 16 / 0.08), 0 2px 8px rgb(40 28 16 / 0.06);
+  --shadow-2: 0 6px 24px rgb(40 28 16 / 0.16), 0 1px 3px rgb(40 28 16 / 0.1);
+
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-read: 'Literata', 'New York', 'Iowan Old Style', Georgia, serif;
+
+  /* Type scale in rem so it follows Dynamic Type (html uses -apple-system-body). */
+  --t-caption: 0.75rem;
+  --t-foot: 0.8125rem;
+  --t-sub: 0.9375rem;
+  --t-body: 1rem;
+  --t-head: 1.0625rem;
+  --t-title3: 1.25rem;
+  --t-title2: 1.375rem;
+  --t-title1: 1.75rem;
+  --t-large: 2.125rem;
+
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 26px;
+  --tap: 44px;
+  --gutter: 20px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --tabbar-h: 52px;
+  --mini-h: 64px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-1: 160ms;
+  --dur-2: 280ms;
+  --dur-3: 420ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #0e0c0a;
+    --bg-elev: #1a1714;
+    --bg-elev-2: #24201b;
+    --bg-sunk: #050403;
+    --bg-glass: rgb(22 19 16 / 0.78);
+    --ink: #f3ece2;
+    --ink-2: #bdb2a4;
+    --ink-3: #978b7d;
+    --line: rgb(243 236 226 / 0.1);
+    --line-strong: rgb(243 236 226 / 0.2);
+    --accent: #f07b45;
+    --accent-ink: #f59a6e;
+    --accent-on: #1b0d06;
+    --accent-soft: #3b2216;
+    --hoodie: #8fa8cf;
+    --hoodie-soft: #1d2533;
+    --ok: #6cc28a;
+    --warn: #e0a84a;
+    --danger: #ff7a70;
+    --highlight: rgb(240 123 69 / 0.16);
+    --scrim: rgb(0 0 0 / 0.55);
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5);
+    --shadow-2: 0 10px 30px rgb(0 0 0 / 0.6);
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e0c0a;
+  --bg-elev: #1a1714;
+  --bg-elev-2: #24201b;
+  --bg-sunk: #050403;
+  --bg-glass: rgb(22 19 16 / 0.78);
+  --ink: #f3ece2;
+  --ink-2: #bdb2a4;
+  --ink-3: #978b7d;
+  --line: rgb(243 236 226 / 0.1);
+  --line-strong: rgb(243 236 226 / 0.2);
+  --accent: #f07b45;
+  --accent-ink: #f59a6e;
+  --accent-on: #1b0d06;
+  --accent-soft: #3b2216;
+  --hoodie: #8fa8cf;
+  --hoodie-soft: #1d2533;
+  --ok: #6cc28a;
+  --warn: #e0a84a;
+  --danger: #ff7a70;
+  --highlight: rgb(240 123 69 / 0.16);
+  --scrim: rgb(0 0 0 / 0.55);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-2: 0 10px 30px rgb(0 0 0 / 0.6);
+}
+
+/*
+ * Design-review simulator (?sim=iphone): stands in for the insets a real
+ * iPhone 16 Pro reports, so screenshots show Dynamic Island clearance.
+ */
+:root.sim-iphone {
+  --safe-top: 62px;
+  --safe-bottom: 34px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font: -apple-system-body;
+  font-family: var(--font-ui);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  background: var(--bg);
+}
+@supports not (font: -apple-system-body) {
+  html {
+    font-size: 100%;
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--t-body);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+  touch-action: manipulation;
+}
+:focus-visible {
+  outline: 2.5px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+img {
+  display: block;
+  max-width: 100%;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Shared building blocks */
+.screen {
+  padding: calc(var(--safe-top) + 8px) calc(var(--gutter) + var(--safe-right))
+    calc(var(--tabbar-h) + var(--mini-h) + var(--safe-bottom) + 28px)
+    calc(var(--gutter) + var(--safe-left));
+  min-height: 100dvh;
+}
+.large-title {
+  font-family: var(--font-display);
+  font-size: var(--t-large);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  padding: 10px 0 14px;
+}
+.section-title {
+  font-family: var(--font-display);
+  font-size: var(--t-title3);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.eyebrow {
+  font-size: var(--t-foot);
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.muted {
+  color: var(--ink-2);
+}
+.faint {
+  color: var(--ink-3);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 0 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: var(--t-sub);
+  transition: transform var(--dur-1) var(--ease-out), background var(--dur-1);
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-on);
+}
+.btn-tonal {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.btn-plain {
+  background: var(--bg-elev-2);
+  color: var(--ink);
+}
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+}
+.btn-block {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 14px;
+  font-size: var(--t-head);
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 999px;
+  color: var(--ink);
+  flex: none;
+  transition: background var(--dur-1), transform var(--dur-1) var(--ease-out);
+}
+.icon-btn:active {
+  background: var(--bg-elev-2);
+  transform: scale(0.94);
+}
+
+.card {
+  background: var(--bg-elev);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  font-size: var(--t-sub);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--ink);
+  /* 36px chip + transparent margin keeps a 44pt hit area in rows */
+  position: relative;
+}
+.chip::after {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+.chip[aria-pressed='true'],
+.chip.on {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: var(--bg-sunk);
+  color: var(--ink-2);
+}
+.field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: max(16px, var(--t-body)); /* 16px+ stops iOS zoom on focus */
+}
+.field input::placeholder {
+  color: var(--ink-3);
+}
+
+.h-scroll {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  margin: 0 calc(-1 * var(--gutter));
+  padding: 4px var(--gutter);
+  scroll-padding: 0 var(--gutter);
+}
+.h-scroll::-webkit-scrollbar {
+  display: none;
+}
+.h-scroll > * {
+  scroll-snap-align: start;
+}
+
+.progress-track {
+  height: 4px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden;
+}
+.progress-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
