@@ -58,3 +58,14 @@ test('audio_core fetches voices only through the reference resolver', async () =
   assert.match(audio, /window\.resolvePocketAssetVoiceId\(baseVoice, emotion\)/);
   assert.match(audio, /_buildPocketProsodyOpts\(workerVoice, \{\s*paragraphEmotion: route\.emotion,/);
 });
+
+test('the quality guard keeps a pitch baseline per emotion state, not per reference file', async () => {
+  // Every state registers as <voice>_neutral in the worker. Judging against that
+  // name pooled happy/worried/neutral pitch into one history, so a neutral line
+  // with byte-identical audio flipped from clean to "pitch drift" once emotion
+  // was on. The guard must see the routed id.
+  const audio = await readFile(new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8');
+  const attempt = audio.slice(audio.indexOf('async function _generatePocketAttempt('), audio.indexOf('function _synthEngineLabel('));
+  assert.match(attempt, /_inspectPocketAudioQuality\(result, text, route\.voiceId \|\| workerVoice\)/);
+  assert.doesNotMatch(attempt, /_inspectPocketAudioQuality\(result, text, workerVoice\)/);
+});

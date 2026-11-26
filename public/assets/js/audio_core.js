@@ -3569,7 +3569,12 @@ async function _generatePocketAttempt(workerObj, text, route, retryLevel = 0, ha
     const dispatchWorker = workerObj || _selectReadyPocketWorker();
     const result = await _runPocketWorkerGeneration(dispatchWorker, text, workerVoice, opts, handlers);
     const qualityStartedAt = performance.now();
-    const quality = _inspectPocketAudioQuality(result, text, workerVoice);
+    // Judge against the ROUTED state (alba_happy), not the registered reference
+    // (alba_neutral): every Pocket state is conditioned on the one neutral file,
+    // so keying the pitch baseline on workerVoice pooled happy, worried and
+    // neutral renders into one history and flagged ordinary emotional pitch as
+    // drift -- and let emotional pitch drag the neutral baseline with it.
+    const quality = _inspectPocketAudioQuality(result, text, route.voiceId || workerVoice);
     if (result?.telemetry) result.telemetry.qualityCheckMs = Math.round(performance.now() - qualityStartedAt);
     return { result, quality, workerVoice, opts, route, error: null };
   } catch (err) {

@@ -26,6 +26,8 @@
 //   --voice <id>          Pocket voice (default alba)
 //   --threads <n>         WASM threads (default 2, the iOS value)
 //   --emotion-mode <m>    neutral | balanced | expressive (default balanced, the app default)
+//   --seed <s>            Pocket voice seed (default: the app default). Renders are deterministic
+//                         per seed, so stability comparisons need several seeds, not repeats
 //   --no-expressive       turn expressive prosody OFF (default ON)
 //   --no-stream           render paragraph 0 with generateChunk instead of the
 //                         streaming path a cold desktop Play press uses
@@ -57,6 +59,7 @@ function parseArgs(argv) {
     voice: 'alba',
     threads: 2,
     emotionMode: 'balanced',
+    seed: '',
     expressive: true,
     stream: true,
     abtest: true,
@@ -80,6 +83,7 @@ function parseArgs(argv) {
     else if (key === '--voice') options.voice = value.toLowerCase();
     else if (key === '--threads') options.threads = Math.max(1, Number(value) || 2);
     else if (key === '--emotion-mode') options.emotionMode = value;
+    else if (key === '--seed') options.seed = String(value);
     else if (key === '--fixture') options.fixture = resolve(value);
     else if (key === '--chrome') options.chrome = resolve(value);
     else if (key === '--out') options.out = resolve(value);
@@ -196,6 +200,7 @@ const harnessConfig = {
   threads: options.threads,
   expressive: options.expressive,
   emotionMode: options.emotionMode,
+  seed: options.seed,
   storyTitle: 'Longform Bench: The Glass Orchard',
   chapterTitle,
   paragraphs,
