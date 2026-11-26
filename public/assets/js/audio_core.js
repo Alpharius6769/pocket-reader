@@ -603,8 +603,26 @@ function _pocketVoiceSeed() {
 // de-escalates on evidence and re-escalates on a sustained clean streak.
 const _prosodyDrift = createProsodyDriftGuard();
 
+// The tier is frozen for the whole chapter. The guard still learns from every
+// paragraph, but its verdict only takes effect at the next chapter boundary:
+// switching expressiveness between two consecutive paragraphs is itself heard
+// as the narrator changing character, which is the drift this guard exists to
+// prevent. A change of emotion mode in Settings re-freezes immediately.
+let _frozenProsodyTier = null;
 function _effectiveProsodyTier() {
-  return _prosodyDrift.effectiveTier(_emotionMode());
+  const mode = _emotionMode();
+  if (!_frozenProsodyTier || _frozenProsodyTier.mode !== mode) {
+    _frozenProsodyTier = { mode, tier: _prosodyDrift.effectiveTier(mode) };
+  }
+  return _frozenProsodyTier.tier;
+}
+
+// Only a real artifact is evidence against expressiveness: a fatal verdict on
+// audio that was actually rendered. A timeout, a worker error or a yield has
+// no audio to judge, and a soft warning is not a failure -- counting those let
+// ordinary scheduling noise flatten the narrator's emotion mid-chapter.
+function _isProsodyArtifact(attempt) {
+  return attempt?.quality?.fatal === true && Number(attempt?.result?.audio?.length || 0) > 0;
 }
 // Not published: _effectiveProsodyTier is read by _artifactCappedTemperature and
 // _resolvePocketRoute in this module and by nothing outside it. The window alias
@@ -639,6 +657,7 @@ window.inspectPocketEmotion = (text) => _detectPocketEmotion(String(text || ''))
 // rest of the book.
 window.resetPocketProsodyDrift = () => {
   _prosodyDriftPosition = null;
+  _frozenProsodyTier = null;
   _prosodyDrift.reset();
 };
 
@@ -655,11 +674,16 @@ window.resetPocketProsodyDrift = () => {
 // chances to miss one. playCurrentParagraph runs on every one of them.
 let _prosodyDriftPosition = null;
 function _syncProsodyDriftToPosition() {
-  const key = `${window.currentStory?.storyKey || window.currentStory?.title || ''}::${window.currentChapterIndex || 0}`;
+  const storyKey = window.currentStory?.storyKey || window.currentStory?.title || '';
+  const key = `${storyKey}::${window.currentChapterIndex || 0}`;
   if (_prosodyDriftPosition === key) return;
-  const moved = _prosodyDriftPosition !== null;
+  const previousStory = _prosodyDriftPosition === null ? null : _prosodyDriftPosition.split('::')[0];
   _prosodyDriftPosition = key;
-  if (moved) _prosodyDrift.reset();
+  // A new story starts clean. A new chapter keeps what the guard learned --
+  // that is how a demotion earned in one chapter takes effect in the next --
+  // and its own 20-clean-paragraph recovery stops it being permanent.
+  if (previousStory !== null && previousStory !== storyKey) _prosodyDrift.reset();
+  _frozenProsodyTier = null;   // re-freeze at the chapter boundary
 }
 
 function _artifactCappedTemperature(baseTemperature, emotion, retryLevel = 0) {
@@ -849,6 +873,13 @@ function _prosodyCacheTag(engine, throughputOverride = null) {
     `mr${_pocketBackendRuntime.modelRevision}`,
     `gc${_pocketBackendRuntime.graphCapture ? 1 : 0}`,
     `md${_pocketBackendRuntime.mimiProvider || 'wasm-threaded'}`,
+    // How the paragraph was actually rendered. Without these, INT8- and
+    // FP16-vocoded paragraphs (or block-4 and per-frame ones) shared one key
+    // and alternated through a chapter as audible grain and timbre changes.
+    `mm${_pocketBackendRuntime.mimiPrecision || 'int8'}`,
+    `dp${_pocketBackendRuntime.decodePath || 'frame'}`,
+    // The tier that was actually applied, not the one requested.
+    `et${_effectiveProsodyTier()}`,
     `sg${_pocketBackendRuntime.gpuSyncGroupBlocks || 1}`,
     POCKET_CALIBRATION_VERSION,
     POCKET_ACCELERATION_VERSION,
@@ -1530,7 +1561,7 @@ async function _loadPocketEngine() {
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v54',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v135',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v138',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -3533,6 +3564,14 @@ async function _generatePocketAttempt(workerObj, text, route, retryLevel = 0, ha
     if (result?.telemetry) result.telemetry.qualityCheckMs = Math.round(performance.now() - qualityStartedAt);
     return { result, quality, workerVoice, opts, route, error: null };
   } catch (err) {
+    // A yield is not a bad render: the worker stood this cache job down so the
+    // paragraph the listener is waiting on could go first. Converting it into a
+    // fatal quality result made buffer_manager treat it as a quality failure
+    // (failCount = 3) and SKIP the paragraph, which then stalled playback when
+    // the reader reached it, and fed the drift guard a failure that never
+    // happened. It must reach the cache loop as the error it is, so the
+    // existing yield requeue (its own counter) handles it.
+    if (_isNarrationYield(err)) throw err;
     return {
       result: null,
       quality: { ok: false, fatal: true, retryable: true, reasons: [err?.message || String(err)], stats: { durationSec: 0, rms: 0, peak: 0 } },
@@ -3542,6 +3581,13 @@ async function _generatePocketAttempt(workerObj, text, route, retryLevel = 0, ha
       error: err,
     };
   }
+}
+
+// Posted by both workers when a priority (playback) job preempts a cache job.
+// Must match pocket_worker.js / kokoro_worker.js and buffer_manager.js exactly.
+const NARRATION_YIELD_MESSAGE = 'Narration cache yielded to playback';
+function _isNarrationYield(err) {
+  return err?.message === NARRATION_YIELD_MESSAGE;
 }
 
 // Which engine actually produced a render, for the diagnostic log.
@@ -3757,7 +3803,7 @@ window.generateChunk = async function(text, voice) {
       // after three failures inside its window, so recording per attempt would
       // let a single stubborn paragraph flatten the whole session's prosody by
       // itself — a retry loop is evidence about one paragraph, not three.
-      _recordProsodyOutcome(false);
+      if (_isProsodyArtifact(first)) _recordProsodyOutcome(false);
 
       const clean = attempts.find((a) => !a.quality.fatal);
       if (clean) {
@@ -3787,7 +3833,7 @@ window.generateChunk = async function(text, voice) {
         ? 'no retry in throughput mode'
         : 'shared engine is serving another synthesis';
       _logPocketQuality('ERROR', `${_synthEngineLabel()} synth quality guard rejected paragraph (${reason})`, first, { retryUsed: false });
-      _recordProsodyOutcome(false);
+      if (_isProsodyArtifact(first)) _recordProsodyOutcome(false);
       window._lastPocketQualityFailure = {
         text,
         voice,
@@ -3796,7 +3842,6 @@ window.generateChunk = async function(text, voice) {
       return null;
     } else if (!first.quality.ok) {
       _logPocketQuality('WARN', `${_synthEngineLabel()} synth accepted with a soft quality warning`, first, { retryUsed: false });
-      _recordProsodyOutcome(false);
     } else {
       _recordProsodyOutcome(true);
     }
@@ -3843,6 +3888,9 @@ window.generateChunk = async function(text, voice) {
     if (keptBestEffort) wav.pocketBestEffort = true;
     return wav;
   } catch (e) {
+    // Pass a yield through untouched: no engine reset (nothing is wrong with
+    // the engine), no null (the caller would read that as a failed paragraph).
+    if (_isNarrationYield(e)) throw e;
     console.error('Pocket worker inference failed:', e);
     if (canResetSharedEngine()) {
       try { await _resetPocketEngineForBackend(); } catch (_) {}

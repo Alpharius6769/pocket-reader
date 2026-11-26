@@ -4,8 +4,8 @@
     "sha256": "de77333712342921"
   },
   "audio_core.js": {
-    "version": "audio-v241",
-    "sha256": "12ce88377bf9eacf"
+    "version": "audio-v244",
+    "sha256": "ee9a14c1a849ccfe"
   },
   "buffer_manager.js": {
     "version": "buffer-v129",
@@ -40,7 +40,7 @@
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-365",
+    "version": "sw-367",
     "sha256": "b5a8a08242bd18b8"
   },
   "experience_coordinator.js": {
@@ -84,19 +84,19 @@
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-365",
+    "version": "sw-367",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v143",
-    "sha256": "40e85b393317de23"
+    "version": "narration-loader-v145",
+    "sha256": "98f63cabc682d5ab"
   },
   "native_app_key.js": {
     "version": "native-key-v1",
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-365",
+    "version": "sw-367",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -112,8 +112,8 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v135",
-    "sha256": "ae28f4f988e90eb2"
+    "version": "pocket-worker-v138",
+    "sha256": "e5e55733988bc7ce"
   },
   "reader_features.js": {
     "version": "features-v49",
@@ -124,8 +124,8 @@
     "sha256": "a969697ffb428a6d"
   },
   "settings_manager.js": {
-    "version": "settings-v221",
-    "sha256": "5acbc2276cf6a480"
+    "version": "settings-v222",
+    "sha256": "f9637377a2424328"
   },
   "storage_core.js": {
     "version": "storage-v55",
@@ -136,15 +136,15 @@
     "sha256": "2ae8b1b4357dc537"
   },
   "ui_controller.js": {
-    "version": "ui-v256",
-    "sha256": "40549fa8c38af75a"
+    "version": "ui-v257",
+    "sha256": "5737c1e64145c37a"
   },
   "virtue_controller.js": {
     "version": "virtue-v55",
     "sha256": "697474e90a3b6382"
   },
   "sw.js": {
-    "version": "sw-365",
-    "sha256": "5cc0449af75c0d7b"
+    "version": "sw-367",
+    "sha256": "1cb5fb0c95228838"
   }
 }

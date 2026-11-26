@@ -373,7 +373,10 @@ test('unconstrained WASM devices decode through the FP16 Mimi vocoder', async ()
   // The descriptor must carry a fallback, or a device that cannot fetch or build
   // the FP16 decoder loses narration entirely rather than losing fidelity.
   assert.match(worker, /fallbackFilename: preferFp16Mimi\(\) \? wasmModelFilename\('mimi_decoder'\) : null,/);
-  assert.match(worker, /return await loadModelDescriptor\(\{ asset, target, filename: fallbackFilename, sourceBackend \}\);/);
+  assert.match(worker, /const loaded = await loadModelDescriptor\(\{ asset, target, filename: fallbackFilename, sourceBackend \}\);/);
+  // And the session reports which file actually built, for the cache tag.
+  assert.match(worker, /if \(asset === 'mimi_decoder'\) loadedMimiFilename = fallbackFilename;/);
+  assert.match(worker, /mimiPrecision: \/fp16\/i\.test\(loadedMimiFilename\) \? 'fp16' : 'int8',/);
 
   // Download progress has to size the FILE actually being fetched, not the role.
   // Keying on the role reported the per-tensor size for an FP16 or per-channel

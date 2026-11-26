@@ -409,6 +409,11 @@ let mimiDecoderSession = null;
 // JS<->WASM state round-trip per frame. Missing/failed loads fall back to the
 // per-frame path silently, so the runtime works before/without the B2 upload.
 let flowLmWasmBlockSession = null;
+// The Mimi file that actually built, which can differ from the one requested:
+// an FP16 vocoder that fails to fetch or build falls back to INT8. Reported in
+// backend telemetry so audio_core's cache tag records how a paragraph was
+// rendered, rather than mixing grainy INT8 paragraphs in with FP16 ones.
+let loadedMimiFilename = '';
 let wasmBlockBosSequence = null;
 // Re-quantized decode block, PER-CHANNEL rather than per-tensor.
 //
@@ -2566,16 +2571,21 @@ async function loadBundle(language, {
     const { asset, target, filename, sourceBackend, fallbackFilename } = descriptor;
     if (fallbackFilename) {
       try {
-        return await loadModelDescriptor({ asset, target, filename, sourceBackend });
+        const loaded = await loadModelDescriptor({ asset, target, filename, sourceBackend });
+        if (asset === 'mimi_decoder') loadedMimiFilename = filename;
+        return loaded;
       } catch (error) {
         // 'diagnostic', not 'log': the main thread has never handled 'log', so
         // this -- the FP16 vocoder failing and the session dropping to INT8, the
         // exact downgrade that is heard as grain -- was reported to nobody.
         postMessage({ type: 'diagnostic', level: 'WARN',
           message: `${asset}: ${filename} unavailable (${error?.message || error}); falling back to ${fallbackFilename}.` });
-        return await loadModelDescriptor({ asset, target, filename: fallbackFilename, sourceBackend });
+        const loaded = await loadModelDescriptor({ asset, target, filename: fallbackFilename, sourceBackend });
+        if (asset === 'mimi_decoder') loadedMimiFilename = fallbackFilename;
+        return loaded;
       }
     }
+    if (asset === 'mimi_decoder') loadedMimiFilename = filename;
     const modelUrls = sourceBackend === 'wasm'
       ? wasmModelPaths(language, filename)
       : [
@@ -2893,6 +2903,10 @@ async function loadBundle(language, {
     operatorFallbackCount: null,
     graphCapture: currentBackend === 'webgpu' ? webGpuGraphCaptureEnabled : false,
     mimiProvider: currentMimiProvider,
+    // How this session renders, for the cache tag: the vocoder precision that
+    // actually built and whether the fused 4-frame decode block is in use.
+    mimiPrecision: /fp16/i.test(loadedMimiFilename) ? 'fp16' : 'int8',
+    decodePath: (flowLmUnifiedSession || flowLmWasmBlockSession || flowLmDecodeBlockSession) ? 'block4' : 'frame',
     gpuSyncGroupBlocks: currentBackend === 'webgpu' ? gpuSyncGroupBlocks : 1,
     sessionCreationMs: Math.round(sessionCreationMs),
   };
@@ -2942,6 +2956,7 @@ async function switchMimiProvider(provider = 'wasm-threaded') {
   const previousSession = mimiDecoderSession;
   mimiDecoderSession = nextSession;
   currentMimiProvider = requested;
+  loadedMimiFilename = filename;
   await releaseSession(previousSession);
   return currentMimiProvider;
 }

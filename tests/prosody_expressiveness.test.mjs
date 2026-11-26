@@ -156,12 +156,16 @@ test('the expressive emotion mode is reachable everywhere it is validated', asyn
 
 test('the synthesis path feeds quality outcomes into the guard', async () => {
   const source = await read('public/assets/js/audio_core.js');
-  // Every terminal branch of the quality guard must report, or the guard goes
-  // blind exactly when a session is degrading.
+  // Clean paragraphs are recorded, and the retry and fatal branches record a
+  // failure -- but only for a real artifact (a fatal verdict on rendered
+  // audio). v2: timeouts, worker errors and soft warnings no longer count; they
+  // flattened emotion mid-chapter on scheduling noise.
   const recordCalls = [...source.matchAll(/_recordProsodyOutcome\((true|false)\)/g)].map((m) => m[1]);
   assert.ok(recordCalls.includes('true'), 'clean paragraphs must be recorded');
-  assert.ok(recordCalls.filter((v) => v === 'false').length >= 3,
-    'retry, fatal, and soft-warning branches must all record a failure');
+  const artifactRecords = source.match(/if \(_isProsodyArtifact\(first\)\) _recordProsodyOutcome\(false\);/g) || [];
+  assert.equal(artifactRecords.length, 2, 'retry and fatal branches record only artifacts');
+  const soft = source.slice(source.indexOf('synth accepted with a soft quality warning'));
+  assert.doesNotMatch(soft.slice(0, soft.indexOf('} else {')), /_recordProsodyOutcome/, 'a soft warning is not a failure');
   // The guard must be able to force neutral even with expressiveness enabled.
   assert.match(source, /_effectiveProsodyTier\(\) !== 'neutral'/);
 });

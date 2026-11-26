@@ -163,13 +163,16 @@ test('the device-setup summary has an element and a way to re-run', async () => 
   assert.match(setup, /\.finally\(\(\) => \{[\s\S]{0,400}renderPocketDeviceSetupSummary\(\);/);
 });
 
-test('the prosody drift guard is reset per story and chapter', async () => {
+test('the prosody drift guard resets per story and re-freezes per chapter', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   // window.resetPocketProsodyDrift had no callers, so a chapter that tripped the
   // guard carried its demotion into the next book.
   assert.match(audio, /function _syncProsodyDriftToPosition\(\)/);
   assert.match(audio, /_syncProsodyDriftToPosition\(\);/);
-  assert.match(audio, /if \(moved\) _prosodyDrift\.reset\(\);/);
+  // v2: a new STORY resets the guard; a new chapter keeps what it learned (so a
+  // demotion takes effect there) and re-freezes the tier at the boundary.
+  assert.match(audio, /if \(previousStory !== null && previousStory !== storyKey\) _prosodyDrift\.reset\(\);/);
+  assert.match(audio, /_frozenProsodyTier = null;   \/\/ re-freeze at the chapter boundary/);
 });
 
 test('settings controls map to the field names they actually write', async () => {
