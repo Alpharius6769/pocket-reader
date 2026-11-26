@@ -174,7 +174,7 @@ test('the masterlist shares ratings and lists with the live Anthronomicon', asyn
   const list = await read('public/assets/js/hmofa_masterlist.js');
   const community = await read('public/assets/js/hmofa_community.js');
   const prefs = await read('public/assets/js/hmofa_preferences.js');
-  const merge = await read('public/assets/js/profile_merge.js');
+  const merge = await read('public/assets/js/library_core.js');
   const sw = await read('public/sw.js');
 
   assert.match(html, /id="hmofa-open-preferences"/);
@@ -198,7 +198,7 @@ test('the masterlist shares ratings and lists with the live Anthronomicon', asyn
     'HMOFA prefs and lists must sync with the profile, so they cannot sit in DEVICE_ONLY_SETTINGS');
 
   assert.match(sw, /hmofa_community\.js\?v=hmofa-community-v4/);
-  assert.match(sw, /hmofa_preferences\.js\?v=hmofa-prefs-v4/);
+  assert.match(sw, /hmofa_preferences\.js\?v=hmofa-prefs-v6/);
 });
 
 test('the native masterlist keeps catalog freshness, URLs, prefs and lists honest', async () => {

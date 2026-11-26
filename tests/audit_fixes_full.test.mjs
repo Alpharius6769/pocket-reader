@@ -6,21 +6,6 @@ import path from 'node:path';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const read = (relative) => fs.readFile(path.join(ROOT, relative), 'utf8');
 
-test('supabase_bridge escapes email before interpolating into statusEl.innerHTML', async () => {
-  const bridge = await read('public/assets/js/supabase_bridge.js');
-  assert.match(bridge, /function _escapeHtml\(/, 'Expected _escapeHtml helper to be defined');
-  assert.match(
-    bridge,
-    /statusEl\.innerHTML\s*=\s*`Signed in as <strong>\$\{_escapeHtml\(email\)\}<\/strong>/,
-    'OAuth email must be HTML-escaped before inserting into innerHTML'
-  );
-  assert.doesNotMatch(
-    bridge,
-    /statusEl\.innerHTML\s*=\s*`Signed in as <strong>\$\{email\}<\/strong>/,
-    'Unescaped OAuth email interpolation must not be present'
-  );
-});
-
 test('public/index.html script query versions match public/sw.js CORE_ASSETS', async () => {
   const indexHtml = await read('public/index.html');
   const swJs = await read('public/sw.js');

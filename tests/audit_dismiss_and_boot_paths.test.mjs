@@ -232,7 +232,7 @@ test('a muted sibling is blurred before it is marked aria-hidden', async () => {
 test('the graduated ladder keeps achievements and the streak', async () => {
   // Functional, not structural: run the real ladder against an oversized
   // profile and check what survives. Only DERIVED data may go.
-  const { shrinkProfileToFit, MAX_PROFILE_BYTES } = await import('../public/assets/js/profile_merge.js');
+  const { shrinkProfileToFit, MAX_PROFILE_BYTES } = await import('../public/assets/js/library_core.js');
   const profile = {
     displayName: 'Reader',
     achievements: [{ id: 'first_book', at: 1 }, { id: 'night_owl', at: 2 }],

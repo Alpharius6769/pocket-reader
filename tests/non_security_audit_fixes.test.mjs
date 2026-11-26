@@ -117,16 +117,15 @@ test('stored AO3 export front matter is removed before narration', async () => {
 // global that is not defined, or a select whose value is overwritten a moment
 // later, fails silently by construction.
 
-test('renderAccountCenter is reachable from the two hooks that call it', async () => {
+test('renderAccountCenter is reachable from the hook that calls it', async () => {
   const cinematic = await read('public/assets/js/cinematic_ui.js');
-  const bridge = await read('public/assets/js/supabase_bridge.js');
   const ui = await read('public/assets/js/ui_controller.js');
 
   // It was a module-local function. Both callers reach for it through window
   // behind a typeof guard, so after an OAuth sign-in and after the first-run
   // wizard the Account Center kept saying "Guest reader" until a reload.
   assert.match(cinematic, /^window\.renderAccountCenter = renderAccountCenter;$/m);
-  for (const [name, source] of [['supabase_bridge', bridge], ['ui_controller', ui]]) {
+  for (const [name, source] of [['ui_controller', ui]]) {
     assert.match(source, /typeof window\.renderAccountCenter === 'function'/,
       `${name} still calls it, so the export has to stay`);
   }

@@ -139,7 +139,6 @@ function pushToProfile(field, value) {
   else delete profile.settings[field];
   window.stampSyncedSetting?.(field);
   window.saveLocalData?.();
-  window.queueCloudSync?.('hmofa-settings');
 }
 
 function updateShadow(name, value) {

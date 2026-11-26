@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
 } from './tts_pronunciation_core.js?v=pron-v34';
-import { profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit } from './profile_merge.js?v=merge-v13';
+import { profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit } from './library_core.js?v=library-core-v1';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
@@ -441,11 +441,6 @@ function _safeHttpCoverUrl(value) {
   return '';
 }
 
-// Cloud pushes stay disabled until the profile's owner has been reconciled
-// with the logged-in Supabase account (see checkCloudSyncOnStartup /
-// triggerCloudLogin). This stops boot-time saves from writing one user's
-// local data into a different user's cloud row on shared devices.
-if (typeof window._cloudPushAllowed === 'undefined') window._cloudPushAllowed = false;
 
 function _defaultProfile() {
   return normalizeProfileObject({
@@ -573,7 +568,6 @@ export async function resetLocalProfile({ preserveSetup = true } = {}) {
   if (!preserveSetup) {
     try { localStorage.removeItem('pr_setup_complete'); } catch (e) {}
   }
-  window._cloudPushAllowed = false;
   window.userProfile = _defaultProfile();
   window.currentStory = null;
   window.curatedLibraryLoaded = false;
@@ -636,11 +630,6 @@ export async function loadLocalData() {
         } catch (e) {}
         delete window.userProfile.settings.siteCookies;
       }
-
-      // NOTE: no cloud push here. Pushing before the profile owner is
-      // reconciled with the logged-in account could write this device's data
-      // into a different user's cloud row; checkCloudSyncOnStartup pushes
-      // after the owner check instead.
     } else {
       // First-time load: build a robust default profile structure to prevent startup crashes
       window.userProfile = _defaultProfile();
@@ -722,11 +711,6 @@ export async function loadLocalData() {
     // Seed the bundled curated stories into the library at every launch
     // (deleted ones stay deleted via tombstones). Fire-and-forget.
     seedCuratedLibrary();
-
-    // Auto-login sync check
-    if (typeof window.checkCloudSyncOnStartup === 'function') {
-      window.checkCloudSyncOnStartup();
-    }
 
     // First-time setup modal — checked here so it fires after all async init
     // (avatar load, engine detection, cloud sync) has had a chance to run.
@@ -871,19 +855,12 @@ function _flushLocalData(options = {}) {
       });
     }
 
-    // Protect sensitive cookies from cloud storage
+    // Site cookies never persist in the saved profile
     if (liteProfile.settings) {
       delete liteProfile.settings.siteCookies;
     }
 
     localStorage.setItem('pocketReaderData', JSON.stringify(liteProfile));
-
-    // Only push to the cloud once the profile owner has been reconciled with
-    // the logged-in account (prevents cross-user writes on shared devices).
-    if (!options.skipCloud && window._cloudPushAllowed && !window.userProfile.isSyncing) {
-      if (typeof window.queueCloudSync === 'function') window.queueCloudSync('profile-save');
-      else if (window.pocketCloud?.saveProfile) window.pocketCloud.saveProfile(liteProfile);
-    }
   } catch (e) {
     console.error("saveLocalData failed:", e);
     // Shed DERIVED data a step at a time rather than amputating everything that
@@ -1012,83 +989,6 @@ window.addEventListener('pagehide', _flushCommitNow);
 window.addEventListener('beforeunload', _flushCommitNow);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') _flushCommitNow(); });
 
-export async function checkCloudSyncOnStartup() {
-  if (typeof window.pullCloudProfileOnStartup === 'function') {
-    try { await window.pullCloudProfileOnStartup(); } catch (error) { console.error('[CloudSync] Startup sync failed:', error); }
-    return;
-  }
-  if (typeof window.pocketCloud?.getCurrentUser !== 'function') return;
-  try {
-    const userEmail = await window.pocketCloud.getCurrentUser();
-    if (userEmail) {
-      console.log("[CloudSync] Auto-logged in on boot:", userEmail);
-
-      // ── Account isolation ────────────────────────────────────────────────
-      // pr_profile_owner records which account this device's local profile
-      // belongs to. If a DIFFERENT account is now logged in, never merge the
-      // previous user's data into it — wipe local state and reboot so the new
-      // user starts from their own cloud profile plus the curated defaults.
-      const owner = prLocal.getItem('pr_profile_owner') || '';
-      if (owner && owner !== userEmail) {
-        console.warn("[CloudSync] Logged-in account changed (was", owner, ") — resetting local profile.");
-        if (typeof window.resetLocalProfile === 'function') {
-          await window.resetLocalProfile({ preserveSetup: true });
-        }
-        location.reload();
-        return;
-      }
-      prLocal.setItem('pr_profile_owner', userEmail);
-
-      window.userProfile.isLoggedIn = true;
-      window.userProfile.cloudEmail = userEmail;
-
-      // Cloud pushes stay DISABLED until the cloud profile has been pulled and
-      // merged below. Enabling them here would let a boot-time saveLocalData()
-      // (curated seeding, engine-default migration, applySettings, ...) push
-      // this device's local-only/default profile over the user's real cloud row
-      // before it has even been fetched (Issue 6).
-
-      if (typeof window.pocketCloud?.loadProfile === 'function') {
-        const cloudProfile = await window.pocketCloud.loadProfile();
-        if (cloudProfile) {
-          console.log("[CloudSync] Loaded cloud profile:", cloudProfile);
-          const merged = mergeProfileIntoCurrent(cloudProfile, { purgeStorage: true });
-
-          if (merged) {
-            console.log("[CloudSync] Merged cloud profile into local profile.");
-            // Persist locally only — pushes are still disabled until the merge
-            // is fully complete just below.
-            if (typeof window.saveLocalData === 'function') window.saveLocalData();
-            if (typeof window.renderLibrary === 'function') window.renderLibrary();
-            if (typeof window.initSettingsUI === 'function') window.initSettingsUI();
-            if (typeof window.applySettings === 'function') window.applySettings();
-          }
-        }
-      }
-
-      // Pull/merge complete — pushes are now safe (Issue 6).
-      window._cloudPushAllowed = true;
-
-      // Reflect the (possibly cloud-updated) display name in the topbar, and
-      // persist + push the merged profile once via saveLocalData. The cloud
-      // email is surfaced on the Profile cloud-sync card, so we no longer stuff
-      // it into the display-name slot — that made the name flash the email and
-      // then revert to the display name (Issue 8).
-      if (typeof window.updateDisplayName === 'function') {
-        window.updateDisplayName(window.userProfile.displayName || 'Guest Reader');
-      } else if (typeof window.saveLocalData === 'function') {
-        window.saveLocalData();
-      }
-
-      if (typeof window.renderProfileExtras === 'function') {
-        window.renderProfileExtras();
-      }
-    }
-  } catch (e) {
-    console.error("[CloudSync] Auto-login check failed:", e);
-  }
-}
-window.checkCloudSyncOnStartup = checkCloudSyncOnStartup;
 
 export function clearTextCache() {
   if (
@@ -1203,8 +1103,6 @@ function _isAo3WorkUrl(url) {
 function _saveStoryUpdateState(entry) {
   window.stampStorySyncField?.(entry, 'metadata');
   window.saveLocalData?.();
-  window.syncPushProfileIfEnabled?.();
-  window.queueCloudSync?.('story-update-state');
 }
 
 window.toggleStorySubscription = async function(storyRef) {

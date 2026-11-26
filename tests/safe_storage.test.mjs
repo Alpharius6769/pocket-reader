@@ -121,7 +121,6 @@ test('every module using the facade imports it', async () => {
   for (const rel of [
     'public/assets/js/buffer_manager.js',
     'public/assets/js/ui_controller.js',
-    'public/assets/js/sync_core.js',
     'public/assets/js/library_manager.js',
     'public/assets/js/audio_core.js',
   ]) {

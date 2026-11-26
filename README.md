@@ -14,12 +14,11 @@ short_description: Edge-routed audiobook reader with browser-side TTS.
 
 # Alpharius' Pocket Reader
 
-Pocket Reader is an offline-capable story reader with browser-side Pocket TTS narration and optional Supabase accounts.
+Pocket Reader is an offline-capable story reader with browser-side Pocket TTS narration. Everything a reader owns stays on the device; there are no accounts.
 
 ## Architecture
 
 - **GitHub Pages:** frontend and PWA shell (`https://alpharius6769.github.io/pocket-reader/`).
-- **Supabase:** authentication, profiles, and account synchronization.
 - **Hugging Face Space:** story search, scraping, uploads, curated-library API, FicHub relay, health endpoints, and push subscriptions.
 - **Cloudflare Worker:** edge routing for the Pocket TTS and Kokoro model bundles, ONNX Runtime Web, and voice assets.
 - **HMOFA Anthronomicon & Masterlist:** interactive story catalog (`https://alpharius6769.github.io/hmofa-story-index/`) authored by Chris (Alpharius67 / Fluffarius). Pocket Reader renders it natively in the masterlist view from the index's published catalog JSON, so a tap loads the story directly. The standalone site is unaffected. See `ANTHRONOMICON_BRIDGE.md`.
@@ -64,7 +63,7 @@ The Voice-Zero emotional pack and the Rayne personal clone were retired from the
 catalog; a stored setting naming one migrates to a live voice of the same gender. See
 `ATTRIBUTIONS.md`.
 
-The frontend is hosted separately on GitHub Pages and talks to this backend through the Cloudflare Worker over HTTPS. Supabase provides authentication and the authenticated profile-sync bridge used by the web app. The unauthenticated FastAPI `/api/state/*` endpoints are intentionally disabled.
+The frontend is hosted separately on GitHub Pages and talks to this backend through the Cloudflare Worker over HTTPS. The unauthenticated FastAPI `/api/state/*` endpoints are intentionally disabled.
 Cloud sync stores canonical JSON profile objects with schema version, sanitized library entries, settings, stats, and deletion tombstones.
 
 ### API Surface
@@ -91,7 +90,7 @@ Cloud sync stores canonical JSON profile objects with schema version, sanitized 
 | POST | `/api/unsubscribe` | Remove a browser push subscription |
 | POST | `/api/send-push/{user_id}` | Admin-only push delivery |
 | POST | `/api/sync/chapters` | Admin-only throttled chapter-refresh sweep |
-| GET | `/api/state/load/{user_id}` | Disabled; returns `410`. Cloud sync runs through Supabase |
+| GET | `/api/state/load/{user_id}` | Disabled; returns `410`. There is no cloud profile |
 
 ### Required Configuration
 

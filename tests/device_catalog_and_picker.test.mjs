@@ -225,12 +225,12 @@ test('a declared model is device-local and dies with the hardware', () => {
   assert.equal(policy.writeDeclaredDevice(storage, 'iphone-99-ultra', here), null);
 });
 
-test('the declared model never reaches the synced profile', async () => {
+test('the declared model never reaches the saved profile', async () => {
   // It describes THIS handset. Syncing it would carry a claim about hardware
   // the other device does not have.
   const source = await read('public/assets/js/pocket_backend_policy.js');
   assert.match(source, /export const DECLARED_DEVICE_KEY = 'pr_declared_device_v1';/);
-  for (const file of ['public/assets/js/profile_merge.js', 'public/assets/js/sync_core.js', 'public/assets/js/library_manager.js']) {
+  for (const file of ['public/assets/js/library_core.js', 'public/assets/js/library_manager.js']) {
     const text = await read(file);
     assert.doesNotMatch(text, /declaredDevice|pr_declared_device/i, `${file} must not carry it`);
   }

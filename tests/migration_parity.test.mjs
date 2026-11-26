@@ -56,18 +56,12 @@ test('login pulls the cloud profile from the logged-in account', async () => {
     'retired hosting compatibility globals should not remain in the login flow');
 });
 
-test('Google sign-in preserves route and hash state on return', async () => {
-  const bridge = await read('public/assets/js/supabase_bridge.js');
-  assert.ok(bridge.includes('currentUrl.pathname + currentUrl.search + currentUrl.hash'),
-    'OAuth redirect should preserve the current search and hash state');
-});
-
 test('no module builds an Anvil asset URL', async () => {
   const modules = [
     'audio_core.js', 'buffer_manager.js', 'pocket_worker.js', 'cinematic_ui.js',
     'device_setup.js', 'virtue_controller.js', 'experience_coordinator.js',
     'library_manager.js', 'narration_runtime_loader.js', 'settings_manager.js',
-    'ui_controller.js', 'supabase_bridge.js', 'data_transfer.js',
+    'ui_controller.js', 'library_core.js', 'data_transfer.js',
   ];
   for (const name of modules) {
     const source = await read(`public/assets/js/${name}`);

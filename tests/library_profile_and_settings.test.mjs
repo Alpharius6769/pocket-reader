@@ -188,7 +188,8 @@ test('the boot chain that hangs off the profile read is still intact', async () 
   assert.ok(body.length > 500, 'loadLocalData body must be locatable');
   // These all live INSIDE loadLocalData, so the missing call disabled every one
   // of them for everyone, not just local persistence.
-  for (const step of ['seedCuratedLibrary()', 'checkCloudSyncOnStartup', '_loadUserAvatar', 'pr_engine_auto_detected']) {
+  assert.ok(!body.includes('checkCloudSyncOnStartup'), 'cloud sync was retired');
+  for (const step of ['seedCuratedLibrary()', '_loadUserAvatar', 'pr_engine_auto_detected']) {
     assert.ok(body.includes(step), `${step} must still run as part of the profile read`);
   }
 });
@@ -220,13 +221,4 @@ test('the voice-engine default fills a gap and never overrides a choice', async 
   assert.match(block, /const _needsDetect = !_savedEngine \|\| !\['pocket', 'webspeech'\]\.includes\(_savedEngine\);/,
     'the default may only fill a missing or invalid value');
 
-  // The asymmetry that makes this necessary must stay documented where it bites.
-  for (const rel of ['public/assets/js/profile_merge.js', 'public/assets/js/sync_core.js']) {
-    const sync = await read(rel);
-    const deviceOnly = sync.slice(sync.indexOf('maxWorkers'), sync.indexOf('maxWorkers') + 400);
-    assert.match(deviceOnly, /_engineManuallySet/,
-      `${rel} still strips _engineManuallySet, so the default must not depend on it`);
-    assert.doesNotMatch(deviceOnly, /'voiceEngine'/,
-      `${rel}: voiceEngine syncs; if that ever changes, revisit the default above`);
-  }
 });

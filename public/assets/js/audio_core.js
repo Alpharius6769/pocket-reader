@@ -4603,10 +4603,7 @@ function _releaseCurrentAudio() {
 // from _handleParagraphEnd below — by the time that runs, narration is active
 // and library_manager.js (eager) has long since defined the global.
 
-let _lastProgressCloudCheckpoint = 0;
-let _paragraphsSinceCloudCheckpoint = 0;
-
-function _checkpointPlaybackProgress(forceCloud = false) {
+function _checkpointPlaybackProgress() {
   const story = window.currentStory;
   // Resolve by stable ref first (storyKey), so two library entries sharing a
   // title can't send this story's progress to the wrong one; fall back to the
@@ -4620,14 +4617,7 @@ function _checkpointPlaybackProgress(forceCloud = false) {
   libraryStory.lastRead = Date.now();
   window.stampStorySyncField?.(libraryStory, 'progress');
   window.recordStoryHistory?.(libraryStory, { silent: true });
-  window.saveLocalData?.({ skipCloud: true });
-  _paragraphsSinceCloudCheckpoint += 1;
-  const due = forceCloud || _paragraphsSinceCloudCheckpoint >= 10 || Date.now() - _lastProgressCloudCheckpoint >= 60000;
-  if (due && window._cloudPushAllowed) {
-    _lastProgressCloudCheckpoint = Date.now();
-    _paragraphsSinceCloudCheckpoint = 0;
-    window.queueCloudSync?.('playback-checkpoint');
-  }
+  window.saveLocalData?.();
 }
 
 // ── Next-paragraph preload (locked-screen playback continuity) ───────────────
@@ -4741,7 +4731,7 @@ function _handleParagraphEnd() {
     if (typeof window.recordDailyActivity === 'function') window.recordDailyActivity();
   }
 
-  _checkpointPlaybackProgress(!canAdvance);
+  _checkpointPlaybackProgress();
   if (!canAdvance) _finishStory();
 }
 

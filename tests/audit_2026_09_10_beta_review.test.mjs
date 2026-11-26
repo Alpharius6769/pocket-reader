@@ -43,18 +43,6 @@ test('jumping to a chapter or bookmark stamps the progress clock', async () => {
 // Email sign-up depended on a confirmation mail that never reliably arrived,
 // so new accounts could be created and then never used.
 
-test('the sign-in modal offers Google only', async () => {
-  const bridge = await read('public/assets/js/supabase_bridge.js');
-  for (const gone of ["'/signup'", 'grant_type=password', "'/recover'", "'/resend'", 'appRedirectUrl', "field('password'"]) {
-    assert.ok(!bridge.includes(gone), `${gone} is still in supabase_bridge.js`);
-  }
-  const form = between(bridge, 'function showLoginForm()', 'function consumeOAuthFragment');
-  assert.match(form, /btn\('Continue with Google', true\)/);
-  assert.match(form, /provider=google/);
-  // Refresh, current-user and logout still go through GoTrue.
-  assert.match(bridge, /gotrue\('\/token\?grant_type=refresh_token'/);
-});
-
 test('no screen offers email sign-up any more', async () => {
   const ui = await read('public/assets/js/cinematic_ui.js');
   assert.ok(!ui.includes('Use email'));

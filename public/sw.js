@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v359';
+var CACHE_NAME = 'pocket-reader-core-v361';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -139,7 +139,7 @@ var OPTIONAL_ASSETS = [
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
     'assets/js/buffer_manager.js?v=buffer-v124',
-    'assets/js/audio_core.js?v=audio-v234',
+    'assets/js/audio_core.js?v=audio-v236',
     'assets/js/pocket_worker.js?v=pocket-worker-v135',
     'assets/js/kokoro_worker.js?v=kokoro-v54',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
@@ -160,20 +160,18 @@ var CORE_ASSETS = [
     'assets/js/experience_coordinator.js?v=experience-v19',
     'assets/js/virtue_controller.js?v=virtue-v55',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v253',
-    'assets/js/supabase_bridge.js?v=supabase-v22',
-    'assets/js/profile_merge.js?v=merge-v13',
+    'assets/js/ui_controller.js?v=ui-v254',
+    'assets/js/library_core.js?v=library-core-v1',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v57',
-    'assets/js/settings_manager.js?v=settings-v218',
-    'assets/js/library_manager.js?v=library-v104',
-    'assets/js/hmofa_masterlist.js?v=hmofa-list-v16',
+    'assets/js/settings_manager.js?v=settings-v219',
+    'assets/js/library_manager.js?v=library-v106',
+    'assets/js/hmofa_masterlist.js?v=hmofa-list-v17',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v4',
     'assets/js/hmofa_community.js?v=hmofa-community-v4',
-    'assets/js/hmofa_preferences.js?v=hmofa-prefs-v4',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v139',
+    'assets/js/hmofa_preferences.js?v=hmofa-prefs-v6',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v140',
     'assets/js/storage_core.js?v=storage-v51',
-    'assets/js/sync_core.js?v=sync-v46',
     'assets/js/cinematic_ui.js?v=cinematic-v18',
     'assets/js/reader_features.js?v=features-v49',
     'assets/js/motion_lite.js'

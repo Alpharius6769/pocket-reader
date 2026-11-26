@@ -51,7 +51,7 @@ import {
   openHmofaPreferencesDialog,
   readPreferences,
   reconcileWithProfile,
-} from './hmofa_preferences.js?v=hmofa-prefs-v4';
+} from './hmofa_preferences.js?v=hmofa-prefs-v6';
 
 const CATALOG_BASE = 'https://alpharius6769.github.io/hmofa-story-index';
 const CATALOG_URL = `${CATALOG_BASE}/assets/catalog.json`;

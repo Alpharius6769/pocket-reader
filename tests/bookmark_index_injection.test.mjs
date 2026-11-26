@@ -14,8 +14,8 @@
 //
 // Reachable because import restores localStorage under a DENYLIST and
 // pocketReaderData is not on it, so a backup file from anyone becomes the
-// profile. The payload runs in the app origin, where pr_supabase_session_v1
-// holds the access and refresh tokens -- account takeover, not defacement.
+// profile. The payload runs in the app origin with full access to the reader's
+// library and settings. normalizeProfileV3 (library_core) runs on every load.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -23,12 +23,12 @@ import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const read = (rel) => readFile(path.join(ROOT, rel), 'utf8');
-const merge = await import('../public/assets/js/profile_merge.js');
+const core = await import('../public/assets/js/library_core.js');
 
 const PAYLOAD = '0);window.__PR_XSS_FIRED=true;//';
 
 test('normalisation coerces bookmark indices to numbers', () => {
-  const profile = merge.normalizeProfile({
+  const profile = core.normalizeProfileV3({
     library: [{
       title: 'x',
       bookmarks: [
@@ -54,7 +54,7 @@ test('normalisation coerces bookmark indices to numbers', () => {
 
 test('the generated id cannot carry a payload either', () => {
   // The id is built from c and p and is itself interpolated into markup.
-  const profile = merge.normalizeProfile({
+  const profile = core.normalizeProfileV3({
     library: [{ title: 'x', bookmarks: [{ c: PAYLOAD, p: PAYLOAD, ts: 1 }] }],
   });
   const { id } = profile.library[0].bookmarks[0];

@@ -91,20 +91,16 @@ test('service-worker cache quota failures never turn a successful network respon
   assert.match(update, /return null/);
 });
 
-test('runtime code uses the Supabase cloud API without legacy Anvil globals', async () => {
+test('runtime code carries no legacy Anvil globals', async () => {
   for (const file of [
-    'public/assets/js/supabase_bridge.js',
     'public/assets/js/cinematic_ui.js',
     'public/assets/js/library_manager.js',
     'public/assets/js/settings_manager.js',
-    'public/assets/js/sync_core.js',
     'public/assets/js/ui_controller.js',
   ]) {
     const source = await read(file);
     assert.doesNotMatch(source, /window\.anvil[A-Z]/, `${file} still uses a retired Anvil global`);
   }
-  const bridge = await read('public/assets/js/supabase_bridge.js');
-  assert.match(bridge, /window\.pocketCloud\s*=/);
 });
 
 test('worker smoke tooling targets the current static app and creates its output directory', async () => {

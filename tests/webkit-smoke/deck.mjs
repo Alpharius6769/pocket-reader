@@ -26,24 +26,15 @@ try {
   const errors = [];
   const page = await ctx.newPage();
   page.on('pageerror', e => errors.push(e.message));
-  const cloudStory = { storyKey: 'cloud-book', title: 'Cloud library entry', author: 'Demo author',
-    progressChapter: 1, lastRead: Date.now(), updatedAt: Date.now(), audioCached: true };
-  let receivedProfile = false;
 
-  // External accounts and story sources are simulated so CI never needs credentials.
+  // External story sources are simulated so CI never needs the network.
   await ctx.route('**/*', async route => {
     const u = new URL(route.request().url());
     if (u.origin === origin || !u.protocol.startsWith('http')) return route.continue();
     let data;
     if (u.pathname === '/api/upload') data = story;
     else if (u.pathname.endsWith('/catalog.json')) data = { schemaVersion: 1, records: [{id:'night',title:'The Last Train',authors:['Demo author'],sources:[],tags:[],partnerSpecies:[],worlds:['HMOFA']}], recordCount: 1 };
-    else if (u.pathname.endsWith('/user')) data = { email: 'reader@example.test' };
-    else if (u.pathname.endsWith('/user_profiles')) {
-      data = [{ revision: 1, profile_data: { library: [cloudStory], settings: {} } }];
-    } else if (u.pathname.endsWith('/commit_user_profile')) {
-      receivedProfile = true;
-      data = [{ revision: 2 }];
-    } else data = { items: [], count: 0, ratings: {}, trending: [] };
+    else data = { items: [], count: 0, ratings: {}, trending: [] };
     return route.fulfill({ json: data });
   });
   await page.goto(origin);
@@ -95,23 +86,18 @@ try {
     window.saveLocalData({ immediate: true, skipCloud: true });
   });
   const saved = await ctx.storageState({ indexedDB: true });
+  // Accounts were retired: a sign-in token left over from an earlier version is
+  // cleared at load, and the local library survives the reload untouched.
+  const libraryBefore = await page.evaluate(() => window.userProfile.library.map((s) => s.storyKey).sort());
   await page.evaluate(() => {
-    localStorage.setItem('pr_supabase_session_v1', JSON.stringify({ access_token: 'fixture', refresh_token: 'fixture', expires_at: Date.now()/1000 + 3600 }));
-    localStorage.setItem('pr_remember_login','true');
+    localStorage.setItem('pr_supabase_session_v1', JSON.stringify({ access_token: 'fixture', refresh_token: 'fixture' }));
+    localStorage.setItem('pr_profile_owner', 'reader@example.test');
   });
   await page.reload();
-  await page.waitForFunction(() => window.userProfile?.library.some(s => s.storyKey === 'cloud-book'), null, {timeout:12000}).catch(async error => {
-    console.error('Account restore', errors, await page.evaluate(() => ({
-      sync: window.pocketCloud?.getCurrentUser ? 'ready' : 'loading', owner: localStorage.getItem('pr_profile_owner'),
-      remembered: localStorage.getItem('pr_remember_login'), session: !!localStorage.getItem('pr_supabase_session_v1'),
-      loggedIn: window.userProfile?.isLoggedIn, diagnostic: document.querySelector('#deck-notice')?.textContent
-    })));
-    throw error;
-  });
-  assert.equal(receivedProfile, true);
-  await nav('Library');
-  await page.waitForSelector('[data-story-key="cloud-book"]');
-  assert.doesNotMatch(await page.locator('[data-story-key="cloud-book"]').innerText(), /Audio on device|100% Cached/);
+  await page.waitForFunction(() => window.__pocketProfileHydrated === true, null, { timeout: 12000 });
+  assert.equal(await page.evaluate(() => localStorage.getItem('pr_supabase_session_v1')), null, 'retired session token is cleared');
+  assert.equal(await page.evaluate(() => localStorage.getItem('pr_profile_owner')), null, 'retired account owner is cleared');
+  assert.deepEqual(await page.evaluate(() => window.userProfile.library.map((s) => s.storyKey).sort()), libraryBefore);
   assert.deepEqual(errors, []);
   const offline = await browser.newContext({ storageState: saved });
   await offline.route(/^https:\/\//, route => route.abort('internetdisconnected'));
@@ -158,7 +144,7 @@ try {
       throw error;
     });
   await offline.close();
-  console.log('Deck smoke passed: import, resume, calibration cancel, transport continuity, layout, catalog, account restore, offline upgrade.');
+  console.log('Deck smoke passed: import, resume, calibration cancel, transport continuity, layout, catalog, retired-account cleanup, offline upgrade.');
 } finally {
   try { await browser?.close(); } finally { server.kill(); }
 }

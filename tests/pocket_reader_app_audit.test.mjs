@@ -72,16 +72,16 @@ test('audio ended-with-error pauses playback (H7)', async () => {
   assert.match(ended, /pausePlayback\(\)/);
 });
 
-test('library hashes and login merge share profile_merge (M2/M3)', async () => {
+test('library hashes and backup merge share library_core (M2/M3)', async () => {
   const library = await read('public/assets/js/library_manager.js');
   // Pinned by binding, not by the exact list: the point is that these come
-  // from profile_merge rather than a local reimplementation, and the import
+  // from library_core rather than a local reimplementation, and the import
   // legitimately grows (shrinkProfileToFit joined it for the quota fallback).
-  const importLine = library.match(/import \{([^}]*)\} from '\.\/profile_merge\.js\?v=[^']+'/);
-  assert.ok(importLine, 'library_manager must import from profile_merge');
+  const importLine = library.match(/import \{([^}]*)\} from '\.\/library_core\.js\?v=[^']+'/);
+  assert.ok(importLine, 'library_manager must import from library_core');
   const bound = importLine[1].split(',').map((name) => name.trim());
   for (const name of ['profileHash', 'storyKeyFor', 'mergeClockedMap']) {
-    assert.ok(bound.includes(name), `${name} must come from profile_merge`);
+    assert.ok(bound.includes(name), `${name} must come from library_core`);
   }
   assert.doesNotMatch(library, /replace\(\/\[\^a-z0-9\]\+\/g/);
   assert.match(library, /function getStoryStableKey\(story\) \{\s*return storyKeyFor\(/);
@@ -91,12 +91,6 @@ test('library hashes and login merge share profile_merge (M2/M3)', async () => {
   );
   assert.match(merge, /mergeClockedMap\(/);
   assert.match(merge, /options\.localSettingsWin/);
-});
-
-test('OAuth expiry uses Date.now, not now() (M4)', async () => {
-  const bridge = await read('public/assets/js/supabase_bridge.js');
-  assert.match(bridge, /Math\.floor\(Date\.now\(\) \/ 1000\) \+ parseInt\(params\.get\('expires_in'/);
-  assert.doesNotMatch(bridge, /expires_at: Number\(params\.get\('expires_at'\) \|\| \(now\(\)/);
 });
 
 test('diagnostics failure HTML-escapes the error (M5)', async () => {

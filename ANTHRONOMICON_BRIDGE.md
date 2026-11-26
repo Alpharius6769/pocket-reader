@@ -120,7 +120,7 @@ Those keys are per-origin, so on their own they would not follow a reader to a
 second device. Pocket Reader mirrors `hmofa_user_prefs_v2` and
 `hmofa_saved_lists_v1` into `userProfile.settings` as `hmofaPreferences` and
 `hmofaSavedLists`, stamped through `stampSyncedSetting` so the clocked merge in
-`profile_merge.js` carries them. A shadow copy (`pr_hmofa_sync_shadow_v1`)
+`library_core.js` resolves them when a backup is restored (cloud sync was retired in v2). A shadow copy (`pr_hmofa_sync_shadow_v1`)
 settles newest-wins against edits made on the index, which writes the same
 localStorage keys without touching Pocket Reader's clock.
 
