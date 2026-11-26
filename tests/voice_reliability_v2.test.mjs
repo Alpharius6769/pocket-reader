@@ -188,3 +188,11 @@ test('a neutral fallback file does not lock emotion when the position is known',
   const buffer = await read('public/assets/js/buffer_manager.js');
   assert.match(buffer, /await window\.generateChunk\(task\.text, routedVoice,\s*\n\s*\{ storyTitle: task\.storyTitle, chapIdx: task\.chapIdx, paraIdx: task\.paraIdx \}\);/);
 });
+
+test('the pitch baseline is kept per voice and delivery emotion', async () => {
+  // All emotions render through one neutral file; a baseline keyed on the file
+  // pooled them and flagged ordinary emotional pitch as drift.
+  const audio = await read('public/assets/js/audio_core.js');
+  assert.match(audio, /\? `\$\{route\.baseVoice\}_\$\{route\.emotion \|\| 'neutral'\}`/);
+  assert.match(audio, /const quality = _inspectPocketAudioQuality\(result, text, pitchKey\);/);
+});

@@ -1,4 +1,4 @@
-import { ui } from './core_events.js?v=core-events-v4';
+import { ui } from './core_events.js?v=core-events-v7';
 import { adoptNarrationPreset } from './library_core.js?v=library-core-v4';
 
 const DEFAULT_API_BASE = 'https://pocket-reader-proxy.alpharius67.workers.dev';

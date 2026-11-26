@@ -4,7 +4,7 @@ import {
   DEFAULT_LSD_STEPS,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v34';
+} from './tts_pronunciation_core.js?v=pron-v37';
 import {
   FUSED_BLOCK_MIN_HEADROOM_MB,
   POCKET_ORT_VERSION,

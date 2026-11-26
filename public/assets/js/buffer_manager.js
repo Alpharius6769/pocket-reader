@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v55';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v57';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -10,7 +10,7 @@ import {
   voicesForEngine,
 } from './pocket_backend_policy.js?v=backend-v64';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
-import { ui } from './core_events.js?v=core-events-v4';
+import { ui } from './core_events.js?v=core-events-v7';
 import { adoptNarrationPreset } from './library_core.js?v=library-core-v4';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
@@ -234,8 +234,14 @@ function _autoResumeAllowed() {
   }
 }
 
+// The isolated session needs the service worker: it is what stamps COOP/COEP
+// on the ?tts_fast=1 navigation. With no worker registered (a shell that does
+// not register one, a dev server, a browser that refused it), the reload waits
+// on navigator.serviceWorker.ready, which never resolves -- Play hung silently.
+// Without a worker, narration runs in the ordinary session instead.
 function _supportsFastNarrationSession() {
-  return window.isSecureContext === true && 'serviceWorker' in navigator;
+  return window.isSecureContext === true && 'serviceWorker' in navigator
+    && Boolean(navigator.serviceWorker.controller || window.__prServiceWorkerRegistration);
 }
 
 // Field telemetry: how often does the ?tts_fast=1 service-worker isolation
@@ -437,10 +443,14 @@ function _requestFastNarrationReload(mode, action = 'cache') {
         go();
         return;
       }
-      // First install: wait briefly for the worker to control this client.
-      navigator.serviceWorker?.ready
-        ?.then(() => setTimeout(go, 50))
-        ?.catch(go) || go();
+      // First install: wait briefly for the worker to control this client --
+      // but never forever. serviceWorker.ready does not settle when no worker
+      // ever registers, and an unbounded wait here left Play doing nothing.
+      // After the deadline the reload still runs; the retry key then stops a
+      // second attempt, so narration continues in the ordinary session.
+      const deadline = new Promise((resolve) => setTimeout(resolve, 3000));
+      Promise.race([navigator.serviceWorker?.ready || Promise.resolve(), deadline])
+        .then(() => setTimeout(go, 50), go);
     });
   return true;
 }

@@ -1,5 +1,5 @@
 import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v64';
-import { ui } from './core_events.js?v=core-events-v4';
+import { ui } from './core_events.js?v=core-events-v7';
 
 const DB_NAME = 'PocketReaderDB';
 const DB_VERSION = 3;

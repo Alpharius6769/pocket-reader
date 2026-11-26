@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v55';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v57';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -6,7 +6,7 @@ import {
   DEFAULT_LSD_STEPS,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v34';
+} from './tts_pronunciation_core.js?v=pron-v37';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -58,7 +58,7 @@ import {
   shouldRetryPocketQuality,
 } from './pocket_performance_policy.js?v=performance-v2';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
-import { ui, lastStatus } from './core_events.js?v=core-events-v4';
+import { ui, lastStatus } from './core_events.js?v=core-events-v7';
 
 window.isPlaying = false;
 window.currentAudio = null;
@@ -119,9 +119,15 @@ try {
 } catch (_) {}
 
 function _setNeuralState(nextState) {
+  const changed = neuralState !== nextState;
   neuralState = nextState;
   neuralStateChangedAt = Date.now();
+  if (changed) {
+    try { ui.engineState(nextState, window._resolveActiveEngine?.() || 'pocket'); } catch (_) {}
+  }
 }
+// Read-only view of the engine lifecycle for the v2 bridge.
+window.getNarrationEngineStatus = () => neuralState;
 
 // ── Voice lists and normalization layer ──────────────────────────────────────
 const POCKET_VOICES = window.POCKET_VOICES || [];
@@ -1619,8 +1625,8 @@ async function _loadPocketEngineOnce(options = {}) {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v54',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v138',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v56',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v140',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -3628,7 +3634,15 @@ async function _generatePocketAttempt(workerObj, text, route, retryLevel = 0, ha
     const dispatchWorker = workerObj || _selectReadyPocketWorker();
     const result = await _runPocketWorkerGeneration(dispatchWorker, text, workerVoice, opts, handlers);
     const qualityStartedAt = performance.now();
-    const quality = _inspectPocketAudioQuality(result, text, workerVoice);
+    // The pitch baseline is kept per voice AND delivery emotion. Every emotion
+    // renders through the same neutral reference file, so keying it on the file
+    // (workerVoice) pooled happy, worried and neutral paragraphs into one
+    // history: ordinary emotional pitch read as drift, and dragged the neutral
+    // baseline with it. (Idea from the benchmark session's seed study.)
+    const pitchKey = route?.engine === 'pocket' && route.baseVoice
+      ? `${route.baseVoice}_${route.emotion || 'neutral'}`
+      : workerVoice;
+    const quality = _inspectPocketAudioQuality(result, text, pitchKey);
     if (result?.telemetry) result.telemetry.qualityCheckMs = Math.round(performance.now() - qualityStartedAt);
     return { result, quality, workerVoice, opts, route, error: null };
   } catch (err) {

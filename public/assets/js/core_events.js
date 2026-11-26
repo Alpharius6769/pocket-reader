@@ -93,6 +93,8 @@ export const ui = Object.freeze({
   voiceListChanged: (engine) =>
     call(CORE_EVENT.ENGINE, 'refreshVoiceSelectorForEngine', [engine], { what: 'voices', engine }),
   bufferChanged: (state) => call(CORE_EVENT.BUFFER, 'updateReaderDrawerStatus', [state], { state }),
+  // The neural engine's own lifecycle: 'idle' | 'loading' | 'ready' | 'failed'.
+  engineState: (state, engine) => emit(CORE_EVENT.ENGINE, { what: 'state', state, engine }),
   // No legacy global: legacy_ui_adapter.js paints the old elements for these.
   status: (text) => { _lastStatus = String(text || ''); return emit(CORE_EVENT.STATUS, { text: _lastStatus }); },
   progress: (pct) => emit(CORE_EVENT.PROGRESS, { pct: Math.max(0, Math.min(100, Number(pct) || 0)) }),

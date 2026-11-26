@@ -7,7 +7,7 @@
 // Deleted together with the old shell (public/index.html, ui_controller.js and
 // friends). The new UI listens on the same events through bridge.ts and has no
 // use for this file.
-import { coreEvents, CORE_EVENT } from './core_events.js?v=core-events-v4';
+import { coreEvents, CORE_EVENT } from './core_events.js?v=core-events-v7';
 
 function replay(event) {
   const detail = event.detail || {};

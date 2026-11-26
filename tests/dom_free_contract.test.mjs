@@ -63,3 +63,24 @@ test('status lines reach the UI as events, and the lock screen reads the last on
   const buffer = await read('public/assets/js/buffer_manager.js');
   assert.match(buffer, /ui\.cachingProgress\(\{/);
 });
+
+test('Play never waits on a service worker that is not there', async () => {
+  // The v2 page did not register sw.js at first, and Play hung silently: the
+  // isolation reload waited on navigator.serviceWorker.ready, which never
+  // settles without a registration.
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  const supports = body(buffer, 'function _supportsFastNarrationSession() {', '\n}\n');
+  assert.match(supports, /navigator\.serviceWorker\.controller \|\| window\.__prServiceWorkerRegistration/);
+  const reload = body(buffer, 'function _requestFastNarrationReload(', '\nwindow.requestPocketNarrationIsolation');
+  assert.match(reload, /const deadline = new Promise\(\(resolve\) => setTimeout\(resolve, 3000\)\);/);
+  assert.doesNotMatch(reload, /navigator\.serviceWorker\?\.ready\s*\n?\s*\?\.then\(\(\) => setTimeout\(go, 50\)\)/);
+  // And the v2 shell registers the worker in production, where the cores look for it.
+  const loader = await read('web/src/lib/core/coreLoader.ts');
+  assert.match(loader, /w\.__prServiceWorkerRegistration = navigator\.serviceWorker/);
+});
+
+test('the engine lifecycle is observable without reading audio_core internals', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  assert.match(audio, /window\.getNarrationEngineStatus = \(\) => neuralState;/);
+  assert.match(audio, /if \(changed\) \{\s*\n\s*try \{ ui\.engineState\(nextState/);
+});
