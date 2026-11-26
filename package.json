@@ -6,6 +6,11 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
+    "dev": "vite --config web/vite.config.ts",
+    "build": "vite build --config web/vite.config.ts",
+    "preview": "vite preview --config web/vite.config.ts",
+    "test:ui": "vitest run --config web/vite.config.ts",
+    "check:ui": "svelte-check --tsconfig web/tsconfig.json",
     "cap:init": "npx @capacitor/cli init \"Pocket Reader\" com.pocketreader.app --web-dir public",
     "cap:add:android": "npx @capacitor/cli add android",
     "cap:add:ios": "npx @capacitor/cli add ios",
@@ -23,6 +28,15 @@
     "@capacitor/status-bar": "^6.0.2"
   },
   "devDependencies": {
-    "@capacitor/cli": "^6.2.0"
+    "@capacitor/cli": "^6.2.0",
+    "@lucide/svelte": "^1.81.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.2",
+    "@testing-library/svelte": "^5.4.2",
+    "jsdom": "^27.4.0",
+    "svelte": "^5.59.2",
+    "svelte-check": "^4.7.8",
+    "typescript": "^6.0.3",
+    "vite": "^8.4.0",
+    "vitest": "^5.1.2"
   }
 }
