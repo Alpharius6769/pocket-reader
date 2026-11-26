@@ -134,8 +134,8 @@ window.__bench = {
     const text = overrideText ?? config.paragraphs[index];
     const logStart = logs.length;
     const rawEmotion = plain(window.inspectPocketEmotion?.(text));
-    const routedVoice = window.resolveVoiceWithSentiment('pocket', config.voice, text,
-      ctx ? { storyTitle: config.storyTitle, chapIdx: 0, paraIdx: index } : null);
+    const position = ctx ? { storyTitle: config.storyTitle, chapIdx: 0, paraIdx: index } : null;
+    const routedVoice = window.resolveVoiceWithSentiment('pocket', config.voice, text, position);
     window.currentParagraphIndex = index;
     window._lastPocketSynthTelemetry = null;
     window._lastPocketQualityFailure = null;
@@ -149,8 +149,8 @@ window.__bench = {
         ? await window.generateChunkStream(text, routedVoice, () => {
           segments += 1;
           if (firstAudioAt == null) firstAudioAt = performance.now();
-        })
-        : await window.generateChunk(text, routedVoice);
+        }, position)
+        : await window.generateChunk(text, routedVoice, position);
     } catch (err) {
       error = String(err?.message || err);
     }

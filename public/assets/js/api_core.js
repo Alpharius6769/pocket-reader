@@ -1,4 +1,5 @@
 import { ui } from './core_events.js?v=core-events-v4';
+import { adoptNarrationPreset } from './library_core.js?v=library-core-v4';
 
 const DEFAULT_API_BASE = 'https://pocket-reader-proxy.alpharius67.workers.dev';
 const DEFAULT_PROXY_BASE = 'https://pocket-reader-proxy.alpharius67.workers.dev';
@@ -464,7 +465,7 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
       } catch (e) { console.warn('Failed to persist uploaded story chapters:', e); }
     }
     if (!silent) window.recordStoryHistory?.(window.currentStory);
-    if (!silent) ui.storyOpened(window.currentStory, newStory.author);
+    if (!silent) ui.storyOpened(adoptNarrationPreset(window.currentStory), newStory.author);
     if (!silent) ui.paragraph();
     if (!silent) ui.navigate('reading-view');
   } catch (error) {
@@ -1077,7 +1078,7 @@ export async function loadStory(url, options = {}) {
           }
 
           if (!preventNavigate)
-            ui.storyOpened(window.currentStory, window.currentStory.author || 'Unknown');
+            ui.storyOpened(adoptNarrationPreset(window.currentStory), window.currentStory.author || 'Unknown');
           if (!preventNavigate && typeof window.recordStoryHistory === 'function') window.recordStoryHistory(window.currentStory);
           if (!preventNavigate) ui.navigate('reading-view');
           if (!preventNavigate) ui.loaded();
@@ -1215,7 +1216,7 @@ export async function loadStory(url, options = {}) {
           if (ownAbort._superseded) return;
           _restoreProgressFromLibrary(existingLibEntry);
           if (!preventNavigate && existingLibEntry && window.currentStory) {
-            ui.storyOpened(window.currentStory, window.currentStory.author || 'Unknown');
+            ui.storyOpened(adoptNarrationPreset(window.currentStory), window.currentStory.author || 'Unknown');
           }
         }
       } catch(fichubErr) {
@@ -1350,7 +1351,7 @@ export async function loadStory(url, options = {}) {
     await _persistOpenedStory();
     if (typeof window.addToLibrary === 'function') window.addToLibrary(window.currentStory);
     if (!preventNavigate)
-      ui.storyOpened(window.currentStory, window.currentStory.author || 'Unknown');
+      ui.storyOpened(adoptNarrationPreset(window.currentStory), window.currentStory.author || 'Unknown');
     if (!preventNavigate && typeof window.recordStoryHistory === 'function') window.recordStoryHistory(window.currentStory);
     if (!preventNavigate) ui.navigate('reading-view');
   } catch (error) {

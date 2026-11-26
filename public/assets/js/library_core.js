@@ -371,6 +371,23 @@ export function setDeviceStatFlag(key, value = 1) {
   return counters[key];
 }
 
+// A story's own narration settings (voice, speed, emotion, pronunciations) live
+// on its LIBRARY entry. Opening the story must carry them onto the story object
+// narration reads from. This used to happen inside the old shell's
+// populateReaderUI, so a UI that did not reproduce it silently dropped every
+// per-story voice. It runs where the story is opened, in the cores.
+export function adoptNarrationPreset(story, library = globalThis.userProfile?.library || []) {
+  if (!story || typeof story !== 'object') return story;
+  const key = story.storyKey || storyKeyFor(story);
+  const entry = (Array.isArray(library) ? library : []).find((item) => item
+    && (item.storyKey === key || storyKeyFor(item) === key));
+  const preset = entry?.narrationPreset || story.narrationPreset;
+  if (preset && typeof preset === 'object' && Object.keys(preset).length) {
+    story.narrationPreset = { ...preset };
+  }
+  return story;
+}
+
 // Existing callers (library_manager, audio_core, reader_features, ...) reach
 // these through window; the v2 bridge imports them directly.
 if (typeof window !== 'undefined') {

@@ -34,7 +34,7 @@ test('a preempted cache render reaches the cache loop as a yield', async () => {
     'the attempt must rethrow a yield before building a fatal quality result',
   );
 
-  const generate = slice(audio, 'window.generateChunk = async function(text, voice) {', 'window.generateChunkStream');
+  const generate = slice(audio, 'window.generateChunk = async function(text, voice, ctx = null) {', 'window.generateChunkStream');
   const outerCatch = generate.slice(generate.lastIndexOf('} catch (e) {'));
   assert.ok(
     outerCatch.indexOf('if (_isNarrationYield(e)) throw e;') >= 0
@@ -168,4 +168,23 @@ test('a chunk cut at the frame budget is a fatal verdict, so it is re-rolled', a
   assert.match(inspect, /if \(Number\(result\?\.telemetry\?\.frameBudgetStops\) > 0\) \{\s*\n\s*fatal = true;\s*\n\s*reasons\.push\('frame budget cut'\);/);
   const worker = await read('public/assets/js/pocket_worker.js');
   assert.match(worker, /if \(!control\.frameLimit && reachedFrameBudget && !eosTailComplete\) frameBudgetStops/);
+});
+
+test('a neutral fallback file does not lock emotion when the position is known', async () => {
+  // The first fix above was not enough: every caller handed generateChunk the
+  // file id (alba_neutral), whose emotion suffix re-locked the paragraph to
+  // neutral inside _resolvePocketRoute. Measured, not assumed: the benchmark
+  // still rendered 43/43 paragraphs at 0.30 until this landed.
+  const audio = await read('public/assets/js/audio_core.js');
+  assert.match(audio, /const lockedEmotion = \(ctx && assetEmotion === 'neutral'\) \? null : assetEmotion;/);
+  assert.match(audio, /window\.generateChunk = async function\(text, voice, ctx = null\) \{/);
+  assert.match(audio, /window\.generateChunkStream = async function\(text, voice, onSegment, ctx = null\) \{/);
+  const routes = audio.match(/const route = _resolvePocketRoute\(engine, voice, text, ctx\);/g) || [];
+  assert.equal(routes.length, 2, 'both generators route with the position');
+  // Every caller passes the position it already built for the plan lookup.
+  assert.match(audio, /await window\.generateChunk\(text, cleanVoice, \{ storyTitle: title, chapIdx: c, paraIdx: p \}\);/);
+  assert.match(audio, /await window\.generateChunk\(text, cleanVoice, \{ storyTitle: title, chapIdx, paraIdx \}\);/);
+  assert.match(audio, /\}, \{ storyTitle: title, chapIdx, paraIdx \}\)\n/);
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  assert.match(buffer, /await window\.generateChunk\(task\.text, routedVoice,\s*\n\s*\{ storyTitle: task\.storyTitle, chapIdx: task\.chapIdx, paraIdx: task\.paraIdx \}\);/);
 });

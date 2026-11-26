@@ -11,6 +11,7 @@ import {
 } from './pocket_backend_policy.js?v=backend-v64';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 import { ui } from './core_events.js?v=core-events-v4';
+import { adoptNarrationPreset } from './library_core.js?v=library-core-v4';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
 const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'alba';
@@ -595,7 +596,7 @@ async function _resumeFastNarrationCache() {
       try {
         if (restoredFromStorage) {
           if (!isPermanent) {
-            ui.storyOpened(window.currentStory, window.currentStory.author || 'Unknown');
+            ui.storyOpened(adoptNarrationPreset(window.currentStory), window.currentStory.author || 'Unknown');
             window.recordStoryHistory?.(window.currentStory);
             ui.navigate('reading-view');
           }
@@ -1623,7 +1624,8 @@ export const BufferManager = {
         const synthStartedAt = performance.now();
         this._currentSynthStartedAt = Date.now();
         try {
-          audioBlob = await window.generateChunk(task.text, routedVoice);
+          audioBlob = await window.generateChunk(task.text, routedVoice,
+            { storyTitle: task.storyTitle, chapIdx: task.chapIdx, paraIdx: task.paraIdx });
           if (gen !== this._generation || !this.isActive) {
             this.activeWorkers = Math.max(0, this.activeWorkers - 1);
             return;

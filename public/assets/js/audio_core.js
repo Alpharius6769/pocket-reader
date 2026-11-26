@@ -739,7 +739,15 @@ function _resolvePocketRoute(engine, voice, text, ctx = null) {
     return { engine, voiceId: _normalizeVoice(engine, voice || null), baseVoice: voice || '', emotion: 'neutral', emotionInfo: null };
   }
   const baseVoice = _baseVoiceId(voice || window.userProfile?.settings?.pocketVoice || POCKET_DEFAULT_VOICE);
-  const lockedEmotion = _emotionFromAssetVoice(voice);
+  // A voice id like alba_neutral used to LOCK the emotion. Every shipped voice
+  // has only its neutral reference file, so the id handed to generateChunk was
+  // always *_neutral and every paragraph was locked to neutral, whatever the
+  // chapter plan said (the benchmark: calm/happy/sad... detected, 43 of 43
+  // rendered neutral). When the caller passes the paragraph position, the plan
+  // decides and a neutral file means only "the file to load". A real emotion
+  // file (none ship today) still locks, as does any caller without a position.
+  const assetEmotion = _emotionFromAssetVoice(voice);
+  const lockedEmotion = (ctx && assetEmotion === 'neutral') ? null : assetEmotion;
   // The drift guard can force neutral even when the user has expressive on:
   // a session that is actively producing artifacts gets stability back first.
   const expressive = (window.isPocketExpressiveProsodyEnabled?.()
@@ -3742,7 +3750,7 @@ async function _maybeRecyclePocketEngine() {
 }
 
 // Live generator with one quality-guard retry around Pocket output.
-window.generateChunk = async function(text, voice) {
+window.generateChunk = async function(text, voice, ctx = null) {
   if (!text || text.trim() === '') return null;
   window._lastPocketQualityFailure = null;
   _cancelWorkerIdleRelease();
@@ -3774,7 +3782,7 @@ window.generateChunk = async function(text, voice) {
   window.setCinematicSynthesisSuppressed?.(true);
   try {
     const _t0 = performance.now();
-    const route = _resolvePocketRoute(engine, voice, text);
+    const route = _resolvePocketRoute(engine, voice, text, ctx);
     const first = await _generatePocketAttempt(null, text, route, 0);
     let accepted = first;
     let retryUsed = false;
@@ -3835,7 +3843,7 @@ window.generateChunk = async function(text, voice) {
       const retryEngine = _resolveActiveEngine();
       const retryRoute = retryEngine === route.engine
         ? route
-        : _resolvePocketRoute(retryEngine, _defaultVoiceForEngine(retryEngine), text);
+        : _resolvePocketRoute(retryEngine, _defaultVoiceForEngine(retryEngine), text, ctx);
       if (retryRoute !== route) {
         window.Diagnostics?.log('INFO', 'Quality-guard retry re-routed after an engine change', {
           from: route.engine, to: retryEngine, fromVoice: route.voiceId, toVoice: retryRoute.voiceId,
@@ -3972,7 +3980,7 @@ window.generateChunk = async function(text, voice) {
   }
 };
 
-window.generateChunkStream = async function(text, voice, onSegment) {
+window.generateChunkStream = async function(text, voice, onSegment, ctx = null) {
   if (!text || text.trim() === '' || typeof onSegment !== 'function') return null;
   _cancelWorkerIdleRelease();
   const engine = _resolveActiveEngine();
@@ -3985,7 +3993,7 @@ window.generateChunkStream = async function(text, voice, onSegment) {
   window.setCinematicSynthesisSuppressed?.(true);
   try {
     const startedAt = performance.now();
-    const route = _resolvePocketRoute(engine, voice, text);
+    const route = _resolvePocketRoute(engine, voice, text, ctx);
     const attempt = await _generatePocketAttempt(null, text, route, 0, { onSegment });
     if (attempt.quality.fatal || !attempt.result?.audio?.length) {
       _logPocketQuality('ERROR', 'Pocket streamed synthesis failed quality validation', attempt, { streamed: true });
@@ -4361,7 +4369,7 @@ async function _ensurePlaybackLookahead() {
       }
       if (cached) continue;
       if (_lookaheadShouldYield()) break;   // re-check right before committing the worker
-      const audioBlob = await window.generateChunk(text, cleanVoice);
+      const audioBlob = await window.generateChunk(text, cleanVoice, { storyTitle: title, chapIdx: c, paraIdx: p });
       if (audioBlob) {
         const cacheVoice = cleanVoice + (typeof _prosodyCacheTag === 'function' ? _prosodyCacheTag(engine) : '');
         await saveAudioChunk(storyRef, c, p, engine, cacheVoice, audioBlob, false, text).catch(() => {});
@@ -4441,8 +4449,8 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
               if (typeof _setPlayBtnLoading === 'function') _setPlayBtnLoading(false);
               window.Diagnostics?.log('INFO', 'Pocket first streamed audio available', { firstSegmentMs: segment.firstSegmentMs });
             }
-          })
-        : await window.generateChunk(text, cleanVoice);
+          }, { storyTitle: title, chapIdx, paraIdx })
+        : await window.generateChunk(text, cleanVoice, { storyTitle: title, chapIdx, paraIdx });
       if (stream) {
         if (audioBlob && stream.segments > 0) {
           stream.end();
@@ -5221,7 +5229,7 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   }
 }
 
-window.onVoiceSelectionChange = function(newVoice) {
+window.onVoiceSelectionChange = function(newVoice, options = {}) {
   // Kokoro voices are a separate namespace stored under their own setting.
   // Falling through to the Pocket path would canonicalise a Kokoro id against
   // the Pocket voice list and quietly rewrite it to donald_malone.
@@ -5264,7 +5272,7 @@ window.onVoiceSelectionChange = function(newVoice) {
   // Switching voice re-synthesizes the loaded story in the new voice — warn
   // first so a long recache is never a surprise. Previously cached voices are
   // kept, so the user can switch back without re-caching that one.
-  if (window.currentStory && cleanNewVoice !== prevVoice) {
+  if (window.currentStory && cleanNewVoice !== prevVoice && options.confirm !== false) {
     const ok = window.confirm(
       "Changing the voice will re-cache this story in the new voice.\n\n" +
       "Playback unlocks as soon as a short starting buffer is ready. " +

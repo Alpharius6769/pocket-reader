@@ -5,7 +5,7 @@ import {
   DEFAULT_POCKET_TEMPERATURE_PRESET,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
 } from './tts_pronunciation_core.js?v=pron-v34';
-import { profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit } from './library_core.js?v=library-core-v1';
+import { profileHash, storyKeyFor, mergeClockedMap, shrinkProfileToFit } from './library_core.js?v=library-core-v4';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 // --- DATA DEFINITIONS (Attached to window for cross-module access) ---
@@ -1324,10 +1324,12 @@ window.checkStoryUpdate = async function(storyRef, url, btnElement = null, optio
   }
 };
 
-export function removeStory(storyRef) {
+// options.confirm === false: the caller already asked (the v2 UI shows its own
+// sheet), so the blocking native confirm() must not ask again.
+export function removeStory(storyRef, options = {}) {
   const removedStory = findLibraryStoryByRef(storyRef);
   if (!removedStory) return;
-  if (!confirm(`Remove "${removedStory.title}" from your library?`)) return;
+  if (options.confirm !== false && !confirm(`Remove "${removedStory.title}" from your library?`)) return;
   const removedKey = removedStory.storyKey || getStoryStableKey(removedStory);
   if (removedStory) {
     _markDeletedStory(window.userProfile, removedStory);
@@ -1423,10 +1425,10 @@ document.addEventListener('click', () => {
   });
 });
 
-export async function permCacheStory(storyRef) {
+export async function permCacheStory(storyRef, options = {}) {
   const story = findLibraryStoryByRef(storyRef);
   if (!story) return;
-  if(confirm(`Permanent Cache will run in the background to synthesize the entire story. Please leave this page open while it caches.\n\nBegin caching "${story.title}"?`)) {
+  if (options.confirm === false || confirm(`Permanent Cache will run in the background to synthesize the entire story. Please leave this page open while it caches.\n\nBegin caching "${story.title}"?`)) {
     await window.startCaching('Permanent', storyRef);
   }
 }
