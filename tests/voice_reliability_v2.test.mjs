@@ -114,3 +114,58 @@ test('reloading an engine that already ran retries before stepping down', async 
   const once = slice(audio, 'async function _loadPocketEngineOnce(options = {}) {', '\n}\n\n// A failed engine');
   assert.match(once, /if \(!options\.suppressDegrade\) _degradeNarrationEngine\(engineLabel, e\);/);
 });
+
+// ── Gentle emotion actually reaches the render ──────────────────────────────
+// Symptom (found by tools/longform_bench.mjs): expressive narration was flat.
+// Every shipped voice lists only a neutral reference FILE, and the delivery
+// emotion was clipped to that list, so every paragraph rendered at the neutral
+// temperature. Delivery and file are now separate questions.
+
+test('delivery emotion is not clipped to the voice files that exist', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const resolve = slice(audio, 'function _resolveEmotionForVoice(', '\n}\n');
+  assert.doesNotMatch(resolve, /availableEmotions/, 'reference files must not decide the delivery emotion');
+  assert.match(resolve, /const available = mode === 'expressive' \? POCKET_ALL_EMOTIONS : POCKET_SAFE_EMOTIONS;/);
+  // The file still falls back to neutral, so the timbre stays one narrator...
+  const utils = await read('public/assets/js/engine_utils.js');
+  assert.match(utils, /if \(voice && voice\.availableEmotions\.includes\(emotion\)\) return `\$\{base\}_\$\{emotion\}`;\s*\n\s*return `\$\{base\}_\$\{window\.POCKET_DEFAULT_EMOTION\}`;/);
+  // ...and the onset fade keys on the FILE, so a delivery-only change adds none.
+  assert.match(audio, /const switched = _lastSynthesizedVoiceAsset !== null && voiceAsset !== _lastSynthesizedVoiceAsset;/);
+  // Gentle: the balanced caps stay inside a narrow band around neutral.
+  const caps = slice(audio, 'const POCKET_BALANCED_TEMP_CAPS = {', '};');
+  const values = [...caps.matchAll(/: (0\.\d+)/g)].map((m) => Number(m[1]));
+  assert.ok(values.length >= 8 && Math.max(...values) - Math.min(...values) <= 0.06, `balanced caps ${values}`);
+});
+
+// ── The playback runway follows measured speed ──────────────────────────────
+// Symptom: "slow to start". With a cache job running, Play waited for a flat
+// 20 paragraphs even on a phone rendering at twice real time.
+
+test('the runway is 20 when slow or unknown and shrinks to 2 when fast', async () => {
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  const fnSource = slice(buffer, 'export function playbackRunwayForRtf(rtf) {', '\n}\n');
+  const runway = new Function('PLAYBACK_RUNWAY_MAX', 'PLAYBACK_RUNWAY_MIN',
+    `${fnSource.replace('export ', '')}\n}\nreturn playbackRunwayForRtf;`)(20, 2);
+  assert.equal(runway(null), 20, 'no measurement keeps the safe runway');
+  assert.equal(runway(1.4), 20, 'slower than real time keeps the safe runway');
+  assert.equal(runway(0.95), 20);
+  assert.equal(runway(0.49), 2, 'the benchmarked desktop speed starts almost at once');
+  assert.equal(runway(0.5), 2);
+  const mid = runway(0.72);
+  assert.ok(mid > 2 && mid < 20, `0.72 interpolates (got ${mid})`);
+  assert.match(buffer, /recordNarrationRtf\(diag\.realTimeFactor\);/);
+  assert.match(buffer, /const RTF_MIN_SAMPLES = 3;/, 'one fast paragraph must not unlock playback');
+  assert.match(buffer, /stored\.context === _rtfContextKey\(\)/, 'a stored speed only applies to the same engine and threads');
+});
+
+// ── A frame-budget cut is a bad render ──────────────────────────────────────
+// Symptom: clipped sentence endings. The worker counted chunks it stopped at
+// the frame budget before end-of-speech, but only as telemetry.
+
+test('a chunk cut at the frame budget is a fatal verdict, so it is re-rolled', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const inspect = slice(audio, 'function _inspectPocketAudioQuality(', '\n}\n');
+  assert.match(inspect, /if \(Number\(result\?\.telemetry\?\.frameBudgetStops\) > 0\) \{\s*\n\s*fatal = true;\s*\n\s*reasons\.push\('frame budget cut'\);/);
+  const worker = await read('public/assets/js/pocket_worker.js');
+  assert.match(worker, /if \(!control\.frameLimit && reachedFrameBudget && !eosTailComplete\) frameBudgetStops/);
+});

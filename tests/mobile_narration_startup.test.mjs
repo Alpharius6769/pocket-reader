@@ -10,8 +10,8 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v247'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v129'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v253'\)/);
+  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v132'\)/);
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
@@ -95,8 +95,8 @@ test('a narration-resume fix advances the immutable module and service-worker re
     read('public/sw.js'),
     read('public/index.html'),
   ]);
-  assert.match(loader, /buffer_manager\.js\?v=buffer-v129/);
-  assert.match(worker, /buffer_manager\.js\?v=buffer-v129/);
+  assert.match(loader, /buffer_manager\.js\?v=buffer-v132/);
+  assert.match(worker, /buffer_manager\.js\?v=buffer-v132/);
   assert.match(worker, /pocket-reader-core-v\d+/);
   // Derived, not pinned: the shell must register whatever revision the service
   // worker actually ships. Hardcoding the number here only forced a mechanical
@@ -116,11 +116,13 @@ test('first requested paragraph supplies calibration telemetry without a throwaw
   assert.match(audio, /realTimeFactor:\s*telemetry\?\.realTimeFactor/);
 });
 
-test('caching requires a twenty-paragraph runway or story completion before playback', async () => {
+test('caching requires a measured runway (twenty when slow or unknown) or story completion before playback', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
   const audio = await read('public/assets/js/audio_core.js');
 
-  assert.match(buffer, /function _minimumPlaybackReadyCount[\s\S]*?Math\.min\(20,/);
+  // v2: the runway follows measured speed; 20 remains the ceiling and the default (voice_reliability_v2).
+  assert.match(buffer, /function _minimumPlaybackReadyCount[\s\S]*?Math\.min\(playbackRunwayForRtf\(_medianRtf\(\)\),/);
+  assert.match(buffer, /const PLAYBACK_RUNWAY_MAX = 20;/);
   assert.match(audio, /getPocketPlaybackReadyCount\?\.\(total\)/);
   assert.match(audio, /Math\.min\(20,\s*total\)/);
 

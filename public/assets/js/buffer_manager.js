@@ -85,8 +85,67 @@ function _narrationRuntimeLabel() {
   return `Threaded WASM ×${threads}`;
 }
 
+// How many paragraphs must be cached before Play is allowed while a cache job
+// runs. It was a flat 20, which protects a device that renders slower than real
+// time -- without it, playback catches the renderer and stalls every few lines
+// -- but on a device that renders at twice real time it is a long wait for a
+// buffer that can never run dry. The runway now follows the measured speed:
+// realTimeFactor (synthesis seconds per audio second) from recent renders, and
+// from the last session on this device for the same engine and thread count,
+// so a fast phone starts its next story almost at once.
+//
+//   unknown, or RTF >= 0.95  -> 20 (unchanged)
+//   RTF 0.50 or faster       ->  2
+//   in between               -> linear
+const PLAYBACK_RUNWAY_MAX = 20;
+const PLAYBACK_RUNWAY_MIN = 2;
+const RTF_SAMPLE_WINDOW = 6;
+const RTF_MIN_SAMPLES = 3;
+const RTF_STORAGE_KEY = 'pr_narration_rtf_v1';
+const RTF_STORAGE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const _rtfSamples = [];
+
+function _rtfContextKey() {
+  const engine = typeof _resolveActiveEngine === 'function' ? _resolveActiveEngine() : 'pocket';
+  const threads = Number(window.getPocketTtsRuntimeConfig?.()?.wasmThreadCount || 0);
+  return `${engine}:${threads}`;
+}
+
+function _medianRtf() {
+  if (_rtfSamples.length >= RTF_MIN_SAMPLES) {
+    const sorted = [..._rtfSamples].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  }
+  try {
+    const stored = JSON.parse(prLocal.getItem(RTF_STORAGE_KEY) || 'null');
+    if (stored && stored.context === _rtfContextKey()
+        && Date.now() - Number(stored.at || 0) < RTF_STORAGE_MAX_AGE_MS
+        && Number.isFinite(Number(stored.median))) {
+      return Number(stored.median);
+    }
+  } catch (_) { /* no usable measurement */ }
+  return null;
+}
+
+export function recordNarrationRtf(rtf) {
+  const value = Number(rtf);
+  if (!Number.isFinite(value) || value <= 0 || value > 20) return;
+  _rtfSamples.push(value);
+  if (_rtfSamples.length > RTF_SAMPLE_WINDOW) _rtfSamples.shift();
+  if (_rtfSamples.length >= RTF_MIN_SAMPLES) {
+    prLocal.setItem(RTF_STORAGE_KEY, JSON.stringify({ context: _rtfContextKey(), median: _medianRtf(), at: Date.now() }));
+  }
+}
+
+export function playbackRunwayForRtf(rtf) {
+  const value = Number(rtf);
+  if (rtf == null || !Number.isFinite(value) || value >= 0.95) return PLAYBACK_RUNWAY_MAX;
+  const t = Math.max(0, Math.min(1, (value - 0.5) / 0.45));
+  return Math.ceil(PLAYBACK_RUNWAY_MIN + (PLAYBACK_RUNWAY_MAX - PLAYBACK_RUNWAY_MIN) * t);
+}
+
 function _minimumPlaybackReadyCount(total) {
-  return Math.min(20, Math.max(0, Number(total) || 0));
+  return Math.min(playbackRunwayForRtf(_medianRtf()), Math.max(0, Number(total) || 0));
 }
 window.getPocketPlaybackReadyCount = _minimumPlaybackReadyCount;
 
@@ -1575,6 +1634,7 @@ export const BufferManager = {
           if (diag) {
             this._lastSynthTelemetry = diag;
             this._recordThermalSample(diag);
+            recordNarrationRtf(diag.realTimeFactor);
           }
         } catch (err) {
           this._currentSynthStartedAt = null;

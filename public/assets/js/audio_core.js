@@ -481,12 +481,24 @@ function _balancedLowConfidenceFallback(emotion, emotionInfo) {
   return POCKET_BALANCED_EMOTION_MAP[emotion] || emotion;
 }
 
+// Returns the DELIVERY emotion for a paragraph: what sets its sampling
+// temperature (POCKET_BALANCED_TEMP_CAPS / POCKET_FULL_TEMP_CAPS) and seed.
+//
+// It used to be clipped to the emotions the voice has reference FILES for.
+// Every shipped voice has only a neutral file, so every paragraph resolved to
+// neutral and expressive narration rendered at one flat temperature -- the
+// benchmark showed calm, happy, sad, worried, surprised and frustrated all
+// detected and all discarded. Which file is loaded is a separate question,
+// answered by resolvePocketAssetVoiceId, which already falls back to the
+// voice's neutral file: the timbre stays the same narrator, and only the
+// delivery moves. That is the "gentle" emotion v2 ships: balanced caps span
+// 0.28-0.33, and the chapter plan's dwell keeps changes rare.
 function _resolveEmotionForVoice(baseVoice, requestedEmotion, emotionInfo = null) {
   const mode = _emotionMode();
   const emotion = POCKET_ALL_EMOTIONS.includes(requestedEmotion) ? requestedEmotion : 'neutral';
   if (mode === 'neutral') return 'neutral';
   const voice = window.POCKET_VOICE_PACK?.voices?.find((candidate) => candidate.id === baseVoice);
-  const available = voice?.availableEmotions || POCKET_SAFE_EMOTIONS;
+  const available = mode === 'expressive' ? POCKET_ALL_EMOTIONS : POCKET_SAFE_EMOTIONS;
   const fallbacks = voice?.fallbackEmotions || {};
   let resolved;
 
@@ -3331,6 +3343,15 @@ function _inspectPocketAudioQuality(result, text, assetVoice = null) {
     reasons.push('duration too short');
   }
   if (durationSec > maxDuration) reasons.push('duration too long');
+  // The worker hit its frame budget without the model ever reaching end of
+  // speech: the chunk was cut mid-word (heard as a clipped sentence ending) or
+  // was running away. The worker always knew; this verdict used to be
+  // telemetry only, so the guard waved the paragraph through. A re-roll at a
+  // cooler temperature is what fixes a runaway.
+  if (Number(result?.telemetry?.frameBudgetStops) > 0) {
+    fatal = true;
+    reasons.push('frame budget cut');
+  }
   if (clipRatio > 0.005) reasons.push('clipping');
   if (durationSec > 1.2 && silenceRatio > 0.82) {
     fatal = true;

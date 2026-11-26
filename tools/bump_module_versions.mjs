@@ -32,7 +32,7 @@ function pending() {
 
 // Replace `from` only where it stands as a whole token. A bare substring
 // replacement bumped `catalog-v1` inside `hmofa-catalog-v1` as well -- another
-// cache's name -- and would turn `buffer-v115` into `buffer-v129` when bumping
+// cache's name -- and would turn `buffer-v115` into `buffer-v132` when bumping
 // `buffer-v11`. So the characters either side of a match must not be ones that
 // could belong to a longer token. Still an exact literal, never a pattern.
 function replaceToken(src, from, to) {
