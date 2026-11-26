@@ -6,7 +6,7 @@ import type { CoreBridge } from '../core/bridge';
 import { player, initialPlayer } from './player';
 import { library } from './library';
 import { settings } from './settings';
-import { toast } from './ui';
+import { toast, dismissActionToasts } from './ui';
 
 export async function connectStores(b: CoreBridge): Promise<() => void> {
   const snap = b.getPlayback();
@@ -32,7 +32,10 @@ export async function connectStores(b: CoreBridge): Promise<() => void> {
           : { ...p, position: e.position, paragraphCount: e.paragraphCount, chapterCount: e.chapterCount },
       ),
     ),
-    b.on('playstate', (e) => player.update((p) => ({ ...p, state: e.state }))),
+    b.on('playstate', (e) => {
+      player.update((p) => ({ ...p, state: e.state }));
+      if (e.state === 'playing' || e.state === 'loading') dismissActionToasts();
+    }),
     b.on('buffer', (e) => player.update((p) => ({ ...p, buffer: { ready: e.ready, target: e.target } }))),
     b.on('engine', (e) => player.update((p) => ({ ...p, engineState: e, engine: e.engine }))),
     b.on('story-loaded', (e) =>

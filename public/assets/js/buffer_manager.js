@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v57';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v58';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -10,7 +10,7 @@ import {
   voicesForEngine,
 } from './pocket_backend_policy.js?v=backend-v64';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
-import { ui } from './core_events.js?v=core-events-v7';
+import { ui } from './core_events.js?v=core-events-v9';
 import { adoptNarrationPreset } from './library_core.js?v=library-core-v4';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
@@ -480,11 +480,26 @@ function _awaitMobileNarrationGesture(action = 'cache') {
       window.startBgKeepAlive?.();
       window.closeFeatureDialog?.();
       delete window.continuePocketNarrationAfterReload;
+      delete window.__prPendingNarrationGesture;
+      document.getElementById('pr-gesture-fallback')?.remove();
       resolve();
     };
     window.continuePocketNarrationAfterReload = finish;
-
     const verb = action === 'playback' ? 'Start narration' : 'Start caching';
+    // The v2 UI asks for the tap itself (its Play button, or a notice action).
+    // After the isolation reload this runs while the cores are still loading,
+    // usually BEFORE the UI has subscribed, so the request is also left where a
+    // late UI can claim it (RealBridge.attach), and the bare fallback below
+    // waits a moment first instead of covering the screen at once.
+    const pending = { verb, finish, claimed: false };
+    window.__prPendingNarrationGesture = pending;
+    if (ui.requestGesture(verb, finish) === true) { pending.claimed = true; return; }
+    setTimeout(() => {
+      if (settled || pending.claimed) return;
+      showFallback();
+    }, 2500);
+
+    function showFallback() {
     if (typeof window.showFeatureDialog === 'function') {
       window.showFeatureDialog(
         'Narration is ready',
@@ -497,6 +512,7 @@ function _awaitMobileNarrationGesture(action = 'cache') {
     // Minimal fallback for an unusually early resume before shared modal helpers
     // load. It still preserves the required direct user gesture.
     const overlay = document.createElement('div');
+    overlay.id = 'pr-gesture-fallback';
     overlay.setAttribute('role', 'dialog');
     overlay.setAttribute('aria-modal', 'true');
     overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:24px';
@@ -510,6 +526,7 @@ function _awaitMobileNarrationGesture(action = 'cache') {
     }, { once: true });
     overlay.appendChild(button);
     document.body.appendChild(overlay);
+    }
   });
 }
 
@@ -666,6 +683,11 @@ async function _resumeFastNarrationCache() {
       if (storyLoaded) {
         prSession.removeItem(FAST_NARRATION_RESUME_KEY);
         if (resume.action === 'playback') {
+          // The reload spent the tap that pressed Play, and iOS only starts
+          // audio inside a user gesture: starting here, unprompted, left a
+          // phone "playing" in silence. Ask for one more tap (the v2 UI's Play
+          // button), then start inside it. Desktop autoplays and needs none.
+          if (_isMobileNarrationPlatform()) await _awaitMobileNarrationGesture('playback');
           window.togglePlayState?.();
         } else {
           BufferManager.start(resume.mode || 'Normal');

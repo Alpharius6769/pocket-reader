@@ -1,0 +1,14 @@
+# Pocket Reader v2 preview: the production build (dist/) served as static
+# assets, so the new UI can be tried on a real iPhone before cutover to GitHub
+# Pages. A separate origin on purpose: the live app's service worker (scoped to
+# alpharius6769.github.io/pocket-reader/) cannot interfere with it.
+#
+# Deploy: npm run build && (cd preview && wrangler deploy)
+# The model/story proxy only answers known origins; this one is listed in
+# ALLOWED_ORIGINS in worker/wrangler.toml. Remove it there when the preview goes.
+name = "pocket-reader-next"
+compatibility_date = "2026-11-26"
+
+[assets]
+directory = "../dist"
+not_found_handling = "single-page-application"

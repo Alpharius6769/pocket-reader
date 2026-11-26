@@ -12,6 +12,7 @@ const CORE_EVENT = {
   NAVIGATE: 'pr:navigate', STORY_OPENED: 'pr:story-loaded', LOADING: 'pr:loading', DIALOG: 'pr:dialog',
   LIBRARY: 'pr:library', CACHE_PANEL: 'pr:cache-panel', ENGINE: 'pr:engine', BUFFER: 'pr:buffer',
   STATUS: 'pr:status', PROGRESS: 'pr:progress', PLAY_LOADING: 'pr:play-loading', CACHING: 'pr:caching-progress',
+  GESTURE: 'pr:gesture-needed',
 };
 function fire(type: string, detail: any = {}) {
   listeners.get(type)?.forEach((fn) => fn(detail));
@@ -173,6 +174,56 @@ describe('RealBridge', () => {
     expect(page).toMatchObject({ page: 1, hasMore: true });
     expect(page.items[0]).toMatchObject({ title: 'Found', source: 'ao3', words: 12345, chapterCount: 3, complete: true });
     await expect(b.search({ query: '' })).resolves.toMatchObject({ items: [] });
+  });
+
+  it('turns the post-reload tap request into Play, run inside the tap', async () => {
+    const b = await makeBridge();
+    const notices: any[] = [];
+    const states: string[] = [];
+    b.on('notice', (n) => notices.push(n));
+    b.on('playstate', (p) => states.push(p.state));
+    w.togglePlayState = vi.fn();
+    const onContinue = vi.fn();
+    const detail: any = { verb: 'Start narration', onContinue };
+    listeners.get(CORE_EVENT.GESTURE)!.forEach((fn) => fn(detail));
+    expect(detail.result).toBe(true);
+    expect(notices.at(-1)).toMatchObject({ actionLabel: 'Start narration' });
+    expect(states.at(-1)).toBe('paused');
+    const done = b.play();
+    expect(onContinue).toHaveBeenCalledTimes(1);
+    expect(w.togglePlayState).not.toHaveBeenCalled();
+    await done;
+    // Consumed: the next Play is an ordinary one.
+    w.currentStory = { storyKey: 's_1', title: 'T', chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    await b.play();
+    expect(onContinue).toHaveBeenCalledTimes(1);
+    expect(w.togglePlayState).toHaveBeenCalledTimes(1);
+  });
+
+  it('claims a tap request the cores raised before the bridge attached', async () => {
+    // After the isolation reload, buffer_manager resumes while the cores are
+    // still loading, before this bridge subscribes.
+    const finish = vi.fn();
+    w.__prPendingNarrationGesture = { verb: 'Start narration', finish, claimed: false };
+    const b = await makeBridge();
+    expect(w.__prPendingNarrationGesture.claimed).toBe(true);
+    await Promise.resolve();
+    // The stores subscribe only after attach(); the notice must still reach them.
+    const notices: any[] = [];
+    b.on('notice', (n) => notices.push(n));
+    await Promise.resolve();
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ message: 'Narration is ready. Tap play to start.', actionLabel: 'Start narration' });
+    w.togglePlayState = vi.fn();
+    await b.play();
+    expect(finish).toHaveBeenCalledTimes(1);
+    expect(w.togglePlayState).not.toHaveBeenCalled();
+    // Once the tap is spent, a new subscriber is not told to tap again.
+    const later: any[] = [];
+    b.on('notice', (n) => later.push(n));
+    await Promise.resolve();
+    expect(later).toHaveLength(0);
+    delete w.__prPendingNarrationGesture;
   });
 
   it('removes a library story without the native confirm dialog', async () => {

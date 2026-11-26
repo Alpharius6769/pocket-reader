@@ -95,12 +95,19 @@ const TOAST_MS = 3200;
 export function toast(notice: Omit<Notice, 'id'> & { id?: string }) {
   const n: Notice = { id: notice.id ?? `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, ...notice };
   ui.update((u) => ({ ...u, toasts: [...u.toasts.filter((t) => t.message !== n.message), n].slice(-3) }));
-  setTimeout(() => dismissToast(n.id), n.level === 'error' ? TOAST_MS * 1.6 : TOAST_MS);
+  // A toast with an action is waiting on the reader (the post-reload "Start
+  // narration" tap); it stays until used or replaced, not 3 s.
+  if (!n.actionLabel) setTimeout(() => dismissToast(n.id), n.level === 'error' ? TOAST_MS * 1.6 : TOAST_MS);
   if (n.mood) say(n.mood, null);
 }
 
 export function dismissToast(id: string) {
   ui.update((u) => ({ ...u, toasts: u.toasts.filter((t) => t.id !== id) }));
+}
+
+/** Playback started some other way: an action toast asking for it is stale. */
+export function dismissActionToasts() {
+  ui.update((u) => (u.toasts.some((t) => t.actionLabel) ? { ...u, toasts: u.toasts.filter((t) => !t.actionLabel) } : u));
 }
 
 /** Ask Virtue to change mood and (optionally) say something. */

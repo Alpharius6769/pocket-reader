@@ -180,6 +180,10 @@ export class RealBridge implements CoreBridge {
   private lastCompanionBeat: string | undefined;
   private libraryTimer: ReturnType<typeof setTimeout> | null = null;
   private noticeSeq = 0;
+  /** Set when the cores wait for a tap after the isolation reload (iOS). */
+  private pendingGesture: (() => void) | null = null;
+  private gestureNoticeId: string | null = null;
+  private gestureNotice: Notice | null = null;
   private lastEngineEmit = 0;
   private engineTrailing: ReturnType<typeof setTimeout> | null = null;
   private api: Record<string, AnyFn> = {};
@@ -248,6 +252,7 @@ export class RealBridge implements CoreBridge {
     on(E.STATUS, (d: any) => {
       if (this.engine.status === 'loading' && d.text) this.updateEngine({ message: d.text });
     });
+    on(E.GESTURE, (d: any) => this.handleGestureRequest(d));
     on(E.CACHING, (d: any) => {
       const story = w.currentStory;
       if (!story) return;
@@ -261,6 +266,14 @@ export class RealBridge implements CoreBridge {
 
     this.engine = { engine: activeEngine(), status: this.engineStatusNow() };
     if (w.currentStory) this.state = w.isPlaying ? 'playing' : 'paused';
+
+    // A tap request raised before this bridge subscribed (the cores resume
+    // narration while still loading after the isolation reload): claim it.
+    const early = w.__prPendingNarrationGesture;
+    if (early && !early.claimed && typeof early.finish === 'function') {
+      early.claimed = true;
+      queueMicrotask(() => this.handleGestureRequest({ verb: early.verb, onContinue: early.finish }));
+    }
   }
 
   /* ------------------------------------------------------------ events */
@@ -269,6 +282,15 @@ export class RealBridge implements CoreBridge {
     let set = this.handlers.get(event);
     if (!set) this.handlers.set(event, (set = new Set()));
     set.add(handler as Handler);
+    // After the isolation reload the tap request is claimed in attach(), before
+    // the stores subscribe, so its notice went to nobody. Hand it to a late
+    // listener while the tap is still owed.
+    const owed = this.gestureNotice;
+    if (event === 'notice' && owed) {
+      queueMicrotask(() => {
+        if (this.gestureNotice === owed && set!.has(handler as Handler)) (handler as (n: Notice) => void)(structuredClone(owed));
+      });
+    }
     return () => set!.delete(handler as Handler);
   }
 
@@ -325,9 +347,11 @@ export class RealBridge implements CoreBridge {
     this.emit('engine', { ...next });
   }
 
-  private notice(level: Notice['level'], message: string, mood?: VirtueMood, actionLabel?: string) {
-    if (!message) return;
-    this.emit('notice', { id: `n${++this.noticeSeq}`, level, message: String(message), mood, actionLabel });
+  private notice(level: Notice['level'], message: string, mood?: VirtueMood, actionLabel?: string): Notice | null {
+    if (!message) return null;
+    const n: Notice = { id: `n${++this.noticeSeq}`, level, message: String(message), mood, actionLabel };
+    this.emit('notice', n);
+    return n;
   }
 
   private onParagraph() {
@@ -435,7 +459,31 @@ export class RealBridge implements CoreBridge {
 
   /* --------------------------------------------------------- transport */
 
+  private handleGestureRequest(d: any) {
+    if (typeof d.onContinue !== 'function') return;
+    this.pendingGesture = d.onContinue;
+    d.result = true;
+    this.setState('paused', 'tap-to-start');
+    this.gestureNotice = this.notice('info', 'Narration is ready. Tap play to start.', 'smile', d.verb || 'Start narration');
+    this.gestureNoticeId = this.gestureNotice?.id ?? null;
+  }
+
+  /** Runs the cores' pending post-reload continuation inside this tap. */
+  private continueGesture(): boolean {
+    const go = this.pendingGesture;
+    if (!go) return false;
+    this.pendingGesture = null;
+    this.gestureNoticeId = null;
+    this.gestureNotice = null;
+    this.setState('loading');
+    go();
+    return true;
+  }
+
   async play() {
+    // After the isolation reload the cores are already mid-play and only need
+    // the tap; starting a second play here would toggle them off again.
+    if (this.continueGesture()) return;
     if (!w.currentStory) throw new BridgeError('not-found', 'Choose a story first.');
     if (w.isPlaying) return;
     this.setState(this.engineStatusNow() === 'ready' ? 'buffering' : 'loading');
@@ -1022,8 +1070,9 @@ export class RealBridge implements CoreBridge {
     };
   }
 
-  runNoticeAction(_noticeId: string) {
-    /* The cores' notices carry no action callbacks the UI can replay. */
+  runNoticeAction(noticeId: string) {
+    // Only the post-reload "Start narration" notice carries an action.
+    if (noticeId === this.gestureNoticeId) this.continueGesture();
   }
 }
 

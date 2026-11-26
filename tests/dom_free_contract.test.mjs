@@ -75,3 +75,19 @@ test('the engine lifecycle is observable without reading audio_core internals', 
   assert.match(audio, /window\.getNarrationEngineStatus = \(\) => neuralState;/);
   assert.match(audio, /if \(changed\) \{\s*\n\s*try \{ ui\.engineState\(nextState/);
 });
+
+test('after the isolation reload a phone asks for a tap before playback, through the v2 UI', async () => {
+  // iOS starts audio only inside a user gesture, and the reload spent the one
+  // that pressed Play. The playback resume used to start unprompted.
+  const buffer = await read('public/assets/js/buffer_manager.js');
+  assert.match(buffer, /if \(_isMobileNarrationPlatform\(\)\) await _awaitMobileNarrationGesture\('playback'\);\s*\n\s*window\.togglePlayState\?\.\(\);/);
+  const gesture = body(buffer, 'function _awaitMobileNarrationGesture(', '\nasync function _resumeFastNarrationCache');
+  assert.match(gesture, /if \(ui\.requestGesture\(verb, finish\) === true\) \{ pending\.claimed = true; return; \}/);
+  // Raised before the UI subscribes, the request waits for a late claim; the
+  // bare overlay only appears if nothing claims it.
+  assert.match(gesture, /window\.__prPendingNarrationGesture = pending;/);
+  assert.match(gesture, /if \(settled \|\| pending\.claimed\) return;\s*\n\s*showFallback\(\);/);
+  const bridge = await read('web/src/lib/core/bridge.real.ts');
+  assert.match(bridge, /const early = w\.__prPendingNarrationGesture;/);
+  assert.match(bridge, /if \(this\.continueGesture\(\)\) return;/);
+});

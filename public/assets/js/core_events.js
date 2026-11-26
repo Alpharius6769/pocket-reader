@@ -39,6 +39,7 @@ export const CORE_EVENT = Object.freeze({
   PROGRESS: 'pr:progress',           // { pct } -- engine/model load progress, 0-100
   PLAY_LOADING: 'pr:play-loading',   // { loading, message }
   CACHING: 'pr:caching-progress',    // { active, paused, mode, cached, total, skipped, pct, runway, text }
+  GESTURE: 'pr:gesture-needed',      // { verb, onContinue } -- call onContinue inside a user tap
 });
 
 let _lastStatus = '';
@@ -99,6 +100,10 @@ export const ui = Object.freeze({
   status: (text) => { _lastStatus = String(text || ''); return emit(CORE_EVENT.STATUS, { text: _lastStatus }); },
   progress: (pct) => emit(CORE_EVENT.PROGRESS, { pct: Math.max(0, Math.min(100, Number(pct) || 0)) }),
   playLoading: (loading, message) => emit(CORE_EVENT.PLAY_LOADING, { loading: !!loading, message }),
+  // iOS only starts audio inside a user gesture, and the isolation reload
+  // spends the one that pressed Play. A UI that handles this sets
+  // detail.result = true and calls onContinue from inside its next tap.
+  requestGesture: (verb, onContinue) => emit(CORE_EVENT.GESTURE, { verb, onContinue }),
   cachingProgress: (snapshot) => {
     if (snapshot?.text) _lastStatus = String(snapshot.text);
     return emit(CORE_EVENT.CACHING, { ...snapshot });

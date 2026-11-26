@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v57';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v58';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -58,7 +58,7 @@ import {
   shouldRetryPocketQuality,
 } from './pocket_performance_policy.js?v=performance-v2';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
-import { ui, lastStatus } from './core_events.js?v=core-events-v7';
+import { ui, lastStatus } from './core_events.js?v=core-events-v9';
 
 window.isPlaying = false;
 window.currentAudio = null;

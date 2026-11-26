@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v378';
+var CACHE_NAME = 'pocket-reader-core-v381';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -138,8 +138,8 @@ var OPTIONAL_ASSETS = [
 // connection these are the most likely single fetch to fail -- and losing the
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
-    'assets/js/buffer_manager.js?v=buffer-v138',
-    'assets/js/audio_core.js?v=audio-v259',
+    'assets/js/buffer_manager.js?v=buffer-v144',
+    'assets/js/audio_core.js?v=audio-v260',
     'assets/js/pocket_worker.js?v=pocket-worker-v140',
     'assets/js/kokoro_worker.js?v=kokoro-v56',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
@@ -148,7 +148,7 @@ var DEFERRED_ASSETS = [
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     './',
-    'assets/js/core_events.js?v=core-events-v7',
+    'assets/js/core_events.js?v=core-events-v9',
     'assets/js/tts_pronunciation_core.js?v=pron-v37',
     'assets/js/device_catalog.js?v=catalog-v7',
     'assets/js/pocket_backend_policy.js?v=backend-v64',
@@ -156,7 +156,7 @@ var CORE_ASSETS = [
     'assets/js/safe_storage.js?v=safe-storage-v1',
     'assets/js/native_app_key.js?v=native-key-v1',
     'assets/js/diagnostics.js?v=diag-v9',
-    'assets/js/api_core.js?v=search-v43',
+    'assets/js/api_core.js?v=search-v44',
     'assets/js/engine_utils.js',
     'assets/js/library_core.js?v=library-core-v4',
     'assets/js/data_transfer.js?v=transfer-v5',
@@ -166,8 +166,8 @@ var CORE_ASSETS = [
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v4',
     'assets/js/hmofa_community.js?v=hmofa-community-v4',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v6',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v155',
-    'assets/js/storage_core.js?v=storage-v57',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v158',
+    'assets/js/storage_core.js?v=storage-v58',
     // Imported, unversioned, by library_manager.js.
     'assets/js/motion_lite.js'
     /* __V2_APP_ASSETS__ */

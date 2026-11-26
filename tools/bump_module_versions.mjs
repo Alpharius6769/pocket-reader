@@ -32,8 +32,9 @@ function pending() {
 
 // Replace `from` only where it stands as a whole token. A bare substring
 // replacement bumped `catalog-v1` inside `hmofa-catalog-v1` as well -- another
-// cache's name -- and would turn `buffer-v115` into `buffer-v138` when bumping
-// `buffer-v11`. So the characters either side of a match must not be ones that
+// cache's name -- and would turn `example-v115` into `example-v125` when bumping
+// `example-v11`. (Not a real module name: a live token in this comment got
+// bumped along with the module.) So the characters either side of a match must not be ones that
 // could belong to a longer token. Still an exact literal, never a pattern.
 function replaceToken(src, from, to) {
   let out = '';

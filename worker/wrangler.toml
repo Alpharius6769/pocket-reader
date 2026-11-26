@@ -15,7 +15,8 @@ head_sampling_rate = 0.1
 # an unowned *.pages.dev name can be claimed by creating a Pages project with it
 # -- which would have handed the claimant CORS access to /api/ (forwarded with
 # HF_TOKEN) and /catalog-api/ (written with CATALOG_PROXY_KEY).
-ALLOWED_ORIGINS = "https://alpharius6769.github.io"
+# The v2 preview (preview/wrangler.toml) while it exists. Remove at cutover.
+ALLOWED_ORIGINS = "https://alpharius6769.github.io,https://pocket-reader-next.alpharius67.workers.dev"
 # Set to "1" only for local development. Production must not reflect CORS for
 # arbitrary localhost origins.
 ALLOW_LOCALHOST_ORIGINS = "0"
