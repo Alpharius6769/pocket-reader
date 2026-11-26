@@ -83,3 +83,34 @@ test('the cache tag records vocoder precision, decode path and applied tier', as
   assert.match(worker, /decodePath: \(flowLmUnifiedSession \|\| flowLmWasmBlockSession \|\| flowLmDecodeBlockSession\) \? 'block4' : 'frame',/);
   assert.match(worker, /loadedMimiFilename = filename;/);
 });
+
+// ── Recycles stay off the live path ─────────────────────────────────────────
+// Symptom: a multi-second pause every ~20 paragraphs, mid-chapter. The worker
+// recycle was checked at the top of every generateChunk, the live one included.
+
+test('the worker recycle defers past live playback until a hard ceiling', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  const recycle = slice(audio, 'async function _maybeRecyclePocketEngine() {', '\n}\n');
+  assert.match(recycle, /if \(window\._playPriority === true && window\._pocketParagraphCount < recycleEvery \* 2\) return false;/);
+  assert.ok(
+    recycle.indexOf('window._playPriority === true') < recycle.indexOf('_resetPocketEngineForBackend'),
+    'the live-path check must come before the teardown',
+  );
+});
+
+// ── A reload failure does not swap the narrator mid-chapter ─────────────────
+// Symptom: the voice changed to Kokoro partway through a chapter after one
+// failed recycle reload.
+
+test('reloading an engine that already ran retries before stepping down', async () => {
+  const audio = await read('public/assets/js/audio_core.js');
+  assert.match(audio, /const POCKET_RELOAD_BACKOFF_MS = Object\.freeze\(\[2000, 6000\]\);/);
+  const wrapper = slice(audio, 'async function _loadPocketEngine() {', '\nasync function _loadPocketEngineOnce(');
+  assert.match(wrapper, /const isReload = _enginesLoadedThisPage\.has\(engine\);/);
+  assert.match(wrapper, /_loadPocketEngineOnce\(\{ suppressDegrade: isReload \}\)/,
+    'a first load still steps down immediately; a reload does not');
+  assert.match(wrapper, /_loadPocketEngineOnce\(\{ suppressDegrade: !last \}\)/,
+    'the final retry is allowed to step down, so the reader is never left in silence');
+  const once = slice(audio, 'async function _loadPocketEngineOnce(options = {}) {', '\n}\n\n// A failed engine');
+  assert.match(once, /if \(!options\.suppressDegrade\) _degradeNarrationEngine\(engineLabel, e\);/);
+});

@@ -1434,7 +1434,46 @@ function _recoverFromPocketWorkerCrash(workerObj, reason) {
   loadedVoiceEngine = null;
 }
 
+// An engine that has already run on this page and fails to come back (after a
+// recycle, an idle release or a backend reset) is almost always a transient:
+// memory not yet reclaimed, a dropped fetch. Stepping straight down the ladder
+// then swapped the narrator mid-chapter. It gets two more attempts, with
+// backoff, before the step-down -- which still happens, because silence is
+// worse than a different voice. A FIRST load that fails steps down at once, as
+// before: that is a device that cannot run the engine.
+const POCKET_RELOAD_BACKOFF_MS = Object.freeze([2000, 6000]);
+const _enginesLoadedThisPage = new Set();
+let _pocketReloadRetryPromise = null;
+
 async function _loadPocketEngine() {
+  if (_pocketReloadRetryPromise) return _pocketReloadRetryPromise;
+  const engine = _resolveActiveEngine();
+  const isReload = _enginesLoadedThisPage.has(engine);
+  const first = await _loadPocketEngineOnce({ suppressDegrade: isReload });
+  if (first) {
+    _enginesLoadedThisPage.add(engine);
+    return true;
+  }
+  if (!isReload || neuralState !== 'failed') return first;
+  _pocketReloadRetryPromise = (async () => {
+    for (let attempt = 0; attempt < POCKET_RELOAD_BACKOFF_MS.length; attempt += 1) {
+      window.Diagnostics?.log('WARN', 'Narration engine reload failed; retrying before stepping down', {
+        engine, attempt: attempt + 1, backoffMs: POCKET_RELOAD_BACKOFF_MS[attempt],
+      });
+      await new Promise((resolve) => setTimeout(resolve, POCKET_RELOAD_BACKOFF_MS[attempt]));
+      const last = attempt === POCKET_RELOAD_BACKOFF_MS.length - 1;
+      if (await _loadPocketEngineOnce({ suppressDegrade: !last })) return true;
+    }
+    return false;
+  })();
+  try {
+    return await _pocketReloadRetryPromise;
+  } finally {
+    _pocketReloadRetryPromise = null;
+  }
+}
+
+async function _loadPocketEngineOnce(options = {}) {
   const initializationStartedAt = performance.now();
   const engine = _resolveActiveEngine();
   const settings = window.userProfile?.settings || {};
@@ -2023,7 +2062,7 @@ async function _loadPocketEngine() {
       _engineReadyResolve();
       _engineReadyResolve = null;
     }
-    _degradeNarrationEngine(engineLabel, e);
+    if (!options.suppressDegrade) _degradeNarrationEngine(engineLabel, e);
   } finally {
     clearTimeout(engineLoadTimerId);
     _setPlayBtnLoading(false);
@@ -3651,6 +3690,13 @@ async function _maybeRecyclePocketEngine() {
   window._pocketParagraphCount = (window._pocketParagraphCount || 0) + 1;
   const recycleEvery = _pocketBackendRuntime?.selectedBackend === 'webgpu' ? 60 : 20;
   if (window._pocketParagraphCount < recycleEvery) return false;
+  // Never on the live path while there is any headroom. A recycle is a full
+  // teardown, session rebuild and voice re-registration -- seconds of silence
+  // in the middle of a chapter when it lands on the paragraph the listener is
+  // waiting for. The next cache-ahead render (nobody is waiting on it) takes it
+  // instead; only a session that has gone a whole second interval without one
+  // recycles on the live path, because the drift it clears is worse.
+  if (window._playPriority === true && window._pocketParagraphCount < recycleEvery * 2) return false;
   // A second cache worker or live request may still own the shared engine.
   // Leave the threshold armed and let the next idle request perform the reset.
   if ((window._pocketActiveSynthesis || 0) > 0) return false;
