@@ -35,6 +35,7 @@ window.userProfile = {
     expressiveProsody: config.expressive,
     voiceEmotionMode: config.emotionMode,
     pronunciationOverrides: [],
+    ...(config.seed ? { pocketVoiceSeed: config.seed } : {}),
   },
   library: [],
 };
