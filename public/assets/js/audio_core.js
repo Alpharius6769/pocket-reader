@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v51';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v55';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -58,6 +58,7 @@ import {
   shouldRetryPocketQuality,
 } from './pocket_performance_policy.js?v=performance-v2';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
+import { ui, lastStatus } from './core_events.js?v=core-events-v4';
 
 window.isPlaying = false;
 window.currentAudio = null;
@@ -1453,17 +1454,8 @@ async function _loadPocketEngine() {
 
   _setPlayBtnLoading(true);
 
-  const _setStatus = (msg) => {
-    const bufferText = document.getElementById('reader-buffer-text');
-    if (bufferText) bufferText.innerText = msg;
-    const modalText = document.getElementById('caching-progress-text');
-    if (modalText) modalText.innerText = msg;
-  };
-
-  const _setProgressFill = (pct) => {
-    const fill = document.getElementById('caching-progress-fill');
-    if (fill) fill.style.width = pct + '%';
-  };
+  const _setStatus = (msg) => ui.status(msg);
+  const _setProgressFill = (pct) => ui.progress(pct);
   _setProgressFill(1);
   // Ensure GPU detection has finished before reporting hardware details.
   await _gpuDetectionPromise;
@@ -1855,10 +1847,8 @@ async function _loadPocketEngine() {
                     _engineReadyResolve = null;
                   }
                   _setStatus('Neural engine ready - synthesizing audio...');
-                  if (typeof window.triggerVirtue === 'function') {
-                    window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
-                    window.virtueSpeak(`${engineLabel} loaded! Ready for high-quality narration.`, 4000);
-                  }
+                  ui.companion('virtue_holding_bubble_happy_no_paws');
+                  ui.say(`${engineLabel} loaded! Ready for high-quality narration.`, 4000);
                 } else {
                   _setNeuralState('failed');
                   if (_engineReadyResolve) {
@@ -1881,10 +1871,8 @@ async function _loadPocketEngine() {
                     _engineReadyResolve = null;
                   }
                   _setStatus('Neural engine ready - synthesizing audio...');
-                  if (typeof window.triggerVirtue === 'function') {
-                    window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
-                    window.virtueSpeak(`${engineLabel} loaded! Ready for high-quality narration.`, 4000);
-                  }
+                  ui.companion('virtue_holding_bubble_happy_no_paws');
+                  ui.say(`${engineLabel} loaded! Ready for high-quality narration.`, 4000);
                 } else {
                   _setNeuralState('failed');
                   if (_engineReadyResolve) {
@@ -2069,16 +2057,16 @@ function _degradeNarrationEngine(engineLabel, error) {
     }
   }
   window._pocketRuntimeEngineOverride = nextEngine;
-  window.pocketNotify?.(
+  ui.notify(
     `${engineLabel} could not start on this device. Switching to ${nextEngine} narration.`,
   );
   // The voice must move with the engine. A voice id from the failed engine
   // handed to the next one is an unknown id at the worker, which stalls for 60 s
   // rather than failing -- the same contract the retired-voice aliases protect.
   try {
-    const current = document.getElementById('voice-selector')?.value;
+    const current = _savedVoiceForEngine(failed);
     const coerced = coerceVoiceForEngine(nextEngine, current);
-    if (coerced && coerced !== current) window.refreshVoiceSelectorForEngine?.(nextEngine);
+    if (coerced && coerced !== current) ui.voiceListChanged(nextEngine);
   } catch (_) { /* the selector is cosmetic here; the engine switch is what matters */ }
   return true;
 }
@@ -2101,12 +2089,7 @@ window._degradeNarrationEngine = _degradeNarrationEngine;
 // running so _playGeneratedAudio can finish the paragraph on the device voice,
 // a reload retries the neural engine, and picking one in Settings clears it.
 function _fallbackToWebSpeech() {
-  const _setStatus = (msg) => {
-    const bufferText = document.getElementById('reader-buffer-text');
-    if (bufferText) bufferText.innerText = msg;
-    const modalText = document.getElementById('caching-progress-text');
-    if (modalText) modalText.innerText = msg;
-  };
+  const _setStatus = (msg) => ui.status(msg);
 
   _setStatus('Engine failed to load. Check diagnostics for details.');
   window._pocketNeuralEngineUnavailable = true;
@@ -2135,13 +2118,11 @@ function _fallbackToWebSpeech() {
     engine: loadedVoiceEngine || 'unknown',
     persisted: false,
   });
-  if (typeof window.triggerVirtue === 'function') {
-    window.triggerVirtue('virtue_annoyed_bubble');
-    window.virtueSpeak(
-      "Couldn't load the neural engine, so I'll read with the device voice for now. Your saved choice is untouched — reload to try again.",
-      7000,
-    );
-  }
+  ui.companion('virtue_annoyed_bubble');
+  ui.say(
+    "Couldn't load the neural engine, so I'll read with the device voice for now. Your saved choice is untouched — reload to try again.",
+    7000,
+  );
 }
 
 // ── Play button + Media Session ───────────────────────────────────────────
@@ -2151,7 +2132,7 @@ function _updatePlayButton(playing) {
   if (btn && !btn.dataset.prevHtml) {
     btn.innerHTML = playing ? 'Pause' : 'Play';
   }
-  window.updateDeckTransport?.(playing);
+  ui.playstate(playing);
   _updateMediaSession(playing);
 }
 
@@ -2228,7 +2209,7 @@ function _updateMediaSession(playing) {
   const story   = window.currentStory;
   const chapIdx = window.currentChapterIndex || 0;
   const chTitle = story.chapters?.[chapIdx]?.title || `Chapter ${chapIdx + 1}`;
-  const bufText = document.getElementById('reader-buffer-text')?.textContent || '';
+  const bufText = lastStatus();
   const cacheHint = (bufText && bufText !== 'Buffer idle.') ? ` · ${bufText}` : '';
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
@@ -2396,6 +2377,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function _setPlayBtnLoading(loading, message = '⏳ Loading...') {
+  ui.playLoading(loading, message);
   const playBtn = document.getElementById('play-btn-main');
   if (!playBtn) return;
 
@@ -2557,8 +2539,8 @@ async function ensurePocketVoiceLoaded(voiceName) {
     }
 
     if (!buffer) {
-      if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_thinking');
-      if (typeof window.virtueSpeak === 'function') window.virtueSpeak(`Preparing neural voice (${voiceLabel})...`, 4000);
+      ui.companion('virtue_thinking');
+      ui.say(`Preparing neural voice (${voiceLabel})...`, 4000);
 
       try {
         const response = await fetch(url);
@@ -3939,15 +3921,13 @@ function _signalColdStartOnce() {
     if (!isMobile) return;
     if (localStorage.getItem('pr_coldstart_notice_shown') === 'true') return;
     localStorage.setItem('pr_coldstart_notice_shown', 'true');
-    if (typeof window.virtueSpeak === 'function') {
-      window.virtueSpeak("Warming up the narrator — the first play takes a few seconds while I load the voice. It's quick after that!", 6000);
-    }
+    ui.say("Warming up the narrator — the first play takes a few seconds while I load the voice. It's quick after that!", 6000);
   } catch (_) {}
 }
 
 export function togglePlayState() {
   if (!window.currentStory || !window.currentStory.chapters) {
-    window.pocketNotify?.('No story loaded yet — open one from your library first.', 4000);
+    ui.notify('No story loaded yet — open one from your library first.', 4000);
     return;
   }
 
@@ -3983,12 +3963,8 @@ export function togglePlayState() {
     const message = restarting
       ? `Picking caching back up — ${readyCount} of ${minReady} paragraphs ready. I'll start as soon as the runway is safe.`
       : `Still securing the text! ${readyCount} of ${minReady} paragraphs are ready.`;
-    if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_explaining');
-    if (typeof window.virtueSpeak === 'function') {
-      window.virtueSpeak(message, 4500, true);
-    } else {
-      window.pocketNotify?.(message, 4000);
-    }
+    ui.companion('virtue_explaining');
+    ui.say(message, 4500, true);
     return;
   }
 
@@ -4046,7 +4022,7 @@ export async function playCurrentParagraph() {
   }
 
   if (!window.isPlaying) return;
-  if (typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
+  ui.paragraph();
   _syncProsodyDriftToPosition();
 
   const engine = _resolveActiveEngine();
@@ -4399,9 +4375,7 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
     }
     console.warn('No audio blob for this paragraph — stopping playback to avoid skip-loop.');
     pausePlayback();
-    if (typeof window.virtueSpeak === 'function') {
-      window.virtueSpeak('The neural engine couldn\'t produce audio. Try switching to Device voice in settings.', 6000);
-    }
+    ui.say('The neural engine couldn\'t produce audio. Try switching to Device voice in settings.', 6000);
     return;
   }
 
@@ -4450,7 +4424,7 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
     console.error('Audio playback error:', e);
     URL.revokeObjectURL(audioUrl);
     pausePlayback();
-    if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_annoyed_bubble');
+    ui.companion('virtue_annoyed_bubble');
   };
 
 
@@ -4485,15 +4459,13 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
   } catch (playError) {
     console.warn('Autoplay blocked:', playError);
     pausePlayback();
-    if (typeof window.virtueSpeak === 'function') {
-      window.virtueSpeak('Tap Play to begin - your browser needs a user gesture first.', 5000);
-    }
+    ui.say('Tap Play to begin - your browser needs a user gesture first.', 5000);
   }
 }
 
 async function _playWebSpeech(text) {
   if (!('speechSynthesis' in window)) {
-    window.pocketNotify?.('This browser has no built-in speech engine. Switch to a Pocket voice in Settings.', 6000);
+    ui.notify('This browser has no built-in speech engine. Switch to a Pocket voice in Settings.', 6000);
     pausePlayback();
     return;
   }
@@ -4508,7 +4480,7 @@ async function _playWebSpeech(text) {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate = getEffectivePlaybackRate();
   const voices = window.speechSynthesis.getVoices();
-  const preferredName = document.getElementById('voice-selector')?.value || '';
+  const preferredName = _savedVoiceForEngine('webspeech');
   let picked = voices.find(v => v.name === preferredName) || voices.find(v => v.lang.startsWith('en'));
 
   if (picked) utterance.voice = picked;
@@ -4520,9 +4492,7 @@ async function _playWebSpeech(text) {
   utterance.onerror = (e) => {
     if (e.error !== 'canceled' && window.isPlaying) {
       window.pausePlayback();
-      if (typeof window.virtueSpeak === 'function') {
-        window.virtueSpeak('Speech synthesis failed. Playback paused.', 5000);
-      }
+      ui.say('Speech synthesis failed. Playback paused.', 5000);
     }
   };
 
@@ -4789,10 +4759,8 @@ function _finishStory() {
     if (typeof window.saveLocalData === 'function') window.saveLocalData();
   }
 
-  if (typeof window.triggerVirtue === 'function') {
-    window.triggerVirtue('virtue_story_complete');
-    window.virtueSpeak('Story complete! I hope you enjoyed it.', 8000);
-  }
+  ui.companion('virtue_story_complete');
+  ui.say('Story complete! I hope you enjoyed it.', 8000);
 }
 
 export function skipParagraph(offset) {
@@ -4834,7 +4802,7 @@ export function skipParagraph(offset) {
   window.currentParagraphIndex = p;
 
   window._readerHasScrolled = false;
-  if (typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
+  ui.paragraph();
   if (wasPlaying) {
     window.isPlaying = true;
     playCurrentParagraph();
@@ -4857,7 +4825,7 @@ export function skipChapter(offset) {
   window.currentParagraphIndex = 0;
 
   window._readerHasScrolled = false;
-  if (typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
+  ui.paragraph();
   if (wasPlaying) {
     window.isPlaying = true;
     playCurrentParagraph();
@@ -4875,7 +4843,7 @@ export function seekToParagraph(chapterIndex, paragraphIndex) {
   _releaseCurrentAudio(); // revoke old blob + force load new paragraph
 
   window._readerHasScrolled = false;
-  if (typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
+  ui.paragraph();
 
   if (wasPlaying) {
     window.isPlaying = true;
@@ -4903,7 +4871,7 @@ export function seekToChapter(chapterIndexStr) {
   _releaseCurrentAudio(); // revoke old blob + force load new chapter
 
   window._readerHasScrolled = false;
-  if (typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
+  ui.paragraph();
 
   if (wasPlaying) {
     window.isPlaying = true;
@@ -4971,11 +4939,21 @@ function _defaultVoiceForEngine(engine) {
 // Story narration presets store a voice id that used to be ignored at play
 // time (only emotion/speed/pronunciations applied). Prefer that id when it
 // belongs to the active engine; otherwise fall through to the playbar.
+// The reader's saved choice for an engine. Read from settings rather than from
+// a <select>: every voice control writes these keys (onVoiceSelectionChange),
+// and a core that asks the DOM cannot run under a UI that has no such element.
+function _savedVoiceForEngine(engine) {
+  const settings = window.userProfile?.settings || {};
+  if (engine === 'kokoro') return String(settings.kokoroVoice || '');
+  if (engine === 'pocket') return String(settings.pocketVoice || '');
+  return String(settings.webVoice || '');
+}
+window._savedVoiceForEngine = _savedVoiceForEngine;
+
 function _effectiveVoiceForEngine(engine) {
   const presetVoice = window.currentStory?.narrationPreset?.voice;
-  const selectorVoice = document.getElementById('voice-selector')?.value;
   const requested = (presetVoice && String(presetVoice).trim())
-    || selectorVoice
+    || _savedVoiceForEngine(engine)
     || _defaultVoiceForEngine(engine);
   if (typeof window.resolveVoiceForEngine === 'function') {
     return window.resolveVoiceForEngine(engine, requested);
@@ -5036,7 +5014,7 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   }
   if (engineVal !== 'pocket' && engineVal !== 'webspeech') engineVal = 'pocket';
   const controlValue = _selectedVoiceEngineControlValue || engineVal;
-  if (!document.getElementById('voice-selector')) {
+  if (window.__prLegacyShell && !document.getElementById('voice-selector')) {
     // Retry with the UI value, not the collapsed 'pocket' neural flag.
     // Passing the collapsed value wrote a Pocket override and a Kitten
     // selection then vanished on the next tick.
@@ -5045,8 +5023,7 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   }
 
   if (window.isPlaying && !silent) {
-    if (window.virtueSpeak) window.virtueSpeak("Please pause the story first before changing the voice engine.", 4000);
-    else window.pocketNotify?.("Pause the story first, then switch the voice engine.", 4000);
+    ui.say("Please pause the story first before changing the voice engine.", 4000);
     const prev = _voiceEngineControlValue();
     const globalSel = document.getElementById('voice-engine-select');
     if (globalSel) globalSel.value = prev;
@@ -5064,9 +5041,7 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   if (globalSel) globalSel.value = controlValue;
   const playbarSel = document.getElementById('reader-engine-select');
   if (playbarSel) playbarSel.value = controlValue;
-  if (typeof window.renderNarrationEngineControls === 'function') {
-    try { window.renderNarrationEngineControls(); } catch (_) {}
-  }
+  try { ui.engineControlsChanged(); } catch (_) {}
 
   const voiceSelector = document.getElementById('voice-selector');
   const neuralEngine = engineVal === 'pocket' ? _resolveActiveEngine() : engineVal;
@@ -5115,16 +5090,15 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
     // never overrides their deliberate choice in future sessions.
     window.userProfile.settings._engineManuallySet = true;
     if (typeof window.saveLocalData === 'function') window.saveLocalData();
-    if (typeof window.triggerVirtue === 'function') {
-      window.triggerVirtue('virtue_bubble_wink');
+    {
+      ui.companion('virtue_bubble_wink');
       let label = engineVal === 'pocket' ? 'Pocket TTS' : 'Device';
-      window.virtueSpeak(`Switched to ${label} voice. Well? How do I sound?`, 4000);
+      ui.say(`Switched to ${label} voice. Well? How do I sound?`, 4000);
     }
   }
 
   if (!silent) {
-    if (window.virtueSpeak) window.virtueSpeak("Voice engine changed. Recaching audio... Playback will unlock as soon as the starting buffer is ready.", 5000);
-    else alert("Voice engine changed. Recaching audio... Playback will unlock as soon as the starting buffer is ready.");
+    ui.say("Voice engine changed. Recaching audio... Playback will unlock as soon as the starting buffer is ready.", 5000);
     if (engineVal === 'pocket') {
       if (typeof window.startCaching === 'function') window.startCaching('Normal');
       else if (window.BufferManager) window.BufferManager.start();
@@ -5141,7 +5115,7 @@ window.onVoiceSelectionChange = function(newVoice) {
     const savedKey = 'kokoroVoice';
     const label = 'Kokoro';
     if (window.isPlaying) {
-      window.virtueSpeak?.('Please pause the story first before changing the voice.', 4000);
+      ui.say('Please pause the story first before changing the voice.', 4000);
       const sel = document.getElementById('voice-selector');
       if (sel) sel.value = coerceVoiceForEngine(neuralEngine, window.userProfile?.settings?.[savedKey]);
       return;
@@ -5150,12 +5124,11 @@ window.onVoiceSelectionChange = function(newVoice) {
     if (!window.userProfile.settings) window.userProfile.settings = {};
     window.userProfile.settings[savedKey] = newVoice;
     window.saveLocalData?.();
-    window.pocketNotify?.(`${label} voice updated.`);
+    ui.notify(`${label} voice updated.`);
     return;
   }
   if (window.isPlaying) {
-    if (window.virtueSpeak) window.virtueSpeak("Please pause the story first before changing the voice.", 4000);
-    else alert("Please pause the story first before changing the voice.");
+    ui.say("Please pause the story first before changing the voice.", 4000);
     const engine = window.userProfile?.settings?.voiceEngine || 'pocket';
     const prev = engine === 'pocket' ? (window.userProfile?.settings?.pocketVoice || POCKET_DEFAULT_VOICE) : (window.userProfile?.settings?.webVoice || '');
     const sel = document.getElementById('voice-selector');
@@ -5195,14 +5168,13 @@ window.onVoiceSelectionChange = function(newVoice) {
   if (typeof window.saveLocalData === 'function') window.saveLocalData();
 
   if (window.currentStory) {
-    if (window.virtueSpeak) window.virtueSpeak("Voice changed - re-caching this story. Playback will unlock when the starting buffer is ready.", 5000);
-    else alert("Voice changed - re-caching this story. Playback will unlock when the starting buffer is ready.");
+    ui.say("Voice changed - re-caching this story. Playback will unlock when the starting buffer is ready.", 5000);
     if (engine === 'pocket') {
       if (typeof window.startCaching === 'function') window.startCaching('Normal');
       else if (window.BufferManager) window.BufferManager.start();
     }
   } else {
-    if (window.virtueSpeak) window.virtueSpeak("Voice setting updated.", 3000);
+    ui.say("Voice setting updated.", 3000);
   }
 };
 window.switchReaderVoiceEngine = switchReaderVoiceEngine;
@@ -5254,8 +5226,8 @@ export function saveBookmark() {
     }
 
     if (typeof window.saveLocalData === 'function') window.saveLocalData();
-    if (typeof window.updateContinueReading === 'function') window.updateContinueReading();
-    if (typeof window.renderBookmarksTab === 'function') window.renderBookmarksTab();
+    ui.progressChanged();
+    ui.bookmarksChanged();
 
     if (window.userProfile?.stats) {
       if (typeof window.setDeviceStatFlag === 'function') window.setDeviceStatFlag('firstBookmark');
@@ -5263,10 +5235,8 @@ export function saveBookmark() {
       if (typeof window.checkForNewAchievements === 'function') window.checkForNewAchievements();
     }
 
-    if (typeof window.triggerVirtue === 'function') {
-      window.triggerVirtue('virtue_favorite_story');
-      window.virtueSpeak("Bookmark saved!I'll remember where we left off.", 4000);
-    }
+    ui.companion('virtue_favorite_story');
+    ui.say("Bookmark saved!I'll remember where we left off.", 4000);
   }
 }
 window.saveBookmark = saveBookmark;

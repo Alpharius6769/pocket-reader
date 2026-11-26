@@ -1,4 +1,5 @@
 import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v64';
+import { ui } from './core_events.js?v=core-events-v4';
 
 const DB_NAME = 'PocketReaderDB';
 const DB_VERSION = 3;
@@ -807,13 +808,11 @@ export async function clearAudioCache(includePermanent = false, skipConfirm = fa
           story.audioCached = false;
         });
         if (typeof window.saveLocalData === 'function') window.saveLocalData();
-        if (typeof window.renderLibrary === 'function') window.renderLibrary(true);
-        if (typeof window.updateContinueReading === 'function') window.updateContinueReading();
+        ui.libraryChanged(true);
+        ui.progressChanged();
       }
-      if (typeof window.virtueSpeak === 'function') {
-        window.virtueSpeak("Audio cache cleared! Your browser feels much lighter now.", 4000);
-        if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_changed_settings_and_saved');
-      }
+      ui.say("Audio cache cleared! Your browser feels much lighter now.", 4000);
+      ui.companion('virtue_changed_settings_and_saved');
       resolve();
     };
 
@@ -900,8 +899,8 @@ export async function deleteStoryAudio(storyTitle) {
           story.audioCached = false;
         }
         if (typeof window.saveLocalData === 'function') window.saveLocalData();
-        if (typeof window.renderLibrary === 'function') window.renderLibrary(true);
-        if (typeof window.updateContinueReading === 'function') window.updateContinueReading();
+        ui.libraryChanged(true);
+        ui.progressChanged();
       }
       resolve(true);
     };

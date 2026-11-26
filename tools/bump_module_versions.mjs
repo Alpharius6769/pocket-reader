@@ -8,7 +8,9 @@ import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const EXT = new Set(['.js', '.mjs', '.html', '.json']);
-const SKIP = new Set(['node_modules', '.git', '.venv', 'vendor', '.wrangler', 'dist', 'build']);
+// '.claude' holds other sessions' git worktrees (.claude/worktrees/*). Walking
+// into them rewrote version strings in checkouts this run does not own.
+const SKIP = new Set(['node_modules', '.git', '.venv', 'vendor', '.wrangler', 'dist', 'build', '.claude', 'benchmark-results']);
 
 async function files(dir = ROOT, acc = []) {
   for (const e of await readdir(dir, { withFileTypes: true })) {
@@ -30,7 +32,7 @@ function pending() {
 
 // Replace `from` only where it stands as a whole token. A bare substring
 // replacement bumped `catalog-v1` inside `hmofa-catalog-v1` as well -- another
-// cache's name -- and would turn `buffer-v115` into `buffer-v125` when bumping
+// cache's name -- and would turn `buffer-v115` into `buffer-v129` when bumping
 // `buffer-v11`. So the characters either side of a match must not be ones that
 // could belong to a longer token. Still an exact literal, never a pattern.
 function replaceToken(src, from, to) {

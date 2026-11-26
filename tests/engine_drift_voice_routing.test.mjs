@@ -37,7 +37,7 @@ test('enqueue and re-point share one voice-selection rule', async () => {
   const buf = await read('public/assets/js/buffer_manager.js');
   assert.match(buf, /function _voiceForEngine\(engine, requested\) \{/);
   // The hand-rolled if/else at enqueue is gone, so the two cannot drift.
-  assert.match(buf, /window\._effectiveVoiceForEngine\(engine\)\s*: _voiceForEngine\(engine, presetVoice \|\| selectorVoice\)/);
+  assert.match(buf, /window\._effectiveVoiceForEngine\(engine\)\s*: _voiceForEngine\(engine, presetVoice \|\| savedVoice\)/);
 });
 
 // ── A StyleTTS2 worker must not turn any string into a URL ──────────────────

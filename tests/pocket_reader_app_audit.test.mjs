@@ -57,7 +57,7 @@ test('loadStory registers abort before the cache path and restores progress (H4/
   assert.match(load, /fetch\(`\$\{window\.HF_API_BASE\}\$\{fetchUrl\}`, \{ signal: ownAbort\.signal \}\)/);
   assert.doesNotMatch(load, /if \(!preventNavigate\) showCloudflareFallback\(\);/);
   assert.match(load, /error\?\.name === 'AbortError'/);
-  assert.match(load, /pocketNotify\?/);
+  assert.match(load, /ui\.notify\(/);
   // FicHub's 120s budget must abort the nested controller, not ownAbort, or
   // scrape fallback starts already-aborted and the open fails silently.
   assert.match(load, /const fichubAbort = new AbortController\(\)/);

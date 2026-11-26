@@ -7,8 +7,8 @@ export function ensureNarrationRuntime() {
   if (window.__pocketNarrationRuntimeLoaded === true) return Promise.resolve(true);
   if (narrationRuntimePromise) return narrationRuntimePromise;
 
-  narrationRuntimePromise = import('./audio_core.js?v=audio-v236')
-    .then(() => import('./buffer_manager.js?v=buffer-v124'))
+  narrationRuntimePromise = import('./audio_core.js?v=audio-v241')
+    .then(() => import('./buffer_manager.js?v=buffer-v129'))
     .then(() => {
       window.__pocketNarrationRuntimeLoaded = true;
       return true;

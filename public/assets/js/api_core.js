@@ -1,3 +1,4 @@
+import { ui } from './core_events.js?v=core-events-v4';
 
 const DEFAULT_API_BASE = 'https://pocket-reader-proxy.alpharius67.workers.dev';
 const DEFAULT_PROXY_BASE = 'https://pocket-reader-proxy.alpharius67.workers.dev';
@@ -173,39 +174,35 @@ export function saveSiteCookies() {
   }
 
   if (typeof window.saveLocalData === 'function') window.saveLocalData();
-  if (typeof window.virtueSpeak === 'function') {
-    window.virtueSpeak("Account cookies saved. I'll use them when you load FA or SoFurry stories.", 5000);
-  }
+  ui.say("Account cookies saved. I'll use them when you load FA or SoFurry stories.", 5000);
 }
 window.saveSiteCookies = saveSiteCookies;
 
 export function showCloudflareDownloadHelp() {
-  if (typeof window.showSettingsModal === 'function') {
-    window.showSettingsModal(
-      'Save & load a blocked story',
-      `<p style="font-size:0.9rem;line-height:1.5;">If the story page works in your browser but our backend gets blocked, save the story to your device and upload it here.</p>
-       <h4 style="color:#c9a75c;margin:16px 0 6px 0;">Archive of Our Own (AO3)</h4>
-       <ol style="font-size:0.85rem;line-height:1.6;padding-left:20px;">
-         <li>Open the story's main page (not a single chapter)</li>
-         <li>Click <b>Entire Work</b> (top right) so all chapters are on one page</li>
-         <li>Scroll to <b>Download</b> in the work header, then pick <b>EPUB</b> (or PDF if you prefer)</li>
-         <li>Save the file</li>
-         <li>Come back here and click <b>Open File</b> in the top bar; pick the file you saved</li>
-       </ol>
-       <h4 style="color:#c9a75c;margin:16px 0 6px 0;">Royal Road</h4>
-       <ol style="font-size:0.85rem;line-height:1.6;padding-left:20px;">
-         <li>Open the fiction's main page (not a single chapter)</li>
-         <li>Look for the <b>Download</b> button - usually offers EPUB</li>
-         <li>Save and upload here via Open File</li>
-       </ol>
-       <h4 style="color:#c9a75c;margin:16px 0 6px 0;">FurAffinity/SoFurry/other sites</h4>
-       <ol style="font-size:0.85rem;line-height:1.6;padding-left:20px;">
-         <li>If the site doesn't offer EPUB download, save the page itself: browser menu, <b>Save Page As...</b>, then <b>HTML</b></li>
-         <li>Upload the saved <code>.html</code> via Open File</li>
-       </ol>
-       <p style="margin-top:16px;font-size:0.8rem;color:var(--text-muted);">Tip: for FurAffinity and SoFurry, pasting your account cookies in Settings > Connect Accounts often gets past the login wall without needing to download anything.</p>`
-    );
-  }
+  ui.dialog(
+    'Save & load a blocked story',
+    `<p style="font-size:0.9rem;line-height:1.5;">If the story page works in your browser but our backend gets blocked, save the story to your device and upload it here.</p>
+     <h4 style="color:#c9a75c;margin:16px 0 6px 0;">Archive of Our Own (AO3)</h4>
+     <ol style="font-size:0.85rem;line-height:1.6;padding-left:20px;">
+       <li>Open the story's main page (not a single chapter)</li>
+       <li>Click <b>Entire Work</b> (top right) so all chapters are on one page</li>
+       <li>Scroll to <b>Download</b> in the work header, then pick <b>EPUB</b> (or PDF if you prefer)</li>
+       <li>Save the file</li>
+       <li>Come back here and click <b>Open File</b> in the top bar; pick the file you saved</li>
+     </ol>
+     <h4 style="color:#c9a75c;margin:16px 0 6px 0;">Royal Road</h4>
+     <ol style="font-size:0.85rem;line-height:1.6;padding-left:20px;">
+       <li>Open the fiction's main page (not a single chapter)</li>
+       <li>Look for the <b>Download</b> button - usually offers EPUB</li>
+       <li>Save and upload here via Open File</li>
+     </ol>
+     <h4 style="color:#c9a75c;margin:16px 0 6px 0;">FurAffinity/SoFurry/other sites</h4>
+     <ol style="font-size:0.85rem;line-height:1.6;padding-left:20px;">
+       <li>If the site doesn't offer EPUB download, save the page itself: browser menu, <b>Save Page As...</b>, then <b>HTML</b></li>
+       <li>Upload the saved <code>.html</code> via Open File</li>
+     </ol>
+     <p style="margin-top:16px;font-size:0.8rem;color:var(--text-muted);">Tip: for FurAffinity and SoFurry, pasting your account cookies in Settings > Connect Accounts often gets past the login wall without needing to download anything.</p>`
+  );
 }
 window.showCloudflareDownloadHelp = showCloudflareDownloadHelp;
 
@@ -220,7 +217,7 @@ export async function handleFileSelect(event) {
   if (!file) return;
   const MAX_SIZE = 50 * 1024 * 1024;
   if (file.size > MAX_SIZE) {
-    window.pocketNotify?.('That file is over the 50 MB limit.', 5000);
+    ui.notify('That file is over the 50 MB limit.', 5000);
     event.target.value = '';
     return;
   }
@@ -232,7 +229,7 @@ export async function handleFileSelect(event) {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ];
   if (!ALLOWED.includes(file.type) && !file.name.match(/\.(pdf|epub|html|htm|txt|docx)$/i)) {
-    window.pocketNotify?.('That file type is not supported. Try EPUB, PDF, DOCX, TXT, or HTML.', 6000);
+    ui.notify('That file type is not supported. Try EPUB, PDF, DOCX, TXT, or HTML.', 6000);
     event.target.value = '';
     return;
   }
@@ -297,9 +294,9 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
   // companion reactions, or alert — just parse, add to library, and persist
   // chapters so the caller can cache them.
   const silent = options.silent === true;
-  if (!silent && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_thinking');
-  if (!silent && typeof window.showLoadingOverlay === 'function')
-    window.showLoadingOverlay('Parsing document...', 'Extracting text and chapters');
+  if (!silent) ui.companion('virtue_thinking');
+  if (!silent)
+    ui.loading('Parsing document...', 'Extracting text and chapters');
   const formData = new FormData();
   formData.append('file', file);
   const uploadTimeoutMs = Math.min(
@@ -428,8 +425,8 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
             const _added = newStory.chapters.length - _stored.length;
             newStory.chapters = window.mergeStoryChapters?.(_stored, newStory.chapters, newStory)
               || _stored.concat(newStory.chapters.slice(_stored.length));
-            if (!silent && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
-            if (!silent && window.virtueSpeak) window.virtueSpeak(`Added ${_added} new chapter${_added > 1 ? 's' : ''} from your upload - your existing audio is kept.`, 6000);
+            if (!silent) ui.companion('virtue_holding_bubble_happy_no_paws');
+            if (!silent) ui.say(`Added ${_added} new chapter${_added > 1 ? 's' : ''} from your upload - your existing audio is kept.`, 6000);
           } else if (newStory.chapters.length === _stored.length
                      && _flatten(newStory.chapters) !== _flatten(_stored)) {
             // Same chapter count but the text changed = a corrected re-upload. Take
@@ -437,8 +434,8 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
             // and the stale stored chapters were kept). Audio is position-keyed, so
             // changed paragraphs re-render on next play while unchanged ones keep
             // their cached audio. newStory.chapters already holds the upload.
-            if (!silent && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
-            if (!silent && window.virtueSpeak) window.virtueSpeak('Updated this story from your re-upload.', 5000);
+            if (!silent) ui.companion('virtue_holding_bubble_happy_no_paws');
+            if (!silent) ui.say('Updated this story from your re-upload.', 5000);
           } else {
             // Upload is older, or equal and byte-identical — keep the existing
             // chapters (and their index-keyed audio) untouched.
@@ -467,9 +464,9 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
       } catch (e) { console.warn('Failed to persist uploaded story chapters:', e); }
     }
     if (!silent) window.recordStoryHistory?.(window.currentStory);
-    if (!silent && typeof window.populateReaderUI === 'function') window.populateReaderUI(window.currentStory, newStory.author);
-    if (!silent && typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
-    if (!silent && typeof window.showView === 'function') window.showView('reading-view');
+    if (!silent) ui.storyOpened(window.currentStory, newStory.author);
+    if (!silent) ui.paragraph();
+    if (!silent) ui.navigate('reading-view');
   } catch (error) {
     if (silent) {
       // Background caching path: never alert or pop a companion reaction. Let
@@ -486,11 +483,11 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
     // reads as a system failure inside an installed PWA and takes audio focus on
     // iOS standalone. triggerVirtue on the next line already proves the
     // companion is available here.
-    window.pocketNotify?.(msg, 7000);
-    if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_network_error');
+    ui.notify(msg, 7000);
+    ui.companion('virtue_network_error');
   } finally {
     clearTimeout(timeoutId);
-    if (!silent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+    if (!silent) ui.loaded();
   }
 }
 window.processUploadedFile = processUploadedFile;
@@ -586,44 +583,109 @@ function _syncAo3SearchInputs(payload) {
   setValue('ao3-search-words-max', payload.words_max || '');
 }
 
+// DOM-free: the AO3 search request for a query plus filter values. A pasted
+// AO3 search URL wins over both, as it always has. Filters use the form's own
+// vocabulary: { title, author, fandom, rating, category, language, sort,
+// complete, wordsMin, wordsMax }.
+export function buildAo3SearchPayload(query, filters = {}, options = {}) {
+  const pastedPayload = query ? _readAo3SearchPayloadFromUrl(query) : null;
+  if (pastedPayload) return pastedPayload;
+  const exactTitle = /^".+"$/.test(query || '') ? query.slice(1, -1).trim() : '';
+  const text = (value) => String(value ?? '').trim();
+  const payload = {
+    query: exactTitle ? '' : (query || ''),
+    title: exactTitle || text(filters.title),
+    author: text(filters.author),
+    fandom: text(filters.fandom),
+    rating: filters.rating || 'Any',
+    category: filters.category || 'Any',
+    language: filters.language || 'Any',
+    sort_column: filters.sort || 'revised_at',
+    sort_direction: options.sort_direction || 'desc',
+    complete: filters.complete ? '1' : '',
+    page: options.page || 1,
+    limit: 15,
+  };
+  const minVal = parseInt(filters.wordsMin ?? '', 10);
+  const maxVal = parseInt(filters.wordsMax ?? '', 10);
+  if (!Number.isNaN(minVal)) payload.words_min = minVal;
+  if (!Number.isNaN(maxVal)) payload.words_max = maxVal;
+  return payload;
+}
+window.buildAo3SearchPayload = buildAo3SearchPayload;
+
+export function isEmptyAo3Search(payload) {
+  return !payload.query && !payload.title && !payload.author && !payload.fandom
+    && payload.rating === 'Any' && payload.category === 'Any' && payload.language === 'Any'
+    && !payload.complete && !payload.words_min && !payload.words_max;
+}
+
+// DOM-free: one AO3 search through the backend, with the same two attempts and
+// per-attempt timeout the form has always used. Resolves, never rejects:
+//   { ok: true, data }                     -- data.status === 'ok'
+//   { ok: false, reason, externalUrl }     -- timeout, network or upstream refusal
+export async function searchAo3(payload) {
+  const displayTerm = _ao3DisplayTerm(payload);
+  const fallbackUrl = `https://archiveofourown.org/works/search?work_search%5Bquery%5D=${encodeURIComponent(displayTerm)}`;
+  const started = performance.now();
+  let data = null;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AO3_SEARCH_TIMEOUT_MS);
+    try {
+      const res = await window._rateLimitedFetch('search', () =>
+        fetch(`${window.HF_API_BASE}/api/search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        }));
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error(`search returned ${res.status}`);
+      data = await res.json();
+      lastErr = null;
+      if (window.Diagnostics) window.Diagnostics.log('INFO', `AO3 search ${Math.round(performance.now() - started)}ms`, {
+        attempt,
+        status: data.status,
+        results: Array.isArray(data.results) ? data.results.length : 0,
+        page: data.page,
+      });
+      break;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastErr = err;
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+  if (lastErr) return { ok: false, timedOut: true, reason: 'AO3 search timed out or failed.', externalUrl: fallbackUrl };
+  if (!data || data.status !== 'ok') {
+    return { ok: false, reason: data?.reason || 'AO3 search is temporarily unavailable.', externalUrl: data?.url || fallbackUrl };
+  }
+  return { ok: true, data, displayTerm };
+}
+window.searchAo3 = searchAo3;
+
+// Legacy shell: read the search form, then defer to the pure builder.
 function _buildAo3SearchPayload(query, options = {}) {
   const pastedPayload = query ? _readAo3SearchPayloadFromUrl(query) : null;
   if (pastedPayload) {
     _syncAo3SearchInputs(pastedPayload);
     return pastedPayload;
   }
-
-  const titleEl = document.getElementById('ao3-search-title');
-  const authorEl = document.getElementById('ao3-search-author');
-  const fandomEl = document.getElementById('ao3-search-fandom');
-  const ratingEl = document.getElementById('ao3-search-rating');
-  const categoryEl = document.getElementById('ao3-search-category');
-  const languageEl = document.getElementById('ao3-search-language');
-  const sortEl = document.getElementById('ao3-search-sort');
-  const completeEl = document.getElementById('ao3-search-complete');
-  const wordsMinEl = document.getElementById('ao3-search-words-min');
-  const wordsMaxEl = document.getElementById('ao3-search-words-max');
-  const exactTitle = /^".+"$/.test(query || '') ? query.slice(1, -1).trim() : '';
-
-  const payload = {
-    query: exactTitle ? '' : (query || ''),
-    title: exactTitle || titleEl?.value.trim() || '',
-    author: authorEl?.value.trim() || '',
-    fandom: fandomEl?.value.trim() || '',
-    rating: ratingEl?.value || 'Any',
-    category: categoryEl?.value || 'Any',
-    language: languageEl?.value || 'Any',
-    sort_column: sortEl?.value || 'revised_at',
-    sort_direction: options.sort_direction || 'desc',
-    complete: completeEl?.checked ? '1' : '',
-    page: options.page || 1,
-    limit: 15,
-  };
-  const minVal = parseInt(wordsMinEl?.value || '', 10);
-  const maxVal = parseInt(wordsMaxEl?.value || '', 10);
-  if (!Number.isNaN(minVal)) payload.words_min = minVal;
-  if (!Number.isNaN(maxVal)) payload.words_max = maxVal;
-  return payload;
+  const value = (id) => document.getElementById(id)?.value;
+  return buildAo3SearchPayload(query, {
+    title: value('ao3-search-title'),
+    author: value('ao3-search-author'),
+    fandom: value('ao3-search-fandom'),
+    rating: value('ao3-search-rating'),
+    category: value('ao3-search-category'),
+    language: value('ao3-search-language'),
+    sort: value('ao3-search-sort'),
+    complete: document.getElementById('ao3-search-complete')?.checked === true,
+    wordsMin: value('ao3-search-words-min'),
+    wordsMax: value('ao3-search-words-max'),
+  }, options);
 }
 
 function _ao3DisplayTerm(payload) {
@@ -687,7 +749,7 @@ export async function handleSearchSubmit(query, options = {}) {
     }
   }
 
-  if (typeof window.showView === 'function') window.showView('search-view');
+  ui.navigate('search-view');
   const resultsPanel = document.getElementById('search-results-panel');
   const append = !!options.append;
   let payload;
@@ -697,7 +759,7 @@ export async function handleSearchSubmit(query, options = {}) {
     payload = _buildAo3SearchPayload(rawQuery, { page: options.page || 1 });
   }
 
-  if (!payload.query && !payload.title && !payload.author && !payload.fandom && payload.rating === 'Any' && payload.category === 'Any' && payload.language === 'Any' && !payload.complete && !payload.words_min && !payload.words_max) {
+  if (isEmptyAo3Search(payload)) {
     return;
   }
 
@@ -708,56 +770,19 @@ export async function handleSearchSubmit(query, options = {}) {
     window._ao3SearchState = { payload, results: [], page: payload.page || 1, hasMore: false, nextPage: null, displayTerm };
     if (resultsPanel) resultsPanel.innerHTML = `<p style="color:var(--text-muted);">Searching AO3 for "${_escapeSearchHtml(displayTerm)}"...</p><p style="color:var(--text-muted);font-size:0.82rem;opacity:0.8;margin-top:6px;">AO3 blocks automated traffic, so results are fetched through a proxy — this can take up to a minute. Hang tight.</p>`;
   }
-  if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_bubble_point');
+  ui.companion('virtue_bubble_point');
 
-  const started = performance.now();
-  let data = null;
-  let lastErr = null;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), AO3_SEARCH_TIMEOUT_MS);
-    try {
-      const res = await window._rateLimitedFetch('search', () =>
-        fetch(`${window.HF_API_BASE}/api/search`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        })
-                                                );
-      clearTimeout(timeoutId);
-      if (!res.ok) throw new Error(`search returned ${res.status}`);
-      data = await res.json();
-      lastErr = null;
-      if (window.Diagnostics) window.Diagnostics.log('INFO', `AO3 search ${Math.round(performance.now() - started)}ms`, {
-        attempt,
-        status: data.status,
-        results: Array.isArray(data.results) ? data.results.length : 0,
-        page: data.page,
-      });
-      break;
-    } catch (err) {
-      clearTimeout(timeoutId);
-      lastErr = err;
-      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 1500));
-    }
-  }
-
-  if (lastErr) {
-    const externalUrl = `https://archiveofourown.org/works/search?work_search%5Bquery%5D=${encodeURIComponent(displayTerm)}`;
+  const outcome = await searchAo3(payload);
+  if (!outcome.ok) {
     if (resultsPanel) {
-      resultsPanel.innerHTML = `<div class="pr-card search-state-card"><p>AO3 search timed out or failed.</p><p>Open the exact AO3 search, try again, or paste a story URL directly.</p>${_externalSearchLink(externalUrl)}</div>`;
+      const lead = outcome.timedOut
+        ? '<p>AO3 search timed out or failed.</p><p>Open the exact AO3 search, try again, or paste a story URL directly.</p>'
+        : `<p>${_escapeSearchHtml(outcome.reason)}</p><p>Try again in a minute, open the exact AO3 search, or paste a story URL directly.</p>`;
+      resultsPanel.innerHTML = `<div class="pr-card search-state-card">${lead}${_externalSearchLink(outcome.externalUrl)}</div>`;
     }
     return;
   }
-
-  if (!data || data.status !== 'ok') {
-    const externalUrl = data?.url || `https://archiveofourown.org/works/search?work_search%5Bquery%5D=${encodeURIComponent(displayTerm)}`;
-    if (resultsPanel) {
-      resultsPanel.innerHTML = `<div class="pr-card search-state-card"><p>${_escapeSearchHtml(data?.reason || 'AO3 search is temporarily unavailable.')}</p><p>Try again in a minute, open the exact AO3 search, or paste a story URL directly.</p>${_externalSearchLink(externalUrl)}</div>`;
-    }
-    return;
-  }
+  const data = outcome.data;
 
   const incoming = Array.isArray(data.results) ? data.results : [];
   const prior = append ? (window._ao3SearchState?.results || []) : [];
@@ -955,15 +980,15 @@ export async function loadStory(url, options = {}) {
     } catch (e) {}
   }
   _activeLoadAbort = null;
-  if (!preventNavigate && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_story_loading');
+  if (!preventNavigate) ui.companion('virtue_story_loading');
 
   const showCloudflareFallback = (msg) => {
-    if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-    if (typeof window.showSettingsModal === 'function') {
+    ui.loaded();
+    {
       const safeMessage = String(msg || "The site's bot shield is blocking our backend from downloading this story.")
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-      window.showSettingsModal(
+      ui.dialog(
         'Cloudflare Shield Active',
         `<div class="cloudflare-warning" style="text-align:left;background:transparent;border:none;padding:0;">
            <p>${safeMessage}</p>
@@ -988,7 +1013,7 @@ export async function loadStory(url, options = {}) {
         }, { once: true });
       });
     }
-    if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_network_error');
+    ui.companion('virtue_network_error');
   };
 
   let fetchUrl = url;
@@ -1051,12 +1076,12 @@ export async function loadStory(url, options = {}) {
             }
           }
 
-          if (!preventNavigate && typeof window.populateReaderUI === 'function')
-            window.populateReaderUI(window.currentStory, window.currentStory.author || 'Unknown');
+          if (!preventNavigate)
+            ui.storyOpened(window.currentStory, window.currentStory.author || 'Unknown');
           if (!preventNavigate && typeof window.recordStoryHistory === 'function') window.recordStoryHistory(window.currentStory);
-          if (!preventNavigate && typeof window.showView === 'function') window.showView('reading-view');
-          if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-          if (!preventNavigate && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy');
+          if (!preventNavigate) ui.navigate('reading-view');
+          if (!preventNavigate) ui.loaded();
+          if (!preventNavigate) ui.companion('virtue_holding_bubble_happy');
           return;
         }
       } catch(e) {
@@ -1069,8 +1094,8 @@ export async function loadStory(url, options = {}) {
         fetchUrl = validEntryUrl;
       } else {
         if (!preventNavigate) {
-          window.pocketNotify?.(`Could not load stored chapters for "${existingLibEntry.title || 'Uploaded Document'}". Please re-upload the file.`, 7000);
-          if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+          ui.notify(`Could not load stored chapters for "${existingLibEntry.title || 'Uploaded Document'}". Please re-upload the file.`, 7000);
+          ui.loaded();
         }
         return;
       }
@@ -1092,8 +1117,8 @@ export async function loadStory(url, options = {}) {
   const _isAppInternalRef = /^(\/api\/|\/local-upload\/|local:\/\/)/i.test(_trimmedUrl);
   if (!_isAppInternalRef && (_trimmedUrl.match(/\.(pdf|epub|docx|txt|html|htm)$/i) || _trimmedUrl.match(/^(file:\/\/|[a-z]:[\\\/]|\/)/i))) {
     if (!preventNavigate) {
-      if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-      window.pocketNotify?.("To import a file, use Choose File or drop it onto the upload area.", 6000);
+      ui.loaded();
+      ui.notify("To import a file, use Choose File or drop it onto the upload area.", 6000);
     }
     return;
   }
@@ -1105,9 +1130,9 @@ export async function loadStory(url, options = {}) {
     // URL-less uploaded story whose chapters were evicted reaches here on
     // resume; alerting would be a spurious "Invalid story URL" popup.
     if (!preventNavigate) {
-      window.pocketNotify?.("That does not look like a valid public story URL.", 5000);
-      if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_network_error');
-      if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+      ui.notify("That does not look like a valid public story URL.", 5000);
+      ui.companion('virtue_network_error');
+      ui.loaded();
     }
     return;
   }
@@ -1123,8 +1148,8 @@ export async function loadStory(url, options = {}) {
     // on the non-http ref and pop a spurious Cloudflare dialog.
     if (/^(\/local-upload\/|local:\/\/)/i.test(fetchUrl)) {
       if (!preventNavigate) {
-        if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-        window.pocketNotify?.(`Could not load stored chapters for "${(existingLibEntry && existingLibEntry.title) || 'this uploaded document'}". Please re-upload the file.`, 7000);
+        ui.loaded();
+        ui.notify(`Could not load stored chapters for "${(existingLibEntry && existingLibEntry.title) || 'this uploaded document'}". Please re-upload the file.`, 7000);
       }
       return;
     }
@@ -1147,8 +1172,8 @@ export async function loadStory(url, options = {}) {
       const _propagateOwnAbortToFichub = () => { try { fichubAbort.abort(); } catch (e) {} };
       ownAbort.signal.addEventListener('abort', _propagateOwnAbortToFichub, { once: true });
 
-      if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
-        window.showLoadingOverlay('Loading Story...', 'Fetching from FicHub archive...', _cancelFetch);
+      if (!preventNavigate)
+        ui.loading('Loading Story...', 'Fetching from FicHub archive...', _cancelFetch);
 
       let fichubSuccess = false;
       try {
@@ -1156,8 +1181,8 @@ export async function loadStory(url, options = {}) {
         const resolved = await _fichubResolve(
           _fichubApiUrl(fetchUrl),
           fichubAbort.signal,
-          (pass) => { if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
-            window.showLoadingOverlay(
+          (pass) => { if (!preventNavigate)
+            ui.loading(
               'Preparing this story...',
               'FicHub is generating this EPUB for the first time — this can take up to a minute. Hang tight...',
               _cancelFetch
@@ -1169,14 +1194,14 @@ export async function loadStory(url, options = {}) {
         if (!epubPath) throw new Error('FICHUB_NO_URL');
 
         // Step 2 — download the EPUB binary
-        if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
-          window.showLoadingOverlay('Downloading...', 'Getting EPUB from FicHub archive', _cancelFetch);
+        if (!preventNavigate)
+          ui.loading('Downloading...', 'Getting EPUB from FicHub archive', _cancelFetch);
         const epubUrl = 'https://fichub.net' + epubPath;
         const blob = await _fichubDownloadEpub(epubUrl, resolved.proxy, fichubAbort.signal);
         if (!blob) throw new Error('FICHUB_DL_FAILED');
 
         clearTimeout(ao3Timeout);
-        if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+        if (!preventNavigate) ui.loaded();
 
         // Step 3 — hand off to the existing upload parser
         const title = fhData.meta?.title;
@@ -1189,20 +1214,20 @@ export async function loadStory(url, options = {}) {
           fichubSuccess = true;
           if (ownAbort._superseded) return;
           _restoreProgressFromLibrary(existingLibEntry);
-          if (!preventNavigate && existingLibEntry && typeof window.populateReaderUI === 'function' && window.currentStory) {
-            window.populateReaderUI(window.currentStory, window.currentStory.author || 'Unknown');
+          if (!preventNavigate && existingLibEntry && window.currentStory) {
+            ui.storyOpened(window.currentStory, window.currentStory.author || 'Unknown');
           }
         }
       } catch(fichubErr) {
         clearTimeout(ao3Timeout);
         if (ownAbort._superseded) {
-          if (ownAbort._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+          if (ownAbort._supersededBySilent) ui.loaded();
           return;
         }
         if (window._storyFetchCancelled) {
           window._storyFetchCancelled = false;
-          if (typeof window.virtueSpeak === 'function') window.virtueSpeak("Okay - I stopped loading that story.", 3500);
-          if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+          ui.say("Okay - I stopped loading that story.", 3500);
+          ui.loaded();
           return;
         }
         console.warn('FicHub primary path failed, falling back to backend scrape:', fichubErr.message);
@@ -1211,8 +1236,8 @@ export async function loadStory(url, options = {}) {
       if (fichubSuccess) return;
 
       // ── Fallback: try backend scrape (Zyte → CF Worker → direct) ──
-      if (!preventNavigate && typeof window.showLoadingOverlay === 'function')
-        window.showLoadingOverlay('Retrying...', 'FicHub unavailable — trying direct scrape via Zyte proxy...', _cancelFetch);
+      if (!preventNavigate)
+        ui.loading('Retrying...', 'FicHub unavailable — trying direct scrape via Zyte proxy...', _cancelFetch);
 
       const cookies = window._cookiesForUrl(fetchUrl);
       const body = cookies ? { url: fetchUrl, cookies } : { url: fetchUrl };
@@ -1252,13 +1277,13 @@ export async function loadStory(url, options = {}) {
       // A superseding load or a user Cancel aborted us: exit quietly instead of
       // surfacing a spurious Cloudflare dialog for a request the user abandoned.
       if (ownAbort._superseded) {
-        if (ownAbort._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+        if (ownAbort._supersededBySilent) ui.loaded();
         return;
       }
       if (window._storyFetchCancelled) {
         window._storyFetchCancelled = false;
-        if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-        if (typeof window.virtueSpeak === 'function') window.virtueSpeak("Okay - I stopped loading that story.", 3500);
+        ui.loaded();
+        ui.say("Okay - I stopped loading that story.", 3500);
         return;
       }
       if (!response || !response.ok) throw (lastErr || new Error('SCRAPE_FAILED'));
@@ -1305,7 +1330,7 @@ export async function loadStory(url, options = {}) {
         if (attempt < 2) await new Promise(r => setTimeout(r, 2000));
       }
       if (ownAbort._superseded) {
-        if (ownAbort._supersededBySilent && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+        if (ownAbort._supersededBySilent) ui.loaded();
         return;
       }
       if (!response || !response.ok) throw (lastErr || new Error('SCRAPE_FAILED'));
@@ -1318,18 +1343,18 @@ export async function loadStory(url, options = {}) {
     }
 
     if (ownAbort._superseded) return;
-    if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+    if (!preventNavigate) ui.loaded();
     window.currentStory = data;
     _adoptExistingLibraryIdentity(window.currentStory, existingLibEntry);
     _restoreProgressFromLibrary(existingLibEntry);
     await _persistOpenedStory();
     if (typeof window.addToLibrary === 'function') window.addToLibrary(window.currentStory);
-    if (!preventNavigate && typeof window.populateReaderUI === 'function')
-      window.populateReaderUI(window.currentStory, window.currentStory.author || 'Unknown');
+    if (!preventNavigate)
+      ui.storyOpened(window.currentStory, window.currentStory.author || 'Unknown');
     if (!preventNavigate && typeof window.recordStoryHistory === 'function') window.recordStoryHistory(window.currentStory);
-    if (!preventNavigate && typeof window.showView === 'function') window.showView('reading-view');
+    if (!preventNavigate) ui.navigate('reading-view');
   } catch (error) {
-    if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
+    if (!preventNavigate) ui.loaded();
     if (ownAbort._superseded) return;
     const aborted = error?.name === 'AbortError' || window._storyFetchCancelled;
     if (aborted) {
@@ -1339,8 +1364,8 @@ export async function loadStory(url, options = {}) {
     if (preventNavigate) return;
     const message = String(error?.message || error || 'Could not load that story.');
     window.Diagnostics?.log?.('ERROR', 'loadStory failed', { message, url: fetchUrl });
-    window.pocketNotify?.(message.slice(0, 180) || 'Could not load that story.', 6000);
-    if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_network_error');
+    ui.notify(message.slice(0, 180) || 'Could not load that story.', 6000);
+    ui.companion('virtue_network_error');
   } finally {
     // Only clear the slot if it is still OURS. A newer loadStory() may have
     // already installed its own controller while this one was unwinding;

@@ -10,8 +10,8 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v236'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v124'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v241'\)/);
+  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v129'\)/);
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
@@ -74,8 +74,8 @@ test('failed narration resume cannot leave the loading overlay stuck', async () 
   const resume = resumeStart >= 0 ? buffer.slice(resumeStart, resumeStart + 10000) : '';
   assert.match(resume, /Promise\.race\(/, 'story restore needs a bounded timeout');
   assert.match(resume, /catch \(error\)/, 'story restore errors must be handled');
-  assert.match(resume, /closeCacheModal\?\.\(\)/, 'failed restore must close cache UI');
-  assert.match(resume, /hideLoadingOverlay\?\.\(\)/, 'failed restore must hide the resume overlay');
+  assert.match(resume, /ui\.closeCachePanel\(\)/, 'failed restore must close cache UI');
+  assert.match(resume, /ui\.loaded\(\)/, 'failed restore must hide the resume overlay');
 });
 
 test('post-reload narration restore can fall back to the original story URL before library hydration', async () => {
@@ -95,8 +95,8 @@ test('a narration-resume fix advances the immutable module and service-worker re
     read('public/sw.js'),
     read('public/index.html'),
   ]);
-  assert.match(loader, /buffer_manager\.js\?v=buffer-v124/);
-  assert.match(worker, /buffer_manager\.js\?v=buffer-v124/);
+  assert.match(loader, /buffer_manager\.js\?v=buffer-v129/);
+  assert.match(worker, /buffer_manager\.js\?v=buffer-v129/);
   assert.match(worker, /pocket-reader-core-v\d+/);
   // Derived, not pinned: the shell must register whatever revision the service
   // worker actually ships. Hardcoding the number here only forced a mechanical

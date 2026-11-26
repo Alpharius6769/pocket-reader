@@ -121,7 +121,7 @@ test('the voice moves down with the engine', async () => {
     source.indexOf('window._degradeNarrationEngine ='),
   );
   assert.match(fn, /coerceVoiceForEngine\(nextEngine, current\)/);
-  assert.match(fn, /refreshVoiceSelectorForEngine/);
+  assert.match(fn, /ui\.voiceListChanged\(/);
 });
 
 test('coerceVoiceForEngine really does move a voice across every tier pair', () => {
@@ -145,7 +145,7 @@ test('the reader is told, rather than the narrator just changing character', asy
     source.indexOf('function _degradeNarrationEngine('),
     source.indexOf('window._degradeNarrationEngine ='),
   );
-  assert.match(fn, /window\.pocketNotify\?\.\(/);
+  assert.match(fn, /ui\.notify\(/);
   assert.match(fn, /Diagnostics\?\.log\?\.\('WARN'/,
     'a silent downgrade is undiagnosable after the fact');
 });

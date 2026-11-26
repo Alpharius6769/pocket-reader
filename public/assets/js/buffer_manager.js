@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v51';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v55';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -10,6 +10,7 @@ import {
   voicesForEngine,
 } from './pocket_backend_policy.js?v=backend-v64';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
+import { ui } from './core_events.js?v=core-events-v4';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
 const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'alba';
@@ -364,7 +365,7 @@ function _requestFastNarrationReload(mode, action = 'cache') {
   // Cover the reboot with an overlay so the reload does not look like the app
   // randomly jumping to Home. The overlay is re-shown by _resumeFastNarrationCache
   // after the reload until the reader is restored.
-  window.showLoadingOverlay?.('Preparing fast narration', 'Unlocking multi-threaded narration — one moment…');
+  ui.loading('Preparing fast narration', 'Unlocking multi-threaded narration — one moment…');
   const go = () => window.location.replace(target.href);
   // Prefer an active controller so the navigate handler can stamp isolation headers.
   const regPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker?.ready;
@@ -457,7 +458,7 @@ async function _resumeFastNarrationCache() {
   // The reload reboots the app and briefly lands on Home before the reader is
   // restored. Keep an overlay up across that gap so it does not look like the
   // app is jumping around. (Issue: forced to homescreen when caching starts.)
-  window.showLoadingOverlay?.('Preparing narration', 'Opening your story in fast multi-threaded mode…');
+  ui.loading('Preparing narration', 'Opening your story in fast multi-threaded mode…');
   if (resume.action !== 'playback') {
     _surfaceCacheHandoffState('Preparing offline audio', 'Restoring your story after the fast-narration reload…');
   }
@@ -535,9 +536,9 @@ async function _resumeFastNarrationCache() {
       try {
         if (restoredFromStorage) {
           if (!isPermanent) {
-            window.populateReaderUI?.(window.currentStory, window.currentStory.author || 'Unknown');
+            ui.storyOpened(window.currentStory, window.currentStory.author || 'Unknown');
             window.recordStoryHistory?.(window.currentStory);
-            window.showView?.('reading-view');
+            ui.navigate('reading-view');
           }
         } else {
           await Promise.race([
@@ -550,30 +551,24 @@ async function _resumeFastNarrationCache() {
         prSession.removeItem(FAST_NARRATION_RESUME_KEY);
         prSession.removeItem(FAST_NARRATION_RETRY_KEY);
         window._pocketSuppressCacheDecision = false;
-        window.closeCacheModal?.();
-        window.hideLoadingOverlay?.();
+        ui.closeCachePanel();
+        ui.loaded();
         _surfaceCacheHandoffState(
           'Caching could not start',
           'Your story could not be reopened after the reload. Open it again and retry caching.',
           { terminal: true },
         );
-        window.virtueSpeak?.('Narration could not resume. Please start playback or caching again.', 6000);
+        ui.say('Narration could not resume. Please start playback or caching again.', 6000);
         return;
       } finally {
         window._pocketSuppressCacheDecision = false;
       }
-      window.closeCacheModal?.();
-      window.hideLoadingOverlay?.();
+      ui.closeCachePanel();
+      ui.loaded();
       const savedView = prSession.getItem('POCKET_PRE-RELOAD_VIEW');
       if (savedView) {
         prSession.removeItem('POCKET_PRE-RELOAD_VIEW');
-        for (let i = 0; i < 20; i++) {
-          if (typeof window.showView === 'function') break;
-          await new Promise(r => setTimeout(r, 50));
-        }
-        if (typeof window.showView === 'function') {
-          window.showView(savedView);
-        }
+        ui.navigate(savedView);
       }
       if (!_isolationReady()) {
         const reason = 'Fast narration was requested, but cross-origin isolation was not established. SharedArrayBuffer is unavailable, so Pocket TTS is limited to one WASM thread.';
@@ -613,14 +608,14 @@ async function _resumeFastNarrationCache() {
           'The story text did not finish loading, so there was nothing to cache. Open the story and try again.',
           { terminal: true },
         );
-        window.hideLoadingOverlay?.();
+        ui.loaded();
       }
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  window.closeCacheModal?.();
-  window.hideLoadingOverlay?.();
+  ui.closeCachePanel();
+  ui.loaded();
   prSession.removeItem(FAST_NARRATION_RESUME_KEY);
   prSession.removeItem(FAST_NARRATION_RETRY_KEY);
   _surfaceCacheHandoffState(
@@ -628,7 +623,7 @@ async function _resumeFastNarrationCache() {
     'Preparing the story timed out. Open it again and retry caching.',
     { terminal: true },
   );
-  window.virtueSpeak?.('Story preparation timed out. Open the story and try caching again.', 6000);
+  ui.say('Story preparation timed out. Open the story and try caching again.', 6000);
 }
 
 // ── Screen Wake Lock (keep the screen awake during active caching) ───────────
@@ -770,11 +765,11 @@ export const BufferManager = {
   updateUI() {
     if (!this.containerEl) this.initUI();
     this._syncUiTicker();
-    if (typeof window.updatePlayButtons === 'function') window.updatePlayButtons();
+    ui.playButtons();
 
     const pct = this.totalToCache > 0 ? Math.floor((this.cachedCount / this.totalToCache) * 100) : 0;
     if (this.fillEl) this.fillEl.style.width = `${pct}%`;
-    window.updateReaderDrawerStatus?.(this);
+    ui.bufferChanged(this);
 
     // ── Reader buffer bar status (#away-mode-bar is a legacy id) ─────
     const awayBar = document.getElementById('away-mode-bar');
@@ -834,6 +829,11 @@ export const BufferManager = {
       _releaseCacheWakeLock();
       if (!window.isPlaying) window.stopBgKeepAlive?.();
     }
+    ui.cachingProgress({
+      active: this.isActive, paused: this.paused, mode: this.mode,
+      cached: this.cachedCount, total: this.totalToCache, skipped: this.skippedCount,
+      pct, runway, text: statusText,
+    });
     if (this.textEl) this.textEl.innerText = statusText;
     if (this.pauseBtnEl) {
       this.pauseBtnEl.style.display = this.isActive || this.paused ? 'flex' : 'none';
@@ -1007,10 +1007,10 @@ export const BufferManager = {
     // id is canonicalised against POCKET_VOICES, rewritten to donald_malone, and
     // every paragraph 404s on a voice file that engine does not have.
     const presetVoice = window.currentStory?.narrationPreset?.voice;
-    const selectorVoice = document.getElementById('voice-selector')?.value;
+    const savedVoice = window._savedVoiceForEngine?.(engine) || '';
     voice = typeof window._effectiveVoiceForEngine === 'function'
       ? window._effectiveVoiceForEngine(engine)
-      : _voiceForEngine(engine, presetVoice || selectorVoice);
+      : _voiceForEngine(engine, presetVoice || savedVoice);
     for (let c = 0; c < window.currentStory.chapters.length; c++) {
       const chap = window.currentStory.chapters[c];
       if (!chap.paragraphs) continue;
@@ -1176,15 +1176,13 @@ export const BufferManager = {
     this.updateUI();
     _releaseCacheWakeLock();
     _clearPersistedCacheJob();
-    if (typeof window.triggerVirtue === 'function') {
-      // NOT virtue_smile: that is the 3-star rating beat, and its dialogue pool
-      // is rating language ("A solid middle-of-the-road score"). The virtueSpeak
-      // below is meant to replace the line, but only lands when the override
-      // reaches this particular beat -- so every time it did not, stopping a
-      // cache announced a review the reader never wrote.
-      window.triggerVirtue('virtue_explaining');
-      window.virtueSpeak('Caching stopped.', 2500);
-    }
+    // NOT virtue_smile: that is the 3-star rating beat, and its dialogue pool
+    // is rating language ("A solid middle-of-the-road score"). The virtueSpeak
+    // below is meant to replace the line, but only lands when the override
+    // reaches this particular beat -- so every time it did not, stopping a
+    // cache announced a review the reader never wrote.
+    ui.companion('virtue_explaining');
+    ui.say('Caching stopped.', 2500);
   },
 
   resume() {
@@ -1224,7 +1222,7 @@ export const BufferManager = {
       window.Diagnostics?.log('WARN', 'Cache auto-resume suppressed after repeated interruptions', {
         storyTitle: job.storyTitle,
       });
-      window.queueNotice?.({
+      ui.notice({
         id: 'cache-resume-suppressed',
         title: 'Caching stopped',
         message: 'Caching was interrupted repeatedly (this can happen when the device runs low on memory). Start it again from the story menu when ready.',
@@ -1245,7 +1243,7 @@ export const BufferManager = {
       const currentRef = window.currentStory?.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory?.title;
       if (currentRef !== jobRef) {
         await window.loadStory(jobRef, { preventNavigate: true });
-        window.closeCacheModal?.();
+        ui.closeCachePanel();
       }
       const loadedRef = window.currentStory?.storyKey || window.getStoryStableKey?.(window.currentStory) || window.currentStory?.title;
       if (loadedRef !== jobRef) return;
@@ -1510,8 +1508,8 @@ export const BufferManager = {
               }
             }
             if (typeof window.saveLocalData === 'function') window.saveLocalData();
-            if (typeof window.renderLibrary === 'function') window.renderLibrary(true);
-            if (typeof window.updateContinueReading === 'function') window.updateContinueReading();
+            ui.libraryChanged(true);
+            ui.progressChanged();
           }
         }
         this.updateUI();
@@ -1555,10 +1553,8 @@ export const BufferManager = {
             this.isActive = false;
             this._showModalStatus('AI engine failed to load. Try Device voice instead.');
             if (this.cachingModalDismiss) this.cachingModalDismiss.style.display = 'block';
-            if (typeof window.triggerVirtue === 'function') {
-              window.triggerVirtue('virtue_annoyed_bubble');
-              window.virtueSpeak('The neural engine failed to load. You can switch to Device voice in Settings.', 7000);
-            }
+            ui.companion('virtue_annoyed_bubble');
+            ui.say('The neural engine failed to load. You can switch to Device voice in Settings.', 7000);
             this.updateUI();
             this.activeWorkers = Math.max(0, this.activeWorkers - 1);
             return;
@@ -1728,8 +1724,8 @@ export const BufferManager = {
             }
           }
           if (typeof window.saveLocalData === 'function') window.saveLocalData();
-          if (typeof window.renderLibrary === 'function') window.renderLibrary(true);
-          if (typeof window.updateContinueReading === 'function') window.updateContinueReading();
+          ui.libraryChanged(true);
+          ui.progressChanged();
         }
       }
       await this._prefetchNextVoice();
@@ -1765,10 +1761,8 @@ export const BufferManager = {
         }
         this._showModalStatus('Caching paused - too many errors.');
         if (this.cachingModalDismiss) this.cachingModalDismiss.style.display = 'block';
-        if (typeof window.triggerVirtue === 'function') {
-          window.triggerVirtue('virtue_annoyed_bubble');
-          window.virtueSpeak('I had to pause background caching. The neural engine might be overloaded.', 5000);
-        }
+        ui.companion('virtue_annoyed_bubble');
+        ui.say('I had to pause background caching. The neural engine might be overloaded.', 5000);
         this.activeWorkers = Math.max(0, this.activeWorkers - 1);
         return;
       }
@@ -1868,19 +1862,17 @@ async function _continueCaching(mode) {
   const loadRef = window.currentStory?.url || window.currentStory?.sourceUrl;
   if ((chaptersPersisted || _isLoadableHandoffRef(loadRef))
       && _requestFastNarrationReload(mode, 'cache')) {
-    if (typeof window.closeCacheModal === 'function') window.closeCacheModal();
+    ui.closeCachePanel();
     // The reload is not instant, and on a slow device the tap otherwise looks
     // ignored right up until the page blanks. Same modal the job will use, so
     // the far side continues it rather than opening a second surface.
     _surfaceCacheHandoffState('Preparing offline audio', 'Reloading into fast narration mode…');
     return;
   }
-  if (typeof window.closeCacheModal === 'function') window.closeCacheModal();
+  ui.closeCachePanel();
   BufferManager.start(mode);
-  if (typeof window.triggerVirtue === 'function') {
-    window.triggerVirtue('virtue_explaining');
-    window.virtueSpeak(`Caching started in ${mode} mode. I'll prepare the audio in the background!`, 5000);
-  }
+  ui.companion('virtue_explaining');
+  ui.say(`Caching started in ${mode} mode. I'll prepare the audio in the background!`, 5000);
 }
 
 async function _ensureCachingStory(storyRef) {
@@ -1942,14 +1934,14 @@ window.startCaching = async function(mode, storyRef = null) {
   window.startBgKeepAlive?.();
   if (!await _ensureCachingStory(storyRef)) {
     if (!window.isPlaying) window.stopBgKeepAlive?.();
-    window.virtueSpeak?.('That story could not be opened for offline caching.', 5000);
+    ui.say('That story could not be opened for offline caching.', 5000);
     return;
   }
   if (_resolveActiveEngine() === 'pocket') {
     try { await window.refreshPocketDeviceCapability?.(); } catch (_) {}
     if (isPocketDeviceConstrained() && !window.getPocketExpressiveProsodyChoice?.()) {
       if (!window.isPlaying) window.stopBgKeepAlive?.();
-      if (typeof window.closeCacheModal === 'function') window.closeCacheModal();
+      ui.closeCachePanel();
       _showConstrainedCacheNotice(mode);
       return;
     }
