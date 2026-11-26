@@ -53,7 +53,7 @@ const cacheName = sw.match(/var CACHE_NAME = '([^']+)'/)?.[1];
 if (!cacheName) failures.push('public/sw.js has no CACHE_NAME');
 
 // Nothing may reference the deleted Anvil host.
-for (const rel of ['public/index.html', 'public/sw.js', 'public/standard-page.html']) {
+for (const rel of ['web/index.html', 'public/sw.js']) {
   const source = read(path.join(root, rel));
   for (const token of ['anvil.app', 'serviceworker.py', '_/api/serviceworker']) {
     if (source.includes(token)) failures.push(`${rel} still references ${token}`);

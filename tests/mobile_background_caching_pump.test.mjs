@@ -27,14 +27,6 @@ test('BufferManager exposes getBankedRunwaySec and getBankedRunwayTime', async (
   assert.match(bufferCode, /export function estimateBankedRunwaySec/);
 });
 
-test('Drawer and modal status bars include banked runway information', async () => {
-  const bufferCode = await read('public/assets/js/buffer_manager.js');
-  const cinematicCode = await read('public/assets/js/cinematic_ui.js');
-  assert.match(bufferCode, /const runway = this\.getBankedRunwayTime\(\);/);
-  assert.match(bufferCode, /audio ready/);
-  assert.match(cinematicCode, /getBankedRunwayTime/);
-});
-
 // ── Solution 2: Audio-Clock Background Caching Pump & Lookahead ─────────────
 
 test('Playback lookahead runway is expanded to 8 paragraphs', async () => {
@@ -56,7 +48,9 @@ test('Capacitor configuration is valid JSON and specifies webDir and app identit
   const config = JSON.parse(raw);
   assert.equal(config.appId, 'com.pocketreader.app');
   assert.equal(config.appName, 'Pocket Reader');
-  assert.equal(config.webDir, 'public');
+  // v2: the app is a build; dist/ holds the Svelte shell plus public/ copied in.
+  assert.equal(config.webDir, 'dist');
+  assert.equal(config.plugins.BackgroundRunner.src, 'assets/js/pocket_worker.js', 'the worker keeps its path inside dist/');
 });
 
 test('package.json contains Capacitor scripts and dependencies', async () => {

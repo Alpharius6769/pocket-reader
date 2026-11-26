@@ -27,50 +27,6 @@ test('the curated tag is backfilled onto older profiles', async () => {
   assert.match(source, /if \(existing\.source !== 'curated'\)[\s\S]{0,120}existing\.source = 'curated'/);
 });
 
-test('the Library has a Curated shelf and All still means all', async () => {
-  const html = await read('public/index.html');
-  const source = await read('public/assets/js/library_manager.js');
-  assert.match(html, /data-filter="curated"/);
-  assert.match(source, /filter === 'curated'\) library = library\.filter\(\(s\) => isCuratedStory\(s\)\)/);
-  // The ask was for a tab, not for hiding the bundled stories everywhere else.
-  assert.doesNotMatch(source, /filter !== 'curated'[\s\S]{0,80}!isCuratedStory/);
-});
-
-test('the first view a reader lands on gets its entry work', async () => {
-  // home-view is pre-marked active-view in the shell and never routed through
-  // showView(), so first-visit tips and the achievement check never ran until
-  // the reader navigated away and back.
-  const source = await read('public/assets/js/ui_controller.js');
-  assert.match(source, /function _runInitialViewEntry/);
-  assert.match(source, /document\.querySelector\('\.view\.active-view'\)/);
-  assert.match(source, /_maybeShowPageTips\(viewId\)/);
-  assert.match(source, /checkForNewAchievements/);
-  // Must be deferred past module evaluation or the helpers are still undefined.
-  assert.match(source, /setTimeout\(_runInitialViewEntry, 0\)/);
-});
-
-test('the welcome modal leads with the cloud account', async () => {
-  const html = await read('public/index.html');
-  const modal = html.slice(html.indexOf('id="first-time-setup-title"'), html.indexOf('id="setup-complete-btn"'));
-  const cloudAt = modal.indexOf('setup-cloud-btn');
-  const choice = modal.indexOf('name="resume-mode"');
-  assert.ok(cloudAt >= 0 && cloudAt < choice);
-});
-
-test('profile deep fields live on Edit Profile; setup stays short', async () => {
-  const html = await read('public/index.html');
-  const ui = await read('public/assets/js/ui_controller.js');
-  // First-time setup is account + theme + narrator; about-you fields are Profile Edit.
-  for (const id of ['profile-edit-fandom', 'profile-edit-character', 'profile-edit-genre']) {
-    assert.match(html, new RegExp(`id="${id}"`), `${id} missing from profile edit`);
-  }
-  assert.match(html, /id="setup-read"/);
-  assert.match(html, /id="setup-listen"/);
-  assert.doesNotMatch(html, /id="setup-fandom"/, 'setup no longer asks for fandom');
-  assert.doesNotMatch(html, /id="setup-mood"/, 'setup no longer asks for mood');
-  assert.match(ui, /stampSyncedSetting\?\.\('resumeMode'\)/);
-});
-
 test('cache manager pin and delete scan one story, not the whole store', async () => {
   // Both used to walk every chunk of every story and filter in JS, which is
   // what made the cache manager crawl once a few stories were fully cached.
@@ -96,30 +52,6 @@ test('diagnostics explains a network failure instead of just "Failed to fetch"',
   // Defined before timedTest uses it, or non-network failures hit a TDZ.
   assert.ok(source.indexOf('const describeError') < source.indexOf('const timedTest'),
     'describeError must be initialised before timedTest references it');
-});
-
-test('Settings offers a feedback link that opens safely', async () => {
-  const html = await read('public/index.html');
-  const link = html.match(/<a[^>]*docs\.google\.com\/forms[^>]*>/)?.[0] || '';
-  assert.ok(link, 'the feedback link must exist in Settings');
-  assert.match(link, /target="_blank"/);
-  assert.match(link, /rel="noopener noreferrer"/,
-    'a target=_blank link without noopener hands the opener to the other page');
-});
-
-test('the Anthronomicon panel explains what tapping a story actually does', async () => {
-  // This used to tell readers to copy a link out of the frame and paste it
-  // back, because a cross-origin iframe swallows its own clicks. The catalog is
-  // rendered natively now, so tapping really does load the story -- but the
-  // banner may only promise that while a handler is actually wired to it.
-  const html = await read('public/index.html');
-  const list = await read('public/assets/js/hmofa_masterlist.js');
-  assert.match(html, /Tap any story below/i);
-  assert.doesNotMatch(html, /App Interceptor Active/);
-  assert.match(list, /_handleHmofaStoryIntercept/,
-    'the card action must route through the shared story-load handler');
-  // Not everything is in the catalog, so the paste box has to survive.
-  assert.match(html, /id="hmofa-url-input"/);
 });
 
 // The stored profile has to be read back at boot, and nothing did.

@@ -117,25 +117,3 @@ test('the storage self-test keeps the RAW api, because it is testing storage', a
   assert.doesNotMatch(diagnostics, /safe_storage\.js/, 'diagnostics must not import the facade at all');
 });
 
-test('every module using the facade imports it', async () => {
-  for (const rel of [
-    'public/assets/js/buffer_manager.js',
-    'public/assets/js/ui_controller.js',
-    'public/assets/js/library_manager.js',
-    'public/assets/js/audio_core.js',
-  ]) {
-    const source = await read(rel);
-    if (!/\bprLocal\.|\bprSession\./.test(source)) continue;
-    assert.match(source, /import \{ prLocal, prSession \} from '\.\/safe_storage\.js\?v=/,
-      `${rel} uses the facade and must import it`);
-  }
-});
-
-test('the shell and the service worker both ship it', async () => {
-  // Five modules import it, so unlike the setup-only probes this genuinely
-  // belongs in the atomic core list: the shell cannot run without it.
-  const sw = await read('public/sw.js');
-  const core = sw.slice(sw.indexOf('var CORE_ASSETS = ['), sw.indexOf('// Best-effort cache fill'));
-  assert.match(core, /safe_storage\.js\?v=/);
-  assert.match(await read('public/index.html'), /modulepreload" href="assets\/js\/safe_storage\.js\?v=/);
-});

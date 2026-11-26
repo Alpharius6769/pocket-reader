@@ -87,18 +87,3 @@ test('pocket_worker posts no reply that nothing handles', async () => {
 
 // ── Guidance pointing at controls that do not exist ─────────────────────────
 
-test('no caching hint sends the reader to a setting that does not exist', async () => {
-  const buf = await read('public/assets/js/buffer_manager.js');
-  // enableAMDWorkarounds had no control and no writer anywhere, yet the hint
-  // told readers to "Turn it OFF in Settings > Advanced GPU / Worker settings".
-  assert.ok(!buf.includes('_maybeAmdHint'));
-  assert.ok(!buf.includes('enableAMDWorkarounds'));
-  const html = await read('public/index.html');
-  assert.ok(!html.includes('Advanced GPU / Worker'), 'that Settings section does not exist');
-});
-
-test('motion gating reads the real Data Saver signal, not an unsettable setting', async () => {
-  const motion = await read('public/assets/js/cinematic_ui.js');
-  assert.ok(!motion.includes('settings.dataSaver'));
-  assert.match(motion, /!connection\?\.saveData;/);
-});

@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v377';
+var CACHE_NAME = 'pocket-reader-core-v378';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -148,9 +148,7 @@ var DEFERRED_ASSETS = [
 // The "App Shell" - files to cache instantly on first load
 var CORE_ASSETS = [
     './',
-    'assets/css/theme.css?v=deck-v1',
     'assets/js/core_events.js?v=core-events-v7',
-    'assets/js/legacy_ui_adapter.js?v=legacy-ui-v6',
     'assets/js/tts_pronunciation_core.js?v=pron-v37',
     'assets/js/device_catalog.js?v=catalog-v7',
     'assets/js/pocket_backend_policy.js?v=backend-v64',
@@ -159,14 +157,10 @@ var CORE_ASSETS = [
     'assets/js/native_app_key.js?v=native-key-v1',
     'assets/js/diagnostics.js?v=diag-v9',
     'assets/js/api_core.js?v=search-v43',
-    'assets/js/experience_coordinator.js?v=experience-v19',
-    'assets/js/virtue_controller.js?v=virtue-v55',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v262',
     'assets/js/library_core.js?v=library-core-v4',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v57',
-    'assets/js/settings_manager.js?v=settings-v228',
     'assets/js/library_manager.js?v=library-v111',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v17',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v4',
@@ -174,9 +168,9 @@ var CORE_ASSETS = [
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v6',
     'assets/js/narration_runtime_loader.js?v=narration-loader-v155',
     'assets/js/storage_core.js?v=storage-v57',
-    'assets/js/cinematic_ui.js?v=cinematic-v18',
-    'assets/js/reader_features.js?v=features-v49',
+    // Imported, unversioned, by library_manager.js.
     'assets/js/motion_lite.js'
+    /* __V2_APP_ASSETS__ */
 ];
 
 // Best-effort cache fill: each entry is independent, so one failure costs only
@@ -435,6 +429,25 @@ self.addEventListener('fetch', function (event) {
     }
 
     // Cache-first strategy for large visual assets.
+    // The v2 UI bundle (web/ -> dist/app/). File names carry a content hash, so
+    // a cached copy is always the right one: cache-first, and offline-safe.
+    // Without this rule nothing under /app/ was served from cache at all.
+    if (url.pathname.indexOf('/app/') !== -1) {
+        event.respondWith(
+            caches.match(event.request).then(function (cachedResponse) {
+                if (cachedResponse) return cachedResponse;
+                return fetch(event.request).then(function (networkResponse) {
+                    return updateAppCache(event.request, networkResponse).then(function () {
+                        return networkResponse;
+                    });
+                });
+            }).catch(function () {
+                return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+            })
+        );
+        return;
+    }
+
     if (url.pathname.indexOf('/assets/') !== -1 || event.request.destination === 'image') {
         event.respondWith(
             caches.match(event.request).then(function (cachedResponse) {

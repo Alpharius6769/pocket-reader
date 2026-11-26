@@ -137,23 +137,6 @@ test('the full temperature cap table is actually reachable', async () => {
   assert.doesNotMatch(source, /const caps = POCKET_BALANCED_TEMP_CAPS;/);
 });
 
-test('the expressive emotion mode is reachable everywhere it is validated', async () => {
-  // Five separate clamp sites used to collapse anything outside
-  // neutral|balanced, so no user could ever select the expressive tier.
-  for (const file of [
-    'public/assets/js/audio_core.js',
-    'public/assets/js/library_manager.js',
-    'public/assets/js/settings_manager.js',
-  ]) {
-    const source = await read(file);
-    const clamps = [...source.matchAll(/\[\s*'neutral',\s*'balanced'[^\]]*\]/g)].map((m) => m[0]);
-    for (const clamp of clamps) {
-      assert.match(clamp, /'expressive'/,
-        `${file} still clamps the emotion mode without an expressive tier: ${clamp}`);
-    }
-  }
-});
-
 test('the synthesis path feeds quality outcomes into the guard', async () => {
   const source = await read('public/assets/js/audio_core.js');
   // Clean paragraphs are recorded, and the retry and fatal branches record a
@@ -206,24 +189,6 @@ test('the emotion detector is inspectable from outside the module', async () => 
   // nothing outside audio_core could answer "does this actually vary".
   const source = await read('public/assets/js/audio_core.js');
   assert.match(source, /window\.inspectPocketEmotion\s*=/);
-});
-
-test('the retired voices are gone from every surface, not just the picker', async () => {
-  // Voice-Zero and the personal clone were removed at the product's request.
-  // A leftover mention in a shipped list is not cosmetic: an id that reaches
-  // the worker without a voice pack behind it hangs synthesis for 60 seconds.
-  const engineUtils = await read('public/assets/js/engine_utils.js');
-  const shell = await read('public/index.html');
-  const retired = ['donald_malone', 'bill_boerst', 'jason_mayoff',
-                   'kristin_hughes', 'jodi_krangle_expressive', 'karen_savage', 'rayne'];
-  const pack = engineUtils.slice(
-    engineUtils.indexOf('window.POCKET_VOICE_PACK = {'),
-    engineUtils.indexOf('window.POCKET_RETIRED_VOICES'),
-  );
-  for (const id of retired) {
-    assert.doesNotMatch(pack, new RegExp(`id: '${id}'`), `${id} must not be a shipped voice`);
-    assert.doesNotMatch(shell, new RegExp(`<option value="${id}"`), `${id} must not be selectable`);
-  }
 });
 
 test('Pocket ships three female and three male Kyutai voices, each neutral-only', async () => {
@@ -352,25 +317,6 @@ test('both accelerated decode paths are gated on a single LSD step', async () =>
   // And the per-frame flow sessions are still built only when steps > 1, so the
   // unaccelerated path stays lazy rather than loading on every mobile render.
   assert.match(worker, /chunkMeta\.some\(\(meta\) => Number\(meta\?\.lsdSteps \|\| DEFAULT_LSD_STEPS\) > 1\)/);
-});
-
-test('Alba is the configured default voice across the engine', async () => {
-  // Every module-load fallback has to name a voice that still exists. These
-  // literals are what run before engine_utils has set window.POCKET_DEFAULT_VOICE,
-  // so one left on a retired id is a real 60-second worker stall, not a typo.
-  const engineUtils = await read('public/assets/js/engine_utils.js');
-  assert.match(engineUtils, /window\.POCKET_DEFAULT_VOICE = 'alba'/);
-
-  for (const rel of ['public/assets/js/audio_core.js', 'public/assets/js/buffer_manager.js']) {
-    assert.match(await read(rel), /const POCKET_DEFAULT_VOICE = window\.POCKET_DEFAULT_VOICE \|\| 'alba'/, rel);
-  }
-
-  const library = await read('public/assets/js/library_manager.js');
-  assert.match(library, /const defaultVoice = window\.POCKET_DEFAULT_VOICE \|\| 'alba'/);
-  assert.match(library, /pocketVoice: window\.POCKET_DEFAULT_VOICE \|\| "alba"/);
-
-  const html = await read('public/index.html');
-  assert.match(html, /<option value="alba" selected>/, 'reader starts on the catalog default');
 });
 
 test('getPocketTuningPreset allows expressive temperature tuning without forced fallback', async () => {

@@ -37,43 +37,6 @@ test('upload dedup applies a corrected same-count re-upload', async () => {
   assert.match(api, /_flatten\(newStory\.chapters\) !== _flatten\(_stored\)/);
 });
 
-test('loading overlay reveal is delayed and cancellable', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  // Fast/cached operations must not flash the full-screen modal: show schedules a
-  // ~300ms reveal; hide cancels a pending reveal.
-  assert.match(ui, /_loadingOverlayTimer = setTimeout\(\(\) => \{/);
-  assert.match(ui, /clearTimeout\(window\._loadingOverlayTimer\)/);
-});
-
-test('fast-narration reload paints a self-removing, theme-aware anti-flash mask', async () => {
-  const page = await read('public/index.html');
-  assert.match(page, /pr-iso-mask/);
-  // Gated on an actively-pending resume so a bare ?tts_fast=1 reload is untouched.
-  assert.match(page, /pr_fast_narration_resume_v1/);
-  assert.match(page, /pr_backend_optimization_resume_v1/);
-  // Theme-aware so light-theme users don't get a dark mask.
-  assert.match(page, /background:var\(--app-bg,#111214\)/);
-  // Self-removes when a non-Home view (or the JS overlay) takes over, via the
-  // MutationObserver below plus a 10s backstop. It also published the clear
-  // function as window.__prClearIsoMask, which nothing ever called; removed in
-  // the 2026-09-04 audit.
-  assert.match(page, /var check = function \(\)/);
-  assert.match(page, /MutationObserver/);
-  assert.ok(!page.includes('__prClearIsoMask'), 'the write-only global must stay gone');
-});
-
-test('audio-cache clear is wrapped once with working feedback for both callers', async () => {
-  const settings = await read('public/assets/js/settings_manager.js');
-  // Both the Settings button and the reader storage panel call
-  // window.clearAudioCache; the decorator adds feedback for interactive calls and
-  // passes programmatic (skipConfirm) calls straight through, wrapped only once.
-  assert.match(settings, /_clearAudioCacheWrapped/);
-  assert.match(settings, /if \(skipConfirm\) return _rawClearAudioCache/);
-  // The obsolete settings-only wrapper must be gone (the button now calls the
-  // decorated global directly).
-  assert.doesNotMatch(settings, /clearAudioCacheFromSettings/);
-});
-
 // The anvil-app mirror assertion that lived here is deleted along with Anvil
 // itself (Phase 5). tests/migration_parity.test.mjs asserts the property that
 // replaced it: no module builds an Anvil asset URL.

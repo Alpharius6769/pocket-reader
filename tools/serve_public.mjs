@@ -1,4 +1,5 @@
-// Minimal static server for local verification of the deployable `public/` tree.
+// Minimal static server for local verification of the deployable tree: `dist/`
+// (run `npm run build` first) unless `--root <dir>` names another.
 //
 // Mirrors the two things the static host does that the app depends on: it
 // serves index.html for navigations (so client routing and the service worker
@@ -11,13 +12,14 @@
 // service worker injects COOP/COEP itself for ?tts_fast=1 sessions, and forcing
 // them globally would mask a regression in that path.
 //
-// Usage: node tools/serve_public.mjs [port] [--local-services]
+// Usage: node tools/serve_public.mjs [port] [--local-services] [--root <dir>]
 
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, normalize, sep } from 'node:path';
 
-const root = resolve('public');
+const rootFlag = process.argv.indexOf('--root');
+const root = resolve(rootFlag > 0 && process.argv[rootFlag + 1] ? process.argv[rootFlag + 1] : 'dist');
 const port = Number(process.argv[2]) || 4173;
 
 const MIME = {

@@ -90,9 +90,7 @@ for (let round = 1; round <= 12; round++) {
 
     if (ver.startsWith('sw-')) {
       const n = Number(ver.slice(3));
-      for (const rel of ['public/sw.js', 'public/assets/js/settings_manager.js',
-                         'public/index.html', 'public/assets/js/ui_controller.js',
-                         'tools/smoke_pocket_worker_runtime.mjs']) {
+      for (const rel of ['public/sw.js', 'tools/smoke_pocket_worker_runtime.mjs']) {
         const f = path.join(ROOT, rel);
         let src = await readFile(f, 'utf8');
         src = src.split(`sw.js?v=${n}`).join(`sw.js?v=${n + 1}`);

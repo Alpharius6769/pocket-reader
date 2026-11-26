@@ -90,21 +90,6 @@ test('cancellation is cooperative and never drops the generation mutex', async (
   assert.ok((worker.match(/generationShouldContinue\(\)/g) || []).length >= 5);
 });
 
-test('update checks are dispatched by story key, never by title', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  // checkStoryUpdate(storyRef, ...) resolves through findLibraryStoryByRef, which
-  // only matches a title when it is unique in the library. Both notification
-  // entry points used to pass story.title and silently no-op on a duplicate.
-  const calls = ui.match(/checkStoryUpdate\??\.?\(([^,]+),/g) || [];
-  assert.ok(calls.length >= 2, 'expected the notification and service-worker call sites');
-  for (const call of calls) {
-    const firstArg = call.slice(call.indexOf('(') + 1, -1).trim();
-    // A trailing `|| story.title` fallback is fine — what matters is that the
-    // stable key is tried first rather than the title being the whole argument.
-    assert.match(firstArg, /^story\.storyKey\b/, `dispatch by key, not title: ${firstArg}`);
-  }
-});
-
 test('backups exclude the auth session and per-device identity', async () => {
   const transfer = await read('public/assets/js/data_transfer.js');
   assert.match(transfer, /const EXCLUDED_LOCAL_KEYS = new Set\(/);
@@ -128,18 +113,6 @@ test('backups exclude the auth session and per-device identity', async () => {
 
 // ── Third pass: the modules that had not been read line-by-line ──────────────
 
-test('a disabled companion does not hold the experience queue', async () => {
-  const virtue = await read('public/assets/js/virtue_controller.js');
-  const speak = virtue.slice(virtue.indexOf('export function virtueSpeak('), virtue.indexOf('export function dismissVirtue('));
-  // _showVirtueSpeech no-ops when disabled, but the enqueued run() still parked
-  // _waitForVirtueDismiss for the full duration, serialising the whole queue
-  // behind narration that was never shown.
-  assert.match(speak, /if \(!_isVirtueEnabled\(\)\) return Promise\.resolve\(false\);/);
-  const guardIndex = speak.indexOf('_isVirtueEnabled()');
-  const enqueueIndex = speak.indexOf('enqueueExperience');
-  assert.ok(guardIndex > 0 && guardIndex < enqueueIndex, 'the guard must run before anything is enqueued');
-});
-
 test('per-caller rate limits key on the forwarded client, not the proxy', async () => {
   const app = await read('backend/app.py');
   assert.match(app, /def _client_ip\(request: Request\) -> str:/);
@@ -154,16 +127,6 @@ test('per-caller rate limits key on the forwarded client, not the proxy', async 
   const cacheHit = search.indexOf('if cached is not None:');
   const limiter = search.indexOf('_require_scrape_budget');
   assert.ok(cacheHit > 0 && limiter > cacheHit, 'the limiter must run after the cache, so repeats cost no budget');
-});
-
-test('the companion cooldown timer is restarted, not stacked', async () => {
-  const virtue = await read('public/assets/js/virtue_controller.js');
-  assert.match(virtue, /virtueCooldownTimeout: null,/);
-  const show = virtue.slice(virtue.indexOf('function _showVirtueSpeech('), virtue.indexOf('function _waitForVirtueDismiss('));
-  // An untracked setTimeout let the FIRST of several overlapping speeches clear
-  // the flag, ending the idle cooldown early.
-  assert.match(show, /if \(virtueState\.virtueCooldownTimeout\) clearTimeout\(virtueState\.virtueCooldownTimeout\)/);
-  assert.match(show, /virtueState\.virtueCooldownTimeout = setTimeout\(/);
 });
 
 test('a voice loaded into a retired worker pool is not memoised', async () => {

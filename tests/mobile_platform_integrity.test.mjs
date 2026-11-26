@@ -110,17 +110,6 @@ test('worker-count caps route through the shared platform helper', async () => {
   assert.doesNotMatch(source, /\/Mobi\|Android\|iPhone\|iPad\|Fennec/);
 });
 
-test('subscription sweeps are throttled across foreground transitions', async () => {
-  const source = await read('public/assets/js/ui_controller.js');
-  assert.match(source, /SUBSCRIPTION_SWEEP_MIN_INTERVAL_MS/);
-  assert.match(source, /_lastSubscriptionSweepAt/);
-  const floor = source.match(/SUBSCRIPTION_SWEEP_MIN_INTERVAL_MS\s*=\s*(\d+)\s*\*\s*60\s*\*\s*1000/)?.[1];
-  assert.ok(Number(floor) >= 5,
-    'a sub-5-minute floor still lets app-switching churn backend scrapes');
-  // The visibility handler must go through the throttled path.
-  assert.match(source, /visibilitychange[\s\S]{0,160}_scheduleSubscribedStoryChecks\(\)/);
-});
-
 test('the diagnostics heap sampler pauses while hidden and drops beforeunload', async () => {
   const source = await read('public/assets/js/diagnostics.js');
   assert.match(source, /_memTimer/);
@@ -138,30 +127,6 @@ test('the AudioContext is suspended when idle but never closed', async () => {
   // Closing is unrecoverable — a closed context cannot be resumed, which would
   // permanently break the desktop streaming path.
   assert.doesNotMatch(source, /_audioCtx\.close\(\)/);
-});
-
-test('every module version is consistent across sw.js, the shell, and importers', async () => {
-  // This is the guard that catches a half-applied bump: a module edited and
-  // re-versioned in sw.js but still imported at the old ?v= elsewhere means the
-  // browser fetches two copies, and the fix silently does not ship.
-  const dir = 'public/assets/js';
-  const sources = { 'sw.js': await read('public/sw.js'), 'index.html': await read('public/index.html') };
-  for (const file of (await readdir(dir)).filter((f) => f.endsWith('.js'))) {
-    sources[file] = await read(path.join(dir, file));
-  }
-  const seen = new Map();
-  for (const [origin, text] of Object.entries(sources)) {
-    for (const m of text.matchAll(/assets\/js\/([a-z_0-9]+\.js)\?v=([A-Za-z0-9._-]+)/g)) {
-      if (!seen.has(m[1])) seen.set(m[1], new Map());
-      if (!seen.get(m[1]).has(m[2])) seen.get(m[1]).set(m[2], []);
-      seen.get(m[1]).get(m[2]).push(origin);
-    }
-  }
-  const drifted = [...seen]
-    .filter(([, versions]) => versions.size > 1)
-    .map(([mod, versions]) => `${mod}: ${[...versions].map(([v, files]) => `${v} (${files.join(', ')})`).join(' vs ')}`);
-  assert.deepEqual(drifted, [], `module version drift:\n  ${drifted.join('\n  ')}`);
-  assert.ok(seen.size >= 20, 'expected the full module graph to be scanned');
 });
 
 test('no module changed content without bumping its own version', async () => {
@@ -183,65 +148,3 @@ test('no module changed content without bumping its own version', async () => {
   }
 });
 
-test('the service-worker revision agrees everywhere it is written down', async () => {
-  // Four files independently record this number. The invariant is agreement.
-  const sw = await read('public/sw.js');
-  const revision = sw.match(/pocket-reader-core-v(\d+)/)?.[1];
-  assert.ok(revision, 'sw.js must declare a versioned cache name');
-  const others = {
-    'index.html': await read('public/index.html'),
-    'ui_controller.js': await read('public/assets/js/ui_controller.js'),
-    'settings_manager.js': await read('public/assets/js/settings_manager.js'),
-    'tools/smoke_pocket_worker_runtime.mjs': await read('tools/smoke_pocket_worker_runtime.mjs'),
-  };
-  for (const [name, text] of Object.entries(others)) {
-    const found = new Set([
-      ...[...text.matchAll(/sw\.js\?v=(\d+)/g)].map((m) => m[1]),
-      ...[...text.matchAll(/NARRATION_SERVICE_WORKER_VERSION\s*=\s*'(\d+)'/g)].map((m) => m[1]),
-    ]);
-    assert.ok(found.size > 0, `${name} records no service-worker revision`);
-    for (const v of found) {
-      assert.equal(v, revision, `${name} records SW revision ${v} but sw.js ships ${revision}`);
-    }
-  }
-});
-
-// Mobile Safari zooms the whole page when a focused form control computes below
-// 16px and never zooms back out, leaving the reader panning a page wider than
-// the viewport. Measured on a 375px viewport before the fix: 27 of 74 text
-// controls were under the threshold, including all nineteen fields of the
-// first-run setup wizard -- a new reader's very first tap on an iPhone.
-test('no form control can sit under the iOS focus-zoom threshold', async () => {
-  const css = await read('public/assets/css/theme.css');
-
-  const guard = css.slice(css.indexOf('/* \u2500\u2500 iOS focus zoom'));
-  assert.ok(guard.length > 200, 'the focus-zoom guard must exist');
-  assert.match(guard, /@media \(pointer: coarse\)/,
-    'the guard must be scoped to touch, so desktop typography is untouched');
-  assert.match(guard, /font-size: 16px !important;/,
-    'the guard has to beat the single-class sizes and body.touch-large');
-  const selectorList = guard.slice(guard.indexOf('coarse) {'), guard.indexOf('font-size'));
-  for (const control of ['input', 'select', 'textarea']) {
-    assert.ok(selectorList.includes(control), `${control} must be covered by the guard`);
-  }
-
-  // The root font size is 14px, not 16px, so every rem-based control size is
-  // ~12% smaller than it reads. body.touch-large exists to make phone targets
-  // BIGGER, yet its 1.1rem was 15.4px -- under the threshold, so the one mode
-  // meant to be easier on a phone was also zooming the page on every tap.
-  const touchLarge = css.slice(
-    css.indexOf('body.touch-large .settings-control,'),
-    css.indexOf('body.touch-large .star-rating label'),
-  );
-  assert.ok(touchLarge.length > 0, 'the touch-large control block must exist');
-  assert.match(touchLarge, /font-size: max\(16px, [0-9.]+rem\) !important;/,
-    'touch-large must clear the threshold while staying larger than the default');
-  assert.doesNotMatch(touchLarge, /font-size: 1\.1rem !important;/);
-
-  // A viewport lock would also stop the zoom, at the cost of taking pinch-zoom
-  // away from readers who need it. It must not creep back in as a shortcut.
-  const html = await read('public/index.html');
-  const viewport = html.match(/<meta name="viewport"[^>]*>/)?.[0] || '';
-  assert.doesNotMatch(viewport, /maximum-scale|user-scalable/,
-    'pinch-zoom must stay available');
-});

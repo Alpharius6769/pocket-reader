@@ -145,49 +145,11 @@ test('an abort is not treated as a failed optimization', async () => {
 
 // ── Modals that never appear ────────────────────────────────────────────────
 
-test('a modal releases the queue even when nobody calls release', async () => {
-  // A modal's run promise resolves only via releaseQueuedModal. A close path
-  // that forgets it stranded activeEvent permanently, and pump() returns early
-  // while one is set -- so NOTHING queued afterwards ever ran again.
-  const source = await read('public/assets/js/experience_coordinator.js');
-  const reveal = source.slice(source.indexOf('export function queueModalReveal'), source.indexOf('export function releaseQueuedModal'));
-  assert.match(reveal, /setInterval/, 'the run promise must watch its own overlay');
-  assert.match(reveal, /isVisible\(document\.getElementById\(modalId\)\)/);
-  assert.match(reveal, /MODAL_REVEAL_GRACE_MS/,
-    'a grace period, or the watchdog could fire before the modal has rendered');
-  // Idempotent: the watchdog and an explicit release must not double-resolve.
-  assert.match(reveal, /let settled = false;/);
-  assert.match(reveal, /if \(settled\) return;/);
-});
-
 test('the close path that stranded the queue now releases it', async () => {
   const source = await read('public/assets/js/device_setup.js');
   const accept = source.slice(source.indexOf('function handleSettingsRiskAccept'), source.indexOf('function interceptAdvancedSettingsOpen'));
   assert.match(accept, /classList\.remove\('active'\)/);
   assert.match(accept, /window\.releaseQueuedModal\?\.\('settings-modal-overlay'\)/);
-});
-
-test('a modal preempts a decorative companion beat', async () => {
-  // Priority orders the PENDING queue but never interrupts what is running, and
-  // a Virtue beat holds the slot for its full 10 s speech. A modal asked for
-  // during one waited that long, which reads as the modal being broken.
-  const source = await read('public/assets/js/experience_coordinator.js');
-  const enqueue = source.slice(source.indexOf('export function enqueueExperience'), source.indexOf('export function queueModalReveal'));
-  assert.match(enqueue, /isVirtueEventId\(activeEvent\.id\)\s*\n?\s*&& Number\(priority\) > Number\(activeEvent\.priority \|\| 0\)/);
-  assert.match(enqueue, /window\.dismissVirtue\?\.\(\)/);
-});
-
-test('dismissVirtue actually settles what the queue is waiting on', async () => {
-  // Preemption only works because the beat's run promise is built on the same
-  // waiters dismissVirtue resolves. If that ever changes, preemption silently
-  // becomes a no-op and the delay comes back.
-  const source = await read('public/assets/js/virtue_controller.js');
-  const dismiss = source.slice(source.indexOf('export function dismissVirtue'), source.indexOf('export function dismissVirtue') + 600);
-  assert.match(dismiss, /virtueState\.dismissWaiters\].forEach\(\(done\) => done\(\)\)/);
-  assert.match(source, /_waitForVirtueDismiss\(effectiveDuration, resolve\)/,
-    'the speech run promise must wait on those waiters');
-  assert.match(source, /_waitForVirtueDismiss\(duration, resolve\)/,
-    'and so must the trigger run promise');
 });
 
 // ── The tier ladder still behaves ───────────────────────────────────────────

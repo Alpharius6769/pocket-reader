@@ -45,23 +45,6 @@ test('ignoreOverride suppresses the manual choice without blinding the measureme
   assert.equal(blinded.engine, 'kokoro', 'this is the answer the label used to show');
 });
 
-test('the Settings label reads the same measurement as the line beneath it', async () => {
-  // The panel contradicted itself: "Automatic - Kokoro on this device" directly
-  // above "Detected: This device measured 1024MB of working memory", which is
-  // the reason string for Pocket. Two calls, one of which could not see the
-  // measurement.
-  const source = await read('public/assets/js/settings_manager.js');
-  const render = source.slice(
-    source.indexOf('export function renderNarrationEngineControls'),
-    source.indexOf('window.renderNarrationEngineControls = renderNarrationEngineControls'),
-  );
-  const autoPick = render.slice(render.indexOf('const autoPick = selectNarrationEngine({'), render.indexOf('const select = document.getElementById'));
-  assert.match(autoPick, /ignoreOverride: true/);
-  assert.match(autoPick, /storage: localStorage/);
-  assert.doesNotMatch(autoPick, /storage: null/, 'storage is what carries the measurement');
-  assert.match(autoPick, /deviceMemory:/, 'the reported-RAM fallback needs the RAM figure too');
-});
-
 test('a device test measures rather than echoing the manual choice', async () => {
   // Reported: "Re-run device test always recommends the audio engine I have it
   // manually set to." It passed storage and no override, so it read the choice
@@ -122,28 +105,6 @@ test('Play restarts the cache job the runway gate is waiting on', async () => {
 });
 
 // ── A rating beat for something that was not a rating ───────────────────────
-
-test('virtue_smile is fired only by an actual star rating', async () => {
-  // Screenshot: "A solid middle-of-the-road score. I'm glad it was still
-  // enjoyable." with nothing rated. That is verbatim virtue_smile's pool, whose
-  // declared trigger in the data is "User rates a story 3 stars".
-  const virtue = await read('public/assets/js/virtue_controller.js');
-  const smile = virtue.slice(virtue.indexOf('"virtue_smile": {'), virtue.indexOf('"virtue_smile": {') + 400);
-  assert.match(smile, /"trigger": "User rates a story 3 stars\."/,
-    'if this stops being a rating trigger the rule below can relax');
-
-  for (const file of ['public/assets/js/buffer_manager.js', 'public/assets/js/settings_manager.js']) {
-    const source = await read(file);
-    assert.doesNotMatch(source, /triggerVirtue\('virtue_smile'\)/,
-      `${file} must not announce a review the reader never wrote`);
-  }
-  // The one legitimate caller is the rating handler itself.
-  const library = await read('public/assets/js/library_manager.js');
-  const uses = [...library.matchAll(/triggerVirtue\('virtue_smile'\)/g)];
-  assert.equal(uses.length, 1);
-  const before = library.slice(Math.max(0, uses[0].index - 200), uses[0].index);
-  assert.match(before, /rating === 3/, 'and only on three stars');
-});
 
 // ── The download that looked like a dead worker ─────────────────────────────
 

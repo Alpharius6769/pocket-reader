@@ -211,58 +211,6 @@ test('Pocket telemetry exposes punctuation and stage overhead', async () => {
   assert.match(worker, /gpuReadbacks/);
 });
 
-test('narration isolation and streamed PCM assets are versioned together', async () => {
-  const serviceWorker = await read('public/sw.js');
-  assert.match(serviceWorker, /pocket-reader-core-v\d+/);
-  assert.match(serviceWorker, /ui_controller\.js\?v=ui-v262/);
-  assert.match(serviceWorker, /Cross-Origin-Embedder-Policy', 'require-corp'/);
-  assert.match(serviceWorker, /pocket_pcm_worklet\.js\?v=pcm-v1/);
-  assert.match(serviceWorker, /pocket_worker\.js\?v=pocket-worker-v140/);
-  assert.match(serviceWorker, /pocket_backend_policy\.js\?v=backend-v64/);
-  assert.match(serviceWorker, /device_setup\.js\?v=device-setup-v57/);
-  assert.match(serviceWorker, /device_benchmark_worker\.js\?v=device-bench-v1/);
-  const shell = await read('public/index.html');
-  const swRevision = serviceWorker.match(/pocket-reader-core-v(\d+)/)?.[1];
-  assert.ok(swRevision, 'sw.js must declare a versioned cache name');
-  assert.match(shell, new RegExp(`sw\\.js\\?v=${swRevision}\\b`));
-});
-
-test('Settings recognizes the active narration service worker revision', async () => {
-  const settings = await read('public/assets/js/settings_manager.js');
-  assert.match(settings, /NARRATION_SERVICE_WORKER_VERSION\s*=\s*'\d+'/);
-  assert.match(settings, /searchParams\.get\('v'\)\s*===\s*NARRATION_SERVICE_WORKER_VERSION/);
-  // sw.js is the source of truth for the revision; settings must track it.
-  const swSource = await read('public/sw.js');
-  const swRevision = swSource.match(/pocket-reader-core-v(\d+)/)?.[1];
-  const settingsRevision = settings.match(/NARRATION_SERVICE_WORKER_VERSION\s*=\s*'(\d+)'/)[1];
-  assert.equal(settingsRevision, swRevision,
-    `settings_manager pins SW ${settingsRevision} but sw.js ships ${swRevision}`);
-  // ui_controller performs the PRIMARY service-worker registration. Its ?v= MUST
-  // match NARRATION_SERVICE_WORKER_VERSION, or narrationServiceWorkerControlsPage()
-  // never matches and the SW registration thrashes between versions on every
-  // narration start. (This pin closes the gap that let ui_controller drift to
-  // ?v=110 while everything else moved to 114.)
-  // Derive the version rather than pinning 129 twice: the invariant is that the
-  // two files agree, not that either holds a particular number.
-  const version = settings.match(/NARRATION_SERVICE_WORKER_VERSION\s*=\s*'(\d+)'/)[1];
-  const uiController = await read('public/assets/js/ui_controller.js');
-  const registered = [...uiController.matchAll(/sw\.js\?v=(\d+)/g)].map((m) => m[1]);
-  assert.ok(registered.length > 0, 'ui_controller performs no versioned SW registration');
-  for (const v of registered) {
-    assert.equal(v, version,
-      `ui_controller registers ?v=${v} but NARRATION_SERVICE_WORKER_VERSION is ${version}`);
-  }
-
-  // Anvil is deleted, so the worker path is a single static path. A leftover
-  // Anvil endpoint would fail with an HTML MIME type and silently take offline
-  // support and cross-origin isolation with it.
-  for (const source of [uiController, settings]) {
-    assert.match(source, /sw\.js/, 'the static worker path is missing');
-    assert.doesNotMatch(source, /_\/api\/serviceworker\.js/, 'an Anvil worker path survived');
-    assert.doesNotMatch(source, /hostname\.endsWith\('\.anvil\.app'\)/, 'host-aware branch is obsolete');
-  }
-});
-
 test('mobile playback uses one media-session transport map with seek support', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   assert.match(audio, /function _bindMediaSessionActions\(\)/);
@@ -292,34 +240,9 @@ test('interrupted cache jobs checkpoint locally and only restore on foreground',
   assert.match(buffer, /navigator\.wakeLock\.request\('screen'\)/);
 });
 
-test('story subscriptions use explicit AO3 state and push handoff', async () => {
-  const library = await read('public/assets/js/library_manager.js');
-  const settings = await read('public/assets/js/settings_manager.js');
-  const serviceWorker = await read('public/sw.js');
-  const backend = await read('backend/app.py');
-  assert.match(library, /window\.toggleStorySubscription/);
-  assert.match(library, /window\.checkSubscribedStoryUpdates/);
-  assert.match(library, /publishedChapters/);
-  assert.match(library, /workComplete/);
-  assert.doesNotMatch(library, /entry\.isFinished\s*=\s*entry\.declaredChapters/);
-  assert.match(settings, /story\?\.updateSubscribed/);
-  assert.match(serviceWorker, /self\.addEventListener\('push'/);
-  assert.match(serviceWorker, /story-update/);
-  assert.match(backend, /update_subscribed/);
-  assert.match(backend, /published_chapters/);
-});
-
 test('story menu close handler is initialized before subscription markup', async () => {
   const library = await read('public/assets/js/library_manager.js');
   assert.ok(library.indexOf('const closeMenusJs') < library.indexOf('const subscriptionButton'));
-});
-
-test('onboarding drafts survive an authentication reload and sync on completion', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.match(ui, /SETUP_AUTH_STORAGE_KEY/);
-  assert.match(ui, /_restoreFirstTimeSetupState/);
-  assert.match(ui, /localStorage\.setItem\(SETUP_AUTH_STORAGE_KEY/);
-  assert.match(ui, /queueCloudSync\('onboarding-complete'/);
 });
 
 test('calibration quality compares medians across all timed trials', async () => {

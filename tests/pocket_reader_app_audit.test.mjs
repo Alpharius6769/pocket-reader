@@ -105,13 +105,6 @@ test('library bookmarks await loadStory then jump (M6)', async () => {
   assert.doesNotMatch(library, /setTimeout\(\(\) => \{ if \(typeof window\.jumpToBookmark/);
 });
 
-test('history and queue open by storyKey (M7)', async () => {
-  const features = await read('public/assets/js/reader_features.js');
-  assert.match(features, /loadStory\(\$\{inlineArg\(item\.storyKey \|\| item\.title\)\}\)/);
-  assert.match(features, /loadStory\(\$\{inlineArg\(stableKey\(story\) \|\| story\.title \|\| story\.url \|\| ''\)\}\)/);
-  assert.doesNotMatch(features, /loadStory\(\$\{inlineArg\(story\.title \|\| story\.url \|\| ''\)\}\)/);
-});
-
 test('interrupted cache restore never navigates the reader (M8)', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
   assert.match(buffer, /loadStory\(jobRef, \{ preventNavigate: true \}\)/);
@@ -137,15 +130,6 @@ test('expensive backend ingest routes share the scrape budget (M9)', async () =>
   }
 });
 
-test('push enablement registers the versioned service worker (M10)', async () => {
-  const settings = await read('public/assets/js/settings_manager.js');
-  assert.match(settings, /NARRATION_SERVICE_WORKER_URL/);
-  assert.match(settings, /function narrationRegistrationIsCurrent/);
-  const push = settings.slice(settings.indexOf('let swReg = await navigator.serviceWorker.getRegistration()'));
-  assert.match(push, /!narrationRegistrationIsCurrent\(swReg\)/);
-  assert.match(push, /navigator\.serviceWorker\.register\(swUrl\)/);
-});
-
 // Production is a SUBPATH (alpharius6769.github.io/pocket-reader/), so a
 // root-absolute '/' addresses the account root, not the app. The precached shell
 // is './'; looking it up as '/' missed every time and the offline launch fell
@@ -163,25 +147,6 @@ test('service worker addresses the shell relative to its own scope', async () =>
   assert.doesNotMatch(sw, /caches\.match\('\/'\)/);
   assert.doesNotMatch(sw, /icon: '\/assets\//);
   assert.doesNotMatch(sw, /badge: '\/assets\//);
-});
-
-test('reader and library covers only accept http(s) URLs (L1)', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.match(ui, /function _safeHttpCoverUrl/);
-  assert.match(ui, /parsed\.protocol === 'http:' \|\| parsed\.protocol === 'https:'/);
-  assert.match(ui, /const coverSrc = _safeHttpCoverUrl\(storyObj\.coverImage\)/);
-  const library = await read('public/assets/js/library_manager.js');
-  assert.match(library, /function _safeHttpCoverUrl/);
-  assert.match(library, /const coverSrc = _safeHttpCoverUrl\(story\.coverImage \|\| story\.coverUrl \|\| ''\)/);
-  assert.doesNotMatch(library, /const cover = story\.coverImage \|\| story\.coverUrl \|\| ''/);
-  for (const source of [ui, library]) {
-    const helper = source.slice(
-      source.indexOf('function _safeHttpCoverUrl'),
-      source.indexOf('function _safeHttpCoverUrl') + 450,
-    );
-    assert.match(helper, /if \(!raw\) return '';/);
-    assert.doesNotMatch(helper, /new URL\(String\(value \|\| ''\), window\.location\.href\)/);
-  }
 });
 
 test('admin secrets compare in constant time and health omits paths (L2/L3)', async () => {

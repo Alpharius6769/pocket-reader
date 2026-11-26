@@ -107,13 +107,3 @@ test('the fallback lives in the selector, not at its call sites', async () => {
     'selectNarrationEngine must fall back to the persisted measurement itself');
 });
 
-test('every selectNarrationEngine caller reaches the same answer', async () => {
-  // Belt and braces: no caller may hardcode a headroom of 0 in a way that
-  // defeats the fallback, because `0 ?? x` short-circuits to 0.
-  const roots = ['public/assets/js/engine_utils.js', 'public/assets/js/settings_manager.js'];
-  for (const rel of roots) {
-    const source = await readFile(path.join(ROOT, rel), 'utf8');
-    assert.doesNotMatch(source, /memoryHeadroomMb:\s*0\b/,
-      `${rel} must not pass a literal 0, which would mask the stored measurement`);
-  }
-});

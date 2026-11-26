@@ -4,39 +4,6 @@ import { readFile } from 'node:fs/promises';
 
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
-test('heavy narration modules remain deferred until narration is requested', async () => {
-  const html = await read('public/index.html');
-  const loader = await read('public/assets/js/narration_runtime_loader.js');
-
-  assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
-  assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v259'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v138'\)/);
-});
-
-test('the deferred loader preserves the original mobile user activation', async () => {
-  const html = await read('public/index.html');
-  const loader = await read('public/assets/js/narration_runtime_loader.js');
-  const audio = await read('public/assets/js/audio_core.js');
-  const buffer = await read('public/assets/js/buffer_manager.js');
-
-  assert.match(loader, /function preparePocketDeferredMediaGesture/);
-  assert.match(loader, /MEDIA_GESTURE_ACTIONS/);
-  assert.ok(
-    loader.indexOf('preparePocketDeferredMediaGesture()') < loader.indexOf('ensureNarrationRuntime().then'),
-    'media must be unlocked before the dynamic import promise',
-  );
-  assert.match(audio, /window\.__pocketMobileMediaElement \|\| null/);
-  assert.match(audio, /window\.__pocketMobileAudioContext \|\| null/);
-  assert.match(loader, /audio\.loop = true/);
-  assert.match(audio, /_premiumAudio\.loop = true/);
-  assert.match(audio, /_premiumAudio\?\.dataset\?\.pocketUnlock === '1'[\s\S]*?_premiumAudio\.pause\(\)/);
-  assert.match(audio, /window\.currentAudio\.loop = false/);
-  // Away Mode's queue runner is gone, so nothing may still call it.
-  assert.doesNotMatch(buffer, /startPrecacheQueue/);
-  assert.doesNotMatch(html, /startPrecacheQueue/);
-});
-
 test('playback requests an isolated narration session before model startup', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   const toggle = audio.match(/export function togglePlayState\(\)[\s\S]*?window\.togglePlayState =/)?.[0] || '';
@@ -86,25 +53,6 @@ test('post-reload narration restore can fall back to the original story URL befo
   assert.match(resume, /const loadRef = /, 'resume must derive a fallback load reference');
   assert.match(resume, /window\.loadStory\(loadRef/, 'resume must not require the in-memory library entry');
   assert.match(resume, /Library hydration was slow/, 'fallback must leave useful diagnostic evidence');
-});
-
-test('a narration-resume fix advances the immutable module and service-worker revisions', async () => {
-  const [buffer, loader, worker, shell] = await Promise.all([
-    read('public/assets/js/buffer_manager.js'),
-    read('public/assets/js/narration_runtime_loader.js'),
-    read('public/sw.js'),
-    read('public/index.html'),
-  ]);
-  assert.match(loader, /buffer_manager\.js\?v=buffer-v138/);
-  assert.match(worker, /buffer_manager\.js\?v=buffer-v138/);
-  assert.match(worker, /pocket-reader-core-v\d+/);
-  // Derived, not pinned: the shell must register whatever revision the service
-  // worker actually ships. Hardcoding the number here only forced a mechanical
-  // edit on every bump without ever checking the thing that matters.
-  const swRevision = worker.match(/pocket-reader-core-v(\d+)/)?.[1];
-  assert.ok(swRevision, 'sw.js must declare a versioned cache name');
-  assert.match(shell, new RegExp(`sw\\.js\\?v=${swRevision}\\b`));
-  assert.match(buffer, /storyRef/);
 });
 
 test('first requested paragraph supplies calibration telemetry without a throwaway synthesis', async () => {
@@ -179,10 +127,3 @@ test('a failed cache render gets varied quality retries, never identical reruns'
   assert.match(buffer, /task\.failCount = 3/);
 });
 
-test('every pronunciation consumer uses the current ruleset URL', async () => {
-  for (const file of ['public/assets/js/audio_core.js', 'public/assets/js/settings_manager.js', 'public/assets/js/library_manager.js', 'public/assets/js/pocket_worker.js']) {
-    const source = await read(file);
-    assert.doesNotMatch(source, /tts_pronunciation_core\.js\?v=pron-v9/, `${file} still imports pron-v9`);
-    assert.match(source, /tts_pronunciation_core\.js\?v=pron-v37/, `${file} must import pron-v14`);
-  }
-});

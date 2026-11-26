@@ -31,9 +31,11 @@ const sha = (text) =>
   // every file as changed depending on who checked it out.
   createHash('sha256').update(text.replace(/\r\n/g, '\n'), 'utf8').digest('hex').slice(0, 16);
 
+// v2: the shell is web/index.html, which loads the cores through
+// web/src/lib/core/coreLoader.ts using THIS manifest, so sw.js and the modules'
+// own imports are the only places a ?v= token is written by hand.
 const sources = {
   'sw.js': await readFile('public/sw.js', 'utf8'),
-  'index.html': await readFile('public/index.html', 'utf8'),
 };
 const moduleFiles = (await readdir(JS_DIR)).filter((f) => f.endsWith('.js')).sort();
 for (const file of moduleFiles) {
@@ -135,7 +137,7 @@ if (stale.length) {
   for (const { file, version } of stale) {
     console.error(`  ${file}  still at  ?v=${version}`);
   }
-  console.error('\nBump each module\'s own ?v= everywhere it is referenced (sw.js, index.html,');
+  console.error('\nBump each module\'s own ?v= everywhere it is referenced (sw.js,');
   console.error('and every importer), then re-run with --update.');
   process.exit(1);
 }

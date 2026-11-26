@@ -11,7 +11,7 @@
     "preview": "vite preview --config web/vite.config.ts",
     "test:ui": "vitest run --config web/vite.config.ts",
     "check:ui": "svelte-check --tsconfig web/tsconfig.json",
-    "cap:init": "npx @capacitor/cli init \"Pocket Reader\" com.pocketreader.app --web-dir public",
+    "cap:init": "npx @capacitor/cli init \"Pocket Reader\" com.pocketreader.app --web-dir dist",
     "cap:add:android": "npx @capacitor/cli add android",
     "cap:add:ios": "npx @capacitor/cli add ios",
     "cap:sync": "npx @capacitor/cli sync",

@@ -101,33 +101,11 @@ test('a scraped story with no contents section is untouched', () => {
 // stated. The same chapter could therefore be "Chapter 6" at the top of the
 // reader and "Chapter 5" in the jump list.
 
-test('the chapter jump list and the reader header share one label function', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.ok(
-    !ui.includes('_formatChapterTitle'),
-    'the jump list must not carry a second labelling rule',
-  );
-  assert.equal(
-    (ui.match(/function _formatChapterLabel\(/g) || []).length, 1,
-    'exactly one chapter-label function should exist',
-  );
-  assert.match(ui, /const title = _formatChapterLabel\(idx, ch\.title\);/);
-});
-
 // ── Scrolling to a chapter inside content-visibility sections ────────────────
 // One scrollIntoView() lands on the sum of the contain-intrinsic-size ESTIMATES
 // of every skipped section above the target. On a phone those estimates are
 // roughly half the real height, so a jump to chapter 7 stopped inside chapter 1
 // while the header (driven by the index, which was correct) said "Chapter 7".
-
-test('a chapter jump re-issues the scroll until it converges', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.match(ui, /function _settleScrollTo\(el\) \{/);
-  assert.match(ui, /_settleScrollTo\(activeEl\);/);
-  // Bounded, and abandoned if the reader has moved on to another paragraph.
-  assert.match(ui, /if \(stable >= 1 \|\| \+\+frames >= 8\) return;/);
-  assert.match(ui, /if \(el\.id !== `reader-p-\$\{window\.currentChapterIndex\}-\$\{window\.currentParagraphIndex\}`\) return;/);
-});
 
 // ── An empty chapter must not end narration ─────────────────────────────────
 // The AO3 scraper now KEEPS a chapter whose body it could not read, so that the

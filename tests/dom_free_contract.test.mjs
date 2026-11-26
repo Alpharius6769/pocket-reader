@@ -46,15 +46,6 @@ test('the narration voice comes from settings, not from a <select>', async () =>
   assert.doesNotMatch(buffer, /getElementById\('voice-selector'\)\?\.value/);
 });
 
-test('an engine switch does not wait for an element the new UI never renders', async () => {
-  const audio = await read('public/assets/js/audio_core.js');
-  // Without the flag this re-scheduled itself every 50 ms forever on a page
-  // with no #voice-selector, and the engine never changed.
-  assert.match(audio, /if \(window\.__prLegacyShell && !document\.getElementById\('voice-selector'\)\) \{/);
-  const adapter = await read('public/assets/js/legacy_ui_adapter.js');
-  assert.match(adapter, /window\.__prLegacyShell = true;/);
-});
-
 test('status lines reach the UI as events, and the lock screen reads the last one', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   assert.match(audio, /const _setStatus = \(msg\) => ui\.status\(msg\);/);

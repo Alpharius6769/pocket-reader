@@ -24,6 +24,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
+          cache: npm
 
       - uses: actions/setup-python@v7
         with:
@@ -57,6 +58,18 @@ jobs:
 
       - name: Run backend regression suites
         run: python -m unittest discover -s tests -p "*_regressions.py" -v
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Type-check the v2 UI
+        run: npm run check:ui
+
+      - name: Run the v2 UI tests (components, stores, RealBridge)
+        run: npm run test:ui
+
+      - name: Build the app (dist/ is what Pages publishes)
+        run: npm run build
 
       - name: Install browser smoke dependencies
         working-directory: tests/webkit-smoke

@@ -169,6 +169,8 @@ function stripHtml(html: string): string {
 type Handler = (payload: never) => void;
 
 export class RealBridge implements CoreBridge {
+  /** Survives minification, unlike the class name: tests and diagnostics read it. */
+  readonly kind = 'real' as const;
   private handlers = new Map<BridgeEventName, Set<Handler>>();
   private state: PlayState = 'idle';
   private engine: EngineState = { engine: 'pocket', status: 'idle' };
@@ -973,7 +975,7 @@ export class RealBridge implements CoreBridge {
         id: a.id,
         title: a.title,
         description: a.desc,
-        icon: a.id,
+        icon: `ach_${a.id}`,
         unlockedAt: got ? Number(got.unlockedAt) || undefined : undefined,
         tier: reached?.t,
         progress: next ? { value, target: next.v } : a.target ? { value: Math.min(value, a.target), target: a.target } : undefined,

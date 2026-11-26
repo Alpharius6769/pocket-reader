@@ -91,18 +91,6 @@ test('service-worker cache quota failures never turn a successful network respon
   assert.match(update, /return null/);
 });
 
-test('runtime code carries no legacy Anvil globals', async () => {
-  for (const file of [
-    'public/assets/js/cinematic_ui.js',
-    'public/assets/js/library_manager.js',
-    'public/assets/js/settings_manager.js',
-    'public/assets/js/ui_controller.js',
-  ]) {
-    const source = await read(file);
-    assert.doesNotMatch(source, /window\.anvil[A-Z]/, `${file} still uses a retired Anvil global`);
-  }
-});
-
 test('worker smoke tooling targets the current static app and creates its output directory', async () => {
   const source = await read('tools/smoke_pocket_worker_runtime.mjs');
   assert.match(source, /mkdirSync/);

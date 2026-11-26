@@ -26,11 +26,13 @@ const get = async (url, init) => {
 };
 
 // ── 1. The shell and every module version it references ─────────────────────
-const localShell = await readFile('public/index.html', 'utf8');
-const liveShell = await get(`${PAGES}/index.html?cachebust=${Date.now()}`);
+// v2: the shell (web/index.html) carries no module tokens; the service worker's
+// precache list is the published record of which core versions ship.
+const localShell = await readFile('public/sw.js', 'utf8');
+const liveShell = await get(`${PAGES}/sw.js?cachebust=${Date.now()}`);
 
 if (liveShell.status !== 200) {
-  problems.push(`GitHub Pages returned ${liveShell.status} for index.html`);
+  problems.push(`GitHub Pages returned ${liveShell.status} for sw.js`);
 } else {
   const versionsOf = (html) => {
     const map = new Map();

@@ -1,7 +1,7 @@
 {
   "appId": "com.pocketreader.app",
   "appName": "Pocket Reader",
-  "webDir": "public",
+  "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https",

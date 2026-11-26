@@ -1,150 +1,149 @@
+// v2 browser smoke: the production build (dist/) on the real cores, at iPhone
+// size, in Chromium or WebKit (DECK_BROWSER=webkit).
+//
+// Covers what unit tests cannot: the cores loading by their versioned URLs into
+// the Svelte shell, the profile surviving a reload, and the service worker
+// serving the whole app offline (shell, hashed bundle, cores, story text).
+// Narration itself is not played here: CI has no route to the model proxy, and
+// audio quality is not judgeable by a test anyway.
+//
+// Prerequisite: `npm run build`. Usage: node tests/webkit-smoke/deck.mjs
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { existsSync } from 'node:fs';
 import { chromium, webkit } from 'playwright';
 
-const port = process.env.DECK_PORT || '4789';
-const origin = 'http://127.0.0.1:' + port;
-const server = spawn(process.execPath, ['tools/serve_public.mjs', port], { stdio: ['ignore', 'pipe', 'inherit'] });
-let browser;
-const title = 'Night train across the mountains';
-const story = { title, author: 'Demo author', chapters: [
-  { title: 'Departure', paragraphs: ['The whistle sounded.', 'We crossed the river.'] },
-  { title: 'Arrival', paragraphs: ['At dawn, the train reached the coast.'] },
-] };
+if (!existsSync('dist/index.html') || !existsSync('dist/sw.js')) {
+  throw new Error('dist/ is missing: run `npm run build` first.');
+}
 
+const port = process.env.DECK_PORT || '4789';
+const origin = `http://127.0.0.1:${port}`;
+const server = spawn(process.execPath, ['tools/serve_public.mjs', port, '--root', 'dist'], { stdio: ['ignore', 'pipe', 'inherit'] });
+const title = 'Night Train';
+const text = [
+  'Chapter 1', '',
+  'The whistle sounded twice, and the carriage lurched forward into the dark.', '',
+  '"Are we late?" she asked. Nobody answered.', '',
+  'At dawn, the train reached the coast, and the sea was the colour of slate.',
+].join('\n');
+
+const uploadedStory = {
+  title,
+  author: 'Demo author',
+  chapters: [{
+    title: 'Chapter 1',
+    paragraphs: [
+      'The whistle sounded twice, and the carriage lurched forward into the dark.',
+      '"Are we late?" she asked. Nobody answered.',
+      'At dawn, the train reached the coast, and the sea was the colour of slate.',
+    ],
+  }],
+};
+
+let browser;
 try {
-  await Promise.race([once(server.stdout, 'data'), once(server, 'exit').then(() => { throw Error('Preview failed to start'); })]);
+  await Promise.race([
+    once(server.stdout, 'data'),
+    once(server, 'exit').then(() => { throw new Error('Static server failed to start'); }),
+  ]);
   browser = await (process.env.DECK_BROWSER === 'webkit' ? webkit : chromium).launch();
-  const ctx = await browser.newContext({ viewport: { width: 320, height: 640 }, serviceWorkers: 'block' });
-  await ctx.addInitScript(() => {
-    if (!('speechSynthesis' in window)) {
-      window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
-      window.speechSynthesis = { getVoices: () => [], cancel() {}, pause() {}, resume() {} };
-    }
+  // WebKit runs without the service worker: with one controlling the page,
+  // Playwright's WebKit stops routing the page's cross-origin fetches through
+  // the stand-ins below, and it cannot do the offline reload anyway. Chromium
+  // keeps it, and covers the offline boot.
+  const offlineCheck = process.env.DECK_BROWSER !== 'webkit';
+  const ctx = await browser.newContext({
+    viewport: { width: 402, height: 874 }, hasTouch: true, deviceScaleFactor: 2,
+    serviceWorkers: offlineCheck ? 'allow' : 'block',
   });
+
+  // Everything off-origin (the API proxy, Supabase-era endpoints, fonts CDNs)
+  // is answered locally, so CI needs no network and no credentials.
+  await ctx.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.origin === origin || !url.protocol.startsWith('http')) return route.continue();
+    // Uploaded files are parsed by the backend (POST /api/upload), as in production.
+    // WebKit enforces CORS on fulfilled responses (Chromium does not), and the
+    // real proxy sends these headers, so the stand-in must too.
+    const headers = {
+      'access-control-allow-origin': origin,
+      'access-control-allow-credentials': 'true',
+      'access-control-allow-headers': route.request().headers()['access-control-request-headers'] || 'content-type',
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
+    };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    if (url.pathname.endsWith('/api/upload')) return route.fulfill({ json: uploadedStory, headers });
+    return route.fulfill({ json: { items: [], stories: [], results: [], count: 0 }, headers });
+  });
+
   const errors = [];
   const page = await ctx.newPage();
-  page.on('pageerror', e => errors.push(e.message));
+  page.on('pageerror', (e) => errors.push(e.message));
+  const bridgeReady = () => page.waitForFunction(() => window.__pocketCoreBridge?.kind === 'real', null, { timeout: 20000 });
 
-  // External story sources are simulated so CI never needs the network.
-  await ctx.route('**/*', async route => {
-    const u = new URL(route.request().url());
-    if (u.origin === origin || !u.protocol.startsWith('http')) return route.continue();
-    let data;
-    if (u.pathname === '/api/upload') data = story;
-    else if (u.pathname.endsWith('/catalog.json')) data = { schemaVersion: 1, records: [{id:'night',title:'The Last Train',authors:['Demo author'],sources:[],tags:[],partnerSpecies:[],worlds:['HMOFA']}], recordCount: 1 };
-    else data = { items: [], count: 0, ratings: {}, trending: [] };
-    return route.fulfill({ json: data });
-  });
+  // ── First launch: onboarding, on the real bridge ──────────────────────────
   await page.goto(origin);
-  await page.locator('#setup-skip-btn').click();
-  assert.equal(await page.locator('#device-setup-modal').isVisible(), false);
-  assert.equal(await page.getByRole('button', { name: 'Browse stories', exact: true }).isVisible(), true);
-  await page.locator('#local-file-upload').setInputFiles({ name: 'night.txt', mimeType: 'text/plain', buffer: Buffer.from('A local book') });
-  await page.waitForFunction(() => window.currentActiveView === 'reading-view' && window.currentStory?.chapters.length === 2);
-  assert.equal(await page.locator('#device-setup-modal').isVisible(), false);
-  const nav = name => page.locator('.sidebar').getByRole('button', { name, exact: true }).click();
-  await nav('Home');
-  await page.getByRole('button', { name: 'Listen', exact: true }).click();
-  await page.locator('#device-setup-modal').getByRole('button', {name:'Cancel', exact:true}).click();
-  assert.equal(await page.evaluate(() => !!window.isPlaying), false);
-  await page.locator('.deck-voice summary').click();
-  await page.locator('#reader-engine-select').selectOption('webspeech');
-  // Headless hosts have no system voice. Keep the browser utterance alive while
-  // exercising real playback, navigation and pause handlers.
-  await page.evaluate(() => { speechSynthesis.speak = utterance => { window.testUtterance = utterance; }; });
-  await nav('Home');
-  await page.getByRole('button', { name: 'Listen', exact: true }).click();
-  await page.waitForFunction(() => window.isPlaying && window.testUtterance);
-  await nav('Library');
-  await page.waitForSelector('#deck-mini:not([hidden])');
-  await nav('Discover');
-  await page.waitForFunction(() => window.currentActiveView === 'hmofa-view');
-  await page.getByText('The Last Train', {exact:true}).first().waitFor();
-  assert.equal(await page.evaluate(() => window.testUtterance === window.currentAudio && window.isPlaying), true);
-  await page.locator('[data-deck-toggle]').click();
-  assert.equal(await page.evaluate(() => window.isPlaying), false);
-  await page.locator('[data-deck-return]').click();
-  await page.waitForFunction(() => window.currentActiveView === 'reading-view');
-  await page.evaluate(() => window.seekToParagraph(1, 0));
-  await nav('Home');
-  await page.waitForFunction(() => document.querySelector('.deck-scale')?.textContent.includes('Arrival'));
-  for (const size of [{width:320,height:568},{width:740,height:360},{width:1280,height:820}]) {
-    await page.setViewportSize(size);
-    for (const text of ['Read','Listen']) {
-      const box = await page.getByRole('button', { name:text, exact:true }).boundingBox();
-      assert.ok(box && box.x >= 0 && box.x + box.width <= size.width + 1 && box.y + box.height <= size.height + 1, JSON.stringify({text,size,box}));
-    }
-  }
-  await page.getByRole('button', { name: 'Read', exact: true }).click();
-  await page.waitForFunction(() => window.currentActiveView === 'reading-view');
-  assert.equal(await page.evaluate(() => window.currentChapterIndex), 1);
+  await bridgeReady();
+  await page.getByText('Stories, read aloud.').waitFor({ timeout: 10000 });
+  // Scoped to the onboarding dialog: the tab bar behind it has a Listen button too.
+  await page.getByRole('dialog').getByRole('button', { name: /^Listen/ }).click();
+  await page.waitForFunction(() => localStorage.getItem('pr_setup_complete') === 'true');
 
-  await page.evaluate(() => {
-    window.saveBookmark();
-    window.saveLocalData({ immediate: true, skipCloud: true });
-  });
-  const saved = await ctx.storageState({ indexedDB: true });
-  // Accounts were retired: a sign-in token left over from an earlier version is
-  // cleared at load, and the local library survives the reload untouched.
-  const libraryBefore = await page.evaluate(() => window.userProfile.library.map((s) => s.storyKey).sort());
-  await page.evaluate(() => {
-    localStorage.setItem('pr_supabase_session_v1', JSON.stringify({ access_token: 'fixture', refresh_token: 'fixture' }));
-    localStorage.setItem('pr_profile_owner', 'reader@example.test');
-  });
+  // ── Import, open, bookmark, speed ─────────────────────────────────────────
+  const key = await page.evaluate(async ([name, body]) => {
+    const summary = await window.__pocketCoreBridge.importFile(new File([body], `${name}.txt`, { type: 'text/plain' }));
+    return summary.key;
+  }, [title, text]);
+  assert.ok(key, 'import returns a library key');
+  const opened = await page.evaluate(async (k) => {
+    const b = window.__pocketCoreBridge;
+    const story = await b.loadStory({ kind: 'key', key: k });
+    await b.seekToParagraph(2);
+    const mark = await b.saveBookmark('dawn');
+    b.setSpeed(1.25);
+    return { paragraphs: story.chapters[0].paragraphs.length, mark: [mark.chapter, mark.paragraph, mark.label] };
+  }, key);
+  assert.ok(opened.paragraphs >= 3, `story text loaded (${opened.paragraphs} paragraphs)`);
+  assert.deepEqual(opened.mark, [0, 2, 'dawn']);
+  await page.getByText(title).first().waitFor({ timeout: 5000 });
+
+  // ── Reload: the profile and its settings come back ────────────────────────
+  // Also lets the service worker (registered by the production build) take
+  // control of this page before going offline.
   await page.reload();
-  await page.waitForFunction(() => window.__pocketProfileHydrated === true, null, { timeout: 12000 });
-  assert.equal(await page.evaluate(() => localStorage.getItem('pr_supabase_session_v1')), null, 'retired session token is cleared');
-  assert.equal(await page.evaluate(() => localStorage.getItem('pr_profile_owner')), null, 'retired account owner is cleared');
-  assert.deepEqual(await page.evaluate(() => window.userProfile.library.map((s) => s.storyKey).sort()), libraryBefore);
-  assert.deepEqual(errors, []);
-  const offline = await browser.newContext({ storageState: saved });
-  await offline.route(/^https:\/\//, route => route.abort('internetdisconnected'));
-  const offlinePage = await offline.newPage();
-  const seedPage = origin + '/upgrade-fixture.html';
-  await offlinePage.route(seedPage, route => route.fulfill({ contentType:'text/html', body:'<!doctype html><title>Previous install</title>' }));
-  await offlinePage.goto(seedPage);
-  await offlinePage.evaluate(async () => {
-    await caches.open('pocket-reader-core-legacy-review');
-    for (const name of ['hmofa-catalog-v1', 'pocket-voices-review']) {
-      const cache = await caches.open(name);
-      await cache.put('/upgrade-sentinel', new Response(name));
-    }
-  });
-  await offlinePage.evaluate(() => navigator.serviceWorker.register('./sw.js'));
-  await offlinePage.waitForFunction(() => navigator.serviceWorker.controller, null, { timeout: 60000 });
-  const preserved = await offlinePage.evaluate(async () => ({
-    oldShell: await caches.has('pocket-reader-core-legacy-review'),
-    catalog: await (await (await caches.open('hmofa-catalog-v1')).match('/upgrade-sentinel'))?.text(),
-    voices: await (await (await caches.open('pocket-voices-review')).match('/upgrade-sentinel'))?.text(),
-  }));
-  assert.deepEqual(preserved, { oldShell: false, catalog:'hmofa-catalog-v1', voices:'pocket-voices-review' });
-  await offlinePage.goto(origin);
-  await offlinePage.waitForFunction(() => window.__pocketProfileHydrated);
-  // Removing the origin also exercises WebKit builds whose offline emulation
-  // prevents the navigation from reaching the service worker at all.
-  const stopped = once(server, 'exit');
-  server.kill();
-  await stopped;
-  await offlinePage.reload({ waitUntil: 'domcontentloaded' });
-  await offlinePage.locator('.sidebar').getByRole('button', { name:'Home', exact:true }).click();
-  await offlinePage.getByRole('heading', {name:title}).waitFor();
-  await offlinePage.locator('.deck-scale').getByText('Arrival', { exact:true }).waitFor();
-  await offlinePage.getByRole('button', { name:'Read', exact:true }).click();
-  await offlinePage.waitForFunction(() => window.currentStory?.chapters?.[1]?.title === 'Arrival'
-    && window.currentActiveView === 'reading-view' && window.currentChapterIndex === 1
-    && window.userProfile.library.some(entry => entry.title === window.currentStory.title && entry.bookmarks?.some(b => b.c === 1)),
-    null, { timeout: 8000 }).catch(async error => {
-      console.error('Offline read', await offlinePage.evaluate(() => ({
-        view: window.currentActiveView, title: window.currentStory?.title, chapter: window.currentChapterIndex,
-        chapters: window.currentStory?.chapters?.length, notice: document.querySelector('#deck-notice')?.textContent,
-        stories: window.userProfile.library.filter(s => s.author === 'Demo author').map(s => [s.title, s.progressChapter, s.bookmarks?.length])
-      })));
-      throw error;
-    });
-  await offline.close();
-  console.log('Deck smoke passed: import, resume, calibration cancel, transport continuity, layout, catalog, retired-account cleanup, offline upgrade.');
+  await bridgeReady();
+  if (offlineCheck) await page.waitForFunction(() => !!navigator.serviceWorker?.controller, null, { timeout: 15000 });
+  const restored = await page.evaluate(async (k) => {
+    const b = window.__pocketCoreBridge;
+    const entry = (await b.library.list()).find((e) => e.story.key === k);
+    return { title: entry?.story.title, bookmarks: entry?.bookmarks.length, speed: (await b.getSettings()).speed };
+  }, key);
+  assert.deepEqual(restored, { title, bookmarks: 1, speed: 1.25 });
+  assert.equal(await page.getByText('Stories, read aloud.').count(), 0, 'onboarding does not return');
+
+  // ── Offline: the whole app comes from the service worker ──────────────────
+  // Chromium only. Playwright's WebKit cannot reload a service-worker-controlled
+  // page under offline emulation ("WebKit encountered an internal error"), which
+  // is a harness limit, not an app one; a real iPhone check covers WebKit.
+  if (offlineCheck) {
+  await ctx.setOffline(true);
+  await page.reload();
+  await bridgeReady();
+  await page.getByText(title).first().waitFor({ timeout: 10000 });
+  const offline = await page.evaluate(async (k) => {
+    const story = await window.__pocketCoreBridge.loadStory({ kind: 'key', key: k });
+    return story.chapters[0].paragraphs.length;
+  }, key);
+  assert.equal(offline, opened.paragraphs, 'story text opens offline from IndexedDB');
+  await ctx.setOffline(false);
+  }
+
+  assert.deepEqual(errors, [], 'no uncaught page errors');
+  console.log(`Deck smoke passed (${process.env.DECK_BROWSER || 'chromium'}): onboarding, import, open, bookmark, settings after reload, `
+    + (offlineCheck ? 'offline boot.' : 'offline boot SKIPPED (WebKit harness limit).'));
 } finally {
-  try { await browser?.close(); } finally { server.kill(); }
+  await browser?.close();
+  server.kill();
 }

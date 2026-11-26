@@ -62,21 +62,6 @@ test('the generated id cannot carry a payload either', () => {
   assert.match(id, /^b_\d+_\d+_\d+$/);
 });
 
-test('no bookmark index reaches an inline handler uncoerced', async () => {
-  // The sink-side half. Both files build the handler string themselves, so the
-  // guarantee has to hold at the point of interpolation as well as upstream --
-  // normalisation runs on load, and a render can be reached with an object that
-  // never went through it.
-  for (const rel of ['public/assets/js/library_manager.js', 'public/assets/js/ui_controller.js']) {
-    const source = await read(rel);
-    assert.doesNotMatch(source, /\$\{bm\.c\}/, `${rel} interpolates bm.c raw`);
-    assert.doesNotMatch(source, /\$\{bm\.p\}/, `${rel} interpolates bm.p raw`);
-    assert.doesNotMatch(source, /\$\{bm\.c \+ 1\}/, `${rel} interpolates bm.c raw in the label`);
-    assert.match(source, /const chapIdx = Number\(bm\.c\) \|\| 0;/, `${rel} must coerce the chapter index`);
-    assert.match(source, /const paraIdx = Number\(bm\.p\) \|\| 0;/, `${rel} must coerce the paragraph index`);
-  }
-});
-
 test('the escaped string arguments beside them stay escaped', async () => {
   // The fix must not have disturbed the neighbouring defence: encodeURIComponent
   // leaves the apostrophe alone, and an apostrophe terminates the single-quoted

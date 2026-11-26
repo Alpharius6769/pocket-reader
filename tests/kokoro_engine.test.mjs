@@ -118,34 +118,6 @@ test('kokoro assets are addressed through the proxy, never a third-party origin'
   assert.match(worker, /\/models\/kokoro\/phonemizer\//);
 });
 
-test('the engine is resolved from the shell, not from lazy-loaded audio_core', async () => {
-  const utils = await read('public/assets/js/engine_utils.js');
-  const settings = await read('public/assets/js/settings_manager.js');
-
-  // The first version read a global published by audio_core, which is
-  // lazy-loaded with the narration runtime. A cold session therefore resolved
-  // Pocket even on a device that should never run it, and Settings rendered an
-  // empty Kokoro voice list. Both now import the policy directly, so the answer
-  // exists from the first frame -- which is what "best engine at startup" needs.
-  assert.match(utils, /import \{\s*[\s\S]{0,120}selectNarrationEngine,/);
-  assert.doesNotMatch(utils, /typeof window\.resolveNarrationEngineChoice === 'function'/,
-    'must not depend on audio_core publishing a global');
-  // Returns whatever the policy picked, validated against the known tiers.
-  // Naming one engine here made 'kitten' unreachable: the policy selected it,
-  // this returned 'pocket', and every gate downstream followed.
-  assert.match(utils, /NARRATION_ENGINE_TIERS\.includes\(choice\.engine\)/);
-  assert.match(utils, /return choice\.engine;/);
-  // Decided once at boot and recorded in the diagnostic log, which is what
-  // makes it observable. It was also assigned to window._narrationEngineDecision,
-  // which nothing ever read; removed in the 2026-09-04 audit.
-  assert.match(utils, /Narration engine resolved at startup/);
-  assert.ok(!utils.includes('_narrationEngineDecision'), 'the write-only global must stay gone');
-
-  assert.match(settings, /selectNarrationEngine,/, 'settings imports the policy directly');
-  assert.doesNotMatch(settings, /window\.describeNarrationEngineChoice\?\.\(\)/,
-    'settings must not depend on audio_core being loaded');
-});
-
 test('audio_core loads and routes the Kokoro worker', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   // Generalised: naming one engine here is what shipped Kitten selectable,
@@ -168,27 +140,6 @@ test('voice ids cannot leak across engines', async () => {
   assert.equal(policy.isKokoroVoice('af_heart'), true);
   assert.equal(policy.KOKORO_DEFAULT_VOICE, 'af_heart',
     'af_heart is the A-grade voice and the Kokoro-only default');
-});
-
-test('settings expose the Kokoro voice list without duplicating the engine control', async () => {
-  const settings = await read('public/assets/js/settings_manager.js');
-  const html = await read('public/index.html');
-  const ui = await read('public/assets/js/ui_controller.js');
-
-  assert.match(settings, /export function renderNarrationEngineControls\(\)/);
-  // The container has to exist or the render is a silent no-op.
-  assert.match(html, /id="narration-engine-controls"/);
-  assert.match(ui, /window\.renderNarrationEngineControls\(\)/);
-  // Voice picker is hidden unless Kokoro is the engine actually running —
-  // offering a voice the active engine cannot speak is worse than none.
-  // Generalised to three engines: the picker shows when the RESOLVED engine
-  // has a shell-side voice list, not when it happens to be Kokoro.
-  assert.match(settings, /display:\$\{voicePickerActive \? 'block' : 'none'\}/);
-  assert.match(settings, /const voicePickerActive = !usingWebSpeech && voices\.length > 0/);
-  assert.match(settings, /const voices = voicesForEngine\(choice\.engine\)/,
-    'the list must follow the resolved engine, never a fixed constant');
-  // Device Voice has no neural voice at all, so nothing Kokoro shows there.
-  assert.match(settings, /const usingWebSpeech = window\.userProfile\?\.settings\?\.voiceEngine === 'webspeech'/);
 });
 
 test('phoneme clauses are rejoined so punctuation pauses survive', async () => {
@@ -219,43 +170,6 @@ test('unmapped phoneme characters are skipped, never emitted as junk ids', async
     'an unknown symbol must be dropped, not pushed as undefined');
 });
 
-// Reported from a live build: "Voice Engine" and "Narration engine" were two
-// separate selects saying overlapping things, and Automatic always read "Pocket
-// on this device" because it rendered a default rather than the real decision.
-test('engine choice is one control, not two overlapping ones', async () => {
-  const html = await read('public/index.html');
-  const settings = await read('public/assets/js/settings_manager.js');
-  const audio = await read('public/assets/js/audio_core.js');
-
-  // The neural choice now lives in the single Voice Engine select.
-  const select = html.slice(html.indexOf('id="voice-engine-select"'),
-                            html.indexOf('id="narration-engine-controls"'));
-  for (const value of ['"auto"', '"pocket"', '"kokoro"', '"webspeech"']) {
-    assert.ok(select.includes(`value=${value}`), `the merged select needs ${value}`);
-  }
-  // The duplicate select must be gone.
-  assert.doesNotMatch(settings, /id="narration-engine-select"/,
-    'the second engine select must not come back');
-  assert.doesNotMatch(html, /id="narration-engine-select"/);
-
-  // Both neural values collapse to the neural path, with the model recorded as
-  // the narration override.
-  assert.match(audio, /engineVal === 'auto' \|\| engineVal === 'kokoro' \|\| engineVal === 'pocket'/);
-  // The retired Kitten value from a stale control or profile maps onto Kokoro
-  // rather than falling through to the device voice.
-  assert.match(audio, /if \(engineVal === 'kitten'\) engineVal = 'kokoro';/);
-  assert.match(audio, /writeNarrationEngineOverride\(localStorage, engineVal === 'auto' \? null : engineVal\)/);
-});
-
-test('Automatic is labelled with the engine actually detected for this device', async () => {
-  const settings = await read('public/assets/js/settings_manager.js');
-  // Previously hardcoded to Pocket, so it read "Pocket on this device" even on
-  // hardware routed to Kokoro.
-  assert.match(settings, /const ENGINE_LABELS = \{ kokoro: 'Kokoro', webspeech: 'Device voice', pocket: 'Pocket TTS' \}/);
-  assert.match(settings, /ENGINE_LABELS\[autoPick\.engine\]/);
-  assert.match(settings, /Detected: \$\{_escapeSettingsHtml\(choice\.reason/);
-});
-
 test('first-run detection resolves the narration engine, not just the backend', async () => {
   const setup = await read('public/assets/js/device_setup.js');
   assert.match(setup, /selectNarrationEngine,/, 'device_setup must import the selector');
@@ -263,19 +177,6 @@ test('first-run detection resolves the narration engine, not just the backend', 
   assert.match(setup, /narrationEngineReason: narration\.reason,/);
   // And it has to be visible in the summary the reader is shown.
   assert.match(setup, /SETUP_ENGINE_NAMES = \{ kokoro: 'Kokoro-82M', webspeech: 'the device voice', pocket: 'Pocket TTS' \}/);
-});
-
-// Reported from a live build: the reader page's own engine dropdown still
-// offered only "Pocket TTS" and "Device", so a reader routed to Kokoro could see
-// it in Settings but neither switch it nor pick its voices from the page they
-// actually narrate on.
-test('the reader playbar offers the same engines as Settings', async () => {
-  const html = await read('public/index.html');
-  const select = html.slice(html.indexOf('id="reader-engine-select"'),
-                            html.indexOf('id="voice-selector"'));
-  for (const value of ['"auto"', '"pocket"', '"kokoro"', '"webspeech"']) {
-    assert.ok(select.includes(`value=${value}`), `the reader select needs ${value}`);
-  }
 });
 
 test('the reader voice list follows the engine that will actually run', async () => {
@@ -400,37 +301,6 @@ test('every neural gate in audio_core accepts Kokoro', async () => {
   // The default voice must follow the engine, not always be a Pocket id.
   assert.match(audio, /function _defaultVoiceForEngine\(engine\)/);
   assert.match(audio, /return requested \|\| _defaultVoiceForEngine\(engine\);/);
-});
-
-test('changing engine does not drag in the narration runtime', async () => {
-  const settings = await read('public/assets/js/settings_manager.js');
-  const html = await read('public/index.html');
-  const loader = await read('public/assets/js/narration_runtime_loader.js');
-
-  // Still deferred — that is correct for narration, wrong for a preference.
-  assert.match(loader, /'switchReaderVoiceEngine',/);
-  // So the Settings select must not call it directly.
-  assert.match(html, /onchange="onNarrationEngineSelect\(this\.value\)"/);
-  assert.match(settings, /window\.onNarrationEngineSelect = function/);
-  // The runtime is touched only when it is already up.
-  assert.match(settings, /if \(window\.__pocketNarrationRuntimeLoaded === true\) \{/);
-});
-
-// Reported from a live Kokoro session: opening a story showed an EMPTY voice
-// dropdown and caching never started.
-test('opening a story rebuilds the voice list for the active engine', async () => {
-  const audio = await read('public/assets/js/audio_core.js');
-  const ui = await read('public/assets/js/ui_controller.js');
-  const loader = await read('public/assets/js/narration_runtime_loader.js');
-
-  // The list was only built inside switchReaderVoiceEngine, so it was populated
-  // when the engine CHANGED and never when a story was opened in a session
-  // already on Kokoro.
-  assert.match(audio, /window\.refreshVoiceSelectorForEngine = function/);
-  // Superseded: the reader now calls the SHELL sync, because the deferred
-  // refresher imported the whole runtime just to fill a dropdown.
-  assert.match(ui, /viewId === 'reading-view' && typeof window\.syncNarrationControls === 'function'/);
-  assert.match(loader, /'refreshVoiceSelectorForEngine',/);
 });
 
 test('cache queues never canonicalise a Kokoro voice against the Pocket list', async () => {
@@ -653,69 +523,6 @@ test('one inference is capped well below the graph sequence axis', async () => {
     'a measured no-op must not ship as if it were a fix');
 });
 
-// Reported: switching engine on the READER page looped a "preparing narration"
-// modal with no story open, and the two selects never reflected each other.
-// One cause: they ran different handlers, and the reader one was a DEFERRED
-// action, so changing a preference there imported the whole narration runtime.
-test('both engine selects share one handler and stay in sync', async () => {
-  const html = await read('public/index.html');
-  const settings = await read('public/assets/js/settings_manager.js');
-
-  // Same handler on both, or they cannot agree.
-  const readerSel = html.slice(html.indexOf('id="reader-engine-select"'), html.indexOf('id="voice-selector"'));
-  assert.match(readerSel, /onchange="onNarrationEngineSelect\(this\.value\)"/);
-  const settingsSel = html.slice(html.indexOf('id="voice-engine-select"'));
-  assert.match(settingsSel.slice(0, 300), /onchange="onNarrationEngineSelect\(this\.value\)"/);
-  // The reader select must NOT call the deferred action any more.
-  assert.doesNotMatch(readerSel, /switchReaderVoiceEngine/);
-
-  // One writer keeps both elements aligned.
-  assert.match(settings, /function _syncEngineSelects\(controlValue\)/);
-  assert.match(settings, /for \(const id of \['voice-engine-select', 'reader-engine-select'\]\)/);
-  // Assigning .value must not re-enter the change handler, so the sync writer
-  // must set .value directly and never dispatch an event or call the handler.
-  const syncFn = settings.slice(settings.indexOf('function _syncEngineSelects'));
-  const syncBody = syncFn.slice(0, syncFn.indexOf('window.onNarrationEngineSelect'));
-  assert.match(syncBody, /el\.value = controlValue/);
-  assert.doesNotMatch(syncBody, /el\.value !== controlValue/,
-    'skipping an already-matching value leaves iOS showing the stale hidden-select label');
-  assert.doesNotMatch(syncBody, /dispatchEvent|onNarrationEngineSelect\(/,
-    're-entering the handler from the sync writer would loop the two selects');
-});
-
-test('opening the reader does not drag in the narration runtime', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  const settings = await read('public/assets/js/settings_manager.js');
-  const loader = await read('public/assets/js/narration_runtime_loader.js');
-
-  // refreshVoiceSelectorForEngine is deferred, so calling it on view entry
-  // loaded audio_core + buffer_manager just to fill a dropdown.
-  assert.match(loader, /'refreshVoiceSelectorForEngine',/);
-  assert.match(ui, /viewId === 'reading-view' && typeof window\.syncNarrationControls === 'function'/);
-  assert.doesNotMatch(ui, /viewId === 'reading-view' && typeof window\.refreshVoiceSelectorForEngine/);
-
-  // Kokoro/Kitten lists live in the shell policy. Pocket's catalog is a shell
-  // global (renderPocketVoiceOptions). Device voices come from speechSynthesis.
-  // None of those may wait for audio_core, or the playbar stays empty until
-  // the reader is left and re-entered after narration has started.
-  assert.match(settings, /window\.syncNarrationControls = function/);
-  assert.match(settings, /const voices = voicesForEngine\(engine\);/);
-  assert.match(settings, /if \(voices\.length\) \{/);
-  assert.match(settings, /window\.renderPocketVoiceOptions/);
-  assert.match(settings, /function _fillWebSpeechVoiceSelector/);
-  assert.match(settings, /speechSynthesis\.addEventListener\('voiceschanged'/);
-  // Changing the engine on the playbar must rebuild the list immediately.
-  const handler = settings.slice(
-    settings.indexOf('window.onNarrationEngineSelect = function'),
-    settings.indexOf('function _fillWebSpeechVoiceSelector'),
-  );
-  assert.match(handler, /window\.syncNarrationControls\(\)/);
-  // populateReaderUI used to stamp pocketVoice onto #voice-selector, which
-  // blanks a Kokoro/Kitten list. The playbar list is owned by the shell sync.
-  assert.match(ui, /window\.syncNarrationControls\(\)/);
-  assert.doesNotMatch(ui, /el\('voice-selector'\)\.value = voice/);
-});
-
 // Eighth instance of the same slip, and the one that mattered most: not an
 // engine name this time but a VOICE ASSET, one layer below where every gate
 // above stops looking.
@@ -862,20 +669,3 @@ test('the Pocket worker recycle does not run on Kokoro', async () => {
   assert.ok(gate > 0 && counter > gate, 'the engine gate must precede the paragraph counter');
 });
 
-test('Pocket-only settings are hidden when Pocket is not the running engine', async () => {
-  const settings = await read('public/assets/js/settings_manager.js');
-  const html = await read('public/index.html');
-
-  // Both cards were shown unconditionally. On Kokoro the emotion controls have
-  // no per-emotion voices to choose between, and the backend card is inert --
-  // and "Re-run backend optimization" could force a whole ?tts_fast=1 page
-  // reload on an un-isolated device to reach a call that returns immediately.
-  assert.match(html, /id="expressive-narration-card"/);
-  assert.match(html, /id="narration-backend-card"/);
-  assert.match(settings, /export function syncPocketOnlySettings\(\)/);
-  assert.match(settings, /const pocketActive = !usingWebSpeech && engine === 'pocket';/);
-  assert.match(settings, /for \(const id of \['expressive-narration-card', 'narration-backend-card'\]\)/);
-  // hidden alone loses to a class-set display in this stylesheet.
-  assert.match(settings, /card\.style\.display = pocketActive \? '' : 'none';/);
-  assert.match(settings, /^\s*syncPocketOnlySettings\(\);$/m, 'it has to actually be called');
-});

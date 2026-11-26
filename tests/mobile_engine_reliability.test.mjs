@@ -114,35 +114,6 @@ test('service worker install survives one failed optional asset', async () => {
   assert.doesNotMatch(coreList, /pocket_worker\.js/, 'the TTS worker belongs in DEFERRED_ASSETS');
 });
 
-test('the durable model cache name honours both lifecycle contracts', async () => {
-  const worker = await read('public/assets/js/pocket_worker.js');
-  const serviceWorker = await read('public/sw.js');
-  const settings = await read('public/assets/js/settings_manager.js');
-
-  const name = worker.match(/const POCKET_MODEL_CACHE = '([^']+)'/)?.[1];
-  assert.ok(name, 'pocket_worker must declare a durable model cache name');
-
-  // sw.js activate() deletes every cache except CACHE_NAME and the keep-list.
-  // If the model cache is not on that list, every shell version bump silently
-  // throws away the ~80 MB engine and re-downloads it.
-  const activate = serviceWorker.slice(
-    serviceWorker.indexOf("self.addEventListener('activate'"),
-    serviceWorker.indexOf('// 3. PUSH NOTIFICATIONS'),
-  );
-  const keepTokens = [...activate.matchAll(/indexOf\('([^']+)'\) !== -1/g)].map((match) => match[1]);
-  assert.ok(keepTokens.some((token) => name.includes(token)),
-    `sw.js activate would delete '${name}'; keep-list tokens are ${keepTokens.join(', ')}`);
-
-  // clearNeuralEngineCache must still be able to free it from the settings UI.
-  const clearBlock = settings.slice(settings.indexOf('export async function clearNeuralEngineCache'));
-  const clearRegex = clearBlock.match(/\/([^/\n]+)\/i\.test\(name\)/)?.[1];
-  assert.ok(clearRegex, 'clearNeuralEngineCache must use a cache-name regex');
-  assert.ok(new RegExp(clearRegex, 'i').test(name),
-    `clearNeuralEngineCache cannot delete '${name}'; regex /${clearRegex}/i does not match`);
-  assert.match(clearBlock, /!\/pocket-reader-core\/i\.test\(name\)/,
-    'clearNeuralEngineCache must refuse to delete the app shell cache');
-});
-
 test('model cache helpers degrade instead of throwing', async () => {
   const worker = await read('public/assets/js/pocket_worker.js');
 
@@ -252,50 +223,6 @@ test('the onset ramp maths are monotonic, bounded and unity-terminating', async 
   assert.equal(Math.max(0, Math.round(0 * 24000)), 0);
 });
 
-test('playback speed comes from the profile, through a control that exists', async () => {
-  const [audio, ui, settings, loader, html] = await Promise.all([
-    read('public/assets/js/audio_core.js'),
-    read('public/assets/js/ui_controller.js'),
-    read('public/assets/js/settings_manager.js'),
-    read('public/assets/js/narration_runtime_loader.js'),
-    read('public/index.html'),
-  ]);
-
-  // Every playback path once read `getElementById('speed-slider')?.value || '1'`
-  // against a slider that existed in no markup, so the rate resolved to 1.0 on
-  // every paragraph and clobbered anything set elsewhere. Those ids must stay
-  // gone; the replacement control uses its own.
-  for (const [name, source] of [['audio_core', audio], ['ui_controller', ui], ['settings_manager', settings], ['loader', loader], ['index.html', html]]) {
-    assert.doesNotMatch(source, /getElementById\(['"]speed-slider['"]\)/, `${name} still reads the phantom slider`);
-    assert.doesNotMatch(source, /getElementById\(['"]speed-label['"]\)/, `${name} still reads the phantom label`);
-  }
-
-  assert.match(audio, /export function getEffectivePlaybackRate\(\)/);
-  // Per-story preset wins over the profile default.
-  assert.match(audio, /window\.currentStory\?\.narrationPreset[\s\S]{0,200}window\.userProfile\?\.settings\?\.speed/);
-  // Every consumer must go through the resolver.
-  assert.match(audio, /window\.currentAudio\.playbackRate = getEffectivePlaybackRate\(\)/);
-  assert.match(audio, /utterance\.rate = getEffectivePlaybackRate\(\)/);
-  assert.match(audio, /playbackRate: getEffectivePlaybackRate\(\)/);
-
-  // settings.speed is stored, defaulted, synced, merged and read on every
-  // paragraph -- and for a while nothing could write it. audio_core exported an
-  // applyPlaybackSpeed() for the job with no callers, and it was a DEFERRED
-  // narration action, so wiring a slider to it would have pulled the whole
-  // narration runtime in on a drag. The writer lives in the shell instead.
-  assert.doesNotMatch(audio, /(?:export function|window\.)applyPlaybackSpeed/,
-    'the speed writer belongs in the shell, not in the lazy-loaded runtime');
-  assert.doesNotMatch(loader, /applyPlaybackSpeed/,
-    'setting a preference must not import audio_core');
-  assert.match(settings, /window\.onNarrationSpeedChange = function/);
-  assert.match(settings, /window\.userProfile\.settings\.speed = next;/);
-  assert.match(html, /id="playback-speed-slider"/);
-  assert.match(html, /onchange="window\.onNarrationSpeedChange\(this\.value\)"/);
-  // Populated from the profile when the panel opens, or the control shows 1.00x
-  // over a stored 1.5 and the next drag silently resets it.
-  assert.match(settings, /el\('playback-speed-slider'\)\.value = String\(rate\)/);
-});
-
 test('the narration sanitizer cannot truncate a non-AO3 document', async () => {
   const storage = await read('public/assets/js/storage_core.js');
   const python = await read('backend/parsers_core.py');
@@ -344,38 +271,6 @@ test('audio chunks are fingerprinted so segmentation changes cannot desync playb
   for (const call of reads) assert.match(call, /,\s*text\)/, `read misses the text argument: ${call}`);
   assert.match(buffer, /getAudioChunk\([^)]*routedVoice \+ tag, task\.text\)/);
   assert.match(buffer, /saveAudioChunk\([^)]*this\.mode === 'Permanent', task\.text\)/);
-});
-
-test('no module renders into a container that does not exist', async () => {
-  const { readdir } = await import('node:fs/promises');
-  const html = await read('public/index.html');
-  const dir = new URL('../public/assets/js/', import.meta.url);
-  const names = (await readdir(dir)).filter((f) => f.endsWith('.js'));
-  let js = '';
-  for (const name of names) js += await read(`public/assets/js/${name}`) + '\n';
-
-  const htmlIds = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
-  // Ids a module assigns or emits itself (createElement().id = 'x', or markup
-  // built in a template literal) are legitimately absent from the shell.
-  const jsIds = new Set([
-    ...[...js.matchAll(/\.id\s*=\s*['"]([^'"]+)['"]/g)].map((m) => m[1]),
-    ...[...js.matchAll(/id="([^"]+)"/g)].map((m) => m[1]),
-    ...[...js.matchAll(/id='([^']+)'/g)].map((m) => m[1]),
-  ]);
-
-  const looked = new Set([
-    ...[...js.matchAll(/getElementById\(['"]([^'"]+)['"]\)/g)].map((m) => m[1]),
-    ...[...js.matchAll(/\bel\(['"]([^'"]+)['"]\)/g)].map((m) => m[1]),
-  ]);
-
-  const orphans = [...looked].filter((id) => !htmlIds.has(id) && !jsIds.has(id)).sort();
-
-  // This bug class shipped four times: #speed-slider and #speed-label (playback
-  // speed silently pinned to 1.0x on every paragraph), #bg-cache-panel and
-  // #offline-storage-manager (whole settings panels that never rendered). Each
-  // was a null-guarded lookup, so nothing ever threw and nothing was logged.
-  assert.deepEqual(orphans, [],
-    `modules look up ids that exist nowhere and are created by nothing: ${orphans.join(', ')}`);
 });
 
 test('every precached module URL resolves to a real file', async () => {
@@ -466,30 +361,6 @@ test('constrained startup yields between the cache copy and session creation', a
   assert.match(loader, /setTimeout\(resolve, 24\)/);
 });
 
-test('offscreen view DOM is released only for views that rebuild on entry', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.match(ui, /const _OFFSCREEN_RELEASABLE = Object\.freeze\(\{/);
-  assert.match(ui, /function _releaseOffscreenViewDom/);
-  assert.match(ui, /if \(window\.isPocketDeviceMemorySafeMode\?\.\(\) === false\) return;/,
-    'releasing must be limited to constrained devices');
-
-  const map = ui.slice(ui.indexOf('const _OFFSCREEN_RELEASABLE'),
-                       ui.indexOf('function _releaseOffscreenViewDom'));
-  // Every listed view must have a rebuild hook inside showView, or the view
-  // comes back blank.
-  const showView = ui.slice(ui.indexOf('export function showView'));
-  for (const [viewId, rebuilder] of [
-    ['library-view', /renderLibrary/],
-    ['profile-view', /renderAchievements/],
-  ]) {
-    assert.match(map, new RegExp(`'${viewId}'`), `${viewId} should be releasable`);
-    assert.match(showView, rebuilder, `${viewId} must rebuild on entry`);
-  }
-  // The masterlist has no entry hook, so it must never be cleared.
-  assert.doesNotMatch(map, /hmofa-view/,
-    'the masterlist has no rebuild hook and would come back blank');
-});
-
 // Symptom 1: "the caching modal never appears -- sometimes it does". Tapping
 // Cache on a not-yet-isolated page hands off to a ?tts_fast=1 reload and
 // returns, so BufferManager.start() -- the only creator of the progress modal --
@@ -530,43 +401,6 @@ test('the cache handoff keeps a visible surface from tap through to outcome', as
   );
   assert.match(helper, /caching-progress-dismiss-btn/);
   assert.match(helper, /_escapeCacheStatus\(headline\)/, 'handoff text must be escaped');
-});
-
-// The runtime flavor and isolation state were both already measured and neither
-// was visible, so a device on the heavy fallback (stock ORT reading .onnx
-// protobuf) looked identical to one on the lean path (minimal relaxed-SIMD
-// reading .ort) -- a large slice of peak startup memory on a constrained
-// iPhone. Reporting must stay strictly passive.
-test('narration runtime diagnostics are reported without changing behaviour', async () => {
-  const audio = await read('public/assets/js/audio_core.js');
-  const settings = await read('public/assets/js/settings_manager.js');
-
-  // Exposed on the existing runtime-config surface.
-  assert.match(audio, /ortWasmRuntimeFlavor: _pocketBackendRuntime\.ortWasmRuntimeFlavor \|\| 'unreported'/);
-  assert.match(audio, /crossOriginIsolated: window\.crossOriginIsolated === true,/);
-
-  // Rendered in the settings perf panel, which only builds when that panel is
-  // on screen -- no popup, no notification, no startup cost.
-  assert.match(settings, /function _describeWasmRuntimeFlavor\(cfg\)/);
-  assert.match(settings, /<b>WASM Runtime:<\/b>/);
-  assert.match(settings, /<b>Isolation:<\/b>/);
-  const panel = settings.slice(settings.indexOf('export async function refreshPerfPanel'));
-  assert.match(panel.slice(0, 200), /const p = document\.getElementById\('perf-panel'\);\s*\n\s*if \(!p\) return;/,
-    'the panel must still bail out when it is not rendered');
-
-  // Passive: nothing may branch on the flavor outside the describe helper.
-  const helper = settings.slice(
-    settings.indexOf('function _describeWasmRuntimeFlavor(cfg)'),
-    settings.indexOf('export async function refreshPerfPanel'),
-  );
-  const flavorUses = (settings.match(/ortWasmRuntimeFlavor/g) || []).length;
-  const helperUses = (helper.match(/ortWasmRuntimeFlavor/g) || []).length;
-  assert.equal(flavorUses, helperUses,
-    'the runtime flavor must only be read for display, never to drive behaviour');
-
-  // Values reaching innerHTML are escaped like every other settings string.
-  assert.match(helper, /_escapeSettingsHtml\(flavor\)/);
-  assert.match(helper, /_escapeSettingsHtml\(note\)/);
 });
 
 // Split core on iOS: the unified block4 graph is one 87 MB model, and 87 MB is
@@ -675,18 +509,6 @@ test('the worker recycle waits for teardown before reallocating', async () => {
   const loadIdx = recycle.indexOf('await _loadPocketEngine();');
   assert.ok(resetIdx > 0 && loadIdx > resetIdx,
     'teardown must be awaited before the replacement engine is loaded');
-});
-
-// stock-wasm-only on iOS 26.6 was unexpected and the flavor name alone cannot
-// say whether the probe failed or the relaxed candidates were rejected.
-test('the relaxed SIMD probe and model format are reported', async () => {
-  const worker = await read('public/assets/js/pocket_worker.js');
-  const audio = await read('public/assets/js/audio_core.js');
-  const settings = await read('public/assets/js/settings_manager.js');
-  assert.match(worker, /relaxedSimdSupported: supportsRelaxedSimd\(\),/);
-  assert.match(worker, /ortFormatModels: useOrtFormatWasm,/);
-  assert.match(audio, /relaxedSimdSupported: _pocketBackendRuntime\.relaxedSimdSupported \?\? null,/);
-  assert.match(settings, /<b>Relaxed SIMD \/ \.ort:<\/b>/);
 });
 
 // Field-confirmed 2026-08-22: on an iPhone 13 (4 GB), caching survived

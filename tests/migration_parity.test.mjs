@@ -12,26 +12,6 @@ const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
  * and what remains are the properties that must hold on their own.
  */
 
-test('index.html is a real document, not an Anvil form template', async () => {
-  const html = await read('public/index.html');
-  assert.ok(html.startsWith('<!DOCTYPE html>'), 'index.html must open with a doctype');
-  for (const tag of ['<html lang="en">', '<head>', '</head>', '<body>', '</body>', '</html>']) {
-    assert.ok(html.includes(tag), `index.html is missing ${tag}`);
-  }
-  assert.ok(!html.includes('anvil-form'), 'the <anvil-form> wrapper survived conversion');
-  assert.ok(!html.includes('&quot;'), 'attribute escaping survived conversion');
-  assert.ok(!html.includes('_/theme/'), 'index.html still points at Anvil asset paths');
-  // A protocol-relative //assets/... resolves against a host named "assets".
-  assert.ok(!html.includes('"//assets/') && !html.includes("'//assets/"),
-    'protocol-relative //assets/ URL would resolve to the wrong origin');
-});
-
-test('the page registers the static service worker', async () => {
-  const html = await read('public/index.html');
-  assert.ok(html.includes("sw.js") || html.includes("swUrl"), 'index.html must register sw.js');
-  assert.ok(!html.includes('/_/api/serviceworker.js'), 'the Anvil service-worker endpoint is still referenced');
-});
-
 test('the static worker carries no Anvil-only paths', async () => {
   const sw = await read('public/sw.js');
   const offenders = sw.split('\n')
@@ -40,47 +20,6 @@ test('the static worker carries no Anvil-only paths', async () => {
   assert.deepEqual(offenders, [], 'public/sw.js still references Anvil paths');
   assert.ok(sw.includes("url.pathname === '/sw.js'") || sw.includes("url.pathname.indexOf('/sw.js') !== -1") || sw.includes("url.pathname.endsWith('/sw.js')"),
     "the self-interception guard must match the static worker path");
-});
-
-test('the browser shell does not force a legacy Anvil direct-path frame escape', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.ok(!ui.includes("window.top.location.href = window.location.origin + '/_/'"),
-    'public/assets/js/ui_controller.js still forces the legacy Anvil direct-path redirect');
-});
-
-test('login pulls the cloud profile from the logged-in account', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.ok(ui.includes("typeof window.pocketCloud?.loadProfile === 'function'"),
-    'login should pull the cloud profile whenever loadProfile is available');
-  assert.ok(!ui.includes('window.anvil'),
-    'retired hosting compatibility globals should not remain in the login flow');
-});
-
-test('no module builds an Anvil asset URL', async () => {
-  const modules = [
-    'audio_core.js', 'buffer_manager.js', 'pocket_worker.js', 'cinematic_ui.js',
-    'device_setup.js', 'virtue_controller.js', 'experience_coordinator.js',
-    'library_manager.js', 'narration_runtime_loader.js', 'settings_manager.js',
-    'ui_controller.js', 'library_core.js', 'data_transfer.js',
-  ];
-  for (const name of modules) {
-    const source = await read(`public/assets/js/${name}`);
-    const offenders = source.split('\n')
-      .filter((line) => !line.includes('replace(/_/g'))
-      .filter((line) => line.includes('_/theme/') || line.includes('/_/api/'))
-      .map((line) => line.trim().slice(0, 100));
-    assert.deepEqual(offenders, [],
-      `${name} still points at Anvil's asset layout, which 404s on Pages`);
-  }
-});
-
-test('nothing references Anvil origins or deleted Anvil files', async () => {
-  for (const file of ['public/index.html', 'public/sw.js', 'public/standard-page.html']) {
-    const source = await read(file);
-    for (const token of ['hot-wiry-raven', 'vu5ls67qwlzkeklw', 'anvil.app', 'serviceworker.py', 'FrontEnd_code']) {
-      assert.ok(!source.includes(token), `${file} still references ${token}`);
-    }
-  }
 });
 
 test('all public files are free of deleted Anvil asset paths', async () => {
@@ -129,17 +68,6 @@ const precachedAssets = (source) =>
       .map((m) => decodeURIComponent(m[1])),
   );
 
-test('the service worker precaches every module the shell loads', async () => {
-  const [html, sw] = await Promise.all([read('public/index.html'), read('public/sw.js')]);
-  const cached = precachedAssets(sw);
-  const loaded = new Set(
-    [...html.matchAll(/(?:src|href)=['"]\/assets\/js\/([^'"?]+)/g)].map((m) => decodeURIComponent(m[1])),
-  );
-  const missing = [...loaded].filter((f) => !cached.has(f));
-  assert.deepEqual(missing, [],
-    'these modules are loaded by index.html but never precached, so offline boot would fail on them');
-});
-
 // Global COOP/COEP breaks OAuth popups, which Google sign-in through Supabase
 // depends on. Isolation is applied per-navigation by the service worker
 // instead. This test exists because adding these headers looks like an obvious
@@ -158,12 +86,6 @@ test('_headers does not set COOP/COEP globally, and says it is inert', async () 
   // go unnoticed.
   assert.match(headers, /INERT ON THE CURRENT HOST/,
     '_headers must state that the current host ignores it');
-});
-
-// The one header from _headers that a static host can still deliver.
-test('index.html carries the referrer policy _headers cannot deliver', async () => {
-  const html = await read('public/index.html');
-  assert.match(html, /<meta name="referrer" content="strict-origin-when-cross-origin">/);
 });
 
 test('the PWA manifest is valid and self-hosted', async () => {

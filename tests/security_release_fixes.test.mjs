@@ -24,18 +24,6 @@ test('cache status escapes story titles and audio keys use stable references', a
   assert.match(source, /saveAudioChunk\(task\.storyRef \|\| task\.storyTitle/);
 });
 
-test('push writes and deletes require a server-issued ownership token', async () => {
-  const client = await read('public/assets/js/settings_manager.js');
-  const server = await read(path.join('backend', 'app.py'));
-  assert.match(client, /pocketReaderPushAuthToken/);
-  assert.match(client, /crypto\.getRandomValues\(bytes\)/);
-  assert.doesNotMatch(client, /Math\.random\(\).*pr-/);
-  assert.match(server, /auth_token_hash/);
-  assert.match(server, /secrets\.token_urlsafe\(32\)/);
-  assert.match(server, /hmac\.compare_digest/);
-  assert.match(server, /Push subscription ownership check failed/);
-});
-
 test('service-worker install failures reject and smoke targets the active revision', async () => {
   const worker = await read('public/sw.js');
   const smoke = await read(path.join('tools', 'smoke_pocket_worker_runtime.mjs'));

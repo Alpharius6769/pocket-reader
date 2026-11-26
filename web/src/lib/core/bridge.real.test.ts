@@ -83,6 +83,14 @@ afterEach(() => {
 });
 
 describe('RealBridge', () => {
+  it('names achievement icons as the files are named (ach_<id>)', async () => {
+    w.ACHIEVEMENTS_DB = [{ id: 'first_book', title: 'First Edition', desc: 'd', metric: 'firstStory', target: 1 }];
+    const b = await makeBridge();
+    const [a] = await b.listAchievements();
+    expect(a.icon).toBe('ach_first_book');
+    expect(b.kind).toBe('real');
+  });
+
   it('maps library entries, including paragraph-level progress and live bookmarks only', async () => {
     const b = await makeBridge();
     const [entry] = await b.library.list();

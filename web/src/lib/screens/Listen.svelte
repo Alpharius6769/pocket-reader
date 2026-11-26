@@ -15,6 +15,7 @@
   import Cover from '../components/Cover.svelte';
   import PlayButton from '../components/PlayButton.svelte';
   import Virtue from '../components/Virtue.svelte';
+  import InstallCard from '../components/InstallCard.svelte';
 
   let achievements = $state<Achievement[]>([]);
   let stats = $state<ListeningStats | null>(null);
@@ -66,6 +67,8 @@
       </p>
     {/if}
   </header>
+
+  <InstallCard />
 
   {#if $settings?.companion !== 'none'}
     <section class="companion" aria-label="Virtue">

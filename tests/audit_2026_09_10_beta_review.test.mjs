@@ -27,31 +27,12 @@ test('the JSON backup is a Blob download without story text or avatar', async ()
 
 // ── A chapter-list jump could be undone by the next sync ────────────────────
 
-test('jumping to a chapter or bookmark stamps the progress clock', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  const fn = between(ui, 'export function jumpToBookmark(c, p)', 'window.jumpToBookmark = jumpToBookmark;');
-  const stamp = fn.indexOf("window.stampStorySyncField?.(libStory, 'progress');");
-  assert.ok(stamp > 0, 'the jump must advance the progress clock');
-  assert.ok(stamp > fn.indexOf('libStory.progressParagraph = p;'));
-  assert.ok(stamp < fn.indexOf('window.saveLocalData()'), 'stamp before the save that queues the sync');
-});
-
 // ── Away Mode stuck on "Preparing Away Mode..." after a storage failure ────
 
 // ── Sign-in is Google or guest, nothing else (product decision) ─────────────
 //
 // Email sign-up depended on a confirmation mail that never reliably arrived,
 // so new accounts could be created and then never used.
-
-test('no screen offers email sign-up any more', async () => {
-  const ui = await read('public/assets/js/cinematic_ui.js');
-  assert.ok(!ui.includes('Use email'));
-  assert.ok(!ui.includes('Google or email'));
-  assert.ok(!/create an account/i.test(ui));
-  const html = await read('public/index.html');
-  assert.ok(!html.includes('email &amp; password'));
-  assert.ok(!html.includes('Create Account'));
-});
 
 // ── The iPhone 13 Pro Max is a Pocket device (product decision) ─────────────
 

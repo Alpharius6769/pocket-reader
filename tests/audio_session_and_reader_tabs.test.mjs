@@ -12,16 +12,6 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 // actually being read. Switching tabs (or reloading) cleared it, which is why
 // it looked intermittent.
 
-test('loading a story re-renders whichever reader tab is on screen', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.match(ui, /function _refreshActiveReaderTab\(\) \{/);
-  // Driven from the one funnel every story load passes through.
-  const render = ui.slice(ui.indexOf('export function renderFullStory('), ui.indexOf('window.renderFullStory = renderFullStory;'));
-  assert.match(render, /_refreshActiveReaderTab\(\);/);
-  // Only the visible tab can be stale -- the others re-render on the way in.
-  assert.match(ui, /\['chapters', 'bookmarks'\]\s*\n?\s*\.find\(\(name\) => document\.getElementById\(`tab-btn-\$\{name\}`\)\?\.classList\.contains\('active'\)\)/);
-});
-
 // ── Stop has to mean stop ────────────────────────────────────────────────────
 // The MediaSession 'stop' action was bound to pausePlayback, which leaves the
 // metadata published -- so the lock-screen / Control Centre entry survived

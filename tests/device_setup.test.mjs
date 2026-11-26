@@ -4,52 +4,6 @@ import { readFile } from 'node:fs/promises';
 
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
-test('device calibration opens for a requested action and resumes it after the local benchmark', async () => {
-  const html = await read('public/index.html');
-  const deviceSetup = await read('public/assets/js/device_setup.js');
-  const theme = await read('public/assets/css/theme.css');
-  assert.ok(html.indexOf('id="device-setup-modal"') < html.indexOf('id="first-time-setup-modal"'));
-  assert.match(deviceSetup, /window\.deferForDeviceSetup/);
-  assert.match(html, /device_setup\.js\?v=device-setup-v57/);
-  assert.match(deviceSetup, /pr_device_setup_v2|POCKET_DEVICE_SETUP_KEY/);
-  assert.match(deviceSetup, /localOnly:\s*true/);
-  assert.match(deviceSetup, /simulateThreadedWasm:\s*true/);
-  assert.match(deviceSetup, /benchmarkWebGpu/);
-  assert.match(deviceSetup, /shader-f16/);
-  assert.match(deviceSetup, /pr_device_profile_handoff_v1/);
-  assert.match(deviceSetup, /showFirstTimeProfileSetup/);
-  assert.match(html, /id="device-setup-start-btn"[^>]+disabled/);
-  assert.match(deviceSetup, /setupStartButton\.disabled = false/);
-  assert.match(theme, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
-  assert.match(html, /html:not\(\.calibrating\) #device-setup-modal/);
-  assert.match(deviceSetup, /resumeDeviceAction = resume/);
-  assert.match(deviceSetup, /window\.cancelDeviceSetup = \(\) => \{\s*resumeDeviceAction = null/);
-});
-
-test('settings risk gate appears only when Advanced Settings is opened', async () => {
-  const html = await read('public/index.html');
-  const deviceSetup = await read('public/assets/js/device_setup.js');
-  const theme = await read('public/assets/css/theme.css');
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.match(deviceSetup, /pr_settings_risk_ack_v1/);
-  assert.match(deviceSetup, /I understand and accept this risk/);
-  assert.match(deviceSetup, /#advanced-settings-section > summary/);
-  assert.match(deviceSetup, /handleSettingsRiskChange/);
-  assert.match(deviceSetup, /handleSettingsRiskAccept/);
-  assert.doesNotMatch(deviceSetup, /guardedSettingsControl|beforeinput|pointerdown/);
-  assert.match(html, /data-settings-safe-action="true"[^>]+window\.Diagnostics\.runDiagnostic/);
-  assert.match(html, /data-settings-safe-action="true"[^>]+clearTextCache/);
-  assert.match(html, /data-settings-safe-action="true"[^>]+location\.reload/);
-  assert.doesNotMatch(html, /data-settings-safe-action="true"[^>]+id="low-mem-toggle"/);
-  assert.match(html, /id="global-search"[^>]+aria-label=/);
-  assert.match(html, /id="pronunciation-sounds-input"[^>]+aria-label=/);
-  assert.match(theme, /\.settings-section-nav button\s*\{\s*min-height:\s*44px/);
-  assert.match(theme, /\.top-bar > \.pr-btn-primary:first-of-type,[\s\S]*?min-height:\s*44px\s*!important/);
-  assert.match(ui, /_syncPWABannerInset/);
-  assert.match(theme, /pwa-install-banner-visible \.view-container/);
-  assert.match(theme, /\.pwa-banner\s*\{[\s\S]*?z-index:\s*9000/);
-});
-
 test('iOS memory-safe lifecycle bounds startup blobs, voices, workers, and story prefetch', async () => {
   const policy = await read('public/assets/js/pocket_backend_policy.js');
   const audio = await read('public/assets/js/audio_core.js');
