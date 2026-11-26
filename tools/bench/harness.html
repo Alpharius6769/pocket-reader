@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pocket long-form bench harness</title>
+<!--
+  Headless harness for tools/longform_bench.mjs. It loads the REAL narration
+  cores from public/assets/js with no app UI. The elements below are the DOM ids
+  audio_core.js reads; they exist only so its getElementById calls find
+  something. Served by the bench under the production origin, with COOP/COEP,
+  so the CF model proxy accepts the requests and WASM threads are available.
+-->
+</head>
+<body>
+  <div id="bench-stubs" hidden>
+    <select id="voice-selector"><option value="alba" selected>alba</option></select>
+    <select id="voice-engine-select"><option value="pocket" selected>pocket</option></select>
+    <select id="reader-engine-select"><option value="pocket" selected>pocket</option></select>
+    <button id="play-btn-main" type="button">Play</button>
+    <span id="reader-buffer-text"></span>
+    <span id="caching-progress-text"></span>
+    <div id="caching-progress-fill"></div>
+    <span id="detected-gpu"></span>
+    <input id="expressive-prosody-toggle" type="checkbox" checked>
+  </div>
+  <pre id="bench-status">loading</pre>
+  <script type="module" src="/__bench__/harness.js"></script>
+</body>
+</html>
