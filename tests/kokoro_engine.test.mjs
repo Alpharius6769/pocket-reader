@@ -345,7 +345,7 @@ test('a cancelled generation fails instead of caching truncated audio', async ()
 // tested for the literal 'pocket', so _resolveActiveEngine() returning 'kokoro'
 // hid the caching UI and returned, and Away Mode disabled itself because the
 // merged select now reports 'auto'/'kokoro' rather than 'pocket'.
-test('caching and Away Mode treat Kokoro as a neural engine', async () => {
+test('caching treats Kokoro as a neural engine', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
   // buffer_manager keeps its OWN copy. Every engine must be in it, or caching
   // switches itself off for the tier that was added to serve those devices.
@@ -360,8 +360,6 @@ test('caching and Away Mode treat Kokoro as a neural engine', async () => {
   assert.match(buffer, /if \(!_isNeuralEngine\(engine\)\) \{/);
   assert.doesNotMatch(buffer, /const engine = _resolveActiveEngine\(\);\s*\n\s*if \(engine !== 'pocket'\) \{/);
 
-  // Away Mode read the select, which now yields 'auto' or 'kokoro'.
-  assert.match(buffer, /if \(!_isNeuralControlValue\(selectedEngine\)\) \{/);
   assert.doesNotMatch(buffer, /if \(selectedEngine !== 'pocket'\) \{/);
 
   // And the modal gate, which only worked because both engines store
@@ -418,23 +416,6 @@ test('changing engine does not drag in the narration runtime', async () => {
   assert.match(settings, /if \(window\.__pocketNarrationRuntimeLoaded === true\) \{/);
 });
 
-test('Away Mode has first-visit tips like every other page', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  // Anchor on the ASSIGNMENT, not a call site: window._maybeShowPageTips is
-  // referenced from showView long before the registry is declared, so
-  // indexOf() there yields an empty slice that silently passes nothing.
-  const start = ui.indexOf('const _TIPS_BY_VIEW');
-  const registry = ui.slice(start, ui.indexOf('window._maybeShowPageTips = ', start));
-  assert.match(registry, /'away-mode-view': \[/);
-  // Anchored to elements that actually exist, or the tip is skipped silently.
-  assert.match(registry, /sel: '#away-quick-add-list'/);
-  assert.match(registry, /sel: '#away-queue-list'/);
-  const html = await read('public/index.html');
-  for (const id of ['away-quick-add-list', 'away-queue-list']) {
-    assert.ok(html.includes(`id="${id}"`), `${id} must exist for its tip to render`);
-  }
-});
-
 // Reported from a live Kokoro session: opening a story showed an EMPTY voice
 // dropdown and caching never started.
 test('opening a story rebuilds the voice list for the active engine', async () => {
@@ -459,13 +440,13 @@ test('cache queues never canonicalise a Kokoro voice against the Pocket list', a
   // job against a voice table Kokoro has no file for — every paragraph would
   // fail on a 404.
   const occurrences = buffer.match(/if \(voicesForEngine\((engine|activeNeural)\)\.length\)/g) || [];
-  assert.equal(occurrences.length, 2,
-    'both the single-story queue and the Away Mode queue need the engine branch');
+  assert.equal(occurrences.length, 1,
+    'the cache queue needs the engine branch');
   // Imported from the policy, not read off window: audio_core publishes that
   // global and is lazy-loaded, so it is absent exactly when a cache job starts
   // cold.
   assert.match(buffer, /^\s*voicesForEngine,$/m);
-  assert.match(buffer, /\? window\.resolveVoiceForEngine\((engine|activeNeural), selected\)/);
+  assert.match(buffer, /\? window\.resolveVoiceForEngine\(engine, requested\)/);
   // And the refusal message must describe the real gate, which is neural vs
   // device voice — not Pocket specifically.
   assert.doesNotMatch(buffer, /Away Mode caching requires Pocket TTS/);

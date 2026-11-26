@@ -769,9 +769,9 @@ window.maybeShowDeviceSupportNotice = () => {
   if (localStorage.getItem(SUPPORT_NOTICE_KEY) === 'shown') return false;
   localStorage.setItem(SUPPORT_NOTICE_KEY, 'shown');
   const reason = record.support.reason || 'This phone could not be verified at the current support floor.';
-  window.showSettingsModal?.('Away Mode recommended for this phone', `
+  window.showSettingsModal?.('Save stories ahead on this phone', `
     <p><strong>${escapeHtml(reason)}</strong></p>
-    <p>Live narration may be slow or may be interrupted under memory pressure. For most stories, queue them and use Away Mode while Pocket Reader remains open; cached playback is much lighter on the phone.</p>
+    <p>Live narration may be slow or may be interrupted under memory pressure. For longer stories, save them for offline listening first while Pocket Reader remains open; cached playback is much lighter on the phone.</p>
     <p>This is a recommendation, not a lock. You can still use live narration and change device settings.</p>`);
   return true;
 };

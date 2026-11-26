@@ -169,14 +169,6 @@ test('Virtue does not greet the reader with "There\'s my good boy."', async () =
   assert.doesNotMatch(source, /There's my good boy/);
 });
 
-test('Away Mode loads the narration runtime before painting the queue', async () => {
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.match(ui, /viewId === 'away-mode-view'[\s\S]{0,500}ensureNarrationRuntime/);
-  assert.match(ui, /ensureNarrationRuntime[\s\S]{0,220}renderAwayModeUI/);
-  assert.match(ui, /Away Mode narration runtime failed to load[\s\S]{0,280}pocketNotify/,
-    'a failed Away Mode load must tell the reader instead of failing silently');
-});
-
 test('the masterlist shares ratings and lists with the live Anthronomicon', async () => {
   const html = await read('public/index.html');
   const list = await read('public/assets/js/hmofa_masterlist.js');

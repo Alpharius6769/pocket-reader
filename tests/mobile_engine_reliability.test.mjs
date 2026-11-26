@@ -481,7 +481,6 @@ test('offscreen view DOM is released only for views that rebuild on entry', asyn
   for (const [viewId, rebuilder] of [
     ['library-view', /renderLibrary/],
     ['profile-view', /renderAchievements/],
-    ['away-mode-view', /renderAwayModeUI/],
   ]) {
     assert.match(map, new RegExp(`'${viewId}'`), `${viewId} should be releasable`);
     assert.match(showView, rebuilder, `${viewId} must rebuild on entry`);

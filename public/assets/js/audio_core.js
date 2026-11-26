@@ -3954,15 +3954,9 @@ export function togglePlayState() {
   if (!window.isPlaying && _isNeuralEngine(_resolveActiveEngine())
       && window.deferForDeviceSetup?.(() => togglePlayState())) return;
 
-  // Away Mode guard: block playback while Permanent mode is actively caching
-  if (!window.isPlaying && window.BufferManager?.isActive &&
-      window.BufferManager.mode === 'Permanent' && !window.BufferManager.paused) {
-    if (typeof window.triggerVirtue === 'function') {
-      window.triggerVirtue('virtue_annoyed_bubble');
-      window.virtueSpeak('Playback is locked while Away Mode is actively caching. Pause or cancel it in Settings first!', 6000);
-    }
-    return;
-  }
+  // No lock while a story is being saved for offline listening: the worker
+  // queue puts playback first and preempts the cache render (pocket_worker
+  // enqueueGeneration), so blocking the listener here only added a stall.
 
   // Keep a full twenty-successful-paragraph runway. This check is deliberately
   // independent of the worker's active/paused state: a failed or paused cache

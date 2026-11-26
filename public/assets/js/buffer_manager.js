@@ -21,12 +21,9 @@ const FAST_NARRATION_RETRY_KEY = 'pr_fast_narration_retry_v1';
 const CACHE_JOB_RESUME_KEY = 'pr_cache_job_resume_v1';
 const CACHE_JOB_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-try {
-  const savedQueue = localStorage.getItem('pocketPrecacheQueue');
-  window.precacheQueue = savedQueue ? JSON.parse(savedQueue) : [];
-} catch (_) {
-  window.precacheQueue = [];
-}
+// Away Mode (the multi-story offline queue) was retired in the v2 rebuild.
+// Its persisted queue is dropped so it cannot resurface through a resume path.
+try { localStorage.removeItem('pocketPrecacheQueue'); } catch (_) {}
 
 // 'pocket' and 'kokoro' are both the NEURAL path and cache identically; only
 // 'webspeech' (the OS voice) has nothing to pre-render. Checks that tested for
@@ -327,7 +324,7 @@ function _requestFastNarrationReload(mode, action = 'cache') {
       requestedAt: Date.now(),
     }));
   } else {
-    // Keep an existing Away Mode queue payload; only refresh the timestamp/mode.
+    // Keep an existing resume payload; only refresh the timestamp/mode.
     try {
       const existing = JSON.parse(sessionStorage.getItem(FAST_NARRATION_RESUME_KEY) || 'null') || {};
       existing.mode = mode || existing.mode || 'Normal';
@@ -529,10 +526,6 @@ async function _resumeFastNarrationCache() {
         if (!window.currentStory.title) window.currentStory.title = resume.title;
         if (_requestFastNarrationReload(resume.mode || 'Normal', resume.action || 'cache')) return;
       }
-      if (Array.isArray(resume.awayQueue) && resume.awayQueue.length) {
-        window.precacheQueue = [...resume.awayQueue];
-        prLocal.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
-      }
       // The user already made the cache decision (that is why we reloaded into
       // the isolated session). Suppress the cache-decision modal during this
       // restore so loadStory cannot re-prompt, then start caching exactly once
@@ -609,8 +602,6 @@ async function _resumeFastNarrationCache() {
         prSession.removeItem(FAST_NARRATION_RESUME_KEY);
         if (resume.action === 'playback') {
           window.togglePlayState?.();
-        } else if (resume.mode === 'Permanent' && Array.isArray(window.precacheQueue) && window.precacheQueue.length) {
-          await BufferManager.startPrecacheQueue();
         } else {
           BufferManager.start(resume.mode || 'Normal');
         }
@@ -779,15 +770,13 @@ export const BufferManager = {
   updateUI() {
     if (!this.containerEl) this.initUI();
     this._syncUiTicker();
-    if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
     if (typeof window.updatePlayButtons === 'function') window.updatePlayButtons();
-    // Away Mode playback guard lives in audio_core.js togglePlayState() directly
 
     const pct = this.totalToCache > 0 ? Math.floor((this.cachedCount / this.totalToCache) * 100) : 0;
     if (this.fillEl) this.fillEl.style.width = `${pct}%`;
     window.updateReaderDrawerStatus?.(this);
 
-    // ── Away Mode bar status ─────────────────────────────────────────
+    // ── Reader buffer bar status (#away-mode-bar is a legacy id) ─────
     const awayBar = document.getElementById('away-mode-bar');
     const runway = this.getBankedRunwayTime();
     const runwayText = this.cachedCount > 0 ? ` · ~${runway} ready` : '';
@@ -917,7 +906,7 @@ export const BufferManager = {
         }
       }
 
-      // ISSUE 19 FIX: Away Mode Unique Layout and Layout Overrides
+      // Status copy per mode: re-verifying, permanent (offline) caching, normal.
       if (this.queue.length > 0 && this.queue[0]) {
         if (this.isReverifying) {
           if (this.cachingModalText) {
@@ -925,7 +914,7 @@ export const BufferManager = {
           }
         } else if (this.mode === 'Permanent') {
           if (this.cachingModalText) {
-            this.cachingModalText.innerHTML = `<div style="background:rgba(255,165,0,0.1); border:1px solid rgba(255,165,0,0.35); padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;"><strong style="color:var(--accent-gold); font-size:1.1rem;">Away Mode is preparing offline audio</strong><br><span style="font-size:0.85rem;color:var(--text-muted)">Hide this panel to keep Pocket Reader working. Pause or stop from Settings when needed.</span></div>Caching: <strong style="color:var(--accent-color)">${_escapeCacheStatus(currentStory)}</strong><br><span style="font-size:0.85rem;color:var(--text-muted)">Ch ${this.queue[0].chapIdx + 1}, Para ${this.queue[0].paraIdx + 1}...</span>`;
+            this.cachingModalText.innerHTML = `<div style="background:rgba(255,165,0,0.1); border:1px solid rgba(255,165,0,0.35); padding:10px; border-radius:8px; margin-bottom:15px; text-align:center;"><strong style="color:var(--accent-gold); font-size:1.1rem;">Saving this story for offline listening</strong><br><span style="font-size:0.85rem;color:var(--text-muted)">Hide this panel to keep Pocket Reader working. Pause or stop from Settings when needed.</span></div>Caching: <strong style="color:var(--accent-color)">${_escapeCacheStatus(currentStory)}</strong><br><span style="font-size:0.85rem;color:var(--text-muted)">Ch ${this.queue[0].chapIdx + 1}, Para ${this.queue[0].paraIdx + 1}...</span>`;
           }
         } else {
           if (this.cachingModalText) this.cachingModalText.innerHTML = `Caching: <strong style="color:var(--accent-color)">${_escapeCacheStatus(currentStory)}</strong><br><span style="font-size:0.85rem;color:var(--text-muted)">Ch ${this.queue[0].chapIdx + 1}, Para ${this.queue[0].paraIdx + 1}...</span>`;
@@ -1139,7 +1128,7 @@ export const BufferManager = {
       this.cachingModalEl.style.display = 'flex';
       this.cachingModalEl.classList.add('active');
     }
-    // Away Mode (Permanent) shows only the Minimize button. Other modes show
+    // Permanent (offline) caching shows only the Minimize button. Other modes show
     // BOTH "Begin Playback" (gated until 30 paragraphs) and a Minimize button,
     // so the user is never locked into this screen while caching runs.
     const _isAway = (mode === 'Permanent');
@@ -1165,209 +1154,6 @@ export const BufferManager = {
     this.paused = true;
     _persistCacheJob(this);
     this.updateUI();
-  },
-
-  addToPrecacheQueue(storyRef) {
-    if (!window.precacheQueue) window.precacheQueue = [];
-    const story = window.findLibraryStoryByRef?.(storyRef);
-    if (!story) return;
-    const stableRef = story.storyKey || window.getStoryStableKey?.(story) || storyRef;
-    if (window.precacheQueue.length >= 5) {
-      if (typeof window.triggerVirtue === 'function') {
-        window.triggerVirtue('virtue_annoyed_bubble');
-        window.virtueSpeak('You can only queue up to 5 stories for Away Mode!', 4000);
-      }
-      return;
-    }
-    if (!window.precacheQueue.includes(stableRef)) {
-      window.precacheQueue.push(stableRef);
-      prLocal.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
-      if (typeof window.triggerVirtue === 'function') {
-        window.triggerVirtue('virtue_holding_bubble_happy_no_paws');
-        window.virtueSpeak(`${story.title} is queued. Start Away Mode from the Library button when you are ready.`, 3500);
-      }
-    }
-    const badge = document.getElementById('precache-count');
-    if (badge) badge.innerText = `${window.precacheQueue.length} queued`;
-    const btn = document.getElementById('start-precache-btn');
-    if (btn) {
-      btn.classList.toggle('active', window.precacheQueue.length > 0);
-    }
-  },
-
-  async startPrecacheQueue() {
-    if (!window.precacheQueue || window.precacheQueue.length === 0) {
-      if (!window.isPlaying) window.stopBgKeepAlive?.();
-      if (typeof window.virtueSpeak === 'function') window.virtueSpeak('First, open each story menu and choose Queue Away. Then start Away Mode from Library.', 5000);
-      return;
-    }
-    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (window.userProfile?.settings?.lowMemoryMode || conn?.saveData) {
-      if (typeof window.virtueSpeak === 'function') window.virtueSpeak('Away Mode is disabled in Low Memory Mode or Data Saver.', 5000);
-      if (!window.isPlaying) window.stopBgKeepAlive?.();
-      return;
-    }
-    if (this.isActive) {
-      if (typeof window.virtueSpeak === 'function') window.virtueSpeak('Away Mode is already running. Stop it first to restart.', 4000);
-      return;
-    }
-    if (window.deferForDeviceSetup?.(() => this.startPrecacheQueue())) return;
-    // Unlock media in the initiating or post-calibration tap before the first await.
-    window.preparePocketMobileMediaSession?.();
-    window.startBgKeepAlive?.();
-    window._pocketThroughputCache = true;
-    // Away Mode needs the same isolated multi-thread session as normal caching.
-    if (!_isolationReady()) {
-      const firstRef = window.precacheQueue[0];
-      const firstStory = window.findLibraryStoryByRef?.(firstRef);
-      window.currentStory = window.currentStory || firstStory || { title: 'Queued story', storyKey: firstRef };
-      if (!window.currentStory.title) window.currentStory.title = firstStory?.title || 'Queued story';
-      prSession.setItem(FAST_NARRATION_RESUME_KEY, JSON.stringify({
-        title: window.currentStory.title,
-        mode: 'Permanent',
-        awayQueue: [...window.precacheQueue],
-        requestedAt: Date.now(),
-      }));
-      if (_requestFastNarrationReload('Permanent', 'cache')) return;
-    }
-    const btn = document.getElementById('start-precache-btn');
-    if (btn) {
-      btn.innerHTML = 'Preparing Away Mode...';
-      btn.disabled = true;
-    }
-    this.mode = 'Permanent';
-    this.paused = false;
-    this.itemsSynthesizedThisSession = 0;
-    this.startTime = Date.now();
-    this._thermalHistory = [];
-    this._coolingUntil = 0;
-    this.queue = [];
-    this.totalToCache = 0;
-    this._backendPreparationPromise = null;
-    this._backendParallelStarted = false;
-    const selectedEngine = document.getElementById('voice-engine-select')?.value || 'pocket';
-    if (!_isNeuralControlValue(selectedEngine)) {
-      if (btn) {
-        btn.innerHTML = `Offline audio &nbsp;<span id="precache-count" class="away-mode-badge">${window.precacheQueue.length} queued</span>`;
-        btn.disabled = false;
-        btn.classList.toggle('active', window.precacheQueue.length > 0);
-      }
-      if (!window.isPlaying) window.stopBgKeepAlive?.();
-      if (typeof window.virtueSpeak === 'function') window.virtueSpeak('Away Mode caching needs a neural voice. Switch off Device Voice and try again.', 5000);
-      return;
-    }
-    // Same namespace hazard as the single-story queue above: canonicalising a
-    // Kokoro id against POCKET_VOICES silently swaps it for donald_malone.
-    const activeNeural = _resolveActiveEngine();
-    let voice;
-    if (voicesForEngine(activeNeural).length) {
-      const selected = document.getElementById('voice-selector')?.value;
-      voice = window.resolveVoiceForEngine
-        ? window.resolveVoiceForEngine(activeNeural, selected)
-        : (selected || '');
-    } else {
-      const defaultVoice = POCKET_DEFAULT_VOICE;
-      const selectedVoice = document.getElementById('voice-selector')?.value || defaultVoice;
-      const cleanVoice = typeof window.canonicalPocketVoice === 'function'
-        ? window.canonicalPocketVoice(selectedVoice)
-        : String(selectedVoice || defaultVoice).toLowerCase().trim();
-      voice = POCKET_VOICES.includes(cleanVoice) ? cleanVoice : defaultVoice;
-    }
-    this.maxWorkers = 1;
-    const requestedQueue = [...window.precacheQueue];
-    const consumedRefs = new Set();
-    this.sessionStoryRefs = new Set();
-    for (let i = 0; i < requestedQueue.length; i++) {
-      const storyRef = requestedQueue[i];
-      if (!window.userProfile || !window.userProfile.library) continue;
-      const story = window.findLibraryStoryByRef?.(storyRef);
-      if (!story) continue;
-      const stableRef = story.storyKey || window.getStoryStableKey?.(story) || storyRef;
-      const storyTitle = story.title;
-      let chapters = story.chapters;
-      if (!chapters && typeof window._loadStoryChapters === 'function') {
-        // A storage failure is a miss, as initDB documents for every caller.
-        // Thrown out of this loop, it left the button disabled on "Preparing
-        // Away Mode..." with nothing running and no message.
-        chapters = await window._loadStoryChapters(stableRef, story).catch(() => null);
-        if (!chapters && stableRef !== storyTitle) {
-          chapters = await window._loadStoryChapters(storyTitle, story).catch(() => null);
-          if (chapters) window._saveStoryChapters?.(stableRef, chapters, story).catch(() => {});
-        }
-      }
-      if (!chapters && typeof window._silentFetchStoryChapters === 'function' && story.url) {
-        if (typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_thinking');
-        if (typeof window.showLoadingOverlay === 'function') window.showLoadingOverlay('Downloading...', `Fetching ${storyTitle} for Away Mode`);
-        try {
-          chapters = await window._silentFetchStoryChapters(story.url);
-          if (chapters && typeof window._saveStoryChapters === 'function') {
-            await window._saveStoryChapters(stableRef, chapters, story);
-          }
-        } catch (e) {
-          console.error("Silent fetch failed", e);
-        }
-        if (typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
-      }
-      if (!chapters) continue;
-
-      const queueStart = this.queue.length;
-      for (let c = 0; c < chapters.length; c++) {
-        const chap = chapters[c];
-        if (!chap.paragraphs) continue;
-        for (let p = 0; p < chap.paragraphs.length; p++) {
-          const text = chap.paragraphs[p].trim();
-          if (text && !this._isMetaParagraph(text, story.title, chap.title, story.author)) {
-            this.queue.push({
-              storyTitle: story.title,
-              storyRef: stableRef,
-              chapIdx: c,
-              paraIdx: p,
-              text: text,
-              engine: selectedEngine,
-              voice: voice
-            });
-            this.totalToCache++;
-          }
-        }
-      }
-      if (this.queue.length > queueStart) {
-        consumedRefs.add(storyRef);
-        this.sessionStoryRefs.add(stableRef);
-      }
-    }
-    window.precacheQueue = requestedQueue.filter((ref) => !consumedRefs.has(ref));
-    try { localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue)); } catch (_) {}
-    if (btn) {
-      btn.innerHTML = `Offline audio &nbsp;<span id="precache-count" class="away-mode-badge">${window.precacheQueue.length} queued</span>`;
-      btn.disabled = false;
-      btn.classList.toggle('active', window.precacheQueue.length > 0);
-    }
-    if (this.queue.length === 0) {
-      window._pocketThroughputCache = false;
-      if (!window.isPlaying) window.stopBgKeepAlive?.();
-      if (typeof window.triggerVirtue === 'function') {
-        window.triggerVirtue('virtue_thinking');
-        window.virtueSpeak('Those stories appear to be empty or already cached.');
-      }
-      return;
-    }
-    this._prefetchQueueVoices();
-    const gen = ++this._generation;
-    this.isActive = true;
-    this.mode = 'Permanent';
-    this.startTime = Date.now();
-    this.consecutiveErrors = 0;
-    this.cachedCount = 0;
-    this.skippedCount = 0;
-    this.activeWorkers = 0;
-    const _freshModal = document.getElementById('caching-progress-modal');
-    if (_freshModal) this.cachingModalEl = _freshModal;
-    if (this.cachingModalEl) {
-      this.cachingModalEl.style.display = 'flex';
-      this.cachingModalEl.classList.add('active');
-    }
-    this.updateUI();
-    setTimeout(() => this._loop(gen), 0);
   },
 
   stop() {
@@ -1449,10 +1235,10 @@ export const BufferManager = {
     }
 
     try {
-      const jobRefs = Array.isArray(job.storyRefs) && job.storyRefs.length ? job.storyRefs : job.storyTitles;
-      if (job.mode === 'Permanent' && Array.isArray(jobRefs)) {
-        window.precacheQueue = [...jobRefs];
-        await this.startPrecacheQueue();
+      // A persisted multi-story job is a retired Away Mode queue. Nothing runs
+      // it any more, so it is cleared rather than half-resumed as one story.
+      if (job.mode === 'Permanent' && Array.isArray(job.storyRefs) && job.storyRefs.length > 1) {
+        _clearPersistedCacheJob();
         return;
       }
       const jobRef = job.storyRef || job.storyTitle;
@@ -2007,7 +1793,6 @@ export const BufferManager = {
 };
 
 window.BufferManager = BufferManager;
-window.startPrecacheQueue = (...args) => BufferManager.startPrecacheQueue(...args);
 
 window.addEventListener('pagehide', () => {
   if (BufferManager.isActive || BufferManager.paused) _persistCacheJob(BufferManager);
@@ -2207,147 +1992,3 @@ window._resumeCaching = function() {
   }
 };
 
-window.renderAwayModeUI = function() {
-  const queueList = document.getElementById('away-queue-list');
-  const quickAddList = document.getElementById('away-quick-add-list');
-  if (!queueList || !quickAddList) return;
-
-  const library = window.userProfile?.library || [];
-  const queue = window.precacheQueue || [];
-
-  // Update Stats
-  const queuedCount = BufferManager.queue ? BufferManager.queue.length : 0;
-  const cachedCount = BufferManager.cachedCount || 0;
-  const isActive = BufferManager.isActive && BufferManager.mode === 'Permanent';
-  const isPaused = BufferManager.paused && BufferManager.mode === 'Permanent';
-  const statusText = isActive ? "Running" : (isPaused ? "Paused" : "Idle");
-  
-  const statusEl = document.getElementById('away-status-text');
-  if (statusEl) {
-    statusEl.innerText = statusText;
-    statusEl.style.color = isActive ? 'var(--accent-green)' : (isPaused ? 'var(--accent-yellow)' : 'var(--text-muted)');
-  }
-  
-  const depthEl = document.getElementById('away-queue-depth');
-  if (depthEl) depthEl.innerText = `${queuedCount} paragraphs`;
-  
-  const cachedEl = document.getElementById('away-session-cached');
-  if (cachedEl) cachedEl.innerText = `${cachedCount} paragraphs`;
-  
-  let etaStr = "N/A";
-  if (isActive && BufferManager.startTime && cachedCount > 0 && queuedCount > 0) {
-    const elapsed = Date.now() - BufferManager.startTime;
-    const msPerItem = elapsed / cachedCount;
-    const remainingMs = msPerItem * queuedCount;
-    const remainingMin = Math.ceil(remainingMs / 60000);
-    etaStr = `~${remainingMin} min`;
-  }
-  const etaEl = document.getElementById('away-eta');
-  if (etaEl) etaEl.innerText = etaStr;
-
-  const workersSelect = document.getElementById('away-workers-select');
-  if (workersSelect) {
-    workersSelect.value = BufferManager.maxWorkers || 1;
-  }
-
-  const startBtn = document.getElementById('away-start-btn');
-  const stopBtn = document.getElementById('away-stop-btn');
-  if (startBtn) startBtn.disabled = (isActive || isPaused || queue.length === 0);
-  if (stopBtn) stopBtn.disabled = (!isActive && !isPaused);
-
-  // Render Queue list
-  if (queue.length === 0) {
-    queueList.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.9rem;">No stories in caching queue. Add some from the list below.</div>`;
-  } else {
-    queueList.innerHTML = queue.map((ref, idx) => {
-      const story = window.findLibraryStoryByRef?.(ref);
-      const title = _escapeCacheStatus(story ? story.title : ref);
-      return `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--panel-bg); padding:8px 12px; border-radius:4px; border:1px solid var(--border-color);">
-        <span style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%;" title="${title}">${title}</span>
-        <button class="pr-btn-outline" style="padding:4px 8px; font-size:0.8rem; margin:0;" onclick="window.removeStoryFromAwayQueue('${_encodeForInlineHandler(ref)}')">Remove</button>
-      </div>`;
-    }).join('');
-  }
-
-  // Render Quick Add list
-  const notInQueue = library.filter(s => {
-    const ref = s.storyKey || window.getStoryStableKey?.(s) || s.title;
-    return !queue.includes(ref);
-  });
-
-  if (library.length === 0) {
-    // An empty library and a fully-queued library are different situations, and
-    // the old copy claimed the second while showing the first. On a cold start
-    // this view can render before the profile and curated list have hydrated,
-    // so a reader saw "All library stories are in the queue" above an empty
-    // shelf. renderLibrary() re-runs this once the library lands.
-    quickAddList.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.9rem;">Your library is still loading. Stories will appear here once it does.</div>`;
-  } else if (notInQueue.length === 0) {
-    quickAddList.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.9rem;">All library stories are in the queue.</div>`;
-  } else {
-    quickAddList.innerHTML = notInQueue.map(s => {
-      const ref = s.storyKey || window.getStoryStableKey?.(s) || s.title;
-      const title = _escapeCacheStatus(s.title);
-      return `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--panel-bg); padding:8px 12px; border-radius:4px; border:1px solid var(--border-color);">
-        <span style="font-size:0.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:70%;" title="${title}">${title}</span>
-        <button class="pr-btn-primary" style="padding:4px 8px; font-size:0.8rem; margin:0;" onclick="window.addStoryToAwayQueue('${_encodeForInlineHandler(ref)}')">Add</button>
-      </div>`;
-    }).join('');
-  }
-};
-
-window.startAwayModeFromSubpage = function() {
-  if (window.BufferManager) {
-    window.BufferManager.startPrecacheQueue();
-  }
-};
-
-window.stopAwayModeFromSubpage = function() {
-  if (window.BufferManager) {
-    window.BufferManager.stop();
-  }
-  if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
-};
-
-// A ceiling on the device policy, matching the Settings control. The old range
-// went to 4, which nothing could honour: _ensureCacheBackendReady overwrites
-// maxWorkers from recommendedPocketCacheWorkerCount(), whose largest answer is
-// POCKET_MAX_CACHE_WORKERS. The value now reaches that policy as userMaxWorkers
-// instead of being set here and replaced a moment later.
-window.saveAwayWorkersSetting = function(val) {
-  const num = parseInt(val, 10);
-  if (!isNaN(num) && num >= 1 && num <= POCKET_MAX_CACHE_WORKERS) {
-    if (window.BufferManager) {
-      window.BufferManager.maxWorkers = num;
-    }
-    if (window.userProfile && window.userProfile.settings) {
-      window.userProfile.settings.enableManualWorkers = true;
-      window.userProfile.settings.maxWorkers = num;
-      if (typeof window.saveLocalData === 'function') window.saveLocalData();
-    }
-    if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
-  }
-};
-
-window.addStoryToAwayQueue = function(refEncoded) {
-  const ref = decodeURIComponent(refEncoded);
-  if (window.BufferManager) {
-    window.BufferManager.addToPrecacheQueue(ref);
-  }
-  if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
-};
-
-window.removeStoryFromAwayQueue = function(refEncoded) {
-  const ref = decodeURIComponent(refEncoded);
-  if (!Array.isArray(window.precacheQueue)) window.precacheQueue = [];
-  window.precacheQueue = window.precacheQueue.filter(item => item !== ref);
-  prLocal.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue));
-  const badge = document.getElementById('precache-count');
-  if (badge) badge.innerText = `${window.precacheQueue.length} queued`;
-  const btn = document.getElementById('start-precache-btn');
-  if (btn) {
-    btn.classList.toggle('active', window.precacheQueue.length > 0);
-  }
-  if (typeof window.saveLocalData === 'function') window.saveLocalData();
-  if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
-};

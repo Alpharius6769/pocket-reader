@@ -1572,7 +1572,6 @@ ${favoriteBtn}
   <div class="lib-options-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px;">
     <button onclick="event.stopPropagation(); ${closeMenusJs} window.toggleFavorite(decodeURIComponent('${storyKeyEncoded}'))"><span>${favIcon}</span>Favorite</button>
     <button onclick="event.stopPropagation(); ${closeMenusJs} window.permCacheStory(decodeURIComponent('${storyKeyEncoded}'))"><span>Cache</span>Perm Cache</button>
-    <button onclick="event.stopPropagation(); ${closeMenusJs} window.ensureNarrationRuntime().then(() => window.BufferManager.addToPrecacheQueue(decodeURIComponent('${storyKeyEncoded}')))"><span>Queue</span>Queue Away</button>
     ${subscriptionButton}
     <button onclick="event.stopPropagation(); ${closeMenusJs} window.toggleReadingQueue(decodeURIComponent('${storyKeyEncoded}'))"><span>Next</span>Reading Queue</button>
     <button onclick="event.stopPropagation(); ${closeMenusJs} window.openStoryCollectionDialog(decodeURIComponent('${storyKeyEncoded}'))"><span>Group</span>Collections</button>
@@ -1592,7 +1591,7 @@ ${favoriteBtn}
     </div>
   </div>
   <div style="font-size: 0.58rem; color: var(--text-muted); text-align: center; margin-top: 4px; border-top: 1px dashed rgba(255,255,255,0.04); padding-top: 4px;">
-    Cache = This Story Offline | Queue Away = Add to Away Mode
+    Perm Cache = save this story for offline listening
   </div>
 </div>
 </div>`;
@@ -1766,21 +1765,6 @@ export function renderLibrary(skipAnimation = false) {
 }
 window.renderLibrary = renderLibrary;
 
-// Away Mode's "add a story" list is built from the same library array. On a
-// cold start that view can render before the profile and curated stories have
-// hydrated, leaving an empty shelf that never refills because nothing told it
-// the library had arrived. Re-render it whenever the library does, but only
-// while it is the view on screen.
-const _refreshAwayModeWithLibrary = () => {
-  if (window.currentActiveView !== 'away-mode-view') return;
-  if (typeof window.renderAwayModeUI === 'function') window.renderAwayModeUI();
-};
-const _renderLibraryWithAwayMode = (skipAnimation) => {
-  const result = renderLibrary(skipAnimation);
-  _refreshAwayModeWithLibrary();
-  return result;
-};
-window.renderLibrary = _renderLibraryWithAwayMode;
 
 export function updatePlayButtons() {
   const bm = window.BufferManager;

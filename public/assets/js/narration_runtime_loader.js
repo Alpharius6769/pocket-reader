@@ -7,8 +7,8 @@ export function ensureNarrationRuntime() {
   if (window.__pocketNarrationRuntimeLoaded === true) return Promise.resolve(true);
   if (narrationRuntimePromise) return narrationRuntimePromise;
 
-  narrationRuntimePromise = import('./audio_core.js?v=audio-v232')
-    .then(() => import('./buffer_manager.js?v=buffer-v122'))
+  narrationRuntimePromise = import('./audio_core.js?v=audio-v234')
+    .then(() => import('./buffer_manager.js?v=buffer-v124'))
     .then(() => {
       window.__pocketNarrationRuntimeLoaded = true;
       return true;
@@ -62,14 +62,12 @@ window.preparePocketMobileMediaSession =
 const MEDIA_GESTURE_ACTIONS = new Set([
   'togglePlayState',
   'startCaching',
-  'startPrecacheQueue',
 ]);
 
 const DEFERRED_NARRATION_ACTIONS = [
   'switchReaderVoiceEngine',
   'refreshVoiceSelectorForEngine',
   'startCaching',
-  'startPrecacheQueue',
   '_toggleCachePause',
   '_stopCaching',
   'togglePlayState',

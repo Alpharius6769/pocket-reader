@@ -10,8 +10,8 @@ test('heavy narration modules remain deferred until narration is requested', asy
 
   assert.doesNotMatch(html, /<script[^>]+audio_core\.js/);
   assert.doesNotMatch(html, /<script[^>]+buffer_manager\.js/);
-  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v232'\)/);
-  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v122'\)/);
+  assert.match(loader, /import\('\.\/audio_core\.js\?v=audio-v234'\)/);
+  assert.match(loader, /import\('\.\/buffer_manager\.js\?v=buffer-v124'\)/);
 });
 
 test('the deferred loader preserves the original mobile user activation', async () => {
@@ -32,9 +32,9 @@ test('the deferred loader preserves the original mobile user activation', async 
   assert.match(audio, /_premiumAudio\.loop = true/);
   assert.match(audio, /_premiumAudio\?\.dataset\?\.pocketUnlock === '1'[\s\S]*?_premiumAudio\.pause\(\)/);
   assert.match(audio, /window\.currentAudio\.loop = false/);
-  assert.match(buffer, /window\.startPrecacheQueue\s*=/);
-  assert.match(html, /onclick="window\.startPrecacheQueue\(\)"/);
-  assert.doesNotMatch(html, /if\(window\.BufferManager\) window\.BufferManager\.startPrecacheQueue/);
+  // Away Mode's queue runner is gone, so nothing may still call it.
+  assert.doesNotMatch(buffer, /startPrecacheQueue/);
+  assert.doesNotMatch(html, /startPrecacheQueue/);
 });
 
 test('playback requests an isolated narration session before model startup', async () => {
@@ -95,8 +95,8 @@ test('a narration-resume fix advances the immutable module and service-worker re
     read('public/sw.js'),
     read('public/index.html'),
   ]);
-  assert.match(loader, /buffer_manager\.js\?v=buffer-v122/);
-  assert.match(worker, /buffer_manager\.js\?v=buffer-v122/);
+  assert.match(loader, /buffer_manager\.js\?v=buffer-v124/);
+  assert.match(worker, /buffer_manager\.js\?v=buffer-v124/);
   assert.match(worker, /pocket-reader-core-v\d+/);
   // Derived, not pinned: the shell must register whatever revision the service
   // worker actually ships. Hardcoding the number here only forced a mechanical

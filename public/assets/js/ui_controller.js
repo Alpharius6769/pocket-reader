@@ -18,7 +18,6 @@ import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 const _OFFSCREEN_RELEASABLE = Object.freeze({
   'library-view': ['library-grid'],
   'profile-view': ['achievements-grid-container'],
-  'away-mode-view': ['away-queue-list', 'away-quick-add-list'],
   // The reader is by far the largest of these — a whole story is ~1,000-1,200
   // <p> nodes — and it was the one view never released. Safe to clear because
   // renderFullStory() rebuilds it from window.currentStory whenever the reader
@@ -66,7 +65,7 @@ export function showView(viewId) {
       document.querySelectorAll('.nav-btn').forEach((btn) => {
         btn.classList.remove('active-view');
         const clickAction = btn.getAttribute('onclick');
-        const section = viewId === 'search-view' ? 'hmofa-view' : viewId === 'away-mode-view' ? 'library-view' : viewId;
+        const section = viewId === 'search-view' ? 'hmofa-view' : viewId;
         btn.removeAttribute('aria-current');
         if (clickAction && clickAction.includes(section)) {
           btn.setAttribute('aria-current', 'page');
@@ -93,22 +92,6 @@ export function showView(viewId) {
         if (typeof window.refreshSiteHealth === 'function') window.refreshSiteHealth();
         if (typeof window.refreshPerfPanel === 'function') window.refreshPerfPanel();
         if (typeof window.renderPocketDeviceSetupSummary === 'function') window.renderPocketDeviceSetupSummary();
-      }
-
-      if (viewId === 'away-mode-view') {
-        // renderAwayModeUI lives in buffer_manager.js, which is lazy-loaded with
-        // the narration runtime. On a cold start it does not exist yet, so the
-        // old typeof guard silently rendered nothing and the queue and Quick Add
-        // lists came up empty -- they only appeared once some other action
-        // (opening a story) had pulled the runtime in. Load it first.
-        Promise.resolve(window.ensureNarrationRuntime?.())
-          .then(() => window.renderAwayModeUI?.())
-          .catch((error) => {
-            window.Diagnostics?.log('WARN', 'Away Mode narration runtime failed to load', {
-              error: String(error?.message || error),
-            });
-            window.pocketNotify?.('Away Mode could not start. Open a story once, then try Away Mode again.');
-          });
       }
 
       // Opening a story must rebuild the voice list for whichever engine is
@@ -1389,8 +1372,7 @@ const _TIPS_BY_VIEW = {
     { sel: '#global-search', title: 'Find a story', text: 'Search Archive of Our Own, or paste any story link here to start reading right away.' },
   ],
   'library-view': [
-    { sel: '.lib-options-btn', title: 'Story options', text: 'Tap the ⋮ on any story for Permanent Cache, Away Mode, and "Check for New Chapters".' },
-    { sel: '#start-precache-btn', title: 'Away Mode', text: 'Queue stories to fully cache in the background so you can listen offline later, even with the app closed.' },
+    { sel: '.lib-options-btn', title: 'Story options', text: 'Tap the ⋮ on any story to save it for offline listening or check for new chapters.' },
   ],
   'search-view': [
     { sel: '#ao3-page-search', title: 'Search AO3', text: 'Search Archive of Our Own by title, author, or keywords — or paste a direct story link.' },
@@ -1407,14 +1389,6 @@ const _TIPS_BY_VIEW = {
   ],
   'settings-view': [
     { title: 'Settings', text: 'Tune the voice, worker count, GPU options and more here. You can also re-enable these tips at the bottom of this page.' },
-  ],
-  // Away Mode was the one page with no tips, and it is the least
-  // self-explanatory: a queue, a Quick Add list and a job that deliberately
-  // keeps running once the panel is hidden.
-  'away-mode-view': [
-    { title: 'Away Mode', text: 'Away Mode renders a whole story to audio in the background so you can listen offline later, with no network at all.' },
-    { sel: '#away-quick-add-list', title: 'Queue stories', text: 'Add up to five stories here. They cache one after another, so start with the one you want tonight.' },
-    { sel: '#away-queue-list', title: 'Keep it running', text: 'Hiding the panel does not stop the job — caching keeps going while you read something else. Pause or stop it from Settings.' },
   ],
 };
 
@@ -1737,7 +1711,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=358', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=359', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)

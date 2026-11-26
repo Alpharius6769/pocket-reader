@@ -88,16 +88,6 @@ test('the storage dialog paints before it starts aggregating', async () => {
   assert.match(source, /requestAnimationFrame[\s\S]{0,80}const rows = await getOfflineStoryUsage/);
 });
 
-test('Away Mode distinguishes an empty library from a fully queued one', async () => {
-  const buffer = await read('public/assets/js/buffer_manager.js');
-  const library = await read('public/assets/js/library_manager.js');
-  assert.match(buffer, /if \(library\.length === 0\)/);
-  assert.match(buffer, /Your library is still loading/);
-  // And it must refill once the library arrives.
-  assert.match(library, /_refreshAwayModeWithLibrary/);
-  assert.match(library, /currentActiveView !== 'away-mode-view'/);
-});
-
 test('diagnostics explains a network failure instead of just "Failed to fetch"', async () => {
   const source = await read('public/assets/js/diagnostics.js');
   assert.match(source, /const describeError/);

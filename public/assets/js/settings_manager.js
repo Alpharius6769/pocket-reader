@@ -15,7 +15,7 @@ import {
   coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v64';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '358';
+export const NARRATION_SERVICE_WORKER_VERSION = '359';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1782,21 +1782,6 @@ export async function refreshPerfPanel() {
 }
 window.refreshPerfPanel = refreshPerfPanel;
 
-// ── Global Away Workers Setting Fallback ──────────────────────────────────
-if (typeof window.saveAwayWorkersSetting !== 'function') {
-  window.saveAwayWorkersSetting = function(val) {
-    const num = parseInt(val, 10);
-    // Same ceiling as buffer_manager's real implementation, which replaces this
-    // once the narration runtime loads.
-    if (!isNaN(num) && num >= 1 && num <= NARRATION_WORKER_CEILING) {
-      if (window.userProfile && window.userProfile.settings) {
-        window.userProfile.settings.enableManualWorkers = true;
-        window.userProfile.settings.maxWorkers = num;
-        if (typeof window.saveLocalData === 'function') window.saveLocalData();
-      }
-    }
-  };
-}
 
 
 // Boot catch-up. MUST be the last thing in this module.

@@ -38,14 +38,6 @@ test('jumping to a chapter or bookmark stamps the progress clock', async () => {
 
 // ── Away Mode stuck on "Preparing Away Mode..." after a storage failure ────
 
-test('Away Mode treats a storage failure as a miss instead of throwing', async () => {
-  const buf = await read('public/assets/js/buffer_manager.js');
-  const fn = between(buf, "btn.innerHTML = 'Preparing Away Mode...';", 'window.precacheQueue = requestedQueue.filter');
-  assert.match(fn, /await window\._loadStoryChapters\(stableRef, story\)\.catch\(\(\) => null\);/);
-  assert.match(fn, /await window\._loadStoryChapters\(storyTitle, story\)\.catch\(\(\) => null\);/);
-  assert.ok(!/await window\._loadStoryChapters\([^)]*\);/.test(fn), 'every chapter read in the loop must be caught');
-});
-
 // ── Sign-in is Google or guest, nothing else (product decision) ─────────────
 //
 // Email sign-up depended on a confirmation mail that never reliably arrived,

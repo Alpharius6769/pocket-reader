@@ -10,7 +10,7 @@ test('device calibration opens for a requested action and resumes it after the l
   const theme = await read('public/assets/css/theme.css');
   assert.ok(html.indexOf('id="device-setup-modal"') < html.indexOf('id="first-time-setup-modal"'));
   assert.match(deviceSetup, /window\.deferForDeviceSetup/);
-  assert.match(html, /device_setup\.js\?v=device-setup-v55/);
+  assert.match(html, /device_setup\.js\?v=device-setup-v57/);
   assert.match(deviceSetup, /pr_device_setup_v2|POCKET_DEVICE_SETUP_KEY/);
   assert.match(deviceSetup, /localOnly:\s*true/);
   assert.match(deviceSetup, /simulateThreadedWasm:\s*true/);

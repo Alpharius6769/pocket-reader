@@ -253,19 +253,19 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v51">
 <link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v46">
 <link rel="modulepreload" href="assets/js/engine_utils.js">
-<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v137">
+<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v139">
 <link rel="modulepreload" href="assets/js/api_core.js?v=search-v33">
 <link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v19">
 <link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v55">
 <link rel="modulepreload" href="assets/js/device_catalog.js?v=catalog-v7">
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v64">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
-<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v55">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v216">
-<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v102">
+<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v57">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v218">
+<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v104">
 <link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v18">
 <link rel="modulepreload" href="assets/js/reader_features.js?v=features-v49">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v251">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v253">
 <link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v22">
 
 <!-- ==========================================
@@ -282,7 +282,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.indexOf('/debug/') !== -1 || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=358', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=359', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -587,11 +587,6 @@ Playback-only modules remain deferred so they do not compete with first paint.
             <img loading="lazy" decoding="async" class="pr-layout-044" src="assets/img/library%20512.png" alt="">
             Library
             <button type="button" onclick="triggerFileUpload()">Add story</button>
-            <button id="start-precache-btn" class="away-mode-lib-btn pr-layout-045"
-              onclick="showView('away-mode-view')"
-              title="1. Add stories with Queue Away in each story menu. 2. Start Away Mode here. 3. Minimize the progress panel while Pocket Reader prepares offline audio. Keep the app open while it works; a paused phone may resume caching when you return.">
-              Offline audio &nbsp;<span id="precache-count" class="away-mode-badge">0 queued</span>
-            </button>
           </h1>
           <div class="library-filters">
             <button class="filter-chip active" data-filter="all" onclick="setLibraryFilter('all')">All</button>
@@ -1349,56 +1344,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
             </div>
           </div>
 
-          <div id="away-mode-view" class="view">
-            <h1 class="pr-layout-115">Offline audio</h1>
-            <div class="settings-grid settings-grid-masonry">
-              
-              <!-- Status & Control Card -->
-              <div class="settings-card">
-                <h3>Status & Controls</h3>
-                <p class="settings-help">Away Mode prepares offline narration for your queued stories. Caching runs while this page remains open.</p>
-                <div class="device-setup-facts" style="margin-bottom:15px; margin-top:10px;">
-                  <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><strong>Status</strong><span id="away-status-text" style="font-weight:bold;">Idle</span></div>
-                  <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><strong>Queue Depth</strong><span id="away-queue-depth">0 paragraphs</span></div>
-                  <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><strong>Session Cached</strong><span id="away-session-cached">0 paragraphs</span></div>
-                  <div style="display:flex; justify-content:space-between; margin-bottom:8px;"><strong>ETA</strong><span id="away-eta">N/A</span></div>
-                </div>
-                
-                <div style="display:flex; gap:10px; margin-bottom:15px;">
-                  <button id="away-start-btn" class="pr-btn-success" style="flex:1;" onclick="window.startPrecacheQueue()">Begin Caching</button>
-                  <button id="away-stop-btn" class="pr-btn-outline" style="flex:1;" onclick="window.stopAwayModeFromSubpage()">Stop Caching</button>
-                </div>
 
-                <label class="settings-label" for="away-workers-select" style="margin-top:10px;">Parallel Narration Workers</label>
-                <!-- Same ceiling as Settings. The 3 and 4 options that used to
-                     be here could never take effect: the policy answers 1 or 2,
-                     and Away Mode caching is the only mode that ever reaches 2. -->
-                <select id="away-workers-select" class="settings-control" onchange="window.saveAwayWorkersSetting(this.value)">
-                  <option value="1">1 worker (recommended on phones)</option>
-                  <option value="2">2 workers (faster; high-memory desktops only)</option>
-                </select>
-              </div>
-
-              <!-- Active Queue Card -->
-              <div class="settings-card">
-                <h3>Caching Queue</h3>
-                <p class="settings-help">Manage stories currently queued for offline caching.</p>
-                <div id="away-queue-list" style="display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; margin-top:12px; border:1px solid var(--border-color); padding:8px; border-radius:6px; background:rgba(0,0,0,0.1);">
-                  <!-- Dynamic content -->
-                </div>
-              </div>
-
-              <!-- Quick Add Card -->
-              <div class="settings-card">
-                <h3>Quick Add from Library</h3>
-                <p class="settings-help">Add other library stories to the caching queue.</p>
-                <div id="away-quick-add-list" style="display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto; margin-top:12px; border:1px solid var(--border-color); padding:8px; border-radius:6px; background:rgba(0,0,0,0.1);">
-                  <!-- Dynamic content -->
-                </div>
-              </div>
-
-            </div>
-          </div>
 
         </div>
       </div>
@@ -1468,17 +1414,17 @@ Playback-only modules remain deferred so they do not compete with first paint.
     <script src='assets/js/experience_coordinator.js?v=experience-v19' type='module'></script>
     <script src='assets/js/virtue_controller.js?v=virtue-v55' type='module'></script>
     <script src='assets/js/engine_utils.js' type='module'></script>
-    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v137' type='module'></script>
+    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v139' type='module'></script>
     <script src='assets/js/tts_pronunciation_core.js?v=pron-v34' type='module'></script>
-    <script src='assets/js/library_manager.js?v=library-v102' type='module'></script>
+    <script src='assets/js/library_manager.js?v=library-v104' type='module'></script>
     <!-- Pulls in hmofa_catalog_core.js via a versioned import. The catalog
          itself is only downloaded when the masterlist view is opened. -->
     <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v16' type='module'></script>
-    <script src='assets/js/device_setup.js?v=device-setup-v55' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v216' type='module'></script>
+    <script src='assets/js/device_setup.js?v=device-setup-v57' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v218' type='module'></script>
     <script src='assets/js/cinematic_ui.js?v=cinematic-v18' type='module'></script>
     <script src='assets/js/reader_features.js?v=features-v49' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v251' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v253' type='module'></script>
     <script src='assets/js/supabase_bridge.js?v=supabase-v22' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v5' type='module'></script>
   </div>

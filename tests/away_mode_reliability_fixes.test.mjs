@@ -6,17 +6,6 @@ const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
 // Regression guards for the 2026-07-21 Away Mode / silent-caching audit fixes.
 
-test('Away Mode subpage escapes story titles (stored XSS)', async () => {
-  const buffer = await read('public/assets/js/buffer_manager.js');
-  // Both the queue list and quick-add list must route the title through the
-  // module's HTML escaper before interpolating into innerHTML. Scraped/EPUB
-  // titles are attacker-influenced, so a raw `${title}` render is a stored XSS.
-  assert.match(buffer, /const title = _escapeCacheStatus\(story \? story\.title : ref\);/);
-  assert.match(buffer, /const title = _escapeCacheStatus\(s\.title\);/);
-  // The pre-fix raw interpolations must be gone.
-  assert.doesNotMatch(buffer, /title="\$\{s\.title\}">\$\{s\.title\}/);
-});
-
 test('fast-narration reload saves the real active view, once', async () => {
   const buffer = await read('public/assets/js/buffer_manager.js');
   // showView marks the active view with `.active-view`; the old `.view.active`
