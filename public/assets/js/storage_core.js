@@ -1,4 +1,4 @@
-import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v62';
+import { isMobileLikePlatform } from './pocket_backend_policy.js?v=backend-v64';
 
 const DB_NAME = 'PocketReaderDB';
 const DB_VERSION = 3;

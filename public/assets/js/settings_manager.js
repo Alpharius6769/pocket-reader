@@ -10,13 +10,12 @@ import {
   readNarrationEngineOverride,
   writeNarrationEngineOverride,
   KOKORO_VOICES,
-  KITTEN_ENGINE,
   NARRATION_ENGINE_TIERS,
   voicesForEngine,
   coerceVoiceForEngine,
-} from './pocket_backend_policy.js?v=backend-v62';
+} from './pocket_backend_policy.js?v=backend-v64';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '356';
+export const NARRATION_SERVICE_WORKER_VERSION = '358';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -1441,7 +1440,7 @@ function _describeNarrationEngine() {
   if (!choice) return '<span style="color:var(--text-muted)">not resolved yet</span>';
   const ENGINE_DISPLAY = {
     kokoro: 'Kokoro-82M (light)',
-    kitten: 'KittenTTS Nano (lightest)',
+    webspeech: 'Device voice',
     pocket: 'Pocket TTS',
   };
   const name = ENGINE_DISPLAY[choice.engine] || 'Pocket TTS';
@@ -1549,7 +1548,7 @@ window.syncNarrationControls = function syncNarrationControls() {
 
   const voices = voicesForEngine(engine);
   if (voices.length) {
-    const savedKey = engine === KITTEN_ENGINE ? 'kittenVoice' : 'kokoroVoice';
+    const savedKey = 'kokoroVoice';
     const chosen = coerceVoiceForEngine(engine, window.userProfile?.settings?.[savedKey]);
     const group = (gender) => voices
       .filter((voice) => voice.gender === gender)
@@ -1625,7 +1624,7 @@ export function renderNarrationEngineControls() {
   // KOKORO_VOICES unconditionally is how a Kitten device would be offered
   // af_heart, which its worker cannot load.
   const voices = voicesForEngine(choice.engine);
-  const savedKey = choice.engine === KITTEN_ENGINE ? 'kittenVoice' : 'kokoroVoice';
+  const savedKey = 'kokoroVoice';
   const savedVoice = coerceVoiceForEngine(choice.engine, window.userProfile?.settings?.[savedKey]);
 
   // Keep the single Voice Engine select in step, including labelling which
@@ -1655,7 +1654,7 @@ export function renderNarrationEngineControls() {
   if (select) {
     const autoOption = select.querySelector('option[value="auto"]');
     if (autoOption) {
-      const ENGINE_LABELS = { kokoro: 'Kokoro', kitten: 'Kitten', pocket: 'Pocket TTS' };
+      const ENGINE_LABELS = { kokoro: 'Kokoro', webspeech: 'Device voice', pocket: 'Pocket TTS' };
       autoOption.textContent = `Automatic - ${ENGINE_LABELS[autoPick.engine] || ENGINE_LABELS[choice.engine] || 'Pocket TTS'} on this device`;
     }
     const desired = _voiceEngineControlValue();
@@ -1696,10 +1695,8 @@ export function renderNarrationEngineControls() {
     }
   }
 
-  const engineName = { kokoro: 'Kokoro', kitten: 'Kitten' }[choice.engine] || '';
-  const voiceNote = choice.engine === 'kokoro'
-    ? "Letter grades are Kokoro's own quality ratings. Male voices top out at C+."
-    : 'KittenTTS publishes no quality grades, so none are shown.';
+  const engineName = { kokoro: 'Kokoro' }[choice.engine] || '';
+  const voiceNote = "Letter grades are Kokoro's own quality ratings. Male voices top out at C+.";
   host.innerHTML = `${why}${warning}
     <div id="kokoro-voice-row" style="display:${voicePickerActive ? 'block' : 'none'};">
       <label for="kokoro-voice-select" style="display:block;font-size:0.85rem;color:var(--text-muted);margin-bottom:4px;">${_escapeSettingsHtml(engineName)} voice</label>
@@ -1763,7 +1760,7 @@ export async function refreshPerfPanel() {
   }
   p.innerHTML = `<ul style="font-size:0.85rem;padding-left:20px;color:var(--text-main);line-height:1.6;">
     <li><b>Neural Engine:</b> ${isNeural
-      ? `<span style="color:var(--accent-green);">Active (${_escapeSettingsHtml({ kokoro: 'Kokoro-82M', kitten: 'KittenTTS Nano', pocket: 'Pocket TTS' }[_resolveEngineChoice()?.engine] || 'Pocket TTS')})</span>`
+      ? `<span style="color:var(--accent-green);">Active (${_escapeSettingsHtml({ kokoro: 'Kokoro-82M', webspeech: 'Device voice', pocket: 'Pocket TTS' }[_resolveEngineChoice()?.engine] || 'Pocket TTS')})</span>`
       : 'Inactive'}</li>
     <li><b>Engine State:</b> ${typeof window._neuralState === 'function' ? window._neuralState() : 'idle (loading...)'}</li>
     ${pocketRows}

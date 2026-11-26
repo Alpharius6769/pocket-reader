@@ -51,7 +51,7 @@ test('the loader and resolver both admit every tier', async () => {
 
   // One predicate, used by every site that used to name Kokoro.
   assert.match(audio, /function _isStyleTts2Engine\(engine\) \{/);
-  assert.match(audio, /engine === 'kokoro' \|\| engine === KITTEN_ENGINE/);
+  assert.match(audio, /function _isStyleTts2Engine\(engine\) \{\s*\n\s*return engine === 'kokoro';/);
   assert.match(audio, /if \(engine !== 'pocket' && !_isStyleTts2Engine\(engine\)\) return false;/);
 
   // The resolver returns what the policy picked, validated -- not a hardcoded name.
@@ -66,9 +66,8 @@ test('every neural engine gets its own cache version', async () => {
 
   // A shared version would let two models' renders collide on one key.
   const kokoro = audio.match(/const KOKORO_NARRATION_CACHE_VERSION = '([^']+)'/)?.[1];
-  const kitten = audio.match(/const KITTEN_NARRATION_CACHE_VERSION = '([^']+)'/)?.[1];
-  assert.ok(kokoro && kitten, 'both engines need a declared cache version');
-  assert.notEqual(kokoro, kitten, 'two models must not share one render key');
+  assert.ok(kokoro, 'Kokoro needs a declared cache version');
+  assert.match(audio, /const NEURAL_CACHE_VERSIONS = Object\.freeze\(\{\s*kokoro: KOKORO_NARRATION_CACHE_VERSION,\s*\}\);/);
 });
 
 test('shell modules import the voice contract rather than reading window', async () => {
@@ -92,19 +91,10 @@ test('shell modules import the voice contract rather than reading window', async
   }
 });
 
-test('the Kitten worker does not inherit Kokoro measurements as its own', async () => {
-  const w = await read('public/assets/js/kitten_worker.js');
-  // The chunk-cap sweep (510 -> 592 MB etc.) was measured on an engine whose
-  // session costs +275 MB; Kitten's costs +23 MB. Carrying those numbers over
-  // verbatim reads as though someone had measured this model.
-  assert.doesNotMatch(w, /510 \(the full axis\) -> 592 MB/,
-    "Kokoro's sweep must not be presented as Kitten's");
-  assert.match(w, /NOT MEASURED FOR THIS MODEL/i,
-    'the inherited caps must say they are inherited');
-
-  // And the claim that the graph fixes the sequence axis is false in both
-  // workers: input_ids is [1, sequence_length] with a dynamic dim_param.
-  for (const name of ['kitten_worker.js', 'kokoro_worker.js']) {
+test('the Kokoro worker does not claim a fixed sequence axis', async () => {
+  // The claim that the graph fixes the sequence axis is false: input_ids is
+  // [1, sequence_length] with a dynamic dim_param.
+  for (const name of ['kokoro_worker.js']) {
     const src = await read(`public/assets/js/${name}`);
     assert.doesNotMatch(strip(src), /exported graph fixes the sequence axis/,
       `${name} repeats a claim that was checked against the model and is wrong`);

@@ -158,7 +158,7 @@ test('a model download reports progress and cannot stall forever', async () => {
   assert.match(audio, /const WORKER_SILENCE_TIMEOUT_MS = 75000;/,
     'the budget these downloads have to fit inside');
 
-  for (const file of ['public/assets/js/kokoro_worker.js', 'public/assets/js/kitten_worker.js']) {
+  for (const file of ['public/assets/js/kokoro_worker.js']) {
     const source = await read(file);
     const fetchBuffer = source.slice(
       source.indexOf('async function fetchBuffer(url, label)'),
@@ -188,7 +188,7 @@ test('the StyleTTS2 workers take the thread count the policy already sends', asy
   // got. wasmThreadCount was already in the init message and both workers
   // answered with their own Math.min(2, cores) instead -- the same shape as
   // constrainedMemoryMode, which their own comments record being dropped here.
-  for (const file of ['public/assets/js/kokoro_worker.js', 'public/assets/js/kitten_worker.js']) {
+  for (const file of ['public/assets/js/kokoro_worker.js']) {
     const source = await read(file);
     assert.doesNotMatch(source, /numThreads = isolated \? Math\.min\(2, self\.navigator/,
       `${file} must not hardcode the cap any more`);

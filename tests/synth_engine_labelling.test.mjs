@@ -22,7 +22,6 @@ test('synth log lines are labelled with the engine that produced them', () => {
   assert.match(audio, /function _synthEngineLabel\(\) \{/);
   const fn = audio.slice(audio.indexOf('function _synthEngineLabel()'), audio.indexOf('function _logPocketQuality'));
   assert.match(fn, /if \(engine === 'kokoro'\) return 'Kokoro';/);
-  assert.match(fn, /if \(engine === KITTEN_ENGINE\) return 'Kitten';/);
   assert.match(fn, /return 'Pocket';/);
 });
 

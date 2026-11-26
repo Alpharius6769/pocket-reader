@@ -193,8 +193,8 @@ test('dismissVirtue actually settles what the queue is waiting on', async () => 
 // ── The tier ladder still behaves ───────────────────────────────────────────
 
 test('the engine ladder is unchanged by these fixes', () => {
-  assert.deepEqual([...policy.NARRATION_ENGINE_TIERS], ['kitten', 'kokoro', 'pocket']);
-  for (const engine of policy.NARRATION_ENGINE_TIERS) {
+  assert.deepEqual([...policy.NARRATION_ENGINE_TIERS], ['webspeech', 'kokoro', 'pocket']);
+  for (const engine of policy.NEURAL_ENGINE_TIERS) {
     if (engine === 'pocket') continue;
     assert.equal(policy.voicesForEngine(engine).length, 6, `${engine} ships six voices`);
   }

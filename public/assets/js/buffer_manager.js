@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v50';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v51';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -8,7 +8,7 @@ import {
   detectMobilePlatform,
   isMobileLikePlatform,
   voicesForEngine,
-} from './pocket_backend_policy.js?v=backend-v62';
+} from './pocket_backend_policy.js?v=backend-v64';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
@@ -36,7 +36,7 @@ function _isNeuralEngine(engine) {
   // This module keeps its own copy. The last time an engine was missing from it,
   // caching silently switched itself off for exactly the devices that engine was
   // added to serve.
-  return engine === 'pocket' || engine === 'kokoro' || engine === 'kitten';
+  return engine === 'pocket' || engine === 'kokoro';
 }
 
 // The merged Voice Engine control also carries 'auto', which resolves to a
@@ -1014,7 +1014,7 @@ export const BufferManager = {
     // on a 404 for a voice table that does not exist.
     let voice;
     // Engine-aware for EVERY neural engine, not just Kokoro. The comment above
-    // describes what happens otherwise, and it applies verbatim to Kitten: the
+    // describes what happens otherwise, and it applies to any non-Pocket engine: the
     // id is canonicalised against POCKET_VOICES, rewritten to donald_malone, and
     // every paragraph 404s on a voice file that engine does not have.
     const presetVoice = window.currentStory?.narrationPreset?.voice;

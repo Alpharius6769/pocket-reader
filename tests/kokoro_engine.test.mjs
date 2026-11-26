@@ -155,7 +155,7 @@ test('audio_core loads and routes the Kokoro worker', async () => {
   assert.match(audio, /kokoro_worker\.js\?v=kokoro-v\d+/);
   // The Pocket backend planner has nothing to decide for a single WASM graph.
   assert.match(audio, /const backendPlan = _isStyleTts2Engine\(engine\)/);
-  assert.match(audio, /const ENGINE_LOAD_LABELS = \{ kokoro: 'Kokoro TTS', kitten: 'Kitten TTS', pocket: 'Pocket TTS' \}/);
+  assert.match(audio, /const ENGINE_LOAD_LABELS = \{ kokoro: 'Kokoro TTS', pocket: 'Pocket TTS' \}/);
   // A voice id from the other engine must never be handed to a worker.
   assert.match(audio, /window\.resolveVoiceForEngine = function/);
   assert.match(audio, /if \(_isStyleTts2Engine\(engine\)\) return window\.resolveVoiceForEngine\(engine, voice\);/);
@@ -240,9 +240,10 @@ test('engine choice is one control, not two overlapping ones', async () => {
 
   // Both neural values collapse to the neural path, with the model recorded as
   // the narration override.
-  assert.match(audio, /engineVal === 'auto' \|\| engineVal === 'kokoro'/);
-  assert.match(audio, /engineVal === 'kitten' \|\| engineVal === 'pocket'/,
-    'kitten is a UI value too, or picking it falls through to the device voice');
+  assert.match(audio, /engineVal === 'auto' \|\| engineVal === 'kokoro' \|\| engineVal === 'pocket'/);
+  // The retired Kitten value from a stale control or profile maps onto Kokoro
+  // rather than falling through to the device voice.
+  assert.match(audio, /if \(engineVal === 'kitten'\) engineVal = 'kokoro';/);
   assert.match(audio, /writeNarrationEngineOverride\(localStorage, engineVal === 'auto' \? null : engineVal\)/);
 });
 
@@ -250,7 +251,7 @@ test('Automatic is labelled with the engine actually detected for this device', 
   const settings = await read('public/assets/js/settings_manager.js');
   // Previously hardcoded to Pocket, so it read "Pocket on this device" even on
   // hardware routed to Kokoro.
-  assert.match(settings, /const ENGINE_LABELS = \{ kokoro: 'Kokoro', kitten: 'Kitten', pocket: 'Pocket TTS' \}/);
+  assert.match(settings, /const ENGINE_LABELS = \{ kokoro: 'Kokoro', webspeech: 'Device voice', pocket: 'Pocket TTS' \}/);
   assert.match(settings, /ENGINE_LABELS\[autoPick\.engine\]/);
   assert.match(settings, /Detected: \$\{_escapeSettingsHtml\(choice\.reason/);
 });
@@ -261,7 +262,7 @@ test('first-run detection resolves the narration engine, not just the backend', 
   assert.match(setup, /narrationEngine: narration\.engine,/);
   assert.match(setup, /narrationEngineReason: narration\.reason,/);
   // And it has to be visible in the summary the reader is shown.
-  assert.match(setup, /SETUP_ENGINE_NAMES = \{ kokoro: 'Kokoro-82M', kitten: 'KittenTTS Nano', pocket: 'Pocket TTS' \}/);
+  assert.match(setup, /SETUP_ENGINE_NAMES = \{ kokoro: 'Kokoro-82M', webspeech: 'the device voice', pocket: 'Pocket TTS' \}/);
 });
 
 // Reported from a live build: the reader page's own engine dropdown still
@@ -303,7 +304,7 @@ test('a Kokoro voice id is never canonicalised against the Pocket voice list', a
   assert.ok(neuralIdx >= 0, 'neural ids need their own branch');
   assert.ok(canonIdx < 0 || neuralIdx < canonIdx,
     'the neural branch must return before canonicalPocketVoice rewrites the id');
-  assert.match(handler, /isKittenVoice\(newVoice\)/);
+  assert.match(handler, /isKokoroVoice\(newVoice\)/);
   assert.match(handler, /window\.userProfile\.settings\[savedKey\] = newVoice;/);
 });
 
@@ -350,7 +351,7 @@ test('caching and Away Mode treat Kokoro as a neural engine', async () => {
   // switches itself off for the tier that was added to serve those devices.
   const bufAt = buffer.indexOf('function _isNeuralEngine');
   const bufBody = buffer.slice(bufAt, bufAt + 400);
-  for (const e of ['pocket', 'kokoro', 'kitten']) {
+  for (const e of ['pocket', 'kokoro']) {
     assert.ok(bufBody.includes(`'${e}'`), `buffer_manager _isNeuralEngine must accept ${e}`);
   }
   assert.match(buffer, /function _isNeuralControlValue\(value\) \{\s*\n\s*return value !== 'webspeech';/);
@@ -378,7 +379,7 @@ test('every neural gate in audio_core accepts Kokoro', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   const nAt = audio.indexOf('function _isNeuralEngine');
   const nBody = audio.slice(nAt, nAt + 400);
-  for (const e of ["'pocket'", "'kokoro'", 'KITTEN_ENGINE']) {
+  for (const e of ["'pocket'", "'kokoro'"]) {
     assert.ok(nBody.includes(e), `_isNeuralEngine must accept ${e}`);
   }
   // The generation paths specifically: returning null here is what made
@@ -804,7 +805,6 @@ test('Kokoro audio is cached under a render-shape version', async () => {
   // meant its audio was keyed on position and voice alone - uninvalidatable,
   // and able to collide with the other engine's renders.
   assert.match(audio, /if \(_isStyleTts2Engine\(engine\)\) return `#\$\{NEURAL_CACHE_VERSIONS\[engine\]\}`;/);
-  assert.match(audio, /const KITTEN_NARRATION_CACHE_VERSION = '[a-z0-9]+';/);
   assert.match(audio, /if \(_isStyleTts2Engine\(engine\)\) return \[_prosodyCacheTag\(engine\)\];/);
 });
 

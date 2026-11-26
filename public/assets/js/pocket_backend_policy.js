@@ -8,7 +8,7 @@ import {
   tierCeilingForDevice,
   tierSpanForModels,
   tiersForGeometry,
-} from './device_catalog.js?v=catalog-v5';
+} from './device_catalog.js?v=catalog-v7';
 
 export const POCKET_ORT_VERSION = '1.27.0';
 export const POCKET_CALIBRATION_VERSION = 'cal-v12';
@@ -1330,10 +1330,18 @@ export function selectCalibratedBackend(wasm, webgpu, options = {}) {
 // iOS Safari, plus Android's deviceMemory where Chrome does report it.
 export const KOKORO_ENGINE = 'kokoro';
 export const POCKET_ENGINE = 'pocket';
-export const KITTEN_ENGINE = 'kitten';
+// The device's own speech voice. It is the bottom rung, not a neural engine: no
+// worker, no model download, nothing that can run out of memory. A phone that
+// cannot safely build a Kokoro session (4 GB iPhones peak inside Kokoro's
+// 396-421 MB session build) lands here rather than on a tab-killing load.
+export const DEVICE_VOICE_ENGINE = 'webspeech';
 // Ordered lightest-first. Index position IS the tier, so anything that needs to
 // step a device down can do it without a lookup table.
-export const NARRATION_ENGINE_TIERS = Object.freeze([KITTEN_ENGINE, KOKORO_ENGINE, POCKET_ENGINE]);
+export const NARRATION_ENGINE_TIERS = Object.freeze([DEVICE_VOICE_ENGINE, KOKORO_ENGINE, POCKET_ENGINE]);
+export const NEURAL_ENGINE_TIERS = Object.freeze([KOKORO_ENGINE, POCKET_ENGINE]);
+export function isNeuralEngine(engine) {
+  return NEURAL_ENGINE_TIERS.includes(engine);
+}
 export const NARRATION_ENGINE_OVERRIDE_KEY = 'pr_narration_engine_override_v1';
 export const KOKORO_MODEL_REVISION = 'kokoro-82m-v1.0';
 
@@ -1350,52 +1358,24 @@ export const KOKORO_VOICES = Object.freeze([
 ]);
 export const KOKORO_DEFAULT_VOICE = 'af_heart';
 
-export const KITTEN_MODEL_REVISION = 'kitten-tts-2-nano-en';
-// KittenTTS 2 Nano English voices. Upstream publishes ten; we keep three per
-// gender to match Kokoro and Pocket. Labels come from KittenML's own
-// descriptions. No quality grades are published, so none are invented here.
-export const KITTEN_VOICES = Object.freeze([
-  { id: 'eleanor', label: 'Eleanor - female, somber',   gender: 'female' },
-  { id: 'serena',  label: 'Serena - female, gentle',    gender: 'female' },
-  { id: 'grace',   label: 'Grace - female, soothing',   gender: 'female' },
-  { id: 'otis',    label: 'Otis - male, rumbling',      gender: 'male'   },
-  { id: 'vincent', label: 'Vincent - male, hushed',     gender: 'male'   },
-  { id: 'danny',   label: 'Danny - male, cheerful',     gender: 'male'   },
-]);
-
-// Retired Nano 0.1 ids. A stored setting naming one must resolve to a live
-// voice of the same gender rather than reaching the worker as an unknown id.
-export const KITTEN_RETIRED_VOICES = Object.freeze({
-  'expr-voice-2-f': 'eleanor',
-  'expr-voice-3-f': 'eleanor',
-  'expr-voice-4-f': 'serena',
-  'expr-voice-5-f': 'grace',
-  'expr-voice-2-m': 'otis',
-  'expr-voice-3-m': 'otis',
-  'expr-voice-4-m': 'vincent',
-  'expr-voice-5-m': 'danny',
-});
-export const KITTEN_DEFAULT_VOICE = 'eleanor';
-
-export function isKittenVoice(voiceId) {
-  const id = String(voiceId || '').toLowerCase().trim();
-  return KITTEN_VOICES.some((voice) => voice.id === id);
-}
+// Kitten was retired in the v2 rebuild. A profile still naming it (as a stored
+// override or an engine choice) must not reach a worker that no longer exists:
+// readNarrationEngineOverride drops it because it is no longer a tier, and this
+// alias lets any caller holding the old string ask for the right rung.
+export const RETIRED_ENGINE_ALIASES = Object.freeze({ kitten: KOKORO_ENGINE });
 
 // The single place that answers "which voices may this engine use". Every
 // selector, default and validation path goes through here, so a voice id cannot
-// leak across engines: Kokoro and KittenTTS 2 both ship a (510, 256) style
-// table indexed by token count, and Pocket's are a different asset family
-// again. Handing one to the wrong worker is what previously resolved an
-// unknown id to a Pocket voice pack and hung for 60 s.
+// leak across engines: Kokoro ships a (510, 256) style table indexed by token
+// count, and Pocket's are a different asset family again. Handing one to the
+// wrong worker is what previously resolved an unknown id to a Pocket voice pack
+// and hung for 60 s.
 export function voicesForEngine(engine) {
-  if (engine === KITTEN_ENGINE) return KITTEN_VOICES;
   if (engine === KOKORO_ENGINE) return KOKORO_VOICES;
   return [];   // Pocket manages its own voice packs elsewhere.
 }
 
 export function defaultVoiceForEngine(engine) {
-  if (engine === KITTEN_ENGINE) return KITTEN_DEFAULT_VOICE;
   if (engine === KOKORO_ENGINE) return KOKORO_DEFAULT_VOICE;
   return null;
 }
@@ -1407,13 +1387,6 @@ export function isVoiceValidForEngine(engine, voiceId) {
   return allowed.some((voice) => voice.id === id);
 }
 
-// Returns a voice that is definitely valid for the engine: the current one when
-// it belongs, otherwise that engine's default.
-export function migrateRetiredVoice(engine, voiceId) {
-  if (engine !== KITTEN_ENGINE) return voiceId;
-  return KITTEN_RETIRED_VOICES[String(voiceId || '').toLowerCase().trim()] || voiceId;
-}
-
 // The gender a voice id is known to have, in ANY engine's catalog, or null.
 // Used only to make a cross-engine substitution less jarring; nothing branches
 // on it otherwise.
@@ -1422,22 +1395,20 @@ export function voiceGender(voiceId) {
   if (!id) return null;
   const pocket = (globalThis.POCKET_VOICE_PACK?.voices || []).find((voice) => voice.id === id);
   if (pocket?.gender) return pocket.gender;
-  const styled = [...KOKORO_VOICES, ...KITTEN_VOICES].find((voice) => voice.id === id);
+  const styled = KOKORO_VOICES.find((voice) => voice.id === id);
   return styled?.gender || null;
 }
 
+// Returns a voice that is definitely valid for the engine: the current one when
+// it belongs, otherwise a same-gender voice, otherwise that engine's default.
 export function coerceVoiceForEngine(engine, voiceId) {
-  // Try the retirement map before falling back to the engine default: a reader
-  // who picked expr-voice-2-f should land on its nearest surviving sibling, not
-  // be silently reset to whatever the engine happens to default to.
-  const migrated = migrateRetiredVoice(engine, voiceId);
-  if (isVoiceValidForEngine(engine, migrated)) return migrated;
+  if (isVoiceValidForEngine(engine, voiceId)) return voiceId;
   // Falling across engines -- a tier stepped down, or a stale queue was
   // re-pointed. The engine default is a coin flip on gender, and landing a
   // reader who deliberately chose a male narrator on a female one reads as the
   // app ignoring them. Keep the gender when the catalogue knows it; the choice
   // within a gender is still arbitrary, but it is no longer contradictory.
-  const wanted = voiceGender(migrated) || voiceGender(voiceId);
+  const wanted = voiceGender(voiceId);
   if (wanted) {
     const match = voicesForEngine(engine).find((voice) => voice.gender === wanted);
     if (match) return match.id;
@@ -1481,9 +1452,9 @@ export function writeNarrationEngineOverride(storage = globalThis.localStorage, 
 // while ORT builds its session: measured at 396-421 MB for Kokoro against a
 // 298-310 MB steady state, which is why a device that narrates happily for an
 // hour can still die in the first two seconds. Pocket builds a heavier graph
-// still; Kitten's model is roughly 12x smaller than Kokoro's.
+// still. The device voice needs nothing from the tab.
 export const ENGINE_HEADROOM_MB = Object.freeze({
-  [KITTEN_ENGINE]: 96,
+  [DEVICE_VOICE_ENGINE]: 0,
   [KOKORO_ENGINE]: 448,
   [POCKET_ENGINE]: 704,
 });
@@ -1512,8 +1483,9 @@ export const FUSED_BLOCK_MIN_HEADROOM_MB = ENGINE_HEADROOM_MB[POCKET_ENGINE];
 // models they claimed to describe.
 //
 // The catalogue keys on RAM and derives the same lists, which is why the 13 and
-// 13 mini moved to Kitten by writing down that they have 4 GB rather than by
-// editing a candidate array. Sizes are still matched EXACTLY, not as ranges: a
+// 13 mini sit on the device-voice rung by writing down that they have 4 GB
+// rather than by editing a candidate array (a measurement can still lift them
+// one rung, to Kokoro). Sizes are still matched EXACTLY, not as ranges: a
 // ">= 402 wide and >= 874 tall" rule reads naturally and is wrong, because it
 // also swallows the iPhone 15 Plus at 430x932.
 
@@ -1547,8 +1519,11 @@ export function classifyIosNarrationTier(signals = {}) {
   if (declared) return declared;
 
   if (!w || !h) {
-    return { engine: KITTEN_ENGINE, confident: false,
-      reason: 'This browser did not report a screen size, so the lightest engine is the safe default.' };
+    const open = resolveTierByHeadroom([...NARRATION_ENGINE_TIERS], headroomMb);
+    return { engine: open.engine, confident: false,
+      reason: open.measured
+        ? `This browser did not report a screen size, but it measured ${Math.round(headroomMb)} MB of working memory.`
+        : 'This browser did not report a screen size, so the device voice is used until the device test runs.' };
   }
   const key = geometryKey(w, h);
   // Candidates come from the catalogue now: every iPhone shipping this exact
@@ -1567,15 +1542,16 @@ export function classifyIosNarrationTier(signals = {}) {
     : null;
   // An unrecognised size is a device this table has never seen -- a new model,
   // an iPad, or a browser reporting something unexpected. Measurement is the
-  // only thing that can speak for it, so let it, and floor at Kitten otherwise.
+  // only thing that can speak for it, so let it, and floor at the device voice
+  // otherwise.
   if (!hit) {
-    const open = resolveTierByHeadroom([KITTEN_ENGINE, KOKORO_ENGINE, POCKET_ENGINE], headroomMb);
+    const open = resolveTierByHeadroom([...NARRATION_ENGINE_TIERS], headroomMb);
     return {
       engine: open.engine,
       confident: open.measured,
       reason: open.measured
         ? `This device is not a known iPhone model, but it measured ${Math.round(headroomMb)} MB of working memory.`
-        : 'This screen size does not match a known iPhone, so the lightest engine is the safe default.',
+        : 'This screen size does not match a known iPhone, so the device voice is used until the device test runs.',
     };
   }
   if (hit.candidates.length === 1) {
@@ -1615,7 +1591,7 @@ export function classifyIosNarrationTier(signals = {}) {
 //
 // Android runs the higher tiers more comfortably than iOS at equivalent RAM:
 // there is no per-tab jetsam budget as tight as Safari's, and Chrome reports
-// enough to decide honestly. So the floor is Kokoro, never Kitten, and the top
+// enough to decide honestly. So the floor is Kokoro, never the device voice, and the top
 // bucket goes to Pocket on memory alone rather than requiring a core count too
 // -- a Pixel 6 Pro (8 as reported, 8 cores) and an 8 GB device with 6 big cores
 // both hold a Pocket session fine, and the old `cores >= 8` rule sent the
@@ -1633,7 +1609,15 @@ export function classifyAndroidNarrationTier(signals = {}) {
   // An INFERRED Android class may only demote -- see androidInferredCeiling.
   // Applied after the normal decision below rather than instead of it, so a
   // device that measures well is never capped by a catalogue guess.
-  const inferredCeiling = androidInferredCeiling(signals.model || '');
+  // Floored at Kokoro: the catalogue's RAM table puts a 4 GB class on the
+  // device-voice rung, which is right for Safari's tight per-tab budget and
+  // wrong here -- Android floors at Kokoro by product rule, and an inferred
+  // class is a guess that may only ever demote to the floor, not through it.
+  const rawCeiling = androidInferredCeiling(signals.model || '');
+  const inferredCeiling = rawCeiling
+    && NARRATION_ENGINE_TIERS.indexOf(rawCeiling) < NARRATION_ENGINE_TIERS.indexOf(KOKORO_ENGINE)
+    ? KOKORO_ENGINE
+    : rawCeiling;
   const demote = (picked) => {
     if (!inferredCeiling) return picked;
     const rank = (engine) => NARRATION_ENGINE_TIERS.indexOf(engine);
@@ -1749,9 +1733,10 @@ export function selectNarrationEngine(options = {}) {
   }
 
   // Low-memory mode outranks the ladder, but only ever steps DOWN -- it must not
-  // promote a device past what it can hold.
+  // promote a device past what it can hold. It asks for the lighter NEURAL
+  // engine; dropping a reader to the device voice is the failure ladder's job.
   if (options.lowMemoryMode === true || capability.lowMemoryMode === true) {
-    const floor = platform === 'android' ? KOKORO_ENGINE : KITTEN_ENGINE;
+    const floor = KOKORO_ENGINE;
     if (NARRATION_ENGINE_TIERS.indexOf(floor) < NARRATION_ENGINE_TIERS.indexOf(picked.engine)) {
       picked = { engine: floor, confident: true, reason: 'Low-memory mode is on.' };
     }

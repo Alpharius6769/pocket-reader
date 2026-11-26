@@ -4,7 +4,7 @@ import {
   isMobileLikePlatform,
   selectNarrationEngine,
   NARRATION_ENGINE_TIERS,
-} from './pocket_backend_policy.js?v=backend-v62';
+} from './pocket_backend_policy.js?v=backend-v64';
 
 const _prLogicalCores = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 2) : 2;
 // Routed through the shared platform helper so a stock iPad — which reports a
@@ -61,9 +61,9 @@ const NEUTRAL_ONLY_FALLBACKS = Object.freeze(
 // emotion references built in B2 (donald_malone_happy, _sad, _anger and friends
 // all resolve; alba_happy does not). With them gone, expressiveness has to come
 // from synthesis-time control rather than from swapping reference packs, which
-// is the only approach that could ever have worked across Kokoro and Kitten
-// anyway: Kokoro indexes a (510, 1, 256) style table by token count and Kitten
-// carries one 256-float vector, and neither has an emotion axis to swap.
+// is the only approach that could ever have worked across engines anyway:
+// Kokoro indexes a (510, 1, 256) style table by token count and has no emotion
+// axis to swap.
 //
 // The accent spread is deliberate: one English and two American per gender, so
 // a listener has a real choice rather than three takes on the same voice.
@@ -298,7 +298,7 @@ window.renderPocketVoiceOptions = function renderPocketVoiceOptions(selectEl, se
   const selectedBase = window.POCKET_VOICES.includes(selected)
     ? selected
     : selected.replace(/_(neutral|calm|happy|sad|worried|surprised|tired|frustrated|anger|excited|enthused|shout|confused)$/, '');
-  // Female first, to match Kokoro and Kitten (built in settings_manager's
+  // Female first, to match Kokoro (built in settings_manager's
   // syncNarrationControls) and the static markup in the shell. Pocket was the
   // only engine listing male first, so the picker reordered itself purely
   // because the reader changed engine.
@@ -375,7 +375,7 @@ window._resolveActiveEngine = function _resolveActiveEngine() {
         storage: localStorage,
       });
       // Return whatever the policy picked, validated against the known tiers.
-      // Naming one engine here is what made 'kitten' unreachable: the policy
+      // Naming one engine here is what once made a lighter tier unreachable: the policy
       // selected it, this returned 'pocket', and every downstream gate then
       // resolved a device onto an engine it had not chosen.
       if (choice?.engine && choice.engine !== 'pocket'

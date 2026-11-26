@@ -12,12 +12,12 @@ import {
   POCKET_DEVICE_SETUP_KEY,
   isIosLikePlatform,
   detectMobilePlatform,
-} from './pocket_backend_policy.js?v=backend-v62';
+} from './pocket_backend_policy.js?v=backend-v64';
 import {
   androidClassForModel,
   geometryKey,
   pickerOptions,
-} from './device_catalog.js?v=catalog-v5';
+} from './device_catalog.js?v=catalog-v7';
 
 const SETTINGS_RISK_ACK_KEY = 'pr_settings_risk_ack_v1';
 const SUPPORT_NOTICE_KEY = 'pr_device_support_notice_v2';
@@ -395,7 +395,7 @@ function resultLabel(record) {
   // The narration engine belongs in this line: on a constrained phone it is a
   // bigger factor than the backend, and without it the summary reported a
   // WebGPU/WASM decision while staying silent about which model would run.
-  const SETUP_ENGINE_NAMES = { kokoro: 'Kokoro-82M', kitten: 'KittenTTS Nano', pocket: 'Pocket TTS' };
+  const SETUP_ENGINE_NAMES = { kokoro: 'Kokoro-82M', webspeech: 'the device voice', pocket: 'Pocket TTS' };
   const engine = SETUP_ENGINE_NAMES[record.narrationEngine] || 'Pocket TTS';
   const seconds = estimateModelDownloadSeconds(record.narrationEngine, record.downlinkMbps);
   // Only worth saying when it is long enough to be mistaken for a stall.
@@ -435,7 +435,7 @@ async function measureRefreshHz(sampleCount = 24) {
   });
 }
 
-// Kokoro's model is 86 MB and Kitten's is 23.8 MB. On the 1.7 Mbps this app has
+// Kokoro's model is 86 MB and Pocket's about 120 MB. On the 1.7 Mbps this app has
 // been measured against in the field that is roughly seven minutes against two,
 // once, before a word is spoken. The engine choice does not change -- a slow
 // link says nothing about what the device can RUN -- but the reader deserves to
@@ -447,7 +447,7 @@ function readDownlinkMbps() {
 }
 
 export function estimateModelDownloadSeconds(engine, downlinkMbps) {
-  const megabytes = { kokoro: 86, kitten: 24, pocket: 120 }[String(engine || '')] || 0;
+  const megabytes = { kokoro: 86, pocket: 120 }[String(engine || '')] || 0;
   const mbps = Number(downlinkMbps) || 0;
   if (!megabytes || !mbps) return 0;
   return Math.round((megabytes * 8) / mbps);

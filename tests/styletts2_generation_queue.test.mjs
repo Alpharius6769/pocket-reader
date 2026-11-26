@@ -17,7 +17,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 // is exercised directly in scratch simulation against the shipped block; these
 // guards pin the structure so it cannot quietly revert.
 
-for (const file of ['kokoro_worker.js', 'kitten_worker.js']) {
+for (const file of ['kokoro_worker.js']) {
   test(`${file}: one render at a time`, async () => {
     const worker = await read(`public/assets/js/${file}`);
     assert.match(worker, /let isGenerating = false;/);
@@ -68,8 +68,8 @@ for (const file of ['kokoro_worker.js', 'kitten_worker.js']) {
   });
 }
 
-test('the yield message names no engine, because three now emit it', async () => {
-  for (const file of ['pocket_worker.js', 'kokoro_worker.js', 'kitten_worker.js']) {
+test('the yield message names no engine, because both workers emit it', async () => {
+  for (const file of ['pocket_worker.js', 'kokoro_worker.js']) {
     const worker = await read(`public/assets/js/${file}`);
     assert.match(worker, /= 'Narration cache yielded to playback';/, file);
     assert.ok(!worker.includes("'Pocket cache yielded to playback'"), `${file} still names Pocket`);

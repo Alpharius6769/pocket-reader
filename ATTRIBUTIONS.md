@@ -84,19 +84,6 @@ Last reviewed: 2026-09-04.
 - Distribution note: the model and voice tables are served through the
   Cloudflare Worker from Backblaze B2 rather than stored in this source tree.
 
-### KittenTTS 2 Nano (narration engine)
-
-- Upstream: KittenML/kitten-tts-2-nano (English int8)
-- License: Apache-2.0
-- Source: https://huggingface.co/KittenML/kitten-tts-2-nano
-- Used as: the lightest narration tier, for devices that cannot hold Kokoro.
-  Smaller English graph (~16.6 MB int8) with Kokoro-style (510, 256) voice
-  tables; roughly 12x less resident memory than Kokoro.
-- Shipped voices: `eleanor`, `serena`, `grace`, `otis`, `vincent`, `danny`.
-  Legacy `expr-voice-*` ids migrate to these.
-- Distribution note: served through the Cloudflare Worker from Backblaze B2
-  under `kitten/v2.0/` rather than stored in this source tree.
-
 ### Voice-Zero Emotional Pack
 
 - Upstream: OwenTyme/voice-zero

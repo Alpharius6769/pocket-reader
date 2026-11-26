@@ -13,7 +13,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 // playback render cancelled the playback render instead. Pocket always gated
 // this on the active job id.
 
-for (const file of ['kokoro_worker.js', 'kitten_worker.js', 'pocket_worker.js']) {
+for (const file of ['kokoro_worker.js', 'pocket_worker.js']) {
   test(`${file}: cancel stops only the job it names`, async () => {
     const worker = await read(`public/assets/js/${file}`);
     const from = worker.indexOf("type === 'cancel_generation'");
@@ -26,7 +26,7 @@ for (const file of ['kokoro_worker.js', 'kitten_worker.js', 'pocket_worker.js'])
 // ── The timeout counted time spent waiting in the queue ─────────────────────
 
 test('every worker announces when a job actually starts, with its id', async () => {
-  for (const file of ['kokoro_worker.js', 'kitten_worker.js']) {
+  for (const file of ['kokoro_worker.js']) {
     const worker = await read(`public/assets/js/${file}`);
     assert.match(worker, /self\.postMessage\(\{ type: 'generation_started', id: task\.jobId \}\);/, file);
   }

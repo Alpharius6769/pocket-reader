@@ -63,7 +63,7 @@ test('the yield message is spelled identically on both sides', async () => {
   assert.match(worker, /const POCKET_YIELDED_TO_PLAYBACK = 'Narration cache yielded to playback';/);
   assert.ok(buf.includes("'Narration cache yielded to playback'"));
   // Three workers emit it now, so the string must not name one of them.
-  for (const w of ["kokoro_worker.js", "kitten_worker.js"]) {
+  for (const w of ["kokoro_worker.js"]) {
     const styled = await read(`public/assets/js/${w}`);
     assert.match(styled, /const YIELDED_TO_PLAYBACK = 'Narration cache yielded to playback';/);
   }

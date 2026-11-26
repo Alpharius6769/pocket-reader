@@ -43,7 +43,7 @@ test('enqueue and re-point share one voice-selection rule', async () => {
 // ── A StyleTTS2 worker must not turn any string into a URL ──────────────────
 
 test('the StyleTTS2 workers refuse another engine\'s voice id', async () => {
-  for (const [file, label] of [['kokoro_worker.js', 'Kokoro'], ['kitten_worker.js', 'Kitten']]) {
+  for (const [file, label] of [['kokoro_worker.js', 'Kokoro']]) {
     const worker = await read(`public/assets/js/${file}`);
     assert.match(worker, /let ownVoiceIds = null;/, `${file} must hold the catalog`);
     assert.match(
@@ -60,7 +60,7 @@ test('the StyleTTS2 workers refuse another engine\'s voice id', async () => {
 test('the catalog is sent from the main thread, never re-typed in a worker', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   assert.match(audio, /voiceIds: \(typeof voicesForEngine === 'function' \? voicesForEngine\(engine\) : \[\]\)\.map\(\(v\) => v\.id\),/);
-  for (const file of ['kokoro_worker.js', 'kitten_worker.js']) {
+  for (const file of ['kokoro_worker.js']) {
     const worker = await read(`public/assets/js/${file}`);
     // A second copy of the list drifts. It nearly did here: a hand-written
     // Kokoro list had "bm_george" where the catalog says "am_puck", which would
@@ -74,7 +74,7 @@ test('the catalog is sent from the main thread, never re-typed in a worker', asy
 test('a Pocket voice coerced to another engine keeps its gender', () => {
   const pocket = globalThis.POCKET_VOICE_PACK.voices;
   assert.ok(pocket.length >= 6);
-  for (const engine of ['kokoro', 'kitten']) {
+  for (const engine of ['kokoro']) {
     for (const voice of pocket) {
       const got = policy.coerceVoiceForEngine(engine, voice.id);
       assert.equal(
@@ -89,7 +89,6 @@ test('a voice the engine already owns is never substituted', () => {
   for (const id of ['af_bella', 'am_puck', 'af_heart']) {
     assert.equal(policy.coerceVoiceForEngine('kokoro', id), id);
   }
-  assert.equal(policy.coerceVoiceForEngine('kitten', 'expr-voice-3-m'), 'otis');
 });
 
 test('an unknown id still falls back to the engine default', () => {

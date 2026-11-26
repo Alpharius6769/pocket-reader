@@ -56,7 +56,7 @@ test('a later page load reads the measurement back out of the stored record', ()
 
   // And one tier lower, where the 12/13 pair sits.
   assert.equal(resolveIos(storageWith(record(500)), 390, 844).engine, 'kokoro');
-  assert.equal(resolveIos(storageWith(record(300)), 390, 844).engine, 'kitten');
+  assert.equal(resolveIos(storageWith(record(300)), 390, 844).engine, 'webspeech');
 });
 
 test('an explicit measurement still wins over the stored one', () => {

@@ -6,7 +6,7 @@
 // jumping the whole ladder threw away the two answers most likely to work: a
 // phone that cannot sustain Pocket over a long session -- thermally, or once
 // other tabs have taken the memory -- can almost always still run Kokoro, and
-// nearly anything runs Kitten. Trading a neural voice for a robotic one on the
+// failing that, the device voice still speaks. Trading a neural voice for a robotic one on the
 // first worker death is the biggest quality cliff in the app, and it is most
 // likely hours in, which is when a reader is least willing to lose the narrator.
 import test from 'node:test';
@@ -22,7 +22,7 @@ test('the tier order is lightest-first, which is what "down" means', () => {
   // _nextNarrationTierDown walks toward index 0. If this order ever flips, the
   // degrade path silently becomes an UPGRADE path and a device that just failed
   // to start Kokoro would be handed Pocket.
-  assert.deepEqual([...policy.NARRATION_ENGINE_TIERS], ['kitten', 'kokoro', 'pocket']);
+  assert.deepEqual([...policy.NARRATION_ENGINE_TIERS], ['webspeech', 'kokoro', 'pocket']);
 });
 
 test('degradation walks the ladder down and stops at the device voice', async () => {
@@ -38,8 +38,9 @@ test('degradation walks the ladder down and stops at the device voice', async ()
   // Walk downward, skipping tiers this page has already failed.
   assert.match(fn, /for \(let next = index - 1; next >= 0; next -= 1\)/);
   assert.match(fn, /_failedNarrationEngines\.has\(candidate\)/);
-  // Only when nothing is left does the device voice happen.
-  assert.match(fn, /if \(!nextEngine\) \{[\s\S]{0,220}_fallbackToWebSpeech\(\);/);
+  // Only when nothing neural is left does the device voice happen, and it takes
+  // its own path rather than becoming a runtime engine override.
+  assert.match(fn, /if \(!nextEngine \|\| nextEngine === DEVICE_VOICE_ENGINE\) \{[\s\S]{0,300}_fallbackToWebSpeech\(\);/);
   // The engine that just failed is recorded BEFORE choosing, or a repeated
   // failure would pick the same tier forever.
   assert.match(fn, /_failedNarrationEngines\.add\(failed\);[\s\S]{0,120}_nextNarrationTierDown\(failed\)/);

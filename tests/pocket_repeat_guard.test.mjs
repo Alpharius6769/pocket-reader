@@ -459,7 +459,7 @@ test('the decode-block rebuild is reproducible from a checked-in tool', async ()
 
 test('the fused decode block is gated on measured memory, not on being iOS', async () => {
   // The iOS exclusions were written when 4 GB iPhones still ran Pocket. They no
-  // longer do: the RAM ladder sends 4 GB to Kitten and 6 GB to Kokoro, so every
+  // longer do: the RAM ladder sends 4 GB to the device voice and 6 GB to Kokoro, so every
   // iPhone reaching this worker is 8 GB or better — precisely the phones the
   // gate was excluding from the fused block and the FP16 vocoder.
   const worker = await readFile(
@@ -519,7 +519,7 @@ test('only 8GB-and-up iPhones reach Pocket in the first place', async () => {
     '../public/assets/js/device_catalog.js'
   );
   assert.equal(RAM_TIER_BOUNDARIES.pocketMinGb, 8);
-  assert.equal(tierForRamGb(4), 'kitten');
+  assert.equal(tierForRamGb(4), 'webspeech');
   assert.equal(tierForRamGb(6), 'kokoro');
   assert.equal(tierForRamGb(8), 'pocket');
   assert.equal(tierForRamGb(12), 'pocket');

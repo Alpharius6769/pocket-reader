@@ -113,7 +113,7 @@ test('both engine selects offer the same engines and share one handler', async (
   const settings = optionsOf('voice-engine-select');
   assert.deepEqual(reader.values, settings.values,
     'the reader playbar and Settings must offer exactly the same engines');
-  assert.deepEqual(reader.values, ['auto', 'pocket', 'kokoro', 'kitten', 'webspeech']);
+  assert.deepEqual(reader.values, ['auto', 'pocket', 'kokoro', 'webspeech']);
   assert.ok(reader.handler && settings.handler,
     'both must route through onNarrationEngineSelect so each reflects the other');
 });

@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v50';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v51';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -19,10 +19,7 @@ import {
   readNarrationEngineOverride,
   writeNarrationEngineOverride,
   isKokoroVoice,
-  isKittenVoice,
-  KITTEN_VOICES,
-  KITTEN_DEFAULT_VOICE,
-  KITTEN_ENGINE,
+  DEVICE_VOICE_ENGINE,
   voicesForEngine,
   voiceGender,
   coerceVoiceForEngine,
@@ -55,7 +52,7 @@ import {
   readPocketDeviceSetup,
   wasmThreadCandidates,
   readMeasuredHeadroomMb,
-} from './pocket_backend_policy.js?v=backend-v62';
+} from './pocket_backend_policy.js?v=backend-v64';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   shouldRetryPocketQuality,
@@ -168,25 +165,16 @@ const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // Reverting the key re-serves it. That is not a regression -- it is the state
 // they were already in -- and fixing it would cost everyone else a re-render.
 const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';
-// Kitten renders are versioned on their own axis: a different model produces
-// different audio for the same (text, voice), so the two must not share a key.
-const KITTEN_NARRATION_CACHE_VERSION = 'kittenv3';
 const NEURAL_CACHE_VERSIONS = Object.freeze({
   kokoro: KOKORO_NARRATION_CACHE_VERSION,
-  kitten: KITTEN_NARRATION_CACHE_VERSION,
 });
 
-// Kokoro and Kitten are both single-session StyleTTS2 engines speaking the same
-// worker protocol. Everything that differs from Pocket differs the SAME WAY for
-// both, so branch on this rather than on either engine's name.
-//
-// Branching on the name is what shipped Kitten unable to run at all:
-// _loadPocketEngine tested `engine !== 'pocket' && engine !== 'kokoro'` and
-// returned false, so the tier was selectable, routed, and dead. Four other sites
-// had the same shape - cache tagging, tag variants, voice resolution and the
-// backend plan - and each would have failed differently and quietly.
+// Kokoro is the single-session StyleTTS2 engine. Everything that differs from
+// Pocket (cache tagging, tag variants, voice resolution, the backend plan)
+// branches on this predicate rather than on an engine name, so a future engine
+// of the same family is added in one place.
 function _isStyleTts2Engine(engine) {
-  return engine === 'kokoro' || engine === KITTEN_ENGINE;
+  return engine === 'kokoro';
 }
 // Identity-anchored voice pack subpath on B2 (see Back end/tools/build_anchored_pack_v2.py).
 // Every v2 emotion state shares a neutral identity anchor, so emotion switches keep
@@ -969,9 +957,6 @@ window.isKokoroVoice = isKokoroVoice;
 // Which voice id to hand the worker for the engine that is actually running.
 // A Pocket voice id means nothing to Kokoro and vice versa, so a stored voice
 // from the other engine must not leak across.
-window.KITTEN_VOICES = KITTEN_VOICES;
-window.KITTEN_DEFAULT_VOICE = KITTEN_DEFAULT_VOICE;
-window.isKittenVoice = isKittenVoice;
 window.voicesForEngine = voicesForEngine;
 
 window.resolveVoiceForEngine = function resolveVoiceForEngine(engine, voice) {
@@ -980,7 +965,7 @@ window.resolveVoiceForEngine = function resolveVoiceForEngine(engine, voice) {
   const requested = String(voice || '').toLowerCase().trim();
   if (allowed.some((v) => v.id === requested)) return requested;
   const settings = window.userProfile?.settings || {};
-  const saved = String((engine === KITTEN_ENGINE ? settings.kittenVoice : settings.kokoroVoice) || '')
+  const saved = String(settings.kokoroVoice || '')
     .toLowerCase().trim();
   // The saved voice is this reader's own earlier pick for the target engine, so
   // it is the right answer for an empty or unrecognisable request. It is the
@@ -1537,7 +1522,7 @@ async function _loadPocketEngine() {
   let nWorkers = await _recommendedPocketCacheWorkers(backendPlan);
   _pocketBackendRuntime.cacheWorkerCount = nWorkers;
 
-  const ENGINE_LOAD_LABELS = { kokoro: 'Kokoro TTS', kitten: 'Kitten TTS', pocket: 'Pocket TTS' };
+  const ENGINE_LOAD_LABELS = { kokoro: 'Kokoro TTS', pocket: 'Pocket TTS' };
   let engineLabel = ENGINE_LOAD_LABELS[engine] || 'Pocket TTS';
   _setStatus(`Loading ${engineLabel} (${backendPlan.selectedBackend === 'webgpu' ? 'WebGPU FP16' : 'threaded WASM'})...`);
 
@@ -1553,8 +1538,7 @@ async function _loadPocketEngine() {
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
           kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v54',
-          kitten: 'assets/js/kitten_worker.js?v=kitten-v44',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v133',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v135',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -2039,7 +2023,7 @@ async function _loadPocketEngine() {
 // jumping the whole ladder threw away the two answers most likely to work: a
 // phone that cannot sustain Pocket over a long session -- thermally, or once
 // other tabs have taken the memory -- can almost always still run Kokoro, and
-// nearly anything can run Kitten. Trading a neural voice for a robotic one on
+// failing that, the device voice still speaks. Trading a neural voice for a robotic one on
 // the first worker death is the single biggest quality cliff in the app, and it
 // is at its most likely hours into a session, which is exactly when a reader is
 // least willing to lose the narrator.
@@ -2063,8 +2047,10 @@ function _degradeNarrationEngine(engineLabel, error) {
   const failed = _resolveActiveEngine();
   _failedNarrationEngines.add(failed);
   const nextEngine = _nextNarrationTierDown(failed);
-  if (!nextEngine) {
-    // Nothing lighter left to try. The device voice is the honest answer now.
+  if (!nextEngine || nextEngine === DEVICE_VOICE_ENGINE) {
+    // Nothing lighter left to try. The device voice is the honest answer now,
+    // and it has its own path: it is not a worker, so it must not be recorded
+    // as a runtime engine override.
     _fallbackToWebSpeech();
     return false;
   }
@@ -3588,7 +3574,6 @@ async function _generatePocketAttempt(workerObj, text, route, retryLevel = 0, ha
 function _synthEngineLabel() {
   const engine = _resolveActiveEngine();
   if (engine === 'kokoro') return 'Kokoro';
-  if (engine === KITTEN_ENGINE) return 'Kitten';
   return 'Pocket';
 }
 
@@ -3707,7 +3692,7 @@ window.generateChunk = async function(text, voice) {
     // Only Pocket can render this paragraph differently a second time.
     //
     // The retry chain re-rolls the noise seed and cools the temperature, and
-    // Kokoro and Kitten read NEITHER -- their workers take speed, expressive and
+    // Kokoro reads NEITHER -- their workers take speed, expressive and
     // the pronunciation overrides, all identical across attempts. They are one
     // deterministic forward pass, so a re-render of the same text in the same
     // voice returns the same samples, and a guard verdict about that audio
@@ -4986,17 +4971,12 @@ let _selectedVoiceEngineControlValue = null;
 // null and the caller fell back to the device voice — the engine was selected,
 // listed, and never actually asked to speak.
 function _isNeuralEngine(engine) {
-  // Kitten belongs here for the same reason Kokoro does: every gate that guards
-  // the narration path reads this, and omitting the new tier would make it look
-  // like a device-speech engine to all of them.
-  return engine === 'pocket' || engine === 'kokoro' || engine === KITTEN_ENGINE;
+  // Every gate that guards the narration path reads this; an engine missing
+  // from it looks like a device-speech engine to all of them.
+  return engine === 'pocket' || engine === 'kokoro';
 }
 
 function _defaultVoiceForEngine(engine) {
-  if (engine === KITTEN_ENGINE) {
-    const saved = window.userProfile?.settings?.kittenVoice;
-    return isKittenVoice(saved) ? saved : KITTEN_DEFAULT_VOICE;
-  }
   if (engine === 'kokoro') {
     const saved = window.userProfile?.settings?.kokoroVoice;
     return isKokoroVoice(saved) ? saved : KOKORO_DEFAULT_VOICE;
@@ -5024,8 +5004,8 @@ function _effectiveVoiceForEngine(engine) {
 window._effectiveVoiceForEngine = _effectiveVoiceForEngine;
 
 function _voiceEngineControlValue() {
-  // settings.voiceEngine is 'pocket' for Kitten, Kokoro, AND Pocket TTS.
-  // The control value is the override (or 'auto') so a Kitten device is not
+  // settings.voiceEngine is 'pocket' for Kokoro AND Pocket TTS.
+  // The control value is the override (or 'auto') so a Kokoro device is not
   // shown — or persisted — as Pocket TTS.
   if (window.userProfile?.settings?.voiceEngine === 'webspeech') return 'webspeech';
   return readNarrationEngineOverride(localStorage) || 'auto';
@@ -5037,10 +5017,12 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   }
   // The single Voice Engine control now carries the neural choice too, because
   // a separate "Narration engine" select said an overlapping thing and left the
-  // reader guessing which one won. 'auto' / 'kokoro' / 'kitten' are UI values:
-  // they run the neural path, and which model that means is the narration override.
-  if (engineVal === 'auto' || engineVal === 'kokoro'
-      || engineVal === 'kitten' || engineVal === 'pocket') {
+  // reader guessing which one won. 'auto' / 'kokoro' are UI values: they run
+  // the neural path, and which model that means is the narration override.
+  // 'kitten' is a retired value a stale control or profile can still send; it
+  // means "the lighter neural engine", which is Kokoro now.
+  if (engineVal === 'kitten') engineVal = 'kokoro';
+  if (engineVal === 'auto' || engineVal === 'kokoro' || engineVal === 'pocket') {
     writeNarrationEngineOverride(localStorage, engineVal === 'auto' ? null : engineVal);
     // Asking for a neural engine is asking to try it again, so lift the
     // session-only 'this engine could not load' flag rather than resolving
@@ -5107,7 +5089,7 @@ export function switchReaderVoiceEngine(engineVal, silent = false) {
   if (voiceSelector) {
     const neuralVoices = voicesForEngine(neuralEngine);
     if (neuralVoices.length) {
-      const savedKey = neuralEngine === KITTEN_ENGINE ? 'kittenVoice' : 'kokoroVoice';
+      const savedKey = 'kokoroVoice';
       const chosen = coerceVoiceForEngine(neuralEngine, window.userProfile?.settings?.[savedKey]);
       const byGender = (gender) => neuralVoices.filter((voice) => voice.gender === gender)
         .map((voice) => `<option value="${voice.id}"${voice.id === chosen ? ' selected' : ''}>`
@@ -5170,11 +5152,10 @@ window.onVoiceSelectionChange = function(newVoice) {
   // Kokoro voices are a separate namespace stored under their own setting.
   // Falling through to the Pocket path would canonicalise a Kokoro id against
   // the Pocket voice list and quietly rewrite it to donald_malone.
-  const neuralEngine = isKittenVoice(newVoice) ? KITTEN_ENGINE
-    : (isKokoroVoice(newVoice) ? 'kokoro' : null);
+  const neuralEngine = isKokoroVoice(newVoice) ? 'kokoro' : null;
   if (neuralEngine) {
-    const savedKey = neuralEngine === KITTEN_ENGINE ? 'kittenVoice' : 'kokoroVoice';
-    const label = neuralEngine === KITTEN_ENGINE ? 'Kitten' : 'Kokoro';
+    const savedKey = 'kokoroVoice';
+    const label = 'Kokoro';
     if (window.isPlaying) {
       window.virtueSpeak?.('Please pause the story first before changing the voice.', 4000);
       const sel = document.getElementById('voice-selector');

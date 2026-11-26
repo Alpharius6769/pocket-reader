@@ -30,17 +30,17 @@ const memoryStorage = () => {
 
 // ── The catalogue itself ────────────────────────────────────────────────────
 
-test('RAM maps to the ladder, and the 13 is a Kitten device', () => {
+test('RAM maps to the ladder, and the 13 is a device-voice device', () => {
   // The decision that started this: a 4 GB iPhone 13 has a documented ~400 MB
   // heap budget, and Kokoro's session build peaks at 396-421 MB. The middle
   // engine is a coin flip on exactly that device.
-  assert.equal(catalog.tierForRamGb(4), 'kitten');
+  assert.equal(catalog.tierForRamGb(4), 'webspeech');
   assert.equal(catalog.tierForRamGb(6), 'kokoro');
   assert.equal(catalog.tierForRamGb(8), 'pocket');
   assert.equal(catalog.tierForRamGb(12), 'pocket');
 
-  assert.equal(catalog.tierCeilingForDevice('iphone-13-mini'), 'kitten');
-  assert.equal(catalog.tierCeilingForDevice('iphone-13'), 'kitten');
+  assert.equal(catalog.tierCeilingForDevice('iphone-13-mini'), 'webspeech');
+  assert.equal(catalog.tierCeilingForDevice('iphone-13'), 'webspeech');
   assert.equal(catalog.tierCeilingForDevice('iphone-13-pro'), 'kokoro');
   // 6 GB, but Pocket by product decision -- and only this model. The two
   // phones sharing its screen and its RAM are not included.
@@ -72,13 +72,13 @@ test('geometry candidates are derived from RAM, not hand-written', () => {
   // The old table kept the model names in comments and the candidate lists by
   // hand, so the two could drift. These fall out of the RAM figures.
   const span = (key) => catalog.tiersForGeometry(key).candidates.join(',');
-  assert.equal(span('375x812'), 'kitten', 'X, XS, 11 Pro, 12 mini, 13 mini are all <= 4 GB');
-  assert.equal(span('414x896'), 'kitten');
+  assert.equal(span('375x812'), 'webspeech', 'X, XS, 11 Pro, 12 mini, 13 mini are all <= 4 GB');
+  assert.equal(span('414x896'), 'webspeech');
   assert.equal(span('428x926'), 'kokoro,pocket', '12 Pro Max and 14 Plus are Kokoro; the 13 Pro Max is Pocket');
   assert.equal(span('393x852'), 'kokoro,pocket', '14 Pro and 15 are 6 GB; 15 Pro and 16 are 8 GB');
   assert.equal(span('440x956'), 'pocket');
   // An unrecognised size opens the whole ladder and lets the measurement speak.
-  assert.equal(span('999x1999'), 'kitten,kokoro,pocket');
+  assert.equal(span('999x1999'), 'webspeech,kokoro,pocket');
 });
 
 test('ProMotion is positive evidence only', () => {
@@ -104,9 +104,9 @@ test('an inferred Android class may only ever demote', () => {
   assert.equal(catalog.androidInferredCeiling('SM-S918B'), '');
   assert.equal(catalog.androidInferredCeiling('OnePlus 12'), '');
   // Known-weak classes do demote.
-  assert.equal(catalog.androidInferredCeiling('SM-A536B'), 'kitten');
-  assert.equal(catalog.androidInferredCeiling('moto g power'), 'kitten');
-  assert.equal(catalog.androidInferredCeiling('Redmi Note 12'), 'kitten');
+  assert.equal(catalog.androidInferredCeiling('SM-A536B'), 'webspeech');
+  assert.equal(catalog.androidInferredCeiling('moto g power'), 'webspeech');
+  assert.equal(catalog.androidInferredCeiling('Redmi Note 12'), 'webspeech');
   assert.equal(catalog.androidInferredCeiling(''), '');
 
   // And the a-series is not the flagship class, whichever runs first.
@@ -141,7 +141,7 @@ test('a declared model sets a ceiling the measurement resolves inside', () => {
   // Declared too high for what the device actually holds: the measurement
   // vetoes, and says so rather than silently disagreeing.
   const vetoed = iphone({ declaredDeviceId: 'iphone-15-pro', memoryHeadroomMb: 300 });
-  assert.equal(vetoed.engine, 'kitten');
+  assert.equal(vetoed.engine, 'webspeech');
   assert.match(vetoed.reason, /measured only 300 MB/);
 
   // Declared LOWER than a generous measurement: honour the claim. Being wrong
@@ -153,13 +153,13 @@ test('a failed probe can never promote through a claim', () => {
   // resolveTierByHeadroom returns candidates[0] when nothing clears, so a
   // single-element candidate list from a claim would have bypassed the veto
   // entirely. Truncating the ladder at the ceiling keeps the veto underneath.
-  assert.deepEqual(policy.tiersUpTo('pocket'), ['kitten', 'kokoro', 'pocket']);
-  assert.deepEqual(policy.tiersUpTo('kokoro'), ['kitten', 'kokoro']);
-  assert.deepEqual(policy.tiersUpTo('kitten'), ['kitten']);
-  assert.deepEqual(policy.tiersUpTo('nonsense'), ['kitten', 'kokoro', 'pocket']);
+  assert.deepEqual(policy.tiersUpTo('pocket'), ['webspeech', 'kokoro', 'pocket']);
+  assert.deepEqual(policy.tiersUpTo('kokoro'), ['webspeech', 'kokoro']);
+  assert.deepEqual(policy.tiersUpTo('webspeech'), ['webspeech']);
+  assert.deepEqual(policy.tiersUpTo('nonsense'), ['webspeech', 'kokoro', 'pocket']);
 
   // A measurement below every floor lands on the lightest tier, not the claim.
-  assert.equal(iphone({ declaredDeviceId: 'iphone-17-pro', memoryHeadroomMb: 10 }).engine, 'kitten');
+  assert.equal(iphone({ declaredDeviceId: 'iphone-17-pro', memoryHeadroomMb: 10 }).engine, 'webspeech');
 });
 
 test('a manual Settings choice still outranks everything', () => {
@@ -181,8 +181,10 @@ test('a weak Android class demotes a device the old rule would have promoted', (
   // Eight logical cores and a reported 8 GB is exactly what a budget SoC looks
   // like through the quantised APIs.
   assert.equal(android().engine, 'pocket');
-  assert.equal(android({ model: 'SM-A536B' }).engine, 'kitten');
-  assert.equal(android({ model: 'moto g power' }).engine, 'kitten');
+  // Demoted to Android's floor, Kokoro -- never through it to the device voice,
+  // even though the catalogue's RAM table puts this class on that rung.
+  assert.equal(android({ model: 'SM-A536B' }).engine, 'kokoro');
+  assert.equal(android({ model: 'moto g power' }).engine, 'kokoro');
   // A flagship is untouched.
   assert.equal(android({ model: 'Pixel 8 Pro' }).engine, 'pocket');
   // And a measurement still wins inside the demotion.
@@ -320,14 +322,13 @@ test('a slow link is reported rather than looking like a hang', async () => {
     source.indexOf('function currentDeviceSignals'),
   );
   const sizes = Object.fromEntries(
-    [...fn.matchAll(/(kokoro|kitten|pocket): (\d+)/g)].map((m) => [m[1], Number(m[2])]),
+    [...fn.matchAll(/(kokoro|pocket): (\d+)/g)].map((m) => [m[1], Number(m[2])]),
   );
   assert.equal(sizes.kokoro, 86, 'the model this was reported against');
-  assert.ok(sizes.kitten < sizes.kokoro && sizes.kokoro < sizes.pocket);
+  assert.ok(sizes.kokoro < sizes.pocket);
   // megabytes * 8 / mbps, in seconds.
   assert.match(fn, /\(megabytes \* 8\) \/ mbps/);
   assert.equal(Math.round((sizes.kokoro * 8) / 1.7), 405, 'about seven minutes at 1.7 Mbps');
-  assert.equal(Math.round((sizes.kitten * 8) / 1.7), 113, 'against about two for Kitten');
 
   // Only surfaced when it is long enough to be mistaken for a stall.
   const label = source.slice(source.indexOf('const seconds = estimateModelDownloadSeconds'), source.indexOf('${download}`'));
@@ -365,7 +366,7 @@ test('the worker\'s own thread count is believed over the plan\'s intention', as
   // INSIDE the worker. The main thread merged telemetry on 'backend_selected'
   // and 'backend_status', which is what Pocket sends, and ignored it on
   // 'init_done', which is what StyleTTS2 sends.
-  for (const file of ['public/assets/js/kokoro_worker.js', 'public/assets/js/kitten_worker.js']) {
+  for (const file of ['public/assets/js/kokoro_worker.js']) {
     const worker = await read(file);
     assert.match(worker, /threads: ort\?\.env\?\.wasm\?\.numThreads \|\| 1,/, `${file} reports its real count`);
   }
@@ -439,12 +440,12 @@ test('an undeclared measurement may climb only one tier', () => {
     capability: { platform: 'ios' }, userAgent: 'iPhone',
     screenWidth: 390, screenHeight: 844, storage: null, ...extra,
   }).engine;
-  assert.equal(at({ memoryHeadroomMb: 0 }), 'kitten');
+  assert.equal(at({ memoryHeadroomMb: 0 }), 'webspeech');
   assert.equal(at({ memoryHeadroomMb: 500 }), 'kokoro');
   assert.equal(at({ memoryHeadroomMb: 1024 }), 'kokoro', 'never two tiers on a guess');
 
   // Declaring settles it in both directions.
-  assert.equal(at({ memoryHeadroomMb: 1024, declaredDeviceId: 'iphone-13' }), 'kitten');
+  assert.equal(at({ memoryHeadroomMb: 1024, declaredDeviceId: 'iphone-13' }), 'webspeech');
   assert.equal(at({ memoryHeadroomMb: 900, declaredDeviceId: 'iphone-16e' }), 'pocket');
 });
 
@@ -459,7 +460,7 @@ test('every size that existed before the catalogue behaves as it did', () => {
   assert.equal(at(393, 852, 500), 'kokoro');
   assert.equal(at(430, 932, 900), 'pocket');
   assert.equal(at(430, 932, 500), 'kokoro');
-  assert.equal(at(375, 812, 900), 'kitten');
+  assert.equal(at(375, 812, 900), 'webspeech');
   // 428x926 is the one deliberate change: the 13 Pro Max moved to Pocket
   // (product decision, 2026-09-10), so the size now spans Kokoro..Pocket and a
   // measurement that clears Pocket's bar reaches it. Unmeasured, it floors at
@@ -537,7 +538,7 @@ test('the ProMotion measurement is read back on later launches', () => {
   assert.equal(policy.selectNarrationEngine({
     capability: { platform: 'ios' }, userAgent: 'iPhone',
     screenWidth: 390, screenHeight: 844, storage: setupRecord(),
-  }).engine, 'kitten');
+  }).engine, 'webspeech');
 });
 
 test('the Client Hints model reaches the decision before audio_core loads', () => {
@@ -552,7 +553,7 @@ test('the Client Hints model reaches the decision before audio_core loads', () =
     deviceMemory: 8, hardwareConcurrency: 8, storage: withModel(model),
   }).engine;
   assert.equal(policy.readStoredDeviceModel(withModel('SM-A536B')), 'SM-A536B');
-  assert.equal(boot('SM-A536B'), 'kitten', 'a budget SoC is demoted with no capability object');
+  assert.equal(boot('SM-A536B'), 'kokoro', 'a budget SoC is demoted with no capability object');
   assert.equal(boot('Pixel 8 Pro'), 'pocket', 'and a flagship is untouched');
 
   // An empty string is the ABSENCE of an answer, not an answer, so `??` was the
@@ -563,5 +564,5 @@ test('the Client Hints model reaches the decision before audio_core loads', () =
     userAgent: 'Mozilla/5.0 (Linux; Android 10; K) Mobile',
     deviceMemory: 8, hardwareConcurrency: 8, storage: withModel('SM-A536B'),
   });
-  assert.equal(source.engine, 'kitten');
+  assert.equal(source.engine, 'kokoro');
 });

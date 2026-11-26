@@ -17,7 +17,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 // paragraph length -- could not be told apart from the report. Each render now
 // says which.
 
-for (const file of ['kokoro_worker.js', 'kitten_worker.js']) {
+for (const file of ['kokoro_worker.js']) {
   test(`${file}: generate_done carries render telemetry`, async () => {
     const worker = await read(`public/assets/js/${file}`);
     assert.match(worker, /let lastGenerateTelemetry = null;/);

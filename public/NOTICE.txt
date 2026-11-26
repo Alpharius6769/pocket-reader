@@ -60,8 +60,6 @@ Notable license-sensitive items:
 - Kokoro-82M, the middle narration tier, is Apache-2.0 (hexgrad/Kokoro-82M;
   ONNX build onnx-community/Kokoro-82M-v1.0-ONNX). It is a StyleTTS2 model
   finetuned from yl4579/StyleTTS2-LJSpeech. See ATTRIBUTIONS.md.
-- KittenTTS Nano 0.1, the lightest narration tier, is Apache-2.0
-  (KittenML/kitten-tts-nano-0.1). See ATTRIBUTIONS.md.
 - The shipped Pocket voice catalog is six Kyutai Pocket TTS catalog voices:
   Alba, Mary, Eve, Charles, George, and Noah. Alba is CC BY 4.0
   (Alba MacKenna); the rest are CC BY 4.0 VCTK enhanced references republished

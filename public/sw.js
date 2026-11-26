@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v356';
+var CACHE_NAME = 'pocket-reader-core-v358';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -138,11 +138,10 @@ var OPTIONAL_ASSETS = [
 // connection these are the most likely single fetch to fail -- and losing the
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
-    'assets/js/buffer_manager.js?v=buffer-v120',
-    'assets/js/audio_core.js?v=audio-v230',
-    'assets/js/pocket_worker.js?v=pocket-worker-v133',
+    'assets/js/buffer_manager.js?v=buffer-v122',
+    'assets/js/audio_core.js?v=audio-v232',
+    'assets/js/pocket_worker.js?v=pocket-worker-v135',
     'assets/js/kokoro_worker.js?v=kokoro-v54',
-    'assets/js/kitten_worker.js?v=kitten-v44',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
 ];
 
@@ -151,32 +150,32 @@ var CORE_ASSETS = [
     './',
     'assets/css/theme.css?v=deck-v1',
     'assets/js/tts_pronunciation_core.js?v=pron-v34',
-    'assets/js/device_catalog.js?v=catalog-v5',
-    'assets/js/pocket_backend_policy.js?v=backend-v62',
+    'assets/js/device_catalog.js?v=catalog-v7',
+    'assets/js/pocket_backend_policy.js?v=backend-v64',
     'assets/js/pocket_performance_policy.js?v=performance-v2',
     'assets/js/safe_storage.js?v=safe-storage-v1',
     'assets/js/native_app_key.js?v=native-key-v1',
     'assets/js/diagnostics.js?v=diag-v9',
     'assets/js/api_core.js?v=search-v33',
     'assets/js/experience_coordinator.js?v=experience-v19',
-    'assets/js/virtue_controller.js?v=virtue-v54',
+    'assets/js/virtue_controller.js?v=virtue-v55',
     'assets/js/engine_utils.js',
-    'assets/js/ui_controller.js?v=ui-v250',
+    'assets/js/ui_controller.js?v=ui-v251',
     'assets/js/supabase_bridge.js?v=supabase-v22',
     'assets/js/profile_merge.js?v=merge-v13',
     'assets/js/data_transfer.js?v=transfer-v5',
-    'assets/js/device_setup.js?v=device-setup-v53',
-    'assets/js/settings_manager.js?v=settings-v214',
-    'assets/js/library_manager.js?v=library-v101',
+    'assets/js/device_setup.js?v=device-setup-v55',
+    'assets/js/settings_manager.js?v=settings-v216',
+    'assets/js/library_manager.js?v=library-v102',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v16',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v4',
     'assets/js/hmofa_community.js?v=hmofa-community-v4',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v4',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v136',
-    'assets/js/storage_core.js?v=storage-v50',
-    'assets/js/sync_core.js?v=sync-v45',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v137',
+    'assets/js/storage_core.js?v=storage-v51',
+    'assets/js/sync_core.js?v=sync-v46',
     'assets/js/cinematic_ui.js?v=cinematic-v18',
-    'assets/js/reader_features.js?v=features-v48',
+    'assets/js/reader_features.js?v=features-v49',
     'assets/js/motion_lite.js'
 ];
 

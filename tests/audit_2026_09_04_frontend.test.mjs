@@ -71,7 +71,7 @@ test('Pocket still retries, because its renders genuinely differ', async () => {
   const audio = await read('public/assets/js/audio_core.js');
   // retryLevel reaches the seed and the temperature, which only Pocket reads.
   assert.match(audio, /_artifactCappedTemperature\(tuning\.temperature, paragraphEmotion, retryLevel\)/);
-  for (const file of ['kokoro_worker.js', 'kitten_worker.js']) {
+  for (const file of ['kokoro_worker.js']) {
     const worker = await read(`public/assets/js/${file}`);
     assert.ok(!/opts\.temperature/.test(worker), `${file} does not read temperature`);
     assert.ok(!/opts\.voiceSeed|opts\.seed\b/.test(worker), `${file} does not read a seed`);

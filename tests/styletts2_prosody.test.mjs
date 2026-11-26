@@ -16,7 +16,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const ENGINES = ['kokoro', 'kitten'];
+const ENGINES = ['kokoro'];
 
 const sourceFor = (engine) =>
   readFile(path.join(ROOT, `public/assets/js/${engine}_worker.js`), 'utf8');
@@ -136,14 +136,12 @@ for (const engine of ENGINES) {
   });
 }
 
-test('both StyleTTS2 engines breathe identically, and like Pocket', async () => {
+test('Kokoro breathes like Pocket', async () => {
   // A reader moving between tiers should hear the same narrator phrasing, not
   // discover that one engine pauses differently from another.
-  const [kokoro, kitten] = await Promise.all(ENGINES.map(loadProsody));
-  assert.deepEqual(kokoro.PUNCT_PAUSE_SEC, kitten.PUNCT_PAUSE_SEC);
-  assert.deepEqual(kokoro.CLAUSE_SPEED_SCALE, kitten.CLAUSE_SPEED_SCALE);
+  const [kokoro] = await Promise.all(ENGINES.map(loadProsody));
 
-  // And the table is Pocket's, so all three agree. Parsed rather than pattern
+  // The table is Pocket's, so both engines agree. Parsed rather than pattern
   // matched: several of these marks are regex metacharacters, and building
   // patterns out of them produces a broken regex, not a failed assertion.
   const pocket = await readFile(path.join(ROOT, 'public/assets/js/pocket_worker.js'), 'utf8');
@@ -157,7 +155,7 @@ test('both StyleTTS2 engines breathe identically, and like Pocket', async () => 
     pocketPauses[key] = Number(sec);
   }
   assert.deepEqual(pocketPauses, kokoro.PUNCT_PAUSE_SEC,
-    'all three engines must breathe on the same table');
+    'both engines must breathe on the same table');
 });
 
 test('the prosody change is versioned, or cached flat audio would be replayed', async () => {
@@ -168,6 +166,5 @@ test('the prosody change is versioned, or cached flat audio would be replayed', 
   // who had already listened, and silently.
   const audio = await readFile(path.join(ROOT, 'public/assets/js/audio_core.js'), 'utf8');
   assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';/);
-  assert.match(audio, /const KITTEN_NARRATION_CACHE_VERSION = 'kittenv3';/);
   assert.match(audio, /if \(_isStyleTts2Engine\(engine\)\) return `#\$\{NEURAL_CACHE_VERSIONS\[engine\]\}`;/);
 });

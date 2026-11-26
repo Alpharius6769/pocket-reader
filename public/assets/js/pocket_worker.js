@@ -22,7 +22,7 @@ import {
   selectWebGpuVariant,
   shouldDemoteWebGpuSustained,
   POCKET_WEBGPU_WASM_PARITY_RATIO,
-} from './pocket_backend_policy.js?v=backend-v62';
+} from './pocket_backend_policy.js?v=backend-v64';
 import {
   POCKET_PERFORMANCE_POLICY_VERSION,
   computePocketFrameBudget,
@@ -530,7 +530,7 @@ function wasmModelFilename(role) {
 //
 // This exists because "is this iOS" was doing the job and had stopped being the
 // right question. The iOS exclusions were written when 4 GB iPhones still ran
-// Pocket; they no longer do -- the RAM ladder sends 4 GB to Kitten and 6 GB to
+// Pocket; they no longer do -- the RAM ladder sends 4 GB to the device voice and 6 GB to
 // Kokoro, so every iPhone that reaches this worker is 8 GB or better. The gate
 // was excluding precisely the phones that can afford the good path.
 //

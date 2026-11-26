@@ -19,10 +19,10 @@
 // only decides how HIGH the measurement is allowed to reach, which is why an
 // entry being slightly wrong costs quality rather than a crashed tab.
 
-export const CATALOG_VERSION = 'catalog-v5';
+export const CATALOG_VERSION = 'catalog-v7';
 
 // RAM -> tier. The boundaries come from ENGINE_HEADROOM_MB in the policy
-// (kitten 96, kokoro 448, pocket 704) and from what those figures cost in
+// (device voice 0, kokoro 448, pocket 704) and from what those figures cost in
 // practice: Kokoro's ONNX session build peaks at 396-421 MB, and a 4 GB iPhone
 // is documented as having roughly 400 MB of usable heap. A 4 GB device is
 // therefore not a Kokoro device, however new it is.
@@ -35,7 +35,7 @@ export function tierForRamGb(ramGb) {
   const gb = Number(ramGb) || 0;
   if (gb >= RAM_TIER_BOUNDARIES.pocketMinGb) return 'pocket';
   if (gb >= RAM_TIER_BOUNDARIES.kokoroMinGb) return 'kokoro';
-  return 'kitten';
+  return 'webspeech';
 }
 
 // The tier a catalogue entry reaches. RAM decides, unless the entry records a
@@ -55,7 +55,7 @@ export function tierForEntry(entry) {
 // RAM figures are the published specifications. The 4 GB / 6 GB / 8 GB steps are
 // what actually matter; the exact SoC does not.
 const IPHONES = [
-  // 4 GB. Every one of these is a Kitten device.
+  // 4 GB. Every one of these is a device-voice device (a measurement may lift it to Kokoro).
   { id: 'iphone-x', label: 'iPhone X', ramGb: 3, geometry: '375x812', promotion: false, year: 2017 },
   { id: 'iphone-xs', label: 'iPhone XS', ramGb: 4, geometry: '375x812', promotion: false, year: 2018 },
   { id: 'iphone-xr', label: 'iPhone XR', ramGb: 3, geometry: '414x896', promotion: false, year: 2018 },
@@ -70,7 +70,7 @@ const IPHONES = [
   { id: 'iphone-12-pro', label: 'iPhone 12 Pro', ramGb: 6, geometry: '390x844', promotion: false, year: 2020 },
   { id: 'iphone-12-pro-max', label: 'iPhone 12 Pro Max', ramGb: 6, geometry: '428x926', promotion: false, year: 2020 },
 
-  // The 13 family. 13 mini and 13 are 4 GB -- Kitten, not Kokoro. Their
+  // The 13 family. 13 mini and 13 are 4 GB -- device voice, not Kokoro. Their
   // published heap budget (~400 MB) sits inside Kokoro's session-build peak
   // (396-421 MB), so the middle engine is a coin flip on exactly these two.
   { id: 'iphone-13-mini', label: 'iPhone 13 mini', ramGb: 4, geometry: '375x812', promotion: false, year: 2021 },
@@ -213,7 +213,7 @@ export function iphonesForGeometry(key) {
 // The span of tiers a set of models covers, lowest to highest. This is what a
 // candidate list IS: every tier some member of the set could need, so the
 // measurement can pick inside it.
-export function tierSpanForModels(models, allTiers = ['kitten', 'kokoro', 'pocket']) {
+export function tierSpanForModels(models, allTiers = ['webspeech', 'kokoro', 'pocket']) {
   if (!Array.isArray(models) || !models.length) return [...allTiers];
   let low = allTiers.length - 1;
   let high = 0;
@@ -230,7 +230,7 @@ export function tierSpanForModels(models, allTiers = ['kitten', 'kokoro', 'pocke
 // The candidate tiers a geometry could belong to, derived from the RAM of every
 // model that shares it rather than hand-written per size. An unrecognised size
 // opens the full ladder and lets the measurement speak.
-export function tiersForGeometry(key, allTiers = ['kitten', 'kokoro', 'pocket']) {
+export function tiersForGeometry(key, allTiers = ['webspeech', 'kokoro', 'pocket']) {
   const models = iphonesForGeometry(key);
   if (!models.length) return { candidates: [...allTiers], models: [], note: '' };
   return {
