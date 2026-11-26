@@ -53,11 +53,8 @@ test('the welcome modal leads with the cloud account', async () => {
   const html = await read('public/index.html');
   const modal = html.slice(html.indexOf('id="first-time-setup-title"'), html.indexOf('id="setup-complete-btn"'));
   const cloudAt = modal.indexOf('setup-cloud-btn');
-  const usernameAt = modal.indexOf('setup-username');
-  const themeAt = modal.indexOf('setup-theme');
-  assert.ok(cloudAt > 0, 'the cloud account block must be inside the modal');
-  assert.ok(cloudAt < usernameAt && cloudAt < themeAt,
-    'signing in first is what makes the rest of the form save to an account');
+  const choice = modal.indexOf('name="resume-mode"');
+  assert.ok(cloudAt >= 0 && cloudAt < choice);
 });
 
 test('profile deep fields live on Edit Profile; setup stays short', async () => {
@@ -67,11 +64,11 @@ test('profile deep fields live on Edit Profile; setup stays short', async () => 
   for (const id of ['profile-edit-fandom', 'profile-edit-character', 'profile-edit-genre']) {
     assert.match(html, new RegExp(`id="${id}"`), `${id} missing from profile edit`);
   }
-  assert.match(html, /id="setup-theme"/);
-  assert.match(html, /id="setup-narrator-pref"/);
+  assert.match(html, /id="setup-read"/);
+  assert.match(html, /id="setup-listen"/);
   assert.doesNotMatch(html, /id="setup-fandom"/, 'setup no longer asks for fandom');
   assert.doesNotMatch(html, /id="setup-mood"/, 'setup no longer asks for mood');
-  assert.match(ui, /setup-narrator-pref/);
+  assert.match(ui, /stampSyncedSetting\?\.\('resumeMode'\)/);
 });
 
 test('cache manager pin and delete scan one story, not the whole store', async () => {
@@ -160,7 +157,7 @@ test('the stored profile is read back at boot', async () => {
   // false, so the profile hydrated but the reader's name still read
   // "Guest Reader". Safe to wait because _flushLocalData refuses to write
   // until the latch releases.
-  assert.match(source, /document\.readyState === 'loading'[\s\S]{0,220}DOMContentLoaded/,
+  assert.match(source, /domContentLoadedEventStart > 0[\s\S]{0,240}addEventListener\('DOMContentLoaded'/,
     'hydration must wait for the later modules to define their globals');
 });
 

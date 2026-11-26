@@ -53,7 +53,7 @@ test('library_manager progressChapter handles null/undefined without producing N
   );
   assert.match(
     lib,
-    /Chapter \$\{\(Number\(story\.progressChapter\) \|\| 0\) \+ 1\}/,
+    /Number\(live \? window\.currentChapterIndex : story\?\.progressChapter\) \|\| 0/,
     'Continue reading drawer must coerce progressChapter to avoid Chapter NaN'
   );
   assert.doesNotMatch(

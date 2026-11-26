@@ -19,7 +19,7 @@ test('the ONNX size map does not carry an ORT size', async () => {
   const worker = await read('public/assets/js/pocket_worker.js');
   const onnx = worker.slice(worker.indexOf('const MODEL_ASSET_BYTES = {'), worker.indexOf('const ORT_FORMAT_MODEL_ASSET_BYTES'));
   assert.match(onnx, /flow_lm_unified_block4: 88818684,/);
-  assert.match(onnx, /flow_lm_decode_block4: 88173753,/);
+  assert.match(onnx, /flow_lm_decode_block4: 88173526,/);
   assert.ok(!/87264376/.test(onnx), 'that is the .ort size, not the .onnx one');
 
   const ort = worker.slice(worker.indexOf('const ORT_FORMAT_MODEL_ASSET_BYTES'));

@@ -28,6 +28,12 @@ Pocket Reader is an offline-capable story reader with browser-side Pocket TTS na
 
 Pocket TTS inference runs in the browser. Web Speech is the low-power fallback. Story text, generated audio, model files, cookies, and hardware tuning remain on the device.
 
+## Local preview
+
+Run `node tools/serve_public.mjs 4175 --local-services` and open <http://127.0.0.1:4175>. This mode expects FastAPI on port 8097 and the local Cloudflare Worker on port 8787. Allow the preview origin on both services. For the static shell alone, omit `--local-services`.
+
+Home resumes the selected story at its saved chapter and paragraph. Choose **Read** for text or **Listen** for narration. The compact player stays available while you browse the library or catalog. The welcome screen is skippable, and the device test opens when neural audio is first needed.
+
 ## Verification
 
 ```powershell
@@ -41,7 +47,7 @@ FastAPI backend for the Pocket Reader web app. This Space is a lightweight I/O r
 
 No neural text-to-speech inference runs on this backend. Narration runs in the browser through Pocket TTS assets loaded by the frontend, with the browser's native Web Speech voices available as a fallback.
 Narration runs on one of three in-browser engines, chosen per device by a measured
-memory-headroom probe at first launch and overridable in Settings:
+memory-headroom probe when first using neural narration or saving audio, and overridable in Settings:
 
 | Tier | Model | Shipped voices |
 | --- | --- | --- |

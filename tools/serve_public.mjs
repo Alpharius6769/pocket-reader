@@ -11,7 +11,7 @@
 // service worker injects COOP/COEP itself for ?tts_fast=1 sessions, and forcing
 // them globally would mask a regression in that path.
 //
-// Usage: node tools/serve_public.mjs [port]
+// Usage: node tools/serve_public.mjs [port] [--local-services]
 
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -64,7 +64,16 @@ const server = createServer(async (request, response) => {
       response.end('Not found');
       return;
     }
-    const body = await readFile(file);
+    let body = await readFile(file);
+    if (process.argv.includes('--local-services')) {
+      const proxyBase = 'http://127.0.0.1:8787';
+      if (file === resolve(root, 'index.html')) {
+        const config = JSON.stringify({ apiBase: 'http://127.0.0.1:8097', proxyBase });
+        body = Buffer.from(body.toString('utf8').replace('<head>', `<head><script>window.POCKET_READER_CONFIG=${config}</script>`));
+      } else if (file.endsWith('_worker.js')) {
+        body = Buffer.concat([Buffer.from(`self.PR_PROXY_BASE=${JSON.stringify(proxyBase)};\n`), body]);
+      }
+    }
     const type = MIME[extname(file).toLowerCase()] || 'application/octet-stream';
     response.writeHead(200, {
       'Content-Type': type,

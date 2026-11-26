@@ -174,7 +174,7 @@ function ensureNoticeRegion() {
     region.id = 'experience-notice-region';
     region.className = 'experience-notice-region';
     region.setAttribute('aria-live', 'polite');
-    document.body.appendChild(region);
+    document.querySelector('.view-container').before(region);
   }
   return region;
 }
@@ -267,7 +267,7 @@ function ensureAchievementRegion() {
   region.className = 'achievement-unlock-region';
   region.setAttribute('aria-live', 'polite');
   region.setAttribute('aria-atomic', 'true');
-  document.body.appendChild(region);
+  document.querySelector('.view-container').before(region);
   return region;
 }
 
@@ -277,14 +277,9 @@ function showAchievementUnlock({ ach_id, ach_title, tier }) {
     const iconId = /^[a-z0-9_]+$/i.test(String(ach_id || '')) ? ach_id : 'first_book';
     region.innerHTML = `
       <section class="achievement-unlock-toast" role="status">
-        <div class="achievement-unlock-radiance" aria-hidden="true"></div>
-        <div class="achievement-unlock-emblem" aria-hidden="true">
-          <img src="assets/icons/ach_${iconId}.svg" alt="">
-        </div>
-        <p class="achievement-unlock-kicker">Achievement unlocked</p>
-        <h2>${escapeHtml(ach_title || 'New achievement')}</h2>
-        ${tier ? `<p class="achievement-unlock-tier">${escapeHtml(tier)}</p>` : ''}
-        <p class="achievement-unlock-detail">Added to your reader profile</p>
+        <img width="24" height="24" src="assets/icons/ach_${iconId}.svg" alt="">
+        <span>Achievement unlocked · <strong>${escapeHtml(ach_title || 'New achievement')}</strong></span>
+        ${tier ? `<span>${escapeHtml(tier)}</span>` : ''}
       </section>`;
     region.classList.add('active');
     window.setTimeout(() => {

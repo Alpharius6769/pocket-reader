@@ -12,18 +12,6 @@ const PR_CONFIG = {
 window.POCKET_READER_CONFIG = PR_CONFIG;
 window.PR_PROXY_BASE = PR_CONFIG.proxyBase;
 
-// showCacheDecisionModal lives in the lazily-loaded buffer_manager.js. Opening a
-// story always needs the narration runtime eventually (Play/Cache are core to
-// the reading view), so trigger the load here rather than leave the
-// typeof-guarded call below silently no-op on a user's first story open in a
-// session (before any narration button had been clicked to load it).
-async function _ensureCacheDecisionModal() {
-  if (typeof window.ensureNarrationRuntime === 'function') {
-    try { await window.ensureNarrationRuntime(); } catch (_) { /* already surfaced its own error UI */ }
-  }
-  if (typeof window.showCacheDecisionModal === 'function') window.showCacheDecisionModal();
-}
-
 window._safeParseJson = async function(response, apiName = 'General') {
   try {
     return await response.json();
@@ -478,10 +466,10 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
         if (newStory.url) await window._saveStoryChapters(newStory.url, newStory.chapters, newStory);
       } catch (e) { console.warn('Failed to persist uploaded story chapters:', e); }
     }
+    if (!silent) window.recordStoryHistory?.(window.currentStory);
     if (!silent && typeof window.populateReaderUI === 'function') window.populateReaderUI(window.currentStory, newStory.author);
     if (!silent && typeof window.updateReaderUIText === 'function') window.updateReaderUIText();
     if (!silent && typeof window.showView === 'function') window.showView('reading-view');
-    if (!silent) await _ensureCacheDecisionModal();
   } catch (error) {
     if (silent) {
       // Background caching path: never alert or pop a companion reaction. Let
@@ -1069,7 +1057,6 @@ export async function loadStory(url, options = {}) {
           if (!preventNavigate && typeof window.showView === 'function') window.showView('reading-view');
           if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
           if (!preventNavigate && typeof window.triggerVirtue === 'function') window.triggerVirtue('virtue_holding_bubble_happy');
-          if (!preventNavigate) await _ensureCacheDecisionModal();
           return;
         }
       } catch(e) {
@@ -1341,8 +1328,6 @@ export async function loadStory(url, options = {}) {
       window.populateReaderUI(window.currentStory, window.currentStory.author || 'Unknown');
     if (!preventNavigate && typeof window.recordStoryHistory === 'function') window.recordStoryHistory(window.currentStory);
     if (!preventNavigate && typeof window.showView === 'function') window.showView('reading-view');
-    const suppressCache = window._pocketSuppressCacheDecision;
-    if (!preventNavigate && !suppressCache) await _ensureCacheDecisionModal();
   } catch (error) {
     if (!preventNavigate && typeof window.hideLoadingOverlay === 'function') window.hideLoadingOverlay();
     if (ownAbort._superseded) return;

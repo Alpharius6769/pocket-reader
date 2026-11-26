@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v48';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v50';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -1049,6 +1049,7 @@ export const BufferManager = {
   },
 
   async start(mode = 'Normal') {
+    if (window.deferForDeviceSetup?.(() => this.start(mode))) return;
     this.mode = mode;
     this.paused = false;
     this.itemsSynthesizedThisSession = 0;
@@ -1195,10 +1196,6 @@ export const BufferManager = {
   },
 
   async startPrecacheQueue() {
-    // Must run in the initiating tap before the first await. iOS will reject a
-    // media play() first attempted after async setup or after the tab hides.
-    window.preparePocketMobileMediaSession?.();
-    window.startBgKeepAlive?.();
     if (!window.precacheQueue || window.precacheQueue.length === 0) {
       if (!window.isPlaying) window.stopBgKeepAlive?.();
       if (typeof window.virtueSpeak === 'function') window.virtueSpeak('First, open each story menu and choose Queue Away. Then start Away Mode from Library.', 5000);
@@ -1214,6 +1211,10 @@ export const BufferManager = {
       if (typeof window.virtueSpeak === 'function') window.virtueSpeak('Away Mode is already running. Stop it first to restart.', 4000);
       return;
     }
+    if (window.deferForDeviceSetup?.(() => this.startPrecacheQueue())) return;
+    // Unlock media in the initiating or post-calibration tap before the first await.
+    window.preparePocketMobileMediaSession?.();
+    window.startBgKeepAlive?.();
     window._pocketThroughputCache = true;
     // Away Mode needs the same isolated multi-thread session as normal caching.
     if (!_isolationReady()) {
@@ -1247,7 +1248,7 @@ export const BufferManager = {
     const selectedEngine = document.getElementById('voice-engine-select')?.value || 'pocket';
     if (!_isNeuralControlValue(selectedEngine)) {
       if (btn) {
-        btn.innerHTML = `Away Mode &nbsp;<span id="precache-count" class="away-mode-badge">${window.precacheQueue.length} queued</span>`;
+        btn.innerHTML = `Offline audio &nbsp;<span id="precache-count" class="away-mode-badge">${window.precacheQueue.length} queued</span>`;
         btn.disabled = false;
         btn.classList.toggle('active', window.precacheQueue.length > 0);
       }
@@ -1337,7 +1338,7 @@ export const BufferManager = {
     window.precacheQueue = requestedQueue.filter((ref) => !consumedRefs.has(ref));
     try { localStorage.setItem('pocketPrecacheQueue', JSON.stringify(window.precacheQueue)); } catch (_) {}
     if (btn) {
-      btn.innerHTML = `Away Mode &nbsp;<span id="precache-count" class="away-mode-badge">${window.precacheQueue.length} queued</span>`;
+      btn.innerHTML = `Offline audio &nbsp;<span id="precache-count" class="away-mode-badge">${window.precacheQueue.length} queued</span>`;
       btn.disabled = false;
       btn.classList.toggle('active', window.precacheQueue.length > 0);
     }
@@ -2149,6 +2150,7 @@ window.chooseConstrainedCaching = function chooseConstrainedCaching(enableExpres
 };
 
 window.startCaching = async function(mode, storyRef = null) {
+  if (window.deferForDeviceSetup?.(() => window.startCaching(mode, storyRef))) return;
   // Preserve the user activation before story lookup, capability refresh, or an
   // isolation handoff introduces an await boundary.
   window.preparePocketMobileMediaSession?.();

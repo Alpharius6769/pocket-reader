@@ -57,3 +57,26 @@ jobs:
 
       - name: Run backend regression suites
         run: python -m unittest discover -s tests -p "*_regressions.py" -v
+
+      - name: Install browser smoke dependencies
+        working-directory: tests/webkit-smoke
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium webkit
+
+      - name: Exercise the reader deck in Chromium
+        run: node tests/webkit-smoke/deck.mjs
+
+      - name: Exercise the reader deck in WebKit
+        env:
+          DECK_BROWSER: webkit
+        run: node tests/webkit-smoke/deck.mjs
+
+  publish-pages:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-github-pages.yml

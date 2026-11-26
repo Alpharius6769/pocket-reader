@@ -74,6 +74,11 @@ function isolateModalSiblings(modal, active) {
 }
 
 function trapPocketModalFocus(event) {
+  if (event.key === 'Escape' && activePocketModal?.id === 'device-setup-modal') {
+    event.preventDefault();
+    window.cancelDeviceSetup();
+    return;
+  }
   if (!activePocketModal || event.key !== 'Tab') return;
   const focusable = modalFocusableElements(activePocketModal);
   if (!focusable.length) {
@@ -555,7 +560,7 @@ window.commitDevicePickerChoice = commitDevicePickerChoice;
 export async function runPocketDeviceDiagnostics({ onboarding = false } = {}) {
   if (diagnosticsInFlight) return diagnosticsInFlight;
   diagnosticsInFlight = (async () => {
-    if (onboarding) localStorage.setItem(PROFILE_HANDOFF_KEY, 'pending');
+
     setSetupProgress(10, 'Reading privacy-safe browser hardware signals...');
     const capability = await collectPocketDeviceCapability({
       storage: localStorage,
@@ -692,34 +697,43 @@ function showFirstTimeProfileSetup() {
   const profileSetup = document.getElementById('first-time-setup-modal');
   if (!profileSetup) return false;
   document.documentElement.classList.remove('pr-setup-complete');
-  activatePocketModal(profileSetup, '#setup-username');
+  activatePocketModal(profileSetup, '#first-time-setup-title');
   window.restoreSetupDraft?.();
   return true;
 }
 window.showFirstTimeProfileSetup = showFirstTimeProfileSetup;
 
-window.continuePocketDeviceSetup = () => {
-  document.documentElement.classList.add('pr-device-setup-complete');
-  const modal = document.getElementById('device-setup-modal');
-  if (modal) {
-    deactivatePocketModal(modal);
-    modal.style.display = 'none';
-  }
-  if (localStorage.getItem(PROFILE_HANDOFF_KEY) === 'pending' || localStorage.getItem('pr_setup_complete') !== 'true') {
-    if (!showFirstTimeProfileSetup()) {
-      setTimeout(showFirstTimeProfileSetup, 100);
-    }
-  } else {
-    setTimeout(() => window.maybeShowDeviceSupportNotice?.(), 200);
-  }
+let resumeDeviceAction = null;
+
+window.deferForDeviceSetup = (resume) => {
+  if (window._pocketDeviceSetup) return false;
+  resumeDeviceAction = resume;
+  document.documentElement.classList.add('calibrating');
+  renderDevicePicker();
+  activatePocketModal(document.getElementById('device-setup-modal'), '#device-setup-start-btn');
+  return true;
 };
 
-requestAnimationFrame(() => {
+function closeDeviceSetup() {
   const modal = document.getElementById('device-setup-modal');
-  if (modal && getComputedStyle(modal).display !== 'none') {
-    activatePocketModal(modal, '#device-setup-start-btn');
-  }
-});
+  deactivatePocketModal(modal);
+  modal.style.display = 'none';
+  document.documentElement.classList.remove('calibrating');
+}
+
+window.cancelDeviceSetup = () => {
+  resumeDeviceAction = null;
+  if (!window.isPlaying && !window.BufferManager?.isActive) window.stopBgKeepAlive?.();
+  closeDeviceSetup();
+};
+
+window.continuePocketDeviceSetup = () => {
+  const resume = resumeDeviceAction;
+  resumeDeviceAction = null;
+  closeDeviceSetup();
+  document.documentElement.classList.add('pr-device-setup-complete');
+  resume?.();
+};
 
 window.runPocketDeviceDiagnosticsFromSettings = (button) => {
   const originalLabel = button?.textContent || 'Re-run device test';
@@ -836,24 +850,6 @@ if (setupStartButton) {
   if (!window._pocketDeviceSetup) setSetupText('device-setup-status', 'Ready to test this device.');
 }
 
-// Populate the picker while the modal is idle. The refresh measurement runs
-// here rather than during the benchmark for the same reason it does inside
-// runPocketDeviceDiagnostics -- a busy device drops frames and a dropped frame
-// reads as a 60 Hz panel -- and its result narrows the iPhone list the reader
-// is about to read.
-if (!window._pocketDeviceSetup) {
-  (async () => {
-    let refreshHz = 0;
-    try { refreshHz = await measureRefreshHz(); } catch (_) {}
-    let detectedModel = '';
-    try {
-      detectedModel = String(
-        (await navigator.userAgentData?.getHighEntropyValues?.(['model']))?.model || '',
-      );
-    } catch (_) { /* WebKit and Gecko do not implement Client Hints at all */ }
-    try { renderDevicePicker({ refreshHz, detectedModel }); } catch (_) {}
-  })();
-}
 setTimeout(renderPocketDeviceSetupSummary, 0);
 
 export { SETTINGS_RISK_ACK_KEY, SUPPORT_NOTICE_KEY, PROFILE_HANDOFF_KEY, POCKET_DEVICE_SETUP_KEY };

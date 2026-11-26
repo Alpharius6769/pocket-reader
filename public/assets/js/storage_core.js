@@ -544,6 +544,23 @@ function getAudioKey(storyTitle, chapIdx, paraIdx, engine, voice) {
   return `${storyTitle}_${chapIdx}_${paraIdx}_${engine}_${voice}`;
 }
 
+// Check keys only. Cloud profiles can carry cache flags from another device.
+window.hasLocalStoryAudio = async function hasLocalStoryAudio(storyRef) {
+  const db = await initDB();
+  const prefix = storyRef + '_';
+  return new Promise((resolve, reject) => {
+    const store = db.transaction('audio_chunks').objectStore('audio_chunks');
+    const request = store.openKeyCursor(_storyChunkRange(storyRef));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return resolve(false);
+      if (/^\d+_\d+_/.test(String(cursor.key).slice(prefix.length))) return resolve(true);
+      cursor.continue();
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
+
 // Byte-aware eviction budgets. WAV chunks average ~0.5-1 MB, so the old
 // count-only cap (800 chunks) could exceed half a GB — enough to hit iOS
 // Safari quota limits on long stories. Both a count cap and a byte budget now

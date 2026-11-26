@@ -4,13 +4,13 @@ import { readFile } from 'node:fs/promises';
 
 const read = (name) => readFile(new URL(`../${name}`, import.meta.url), 'utf8');
 
-test('device calibration blocks profile setup until its local benchmark completes', async () => {
+test('device calibration opens for a requested action and resumes it after the local benchmark', async () => {
   const html = await read('public/index.html');
   const deviceSetup = await read('public/assets/js/device_setup.js');
   const theme = await read('public/assets/css/theme.css');
   assert.ok(html.indexOf('id="device-setup-modal"') < html.indexOf('id="first-time-setup-modal"'));
-  assert.match(html, /html:not\(\.pr-device-setup-complete\) #first-time-setup-modal/);
-  assert.match(html, /device_setup\.js\?v=device-setup-v51/);
+  assert.match(deviceSetup, /window\.deferForDeviceSetup/);
+  assert.match(html, /device_setup\.js\?v=device-setup-v53/);
   assert.match(deviceSetup, /pr_device_setup_v2|POCKET_DEVICE_SETUP_KEY/);
   assert.match(deviceSetup, /localOnly:\s*true/);
   assert.match(deviceSetup, /simulateThreadedWasm:\s*true/);
@@ -21,13 +21,9 @@ test('device calibration blocks profile setup until its local benchmark complete
   assert.match(html, /id="device-setup-start-btn"[^>]+disabled/);
   assert.match(deviceSetup, /setupStartButton\.disabled = false/);
   assert.match(theme, /\[hidden\]\s*\{\s*display:\s*none\s*!important/);
-  // Ordering used to be an artefact of statement order in the Anvil form's
-  // Python boot. It is now enforced declaratively in the shell: first-time
-  // setup stays hidden until device setup has stamped its completion class, so
-  // calibration cannot be skipped. Verified live on a clean profile:
-  // device-setup-modal visible, first-time-setup-modal not.
-  assert.match(html, /html:not\(\.pr-device-setup-complete\)\s*#first-time-setup-modal\s*\{\s*display:\s*none/);
-  assert.match(html, /html\.pr-device-setup-complete\s*#device-setup-modal\s*\{\s*display:\s*none/);
+  assert.match(html, /html:not\(\.calibrating\) #device-setup-modal/);
+  assert.match(deviceSetup, /resumeDeviceAction = resume/);
+  assert.match(deviceSetup, /window\.cancelDeviceSetup = \(\) => \{\s*resumeDeviceAction = null/);
 });
 
 test('settings risk gate appears only when Advanced Settings is opened', async () => {

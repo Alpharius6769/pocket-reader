@@ -400,7 +400,7 @@ test('every neural gate in audio_core accepts Kokoro', async () => {
   }
   // The default voice must follow the engine, not always be a Pocket id.
   assert.match(audio, /function _defaultVoiceForEngine\(engine\)/);
-  assert.match(audio, /const defaultVoice = _defaultVoiceForEngine\(engine\);/);
+  assert.match(audio, /return requested \|\| _defaultVoiceForEngine\(engine\);/);
 });
 
 test('changing engine does not drag in the narration runtime', async () => {
@@ -788,7 +788,7 @@ test('the playback lookahead resolves its engine instead of assuming one', async
   const audio = await read('public/assets/js/audio_core.js');
   assert.doesNotMatch(audio, /const engine = 'pocket';/,
     'a literal engine cannot be right for both engines');
-  assert.match(audio, /const selVoice = document\.getElementById\('voice-selector'\)\?\.value \|\| _defaultVoiceForEngine\(engine\);/,
+  assert.match(audio, /const selVoice = _effectiveVoiceForEngine\(engine\);/,
     'the fallback voice must follow the engine too');
 });
 

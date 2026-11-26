@@ -39,7 +39,7 @@ function storeSession(next) {
   try {
     if (next) {
       localStorage.setItem(SESSION_KEY, JSON.stringify(next));
-      localStorage.setItem('pr_remember_login', 'true');
+      if (localStorage.getItem('pr_remember_login') === null) localStorage.setItem('pr_remember_login', 'true');
       if (next.user && next.user.email) {
         localStorage.setItem('pr_profile_owner', next.user.email);
       }
@@ -142,28 +142,28 @@ function showLoginForm() {
   return new Promise((resolve) => {
     const backdrop = document.createElement('div');
     backdrop.style.cssText = 'position:fixed;inset:0;z-index:2147483100;display:flex;align-items:center;'
-      + 'justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(3px)';
+      + 'justify-content:center;background:rgba(0,0,0,.6)';
 
     const card = document.createElement('div');
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-modal', 'true');
     card.setAttribute('aria-label', 'Sign in to Pocket Reader');
-    card.style.cssText = 'width:min(92vw,360px);padding:22px;border-radius:14px;background:#16181c;color:#e8e8ea;'
-      + "border:1px solid #2c3038;font:14px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
+    card.style.cssText = 'width:min(92vw,360px);padding:22px;background:var(--panel-bg);color:var(--text-main);'
+      + "border:1px solid var(--border-color);border-top:3px solid var(--accent-green);font:inherit";
 
     const h = document.createElement('h2');
     h.textContent = 'Sign in';
     h.style.cssText = 'margin:0 0 4px;font-size:18px';
     const sub = document.createElement('p');
-    sub.textContent = 'Sync your library across devices. Optional — the app works fully offline without an account.';
+    sub.textContent = 'Sign in to sync your library, bookmarks and reading position.';
     sub.style.cssText = 'margin:0 0 16px;opacity:.75;font-size:13px';
 
     const btn = (label, primary) => {
       const b = document.createElement('button');
       b.type = 'button'; b.textContent = label;
-      b.style.cssText = 'flex:1;padding:11px;border-radius:9px;cursor:pointer;font:inherit;font-weight:600;'
-        + (primary ? 'background:#4a9eff;color:#08111c;border:1px solid #4a9eff'
-                   : 'background:transparent;color:#e8e8ea;border:1px solid #3a3f49');
+      b.style.cssText = 'flex:1;padding:11px;cursor:pointer;font:inherit;font-weight:600;'
+        + (primary ? 'background:var(--accent-green);color:var(--sidebar-bg);border:1px solid var(--accent-green)'
+                   : 'background:transparent;color:var(--text-main);border:1px solid var(--border-color)');
       return b;
     };
     const google = btn('Continue with Google', true);
@@ -257,7 +257,6 @@ function consumeOAuthFragment() {
   getCurrentUser().then((email) => {
     if (email) {
       localStorage.setItem('pr_profile_owner', email);
-      localStorage.setItem('pr_remember_login', 'true');
       if (window.userProfile) {
         window.userProfile.isLoggedIn = true;
         window.userProfile.cloudEmail = email;

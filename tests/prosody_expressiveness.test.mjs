@@ -365,9 +365,8 @@ test('Alba is the configured default voice across the engine', async () => {
   assert.match(library, /const defaultVoice = window\.POCKET_DEFAULT_VOICE \|\| 'alba'/);
   assert.match(library, /pocketVoice: window\.POCKET_DEFAULT_VOICE \|\| "alba"/);
 
-  const ui = await read('public/assets/js/ui_controller.js');
-  assert.match(ui, /narratorPref === 'Male' \? 'charles' : 'alba'/,
-    'the narrator gender preference must pick from the live catalog');
+  const html = await read('public/index.html');
+  assert.match(html, /<option value="alba" selected>/, 'reader starts on the catalog default');
 });
 
 test('getPocketTuningPreset allows expressive temperature tuning without forced fallback', async () => {

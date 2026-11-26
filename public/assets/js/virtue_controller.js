@@ -317,6 +317,10 @@ function _displayVirtue(triggerKey, variables = {}, isPriority = false) {
 export function triggerVirtue(triggerKey, variables = {}) {
   if (!_isVirtueEnabled()) return Promise.resolve(false);
   const isPriority = _PRIORITY_TRIGGERS.has(triggerKey);
+  if (window.currentActiveView && window.currentActiveView !== 'home-view') {
+    virtueState.lastPriorityUntil = isPriority ? Date.now() + 1500 : 0;
+    return Promise.resolve(false);
+  }
   const frequency = window.userProfile?.settings?.companionFrequency || 'contextual';
   if ((frequency === 'quiet' || document.body.classList.contains('experience-suppressed')) && !isPriority) return Promise.resolve(false);
   if (_globalVirtueGapActive(triggerKey)) return Promise.resolve(false);
@@ -544,6 +548,10 @@ export function virtueSpeak(text, duration = 10000, priority = false) {
   // 4-10s and serialised everything behind narration that was never shown.
   if (!_isVirtueEnabled()) return Promise.resolve(false);
   const effectivePriority = priority || Number(virtueState.lastPriorityUntil || 0) > Date.now();
+  if (window.currentActiveView && window.currentActiveView !== 'home-view') {
+    window.pocketNotify?.(String(text), duration);
+    return Promise.resolve(false);
+  }
   const frequency = window.userProfile?.settings?.companionFrequency || 'contextual';
   if ((frequency === 'quiet' || document.body.classList.contains('experience-suppressed')) && !effectivePriority) return Promise.resolve(false);
   if (_globalVirtueGapActive() && !effectivePriority) return Promise.resolve(false);

@@ -21,7 +21,7 @@
 // Routed through the Worker rather than straight at Supabase: the Worker
 // attaches the shared key that catalog-api now requires for writes, and
 // forwards the real client IP so per-user rate limits still apply.
-const API_BASE = 'https://pocket-reader-proxy.alpharius67.workers.dev/catalog-api';
+const API_BASE = (window.POCKET_READER_CONFIG?.proxyBase || 'https://pocket-reader-proxy.alpharius67.workers.dev') + '/catalog-api';
 
 const STORAGE_KEYS = Object.freeze({
   device: 'hmofa_device_id_v2',

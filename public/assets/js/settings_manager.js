@@ -16,7 +16,7 @@ import {
   coerceVoiceForEngine,
 } from './pocket_backend_policy.js?v=backend-v62';
 
-export const NARRATION_SERVICE_WORKER_VERSION = '350';
+export const NARRATION_SERVICE_WORKER_VERSION = '356';
 
 export const SERVICE_WORKER_PATH = 'sw.js';
 const NARRATION_SERVICE_WORKER_URL = `${SERVICE_WORKER_PATH}?v=${NARRATION_SERVICE_WORKER_VERSION}`;
@@ -430,8 +430,8 @@ export function initSettingsUI() {
   }
   if (el('push-updates-toggle') && settings.pushUpdates !== undefined) el('push-updates-toggle').checked = settings.pushUpdates;
   if (el('ui-hints-toggle')) el('ui-hints-toggle').checked = settings.showHints !== undefined ? settings.showHints : true;
-  // Always apply theme — default to 'slate' if nothing is saved yet
-  const _theme = settings.theme || 'slate';
+  // Restore the saved palette before rendering the controls.
+  const _theme = settings.theme || 'dark';
   if (!settings.theme) settings.theme = _theme;
   if (el('app-theme-select')) el('app-theme-select').value = _theme;
   document.body.classList.remove('theme-light', 'theme-slate', 'theme-high-contrast', 'theme-colorblind');
@@ -813,6 +813,12 @@ window.onNarrationSpeedChange = function onNarrationSpeedChange(value, commit = 
   const next = Number.isFinite(requested) ? Math.min(2, Math.max(0.5, requested)) : 1;
   const label = document.getElementById('playback-speed-label');
   if (label) label.textContent = `${next.toFixed(2)}x`;
+  const deck = document.getElementById('deck-speed');
+  if (deck) deck.value = String(next);
+  const deckLabel = document.getElementById('deck-speed-value');
+  if (deckLabel) deckLabel.textContent = next.toFixed(2) + '×';
+  const slider = document.getElementById('playback-speed-slider');
+  if (slider) slider.value = String(next);
   if (!commit) return next;
 
   if (window.userProfile?.settings) window.userProfile.settings.speed = next;
@@ -1476,6 +1482,8 @@ window.onNarrationEngineSelect = function onNarrationEngineSelect(value) {
   if (!window.userProfile.settings) window.userProfile.settings = {};
 
   if (choice === 'webspeech') {
+    // An explicit choice today resolves the legacy automatic-downgrade prompt.
+    prLocal.setItem('pr_engine_downgrade_recovery_v1', 'kept-device');
     window.userProfile.settings.voiceEngine = 'webspeech';
   } else {
     window.userProfile.settings.voiceEngine = 'pocket';

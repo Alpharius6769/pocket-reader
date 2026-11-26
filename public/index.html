@@ -151,7 +151,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/theme.css?v=midnight-v42">
+<link rel="stylesheet" href="assets/css/theme.css?v=deck-v1">
 
 <!-- ==========================================
 2a. FAST-NARRATION RELOAD MASK (anti-flash)
@@ -250,23 +250,23 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <link rel="modulepreload" href="assets/js/native_app_key.js?v=native-key-v1">
 <link rel="modulepreload" href="assets/js/diagnostics.js?v=diag-v9">
 <link rel="modulepreload" href="assets/js/motion_lite.js">
-<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v48">
+<link rel="modulepreload" href="assets/js/storage_core.js?v=storage-v50">
 <link rel="modulepreload" href="assets/js/sync_core.js?v=sync-v45">
 <link rel="modulepreload" href="assets/js/engine_utils.js">
-<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v135">
-<link rel="modulepreload" href="assets/js/api_core.js?v=search-v28">
-<link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v17">
-<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v52">
+<link rel="modulepreload" href="assets/js/narration_runtime_loader.js?v=narration-loader-v136">
+<link rel="modulepreload" href="assets/js/api_core.js?v=search-v33">
+<link rel="modulepreload" href="assets/js/experience_coordinator.js?v=experience-v19">
+<link rel="modulepreload" href="assets/js/virtue_controller.js?v=virtue-v54">
 <link rel="modulepreload" href="assets/js/device_catalog.js?v=catalog-v5">
 <link rel="modulepreload" href="assets/js/pocket_backend_policy.js?v=backend-v62">
 <link rel="modulepreload" href="assets/js/pocket_performance_policy.js?v=performance-v2">
-<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v51">
-<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v210">
-<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v93">
-<link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v16">
-<link rel="modulepreload" href="assets/js/reader_features.js?v=features-v43">
-<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v244">
-<link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v19">
+<link rel="modulepreload" href="assets/js/device_setup.js?v=device-setup-v53">
+<link rel="modulepreload" href="assets/js/settings_manager.js?v=settings-v214">
+<link rel="modulepreload" href="assets/js/library_manager.js?v=library-v101">
+<link rel="modulepreload" href="assets/js/cinematic_ui.js?v=cinematic-v18">
+<link rel="modulepreload" href="assets/js/reader_features.js?v=features-v48">
+<link rel="modulepreload" href="assets/js/ui_controller.js?v=ui-v250">
+<link rel="modulepreload" href="assets/js/supabase_bridge.js?v=supabase-v22">
 
 <!-- ==========================================
 3. SERVICE WORKER REGISTRATION
@@ -282,7 +282,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       if (window.location.pathname.indexOf('/debug/') !== -1 || window.__prServiceWorkerRegistration) return;
       // Share one registration promise with ui_controller so first load does
       // not race two registrations or emit duplicate failures.
-      var swUrl = new URL('sw.js?v=350', document.baseURI).href;
+      var swUrl = new URL('sw.js?v=356', document.baseURI).href;
       var swFallbackUrl = new URL('sw.js', document.baseURI).href;
       window.__prServiceWorkerRegistration = navigator.serviceWorker
         .register(swUrl)
@@ -328,7 +328,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
     try {
       var _d = localStorage.getItem('pocketReaderData');
       var _t = _d ? (JSON.parse(_d).settings || {}).theme : null;
-      if (!_t || _t === 'dark') _t = 'slate';
+      if (!_t) _t = 'dark';
       if (_t !== 'dark') {
         if (document.body) document.body.classList.add('theme-' + _t);
         document.documentElement.classList.add('theme-' + _t);
@@ -347,14 +347,14 @@ Playback-only modules remain deferred so they do not compete with first paint.
 <style>
   html.pr-setup-complete #first-time-setup-modal { display: none !important; }
   html.pr-device-setup-complete #device-setup-modal { display: none !important; }
-  html:not(.pr-device-setup-complete) #first-time-setup-modal { display: none !important; }
+  html:not(.calibrating) #device-setup-modal { display: none !important; }
 </style>
-<div class="app-wrapper">
+<div class="app-wrapper deck-shell">
 
   <div class="pr-layout-001 device-setup-modal" id="device-setup-modal" role="dialog" aria-modal="true" aria-labelledby="device-setup-title">
     <div class="pr-card pr-layout-002 device-setup-card">
-      <p class="device-setup-kicker">First launch on this device</p>
-      <h2 class="pr-layout-003" id="device-setup-title">Preparing Pocket Reader</h2>
+      <p class="device-setup-kicker">Neural narration</p>
+      <h2 class="pr-layout-003" id="device-setup-title">Set up this device</h2>
       <p class="pr-layout-004">Pocket Reader will read the privacy-safe hardware details your browser makes available, then run a short local compute test. It will compare WebGPU FP16 with WASM x4, x2, and x1 where each option is available.</p>
       <div class="device-setup-facts">
         <div><strong>Local only</strong><span>The result stays on this device and does not follow your account.</span></div>
@@ -373,54 +373,26 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <p id="device-setup-result" class="device-setup-result"></p>
       <div class="modal-buttons">
         <button id="device-setup-start-btn" class="pr-btn-primary" type="button" aria-busy="true" disabled onclick="window.startPocketDeviceSetup()">Test &amp; optimize this device</button>
-        <button id="device-setup-continue-btn" class="pr-btn-primary" type="button" hidden onclick="window.continuePocketDeviceSetup()">Continue to profile</button>
+        <button id="device-setup-continue-btn" class="pr-btn-primary" type="button" hidden onclick="window.continuePocketDeviceSetup()">Continue</button>
+        <button type="button" onclick="window.cancelDeviceSetup()">Cancel</button>
       </div>
     </div>
   </div>
 
   <div class="pr-layout-001" id="first-time-setup-modal" role="dialog" aria-modal="true" aria-labelledby="first-time-setup-title" aria-hidden="true">
     <div class="pr-card pr-layout-002">
-      <h2 class="pr-layout-003" id="first-time-setup-title" tabindex="-1">Welcome to Pocket Reader!</h2>
-      <p class="pr-layout-004">Quick start: account, theme, and narrator. You can fill in the rest later from Profile.</p>
-
-      <!-- Cloud account leads: signing in first restores an existing profile. -->
-      <div class="settings-item pr-layout-017">
-        <label class="pr-layout-018">Cloud Account <span class="pr-layout-019">(optional)</span></label>
-        <p class="pr-layout-020">Back up your library and progress across devices. Signing in first also restores an existing profile.</p>
-        <div class="pr-layout-021" id="setup-cloud-status"></div>
-        <button class="pr-btn-outline pr-layout-022" id="setup-cloud-btn" onclick="window._setupCloudLogin()">Sign in with Google</button>
-        <p class="pr-layout-023">Uses your Google account. You can always do this later from Profile.</p>
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-username">Display name</label>
-        <input class="pr-layout-009" type="text" id="setup-username" name="setup-username" placeholder="Guest">
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-theme">App theme</label>
-        <select class="pr-layout-009" id="setup-theme" name="setup-theme">
-          <option value="dark" selected>Midnight</option>
-          <option value="slate">Anthrostate</option>
-          <option value="light">Paper</option>
-          <option value="high-contrast">High Contrast</option>
-          <option value="colorblind">Colorblind Safe</option>
-        </select>
-      </div>
-
-      <div class="settings-item pr-layout-005">
-        <label for="setup-narrator-pref">Preferred Narrator</label>
-        <select class="pr-layout-009" id="setup-narrator-pref" name="setup-narrator-pref">
-          <option value="">No Preference</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-        </select>
-      </div>
-
-      <div class="pr-layout-024">
-        <button class="pr-btn-outline pr-layout-025" id="setup-skip-btn" type="button" onclick="window.skipFirstTimeSetup()">Skip for now</button>
-        <button class="pr-btn-primary pr-layout-026" id="setup-complete-btn" type="button" onclick="window.completeFirstTimeSetup()">Save &amp; Start Reading</button>
-      </div>
+      <img class="welcome-virtue" src="assets/img/virtue_happy_no_paws.webp" alt="Virtue" width="90" height="90">
+      <h2 id="first-time-setup-title" tabindex="-1">Welcome to Pocket Reader.</h2>
+      <p>Open a story, or sign in to bring back your library.</p>
+      <button class="pr-btn-outline" id="setup-cloud-btn" onclick="window._setupCloudLogin()">Restore account</button>
+      <label class="remember-account"><input id="setup-remember-login" type="checkbox" checked> Remember my account on this device</label>
+      <fieldset class="welcome-choice"><legend>Preferred way to resume</legend>
+        <label><input type="radio" id="setup-read" name="resume-mode" value="read" checked> Read</label>
+        <label><input type="radio" id="setup-listen" name="resume-mode" value="listen"> Listen</label>
+      </fieldset>
+      <div id="setup-cloud-status" role="status"></div>
+      <div class="modal-buttons"><button id="setup-skip-btn" type="button" onclick="window.skipFirstTimeSetup()">Skip for now</button>
+        <button class="pr-btn-primary" id="setup-complete-btn" type="button" onclick="window.completeFirstTimeSetup()">Continue</button></div>
     </div>
   </div>
 
@@ -539,25 +511,21 @@ Playback-only modules remain deferred so they do not compete with first paint.
       <span id="pwa-dismiss-label-text">Don't show again - available in <span id="pwa-countdown">3</span>s</span>
     </label>
   </div>
-  <aside class="sidebar">
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="deck-brand"><b class="brand-mark" aria-hidden="true">▥</b><span>Pocket<br>Reader</span></div>
     <button class="nav-btn active-view" onclick="showView('home-view')">
-      <img class="nav-icon" src="assets/img/home%20192.png" alt="">
       <span>Home</span>
     </button>
     <button class="nav-btn" onclick="showView('library-view')">
-      <img class="nav-icon" src="assets/img/library%20192.png" alt="">
       <span>Library</span>
     </button>
     <button class="nav-btn" onclick="showView('reading-view')">
-      <img class="nav-icon" src="assets/img/reader%20192.png" alt="">
       <span>Reader</span>
     </button>
     <button class="nav-btn" onclick="showView('hmofa-view')">
-      <img class="nav-icon" src="assets/img/hmofa%20192.png" alt="">
-      <span>HMOFA</span>
+      <span>Discover</span>
     </button>
     <button class="nav-btn" onclick="showView('profile-view')">
-      <img class="nav-icon" src="assets/img/profile%20192.png" alt="">
       <span>Profile</span>
     </button>
     <button class="nav-btn nav-more-btn" id="nav-more-btn" onclick="toggleNavMore(event)" aria-expanded="false" aria-controls="nav-more-group">
@@ -566,16 +534,13 @@ Playback-only modules remain deferred so they do not compete with first paint.
     </button>
     <div class="nav-more-group" id="nav-more-group">
       <button class="nav-btn" onclick="showView('settings-view')">
-        <img class="nav-icon" src="assets/img/settings%20192.png" alt="">
-        <span>Settings</span>
+          <span>Settings</span>
       </button>
       <button class="nav-btn nav-btn-secondary" onclick="showView('search-view')">
-        <img class="nav-icon" src="assets/img/search%20192.png" alt="">
-        <span>AO3 Search</span>
+          <span>AO3 Search</span>
       </button>
       <button class="nav-btn" onclick="showView('about-view')">
-        <img class="nav-icon" src="assets/img/about%20192.png" alt="">
-        <span>About</span>
+          <span>About</span>
       </button>
     </div>
   </aside>
@@ -588,30 +553,26 @@ Playback-only modules remain deferred so they do not compete with first paint.
       </button>
       <input class="pr-layout-008" id="local-file-upload" type="file" aria-label="Open a local story file" accept=".pdf,.epub,.html,.htm,.txt,.docx" onchange="handleFileSelect(event)" hidden>
 
-      <input id="global-search" class="search-input" type="search" aria-label="Search stories or paste a story URL" placeholder="Search AO3 (titles, authors) or paste any story URL" onkeydown="if (event.key === 'Enter') { event.preventDefault(); handleTopBarSearch(); }">
+      <input id="global-search" class="search-input" type="search" aria-label="Search stories or paste a story URL" placeholder="Find a story or paste a link" onkeydown="if (event.key === 'Enter') { event.preventDefault(); handleTopBarSearch(); }">
       <button class="pr-btn-primary" onclick="handleTopBarSearch()">Go</button>
       <div class="topbar-title">Pocket Reader</div>
 
-      <div class="topbar-user pr-layout-035" onclick="showView('profile-view')">
+      <button type="button" class="topbar-user pr-layout-035" onclick="showView('profile-view')">
         <span id="user-display-name" class="topbar-user-name">Guest Reader</span>
         <img id="topbar-avatar-img" class="topbar-user-avatar" src="assets/img/profile%20192.png" alt="">
-      </div>
+      </button>
     </div>
-
+    <div id="deck-notice" role="status" aria-live="polite"></div>
+    <section id="deck-mini" hidden aria-label="Now playing"><button type="button" data-deck-return></button><button type="button" data-deck-toggle>Pause</button></section>
     <div class="view-container">
       <div id="home-view" class="view active-view">
-        <div class="panel">
-          <div class="pr-layout-036">
-            <img class="pr-layout-037" src="assets/img/home%20512.png" alt="">
-            <div>
-              <h1 class="pr-layout-038">Welcome back.</h1>
-              <p class="pr-layout-039">Your personalized auto-narration hub.</p>
-            </div>
-          </div>
+        <header class="deck-page-title"><h1>Listening room</h1><span class="deck-grille" aria-hidden="true"></span></header>
+        <div class="deck-stage">
+        <section id="continue-reading-panel" aria-label="Story deck"></section>
+    <div id="virtue-container" class="virtue-container pr-layout-173">
+      <div id="virtue-text-overlay" class="virtue-text-overlay"></div>
+    </div>
         </div>
-        <h2 class="pr-layout-040">Continue Reading</h2>
-        <div class="pr-layout-041" id="continue-reading-panel"></div>
-
         <details class="bookmarks-folder" id="home-bookmarks-folder">
           <summary>All Bookmarks</summary>
           <div class="bookmarks-list" id="home-bookmarks-list">
@@ -625,10 +586,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
           <h1 class="pr-layout-043">
             <img loading="lazy" decoding="async" class="pr-layout-044" src="assets/img/library%20512.png" alt="">
             Library
+            <button type="button" onclick="triggerFileUpload()">Add story</button>
             <button id="start-precache-btn" class="away-mode-lib-btn pr-layout-045"
-              onclick="window.startPrecacheQueue()"
+              onclick="showView('away-mode-view')"
               title="1. Add stories with Queue Away in each story menu. 2. Start Away Mode here. 3. Minimize the progress panel while Pocket Reader prepares offline audio. Keep the app open while it works; a paused phone may resume caching when you return.">
-              Away Mode &nbsp;<span id="precache-count" class="away-mode-badge">0 queued</span>
+              Offline audio &nbsp;<span id="precache-count" class="away-mode-badge">0 queued</span>
             </button>
           </h1>
           <div class="library-filters">
@@ -652,6 +614,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       </div>
 
       <div id="search-view" class="view">
+        <nav class="discover-nav" aria-label="Discovery sources"><button onclick="showView('hmofa-view')">Anthronomicon</button><button onclick="showView('search-view')" aria-current="page">AO3 search</button><button onclick="showView('library-view');setLibraryFilter('curated')">Curated shelf</button></nav>
         <div class="search-layout search-layout-horizontal pr-layout-048">
 
           <!-- Main Panel: Search (primary focus) -->
@@ -772,11 +735,11 @@ Playback-only modules remain deferred so they do not compete with first paint.
 
       <div id="reading-view" class="view">
         <div class="reader-wrapper">
-          <button class="reader-sidebar-toggle" onclick="toggleReaderSidebar()">
+          <button class="reader-sidebar-toggle" aria-label="Toggle story details" onclick="toggleReaderSidebar()">
             <span id="reader-sidebar-toggle-arrow">&lt;</span>
           </button>
 
-          <aside id="reader-sidebar" class="reader-sidebar">
+          <aside id="reader-sidebar" class="reader-sidebar"><button class="deck-close-chapters" type="button" onclick="toggleReaderSidebar()">Close story details</button>
             <div class="reader-tabs">
               <button id="tab-btn-info" class="reader-tab active" onclick="switchReaderTab('info')">Info</button>
               <button id="tab-btn-chapters" class="reader-tab" onclick="switchReaderTab('chapters')">Chapters</button>
@@ -828,15 +791,17 @@ Playback-only modules remain deferred so they do not compete with first paint.
               <div id="reader-content"></div>
             </div>
 
-            <div id="reader-buffer-container" class="reader-buffer-container pr-layout-074">
-
+            <div class="reader-position">
               <div class="pr-layout-075" id="chapter-seek-preview"></div>
-              <input class="pr-layout-076" type="range" id="chapter-progress-bar" list="chapter-notches" min="0" max="0" value="0"
+              <input class="pr-layout-076" type="range" aria-label="Chapter position" id="chapter-progress-bar" list="chapter-notches" min="0" max="0" value="0"
                 oninput="window._readerSeekPreview(this.value)"
                 onchange="window._readerSeekCommit(this.value)"
                 title="Drag to scrub through the story (notches mark chapters)">
               <datalist id="chapter-notches"></datalist>
               <div class="pr-layout-077" id="reader-time-remaining"></div>
+
+            </div>
+            <div id="reader-buffer-container" class="reader-buffer-container pr-layout-074">
 
               <div id="away-mode-bar" class="cache-bar pr-layout-078">
                 <div class="pr-layout-079">
@@ -855,7 +820,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
 
             </div>
             <div class="playback-bar pr-layout-083">
-              <div class="pr-layout-064">
+              <details class="deck-voice"><summary>Narration options</summary>
                 <!-- Mirrors the Settings control, including the neural
                      choice. Leaving Kokoro out here meant a reader on a
                      constrained phone could see the engine in Settings but not
@@ -879,7 +844,9 @@ Playback-only modules remain deferred so they do not compete with first paint.
                     <option value="paul">Paul - American</option>
                   </optgroup>
                 </select>
-              </div>
+                <label for="deck-speed">Speed <output id="deck-speed-value">1.00×</output></label>
+                <input type="range" id="deck-speed" min="0.5" max="2" step="0.05" value="1" oninput="window.onNarrationSpeedChange(this.value,false)" onchange="window.onNarrationSpeedChange(this.value)">
+              </details>
               <div class="pr-layout-088">
                 <button class="control-btn" title="Jump to Start" onclick="window.skipChapter(-999)">&lt;&lt;</button>
                 <button class="control-btn" title="Previous Paragraph" onclick="window.skipParagraph(-1)">&lt;</button>
@@ -888,6 +855,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
                 <button class="control-btn" title="Jump to End" onclick="window.skipChapter(999)">&gt;&gt;</button>
               </div>
               <div class="pr-layout-090 playback-bar-secondary">
+                <button type="button" onclick="if(document.getElementById('reader-sidebar').classList.contains('collapsed'))toggleReaderSidebar();switchReaderTab('chapters')">Chapters</button>
                 <button class="pr-btn-sub pr-layout-091" type="button" onclick="saveBookmark()">Bookmark</button>
               </div>
             </div>
@@ -896,6 +864,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
       </div>
 
       <div id="hmofa-view" class="view">
+        <nav class="discover-nav" aria-label="Discovery sources"><button onclick="showView('hmofa-view')" aria-current="page">Anthronomicon</button><button onclick="showView('search-view')">AO3 search</button><button onclick="showView('library-view');setLibraryFilter('curated')">Curated shelf</button></nav>
         <div class="library-header pr-layout-092" style="flex-wrap:wrap;gap:12px;">
           <h1 class="pr-layout-093">
             <img loading="lazy" decoding="async" class="pr-layout-044" src="assets/img/hmofa%20512.png" alt="">
@@ -1097,7 +1066,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
             <h2 id="settings-display-heading" class="settings-block-title">Display</h2>
             <label class="settings-label" for="app-theme-select">Theme</label>
             <select id="app-theme-select" name="app-theme-select" class="settings-control" onchange="applySettings()">
-              <option value="dark">Midnight</option>
+              <option value="dark">Hi-Fi</option>
               <option value="light">Paper</option>
               <option value="slate">Anthrostate</option>
               <option value="high-contrast">High Contrast</option>
@@ -1383,7 +1352,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
           </div>
 
           <div id="away-mode-view" class="view">
-            <h1 class="pr-layout-115">Away Mode Caching</h1>
+            <h1 class="pr-layout-115">Offline audio</h1>
             <div class="settings-grid settings-grid-masonry">
               
               <!-- Status & Control Card -->
@@ -1398,7 +1367,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
                 </div>
                 
                 <div style="display:flex; gap:10px; margin-bottom:15px;">
-                  <button id="away-start-btn" class="pr-btn-success" style="flex:1;" onclick="window.startAwayModeFromSubpage()">Begin Caching</button>
+                  <button id="away-start-btn" class="pr-btn-success" style="flex:1;" onclick="window.startPrecacheQueue()">Begin Caching</button>
                   <button id="away-stop-btn" class="pr-btn-outline" style="flex:1;" onclick="window.stopAwayModeFromSubpage()">Stop Caching</button>
                 </div>
 
@@ -1465,9 +1434,7 @@ Playback-only modules remain deferred so they do not compete with first paint.
          in other modules. showSettingsModal() covers this need already. -->
 
     <div id="settings-modal-overlay" class="modal-overlay"></div>
-    <div id="virtue-container" class="virtue-container pr-layout-173">
-      <div id="virtue-text-overlay" class="virtue-text-overlay"></div>
-    </div>
+
 
     <div id="caching-progress-modal" class="modal-overlay pr-layout-174">
       <div class="cache-modal-card pr-layout-175">
@@ -1497,24 +1464,24 @@ Playback-only modules remain deferred so they do not compete with first paint.
     </div>
     <script src='assets/js/native_app_key.js?v=native-key-v1' type='module'></script>
     <script src='assets/js/diagnostics.js?v=diag-v9' type='module'></script>
-    <script src='assets/js/storage_core.js?v=storage-v48' type='module'></script>
+    <script src='assets/js/storage_core.js?v=storage-v50' type='module'></script>
     <script src='assets/js/sync_core.js?v=sync-v45' type='module'></script>
-    <script src='assets/js/api_core.js?v=search-v28' type='module'></script>
-    <script src='assets/js/experience_coordinator.js?v=experience-v17' type='module'></script>
-    <script src='assets/js/virtue_controller.js?v=virtue-v52' type='module'></script>
+    <script src='assets/js/api_core.js?v=search-v33' type='module'></script>
+    <script src='assets/js/experience_coordinator.js?v=experience-v19' type='module'></script>
+    <script src='assets/js/virtue_controller.js?v=virtue-v54' type='module'></script>
     <script src='assets/js/engine_utils.js' type='module'></script>
-    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v135' type='module'></script>
+    <script src='assets/js/narration_runtime_loader.js?v=narration-loader-v136' type='module'></script>
     <script src='assets/js/tts_pronunciation_core.js?v=pron-v34' type='module'></script>
-    <script src='assets/js/library_manager.js?v=library-v93' type='module'></script>
+    <script src='assets/js/library_manager.js?v=library-v101' type='module'></script>
     <!-- Pulls in hmofa_catalog_core.js via a versioned import. The catalog
          itself is only downloaded when the masterlist view is opened. -->
-    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v15' type='module'></script>
-    <script src='assets/js/device_setup.js?v=device-setup-v51' type='module'></script>
-    <script src='assets/js/settings_manager.js?v=settings-v210' type='module'></script>
-    <script src='assets/js/cinematic_ui.js?v=cinematic-v16' type='module'></script>
-    <script src='assets/js/reader_features.js?v=features-v43' type='module'></script>
-    <script src='assets/js/ui_controller.js?v=ui-v244' type='module'></script>
-    <script src='assets/js/supabase_bridge.js?v=supabase-v19' type='module'></script>
+    <script src='assets/js/hmofa_masterlist.js?v=hmofa-list-v16' type='module'></script>
+    <script src='assets/js/device_setup.js?v=device-setup-v53' type='module'></script>
+    <script src='assets/js/settings_manager.js?v=settings-v214' type='module'></script>
+    <script src='assets/js/cinematic_ui.js?v=cinematic-v18' type='module'></script>
+    <script src='assets/js/reader_features.js?v=features-v48' type='module'></script>
+    <script src='assets/js/ui_controller.js?v=ui-v250' type='module'></script>
+    <script src='assets/js/supabase_bridge.js?v=supabase-v22' type='module'></script>
     <script src='assets/js/data_transfer.js?v=transfer-v5' type='module'></script>
   </div>
 </body>

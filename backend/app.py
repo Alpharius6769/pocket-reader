@@ -2031,6 +2031,8 @@ async def upload_document(request: Request, file: UploadFile = File(...)):
     meta = meta or {}
     words = sum(len(p.split()) for ch in chapters for p in (ch.paragraphs or []))
     stem = pathlib.Path(filename).stem.replace("_", " ").replace("-", " ").strip()
+    if suffix == ".txt" and len(chapters) == 1:
+        chapters[0].title = stem or "Chapter 1"
     payload = {
         "filename": filename,
         "title": (meta.get("title") or "").strip() or stem or "Untitled",

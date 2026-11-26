@@ -461,7 +461,7 @@ function _defaultProfile() {
       pocketTemperaturePreset: DEFAULT_POCKET_TEMPERATURE_PRESET,
       pocketBackend: "auto",
       pronunciationOverrides: [],
-      theme: "slate",
+      theme: "dark",
       companion: "virtue",
       companionFrequency: "contextual",
       motionPreset: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? "reduced" : (isMobileLikePlatform(navigator.userAgent || '') ? "standard" : "cinematic"),
@@ -623,9 +623,9 @@ export async function loadLocalData() {
       window.userProfile = normalizeProfileObject(window.userProfile);
       if (sanitizeProfileLibrary(window.userProfile, { purgeStorage: true })) saveLocalData();
 
-      // Migrate: ensure theme is 'slate' — covers unset (pre-dates the setting) and old default 'dark'
-      if (!window.userProfile.settings.theme || window.userProfile.settings.theme === 'dark') {
-        window.userProfile.settings.theme = 'slate';
+      // Older profiles can predate the theme setting.
+      if (!window.userProfile.settings.theme) {
+        window.userProfile.settings.theme = 'dark';
         saveLocalData();
       }
 
@@ -734,7 +734,7 @@ export async function loadLocalData() {
     // in the Python init chain would silently skip the check there.
     if (localStorage.getItem('pr_setup_complete') !== 'true') {
       const modal = document.getElementById('first-time-setup-modal');
-      if (modal) modal.style.display = 'flex';
+      if (modal) { if (window.showFirstTimeProfileSetup) window.showFirstTimeProfileSetup(); else modal.style.display = 'flex'; }
     }
 
   } catch (e) {
@@ -743,7 +743,7 @@ export async function loadLocalData() {
     // Even after a load failure, still show the setup modal for new users
     if (prLocal.getItem('pr_setup_complete') !== 'true') {
       const modal = document.getElementById('first-time-setup-modal');
-      if (modal) modal.style.display = 'flex';
+      if (modal) { if (window.showFirstTimeProfileSetup) window.showFirstTimeProfileSetup(); else modal.style.display = 'flex'; }
     }
   }
 }
@@ -808,12 +808,15 @@ async function _hydrateLocalProfile() {
 // Waiting costs nothing: _flushLocalData refuses to write until the latch
 // releases, so no save can clobber the stored profile in the meantime.
 // Exposed so a caller that must not race hydration can await it.
-window.__pocketProfileHydration = document.readyState === 'loading'
-  ? new Promise((resolve) => {
+// Deferred modules evaluate while readyState is already "interactive". The
+// navigation timestamp also covers modules loaded after DOMContentLoaded.
+const modulesReady = document.readyState === 'complete'
+  || performance.getEntriesByType('navigation')[0]?.domContentLoadedEventStart > 0;
+window.__pocketProfileHydration = modulesReady
+  ? Promise.resolve().then(_hydrateLocalProfile)
+  : new Promise(resolve => {
       document.addEventListener('DOMContentLoaded', () => resolve(_hydrateLocalProfile()), { once: true });
-    })
-  : _hydrateLocalProfile();
-
+    });
 
 // The synchronous write. This is the expensive part (normalize + sanitize +
 // full deep clone + JSON.stringify + localStorage write), so it is coalesced by
@@ -1540,9 +1543,8 @@ function _buildStoryCardHtml(story, isList) {
     const safeId = String(storyKey).replace(/[^a-zA-Z0-9_-]/g, '');
     const storyKeyAttr = _escapeHtml(storyKey);
     const storyKeyEncoded = encodeURIComponent(storyKey).replace(/'/g, '%27');
-    const isCached = !!(story.isCached || story.audioCached);
-    const statusClass = story.isFinished ? 'finished' : (Number(story.progressChapter) || 0) > 0 ? 'in-progress' : (isCached ? 'cached' : '');
-    const statusText = story.isFinished ? 'Finished' : (Number(story.progressChapter) || 0) > 0 ? `Ch ${(Number(story.progressChapter) || 0) + 1}${isCached ? ' · Cached' : ''}` : (isCached ? '100% Cached' : 'New');
+    const started = story.progressChapter > 0 || story.progressParagraph > 0;
+    const statusText = story.isFinished ? 'Finished' : started ? 'In progress' : 'New';
     const favIcon = story.favorite ? '★' : '☆';
     const urlSafe = encodeURIComponent(story.sourceUrl || story.url || '').replace(/'/g, "%27");
     const closeMenusJs = `document.querySelectorAll('.lib-options-menu.active').forEach(m => { m.classList.remove('active'); m.closest('.story-card')?.classList.remove('menu-open'); });`;
@@ -1562,18 +1564,15 @@ function _buildStoryCardHtml(story, isList) {
     const r2 = r === 2 ? 'checked' : '';
     const r1 = r === 1 ? 'checked' : '';
 
-    // Floating golden favorite button
-    const favColor = story.favorite ? 'var(--accent-yellow)' : 'var(--text-muted)';
-    const favoriteBtn = `<button class="lib-fav-btn ${story.favorite ? 'active' : ''}" style="background:transparent; border:none; color:${favColor}; font-size:1.1rem; cursor:pointer; padding:4px; outline:none; transition:transform 0.15s ease;" onclick="event.stopPropagation(); window.toggleFavorite(decodeURIComponent('${storyKeyEncoded}'))">${story.favorite ? '★' : '☆'}</button>`;
-
+    const favoriteBtn = `<button class="lib-fav-btn" aria-label="Favorite story" aria-pressed="${!!story.favorite}" onclick="event.stopPropagation(); window.toggleFavorite(decodeURIComponent('${storyKeyEncoded}'))">${favIcon}</button>`;
     const optionsMenu = `<div class="lib-options-wrapper" style="display:flex; align-items:center; gap:6px;">
 ${favoriteBtn}
-<button class="lib-options-btn" onclick="window.toggleLibraryOptions(event, '${safeId}')">⋮</button>
+<button class="lib-options-btn" aria-label="Story actions" onclick="window.toggleLibraryOptions(event, '${safeId}')">⋮</button>
 <div id="lib-menu-${safeId}" class="lib-options-menu">
   <div class="lib-options-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px;">
     <button onclick="event.stopPropagation(); ${closeMenusJs} window.toggleFavorite(decodeURIComponent('${storyKeyEncoded}'))"><span>${favIcon}</span>Favorite</button>
     <button onclick="event.stopPropagation(); ${closeMenusJs} window.permCacheStory(decodeURIComponent('${storyKeyEncoded}'))"><span>Cache</span>Perm Cache</button>
-    <button onclick="event.stopPropagation(); ${closeMenusJs} if(window.BufferManager) window.BufferManager.addToPrecacheQueue(decodeURIComponent('${storyKeyEncoded}'))"><span>Queue</span>Queue Away</button>
+    <button onclick="event.stopPropagation(); ${closeMenusJs} window.ensureNarrationRuntime().then(() => window.BufferManager.addToPrecacheQueue(decodeURIComponent('${storyKeyEncoded}')))"><span>Queue</span>Queue Away</button>
     ${subscriptionButton}
     <button onclick="event.stopPropagation(); ${closeMenusJs} window.toggleReadingQueue(decodeURIComponent('${storyKeyEncoded}'))"><span>Next</span>Reading Queue</button>
     <button onclick="event.stopPropagation(); ${closeMenusJs} window.openStoryCollectionDialog(decodeURIComponent('${storyKeyEncoded}'))"><span>Group</span>Collections</button>
@@ -1629,55 +1628,16 @@ ${favoriteBtn}
     const authorDisplay = _escapeHtml(story.author || 'Unknown');
     const coverSrc = _safeHttpCoverUrl(story.coverImage || story.coverUrl || '');
 
-    if (isList) {
-      const coverHtml = coverSrc
-        ? `<img src="${_escapeHtml(coverSrc)}" class="story-list-cover" style="width:50px;height:70px;object-fit:cover;border-radius:4px;">` 
-        : `<div class="story-list-cover">${_getInitials(story.title)}</div>`;
-      return `<div class="story-card list-row" data-story-key="${storyKeyAttr}" style="position:relative; display:flex; gap:12px; align-items:center; padding:12px 15px;">
-        ${optionsMenu}
-        ${coverHtml}
-        <div style="min-width:0; flex:1;">
-          <h4 class="story-list-title" style="margin:0 0 4px 0;">${titleDisplay}</h4>
-          <p class="story-list-meta" style="margin:0 0 4px 0;">by ${authorDisplay}</p>
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
-            ${fandomBadge}
-            ${ratingRow}
-            <span style="font-size:0.8rem; color:var(--text-muted);">${metadataStats}</span>
-            <span class="story-status-badge ${statusClass}">${statusText}</span>
-          </div>
-          ${tagsHtml}
-        </div>
-        <div class="story-list-actions" style="margin-right:40px;">
-          <button class="pr-btn-primary" style="padding:6px 12px;font-size:0.85rem;" onclick="window.loadStory(decodeURIComponent('${storyKeyEncoded}'))">Play</button>
-        </div>
-      </div>`;
-    } else {
-      const coverHtml = coverSrc
-        ? `<img src="${_escapeHtml(coverSrc)}" class="cover-placeholder" style="aspect-ratio:3/4;width:100%;object-fit:cover;border-radius:6px;margin-bottom:10px;">` 
-        : `<div class="cover-placeholder" style="aspect-ratio:3/4;width:100%;border-radius:6px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;background:var(--accent-blue);color:rgba(255,255,255,0.7);">${_getInitials(story.title)}</div>`;
-      return `<div class="story-card" data-story-key="${storyKeyAttr}" style="position:relative; display:flex; flex-direction:column; padding:15px; border-radius:10px; background:var(--panel-bg); border:1px solid var(--border-color); box-shadow:var(--shadow-soft);">
-        ${optionsMenu}
-        ${coverHtml}
-        <h4 style="margin:0 0 4px 0;color:var(--text-main);font-size:0.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${_escapeHtml(story.title || 'Untitled')}">${titleDisplay}</h4>
-        <p style="margin:0 0 6px 0;color:var(--text-muted);font-size:0.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">by ${authorDisplay}</p>
-        
-        <div style="min-height:22px; display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-          ${fandomBadge}
-          ${ratingRow}
-        </div>
-        
-        ${tagsHtml}
-        
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; font-size:0.75rem; color:var(--text-muted);">
-          <span>${metadataStats}</span>
-          <span class="story-status-badge ${statusClass}">${statusText}</span>
-        </div>
-        
-        <div style="margin-top:auto;">
-          <button class="pr-btn-primary" style="width:100%; padding:8px;" onclick="window.loadStory(decodeURIComponent('${storyKeyEncoded}'))">Play</button>
-        </div>
-      </div>`;
-    }
+    const open = `window.loadStory(decodeURIComponent('${storyKeyEncoded}'))`;
+    const cover = coverSrc
+      ? `<img class="shelf-cover" loading="lazy" src="${_escapeHtml(coverSrc)}" alt="">`
+      : `<div class="shelf-cover" aria-hidden="true">${_getInitials(story.title)}</div>`;
+    return `<article class="story-card ${isList ? 'list-row' : 'shelf-tile'}" data-story-key="${storyKeyAttr}">
+      ${cover}<div class="shelf-info"><h3><button class="shelf-title" onclick="${open}">${titleDisplay}</button></h3>
+      <p>${authorDisplay}</p><div class="shelf-meta">${metadataStats} · ${statusText}<span data-local-audio></span></div>
+      ${isList ? '' : fandomBadge + ratingRow + tagsHtml}</div>
+      <div class="story-list-actions">${optionsMenu}<button class="pr-btn-primary" onclick="${open}">Open</button></div>
+    </article>`;
 }
 
 // How many library cards are drawn at once. Raised by the "Show more" button
@@ -1708,7 +1668,7 @@ export function renderLibrary(skipAnimation = false) {
     grid._viewModeRestored = true;
     try {
       const savedMode = localStorage.getItem('pocketReaderLibraryMode');
-      const wantList = savedMode === 'list';
+      const wantList = savedMode !== 'grid';
       grid.classList.toggle('list-mode', wantList);
       const gridBtn = document.getElementById('library-mode-grid');
       const listBtn = document.getElementById('library-mode-list');
@@ -1790,6 +1750,12 @@ export function renderLibrary(skipAnimation = false) {
   grid.innerHTML = html;
 
   const cards = grid.querySelectorAll('.story-card');
+  cards.forEach(card => {
+    const label = card.querySelector('[data-local-audio]');
+    window.hasLocalStoryAudio?.(card.dataset.storyKey).then(hasAudio => {
+      if (label && hasAudio) label.textContent = ' · Audio on device';
+    }).catch(() => {});
+  });
   if (cards.length > 0 && !skipAnimation) {
     animate(cards, { opacity: [0, 1], y: ["20px", "0px"] }, { delay: stagger(0.04) });
   } else if (skipAnimation) {
@@ -1831,7 +1797,7 @@ export function updatePlayButtons() {
     if (!playBtn) return;
 
     let isPlayDisabled = false;
-    let playText = '&#9658; Play';
+    let playText = 'Open';
     if (cachingRefs.has(storyRef)) {
       if (storyRef === currentCachingRef) {
         if (currentCachedCount < 30) {
@@ -1861,31 +1827,103 @@ export function updatePlayButtons() {
 window.updatePlayButtons = updatePlayButtons;
 
 
+function deckStoryKey(story) {
+  return story && (story.storyKey || getStoryStableKey(story) || story.title);
+}
+
+function resumeEntry() {
+  const library = window.userProfile?.library || [];
+  const active = deckStoryKey(window.currentStory);
+  const history = new Map((window.userProfile?.history || []).map(item => [item.storyKey, Number(item.lastAt) || 0]));
+  const lastVisit = story => Math.max(Number(story.lastRead) || 0, history.get(deckStoryKey(story)) || 0);
+  return library.find(story => !story.isFinished && deckStoryKey(story) === active)
+    || library.filter(story => !story.isFinished && (history.has(deckStoryKey(story))
+      || story.progressChapter || story.progressParagraph || (!isCuratedStory(story) && lastVisit(story))))
+      .sort((a, b) => lastVisit(b) - lastVisit(a))[0];
+}
+
+async function openDeckStory(story, listen) {
+  const key = deckStoryKey(story);
+  if (listen && !window.isPlaying) window.preparePocketMobileMediaSession?.();
+  if (deckStoryKey(window.currentStory) !== key || !window.currentStory?.chapters?.length) {
+    await window.loadStory(key);
+  } else {
+    window.showView('reading-view');
+  }
+  if (listen && deckStoryKey(window.currentStory) === key && window.currentStory?.chapters?.length && !window.isPlaying) {
+    window.togglePlayState?.();
+  }
+}
+
+let savedDeckChapter = null;
+function readSavedDeckChapter(story, index) {
+  const key = deckStoryKey(story);
+  if (savedDeckChapter?.key === key && savedDeckChapter.index === index
+      && savedDeckChapter.updatedAt === story.updatedAt) return savedDeckChapter.result;
+  const result = (async () => {
+    const chapters = await window._loadStoryChapters(key, story)
+      || (key !== story.title && await window._loadStoryChapters(story.title, story));
+    const chapter = chapters?.[index];
+    return chapter && { title: chapter.title, paragraphs: chapter.paragraphs?.length || 0, total: chapters.length };
+  })();
+  savedDeckChapter = { key, index, updatedAt: story.updatedAt, result };
+  return result;
+}
+
 export function updateContinueReading() {
   const panel = document.getElementById('continue-reading-panel');
   if (!panel) return;
-  let library = window.userProfile.library || [];
-  const inProgress = library.filter((s) => !s.isFinished && (s.progressChapter > 0 || s.progressParagraph > 0));
-  inProgress.sort((a, b) => (b.lastRead || 0) - (a.lastRead || 0));
-  if (inProgress.length === 0) {
-    panel.innerHTML = `<p style="color:var(--text-muted);">No story currently in progress.</p>`;
-    return;
+  const story = resumeEntry();
+  const live = story && deckStoryKey(story) === deckStoryKey(window.currentStory);
+  const index = Number(live ? window.currentChapterIndex : story?.progressChapter) || 0;
+  const paragraph = Number(live ? window.currentParagraphIndex : story?.progressParagraph) || 0;
+  const chapters = live ? window.currentStory.chapters : story?.chapters;
+  const chapter = chapters?.[index];
+  const total = Math.max(index + 1, chapters?.length || Number(story?.totalChapters) || 1);
+  const part = chapter?.paragraphs?.length ? Math.min(1, paragraph / chapter.paragraphs.length) : 0;
+  const position = story ? Math.min(100, 100 * (index + part) / total) : 0;
+  const preferListen = window.userProfile?.settings?.resumeMode === 'listen';
+  panel.innerHTML = `<div class="deck-display">
+    <div class="deck-legend"><span><i aria-hidden="true"></i>${story ? 'Selected story' : 'Library input'}</span><span>${story ? 'CH ' + String(index + 1).padStart(2,'0') : 'Standby'}</span></div>
+    <h2>${story ? _escapeHtml(story.title || 'Untitled') : 'Open your first story.'}</h2>
+    <p>${story ? _escapeHtml(story.author || 'Unknown author') : 'Start with a file, a story link, or the curated shelves.'}</p>
+    <div class="deck-tuning" aria-hidden="true"><i></i></div>
+    <div class="deck-scale"><span>${story ? _escapeHtml(chapter?.title || 'Chapter ' + (index + 1)) : 'Chapter position'}</span><span>${story ? (index + 1) + ' / ' + total : '— / —'}</span></div>
+    </div><div class="deck-keys"></div>`;
+  const tuning = panel.querySelector('.deck-tuning');
+  tuning.style.setProperty('--position', position + '%');
+  if (story && !chapter && window._loadStoryChapters) {
+    const scale = panel.querySelector('.deck-scale');
+    readSavedDeckChapter(story, index).then(saved => {
+      if (!saved || !tuning.isConnected) return;
+      if (saved.title) scale.firstElementChild.textContent = saved.title;
+      scale.lastElementChild.textContent = (index + 1) + ' / ' + saved.total;
+      const fraction = saved.paragraphs ? Math.min(1, paragraph / saved.paragraphs) : 0;
+      tuning.style.setProperty('--position', (100 * (index + fraction) / saved.total) + '%');
+    }).catch(() => {});
   }
-  let html = '';
-  inProgress.slice(0, 10).forEach(story => {
-    const titleSafe = _escapeHtml(story.title || 'Untitled');
-    const storyKeyEncoded = encodeURIComponent(story.storyKey || getStoryStableKey(story)).replace(/'/g, "%27");
-    const authorDisplay = _escapeHtml(story.author || 'Unknown');
-    html += `<div class="continue-card" style="min-width:280px; flex-shrink:0; background:var(--panel-bg); border:1px solid var(--border-color); border-radius:8px; display:flex; padding:10px; gap:12px; cursor:pointer;" onclick="window.loadStory(decodeURIComponent('${storyKeyEncoded}'))">
-      <div class="continue-cover" style="width:60px; height:80px; background:var(--accent-blue); color:rgba(255,255,255,0.6); display:flex; align-items:center; justify-content:center; font-weight:bold; border-radius:4px;">${_getInitials(story.title)}</div>
-      <div class="continue-details" style="display:flex; flex-direction:column; justify-content:center;">
-        <h3 style="margin:0 0 4px 0; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;">${titleSafe}</h3>
-        <p style="margin:0;font-size:0.85rem;color:var(--text-muted);">by ${authorDisplay}</p>
-        <p style="margin:4px 0 0 0;font-size:0.8rem;color:var(--accent-blue-text);">Chapter ${(Number(story.progressChapter) || 0) + 1}${(story.isCached || story.audioCached) ? ' · Cached' : ''}</p>
-      </div>
-    </div>`;
-  });
-  panel.innerHTML = html;
+  const keys = panel.querySelector('.deck-keys');
+  const add = (label, action, primary = false) => {
+    const key = document.createElement('button');
+    key.type = 'button';
+    key.className = primary ? 'transport-key primary-key' : 'transport-key';
+    key.textContent = label;
+    key.addEventListener('click', action);
+    keys.append(key);
+  };
+  if (story) {
+    add('Read', () => openDeckStory(story, false), !preferListen);
+    add('Listen', () => openDeckStory(story, true), preferListen);
+    const status = document.createElement('small');
+    keys.append(status);
+    window.hasLocalStoryAudio?.(deckStoryKey(story)).then(available => {
+      status.textContent = available ? 'Audio saved on this device' : 'No saved audio';
+    }).catch(() => { status.textContent = 'Offline status unavailable'; });
+  } else {
+    add('Open file', () => window.triggerFileUpload(), true);
+    add('Paste link', () => document.getElementById('global-search')?.focus());
+    add('Browse stories', () => window.showView('hmofa-view'));
+  }
 }
 window.updateContinueReading = updateContinueReading;
 

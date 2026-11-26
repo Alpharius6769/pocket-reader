@@ -4,6 +4,7 @@ import { chromium, webkit } from '../tests/webkit-smoke/node_modules/playwright/
 
 const root = new URL('../', import.meta.url);
 const files = new Map([
+  ['/device_catalog.js', 'public/assets/js/device_catalog.js'],
   ['/device_setup.js', 'public/assets/js/device_setup.js'],
   ['/pocket_backend_policy.js', 'public/assets/js/pocket_backend_policy.js'],
   ['/assets/js/device_benchmark_worker.js', 'public/assets/js/device_benchmark_worker.js'],
@@ -86,6 +87,7 @@ try {
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(String(error)));
     await page.goto(url, { waitUntil: 'load' });
+    await page.evaluate(() => window.deferForDeviceSetup(() => { window.resumed = true; }));
     await page.click('#device-setup-start-btn');
     await page.waitForSelector('#device-setup-continue-btn:not([hidden])', { timeout: 30000 });
     const setup = await page.evaluate(() => JSON.parse(localStorage.getItem('pr_device_setup_v2')));
@@ -122,6 +124,7 @@ try {
       cpuWidths: setup?.cpuResults?.map((result) => result.threads),
       localOnly: setup?.localOnly === true,
       profileVisibleAfterDeviceSetup,
+      actionResumed: await page.evaluate(() => window.resumed === true),
       normalSettingAvailable: normalSettingAvailable && warningBeforeAdvanced === 0,
       blockedBeforeAck: blockedBeforeAck.open === false && /Before changing advanced settings/i.test(blockedBeforeAck.warning || ''),
       safeDiagnosticRan: safeRuns === 1,
@@ -138,7 +141,7 @@ try {
 console.log(JSON.stringify(results, null, 2));
 const passed = results.length === engines.length && results.every((result) => (
   result.localOnly
-  && result.profileVisibleAfterDeviceSetup
+  && !result.profileVisibleAfterDeviceSetup && result.actionResumed
   && result.normalSettingAvailable
   && result.blockedBeforeAck
   && result.safeDiagnosticRan

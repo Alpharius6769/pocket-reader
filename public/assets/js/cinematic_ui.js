@@ -81,35 +81,6 @@ function applyPersonalization() {
   applyMotionState();
 }
 
-function installAccountGateway() {
-  const cloudButton = document.getElementById('setup-cloud-btn');
-  if (cloudButton && !document.getElementById('setup-account-gateway')) {
-    cloudButton.hidden = true;
-    const gateway = document.createElement('div');
-    gateway.id = 'setup-account-gateway';
-    gateway.className = 'account-gateway';
-    gateway.innerHTML = `
-      <button class="account-option primary" type="button" onclick="window._setupCloudLogin()">${icon('log-in')}<span><strong>Continue with Google</strong><small>Sign in with your Google account to back up and sync.</small></span></button>
-      <label class="account-remember-login"><input id="setup-remember-login" type="checkbox" checked>Remember this device and resume this account when you return.</label>
-      <button class="account-option quiet" type="button" onclick="window.continueSetupAsGuest()">${icon('user')}<span><strong>Continue as guest</strong><small>Everything stays on this device until you sign in.</small></span></button>`;
-    cloudButton.after(gateway);
-    window.restoreSetupDraft?.();
-  }
-}
-
-window.continueSetupAsGuest = () => {
-  const profile = window.userProfile = window.userProfile || {};
-  profile.isLoggedIn = false;
-  delete profile.cloudEmail;
-  window.saveLocalData?.();
-  const status = document.getElementById('setup-cloud-status');
-  if (status) {
-    status.style.display = 'block';
-    status.textContent = 'Guest mode selected. You can sign in with Google later from Profile.';
-  }
-  document.getElementById('setup-complete-btn')?.scrollIntoView({ behavior: motionAllowed() ? 'smooth' : 'auto', block: 'center' });
-};
-
 function syncStatusMarkup() {
   const data = profile();
   const state = window.cloudSyncState || {};
@@ -216,7 +187,7 @@ function installSettingsSystem() {
     <label class="field-row"><span>Line height <output id="reader-line-output"></output></span><input id="reader-line-control" type="range" min="1.35" max="2.2" step="0.05"></label>
     <label class="field-row"><span>Paragraph spacing <output id="reader-spacing-output"></output></span><input id="reader-spacing-control" type="range" min="0.5" max="2.4" step="0.05"></label>
     <label class="field-row"><span>Alignment</span><select id="reader-alignment-control" class="settings-control"><option value="left">Left</option><option value="justify">Justified</option></select></label>`;
-  grid.appendChild(personalization);
+  document.getElementById('settings-display-heading')?.parentElement.appendChild(personalization);
 
   const experience = document.createElement('section');
   experience.className = 'settings-card';
@@ -300,7 +271,7 @@ window.updateReaderDrawerStatus = function updateReaderDrawerStatus(bufferState 
 };
 
 function relabelThemes() {
-  const labels = { slate: 'Anthrostate', dark: 'Midnight', light: 'Paper', 'high-contrast': 'High Contrast', colorblind: 'Colorblind Safe' };
+  const labels = { slate: 'Anthrostate', dark: 'Hi-Fi', light: 'Paper', 'high-contrast': 'High Contrast', colorblind: 'Colorblind Safe' };
   ['setup-theme', 'app-theme-select'].forEach((id) => {
     const select = document.getElementById(id);
     [...(select?.options || [])].forEach((option) => { if (labels[option.value]) option.textContent = labels[option.value]; });
@@ -333,35 +304,31 @@ function installPageHeadings() {
   document.querySelectorAll('.pr-btn-primary, .pr-btn-sub, .pr-btn-outline, .pr-btn-danger').forEach((button) => button.classList.add('elevated-control'));
 }
 
-function installHomeStage() {
-  const home = document.getElementById('home-view');
-  const intro = home?.querySelector(':scope > .panel');
-  if (!home || !intro || document.getElementById('home-virtue-stage')) return;
-  intro.classList.add('home-command-header');
-  intro.querySelector('h1').textContent = 'Tonight\'s reading';
-  intro.querySelector('p').textContent = 'Continue a story, choose what comes next, or settle in for narration.';
-  const stage = document.createElement('aside');
-  stage.id = 'home-virtue-stage';
-  stage.className = 'home-virtue-stage';
-  stage.innerHTML = `
-    <div class="home-virtue-wrapper">
-      <img src="assets/img/virtue_happy_holding_bubble.webp" alt="Virtue">
-      <span class="home-virtue-bubble-text">Welcome!</span>
-    </div>
-  `;
-  intro.appendChild(stage);
-}
+let deckSession = null;
+
+window.updateDeckTransport = (playing = window.isPlaying) => {
+  const row = document.getElementById('deck-mini');
+  if (!row) return;
+  const story = window.currentStory;
+  if (playing) deckSession = story;
+  row.hidden = !story || deckSession !== story || window.currentActiveView === 'reading-view';
+  if (row.hidden) return;
+  row.querySelector('[data-deck-return]').textContent = story.title + ' · Chapter ' + ((window.currentChapterIndex || 0) + 1);
+  row.querySelector('[data-deck-toggle]').textContent = playing ? 'Pause' : 'Resume';
+};
 
 function install() {
+  document.querySelector('[data-deck-return]')?.addEventListener('click', () => window.showView('reading-view'));
+  document.querySelector('[data-deck-toggle]')?.addEventListener('click', () => window.togglePlayState());
   installInlineIconSprite();
-  installAccountGateway();
+
   installAccountCenter();
   installSettingsSystem();
   installReaderDrawers();
   relabelThemes();
   replaceControlGlyphs();
   installPageHeadings();
-  installHomeStage();
+
   applyPersonalization();
   renderAccountCenter();
 }

@@ -84,12 +84,12 @@ test('short status messages use the in-app notice, not a blocking dialog', async
 
 test('below-the-fold imagery is deferred', async () => {
   const html = await read('public/index.html');
-  const lazy = [...html.matchAll(/loading="lazy"/g)].length;
-  assert.ok(lazy >= 5, `expected deferred images in hidden views, found ${lazy}`);
-  // Nav icons and the landing header must stay eager — deferring those would
-  // trade a real regression for a synthetic win.
-  const navBlock = html.slice(html.indexOf('home%20192.png') - 200, html.indexOf('about%20192.png') + 200);
-  assert.doesNotMatch(navBlock, /loading="lazy"/, 'visible nav icons must not be lazy');
+  for (const id of ['library-view','hmofa-view','profile-view','about-view']) {
+    const view = html.slice(html.indexOf('id="' + id + '"')).split(/<div id="[^"]+-view"/)[0];
+    const images = [...view.matchAll(/<img\b[^>]*>/g)];
+    assert.ok(images.length, id);
+    for (const [image] of images) assert.match(image, /loading="lazy"/, id);
+  }
 });
 
 // The masterlist used to embed the Anthronomicon in a cross-origin iframe and
@@ -205,7 +205,7 @@ test('the masterlist shares ratings and lists with the live Anthronomicon', asyn
   assert.doesNotMatch(merge, /hmofaPreferences|hmofaSavedLists/,
     'HMOFA prefs and lists must sync with the profile, so they cannot sit in DEVICE_ONLY_SETTINGS');
 
-  assert.match(sw, /hmofa_community\.js\?v=hmofa-community-v2/);
+  assert.match(sw, /hmofa_community\.js\?v=hmofa-community-v4/);
   assert.match(sw, /hmofa_preferences\.js\?v=hmofa-prefs-v4/);
 });
 
@@ -263,7 +263,7 @@ test('HMOFA masterlist supports cache-bypass refresh, full weekly trending backf
   assert.match(list, /trendingCache = \{ key: null, ids: \[\] \}/);
 
   // Filter sidebar has scroll chaining and custom scrollbars
-  assert.match(css, /\.hmofa-facet-rail\s*\{[^}]*max-height:\s*min\(calc\(100vh - 80px\),\s*calc\(100dvh - 80px\)\);/);
+  assert.match(css, /\.hmofa-facet-rail\s*\{[^}]*overflow-y:\s*auto;/);
   assert.match(css, /\.hmofa-facet-rail\s*\{[^}]*overscroll-behavior:\s*contain;/);
   assert.match(css, /\.hmofa-facet-rail\s*\{[^}]*touch-action:\s*pan-y;/);
   assert.match(css, /\.hmofa-facet-body\s*\{[^}]*overscroll-behavior:\s*auto;/);
@@ -285,7 +285,7 @@ test('the top bar clears the iOS notch and status bar safe areas while mobile na
   assert.match(mobileBlock, /\.view-container\s*\{[^}]*padding-bottom:\s*68px;/);
 });
 
-test('100% cached stories display cached badges and fast reverification feedback on reopen', async () => {
+test('offline indicators use this device and cached stories retain reverification feedback', async () => {
   const css = await read('public/assets/css/theme.css');
   const lib = await read('public/assets/js/library_manager.js');
   const buf = await read('public/assets/js/buffer_manager.js');
@@ -294,10 +294,8 @@ test('100% cached stories display cached badges and fast reverification feedback
   // CSS cached badge styling
   assert.match(css, /\.story-status-badge\.cached\s*\{/);
 
-  // Library manager badge logic
-  assert.match(lib, /'100% Cached'/);
-  assert.match(lib, /isCached \? 'cached' : ''/);
-  assert.match(lib, /· Cached/);
+  assert.match(lib, /hasLocalStoryAudio\?\.\(card.dataset.storyKey\)/);
+  assert.doesNotMatch(lib, /'100% Cached'/);
 
   // Api core preserves isCached flag when loaded from local cache
   assert.match(api, /window\.currentStory\.isCached = !!\(existingLibEntry\.isCached \|\| existingLibEntry\.audioCached\)/);

@@ -1,5 +1,5 @@
 import { animate } from './motion_lite.js';
-import { BLOCKING_OVERLAY_IDS } from './experience_coordinator.js?v=experience-v17';
+import { BLOCKING_OVERLAY_IDS } from './experience_coordinator.js?v=experience-v19';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
 
 // Heavy containers that are fully rebuilt every time their view is entered.
@@ -57,7 +57,8 @@ export function showView(viewId) {
         activeEl.classList.add('active-view');
         animate(activeEl, { opacity: [0, 1], y: ["20px", "0px"] }, { duration: 0.3, easing: [0.22, 1, 0.36, 1] });
       }
-      window.currentActiveView = viewId; // diagnostics.js tags log entries with the active view
+      window.currentActiveView = viewId;
+      window.updateDeckTransport?.(); // diagnostics.js tags log entries with the active view
 
       // First-visit tips for this page (skipped once dismissed; re-enable in Settings).
       if (typeof window._maybeShowPageTips === 'function') window._maybeShowPageTips(viewId);
@@ -65,7 +66,10 @@ export function showView(viewId) {
       document.querySelectorAll('.nav-btn').forEach((btn) => {
         btn.classList.remove('active-view');
         const clickAction = btn.getAttribute('onclick');
-        if (clickAction && clickAction.includes(viewId)) {
+        const section = viewId === 'search-view' ? 'hmofa-view' : viewId === 'away-mode-view' ? 'library-view' : viewId;
+        btn.removeAttribute('aria-current');
+        if (clickAction && clickAction.includes(section)) {
+          btn.setAttribute('aria-current', 'page');
           btn.classList.add('active-view');
         }
       });
@@ -74,7 +78,7 @@ export function showView(viewId) {
       // active, and close the popover after any navigation.
       const _moreBtn = document.getElementById('nav-more-btn');
       if (_moreBtn) {
-        const secondaryViews = ['search-view', 'hmofa-view', 'settings-view', 'about-view', 'away-mode-view'];
+        const secondaryViews = ['settings-view', 'about-view'];
         _moreBtn.classList.toggle('active-view', secondaryViews.includes(viewId));
       }
       if (typeof window.closeNavMore === 'function') window.closeNavMore();
@@ -115,6 +119,7 @@ export function showView(viewId) {
       }
 
       if (viewId === 'home-view') {
+        window.updateContinueReading?.();
         if (typeof window.updateBookmarksFolder === 'function') window.updateBookmarksFolder();
       }
 
@@ -145,7 +150,7 @@ export function showView(viewId) {
       if (viewId === 'hmofa-view') {
         // The catalog is ~640 KB gzipped, so it is fetched on first open rather
         // than at launch for a view most sessions never visit.
-        window.ensureHmofaMasterlistLoaded?.();
+        window.ensureHmofaMasterlistLoaded?.().catch(() => { /* catalog view displays the retry action */ });
       }
 
       if (viewId === 'reading-view') {
@@ -175,18 +180,7 @@ export function showView(viewId) {
       if (vc && viewId !== 'reading-view') vc.scrollTo(0, 0);
     };
 
-    if (document.startViewTransition) {
-      const transition = document.startViewTransition(() => {
-        try { doSwitch(); } catch (e) { console.error('View transition error:', e); }
-      });
-      // Some browsers can exceed the View Transition DOM-update
-      // budget during startup. The view is already switched; consume the
-      // non-fatal timeout so it does not become an app-level runtime error.
-      [transition.ready, transition.updateCallbackDone, transition.finished]
-        .forEach((phase) => phase?.catch(() => {}));
-    } else {
-      doSwitch();
-    }
+    doSwitch();
   } catch (e) {
     console.error('Error switching view:', e);
   }
@@ -771,6 +765,8 @@ function _settleScrollTo(el) {
 }
 
 export function updateReaderUIText() {
+  window.updateDeckTransport?.();
+  if (window.currentActiveView === 'home-view') window.updateContinueReading?.();
   if (!window.currentStory) return;
 
   const currentChapter = window.currentStory.chapters[window.currentChapterIndex];
@@ -1026,11 +1022,15 @@ window.showSettingsModal = showSettingsModal;
 // interrupts audio focus — a poor fit for "still caching, 12 of 20 ready".
 // Falls back to alert() only if the companion is unavailable, so a message is
 // never silently lost.
+let noticeTimer;
 export function pocketNotify(message, durationMs = 5000) {
   const text = String(message || '').trim();
   if (!text) return;
-  if (typeof window.virtueSpeak === 'function') {
-    window.virtueSpeak(text, durationMs);
+  const line = document.getElementById('deck-notice');
+  if (line) {
+    clearTimeout(noticeTimer);
+    line.textContent = text;
+    noticeTimer = setTimeout(() => { line.textContent = ''; }, durationMs);
     return;
   }
   if (typeof alert === 'function') alert(text);
@@ -1500,7 +1500,7 @@ window._maybeShowPageTips = function(viewId) {
   _clearTip();
   const token = ++_tipSeq;
   const tips = _TIPS_BY_VIEW[viewId];
-  if (!tips || _tipDone(viewId)) return;
+  if (!tips || _tipDone(viewId) || prLocal.getItem('pr_deck_tours') !== 'enabled') return;
   let waited = 0;
   const start = () => {
     if (token !== _tipSeq) return;                       // navigated away
@@ -1599,6 +1599,7 @@ function _renderTip(view, tips, idx, tip, target, token) {
 
 // Re-enable all page tips (called from the Settings button).
 window.resetTips = function() {
+  prLocal.setItem('pr_deck_tours', 'enabled');
   try {
     Object.keys(_TIPS_BY_VIEW).forEach((v) => localStorage.removeItem('pr_tips_' + v));
   } catch (e) {}
@@ -1736,7 +1737,7 @@ if ('serviceWorker' in navigator) {
     // We deliberately do NOT reload on `controllerchange`. Isolation is entered
     // explicitly through the ?tts_fast=1 narration handoff so ordinary account
     // and OAuth pages retain their popup relationship.
-    const swUrl = new URL('sw.js?v=350', document.baseURI).href;
+    const swUrl = new URL('sw.js?v=356', document.baseURI).href;
     const swFallbackUrl = new URL('sw.js', document.baseURI).href;
     const registrationPromise = window.__prServiceWorkerRegistration || navigator.serviceWorker
     .register(swUrl)
@@ -1786,20 +1787,10 @@ function _readFavInputs(prefix) {
 const SETUP_DRAFT_STORAGE_KEY = 'pr_setup_draft_v1';
 const SETUP_AUTH_STORAGE_KEY = 'pr_setup_auth_v1';
 const DEVICE_PROFILE_HANDOFF_KEY = 'pr_device_profile_handoff_v1';
-const SETUP_DRAFT_FIELD_IDS = [
-  'setup-username', 'setup-theme', 'setup-narrator-pref',
-];
-
 function _readSetupDraft() {
-  const values = {};
-  SETUP_DRAFT_FIELD_IDS.forEach((id) => {
-    const element = document.getElementById(id);
-    if (element) values[id] = element.value;
-  });
-  const rememberLogin = document.getElementById('setup-remember-login')?.checked;
   return {
-    values,
-    rememberLogin: rememberLogin !== false,
+    resumeMode: document.querySelector('input[name="resume-mode"]:checked')?.value,
+    rememberLogin: document.getElementById('setup-remember-login')?.checked !== false,
   };
 }
 
@@ -1811,10 +1802,8 @@ function _restoreSetupDraft() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETUP_DRAFT_STORAGE_KEY) || 'null');
     if (!saved || typeof saved !== 'object') return false;
-    Object.entries(saved.values || {}).forEach(([id, value]) => {
-      const element = document.getElementById(id);
-      if (element && value != null) element.value = String(value);
-    });
+    const choice = document.getElementById(saved.resumeMode === 'listen' ? 'setup-listen' : 'setup-read');
+    if (choice) choice.checked = true;
     const remember = document.getElementById('setup-remember-login');
     if (remember && typeof saved.rememberLogin === 'boolean') remember.checked = saved.rememberLogin;
     return true;
@@ -1834,7 +1823,7 @@ function _restoreSetupAccountState() {
     if (statusEl) {
       statusEl.style.display = 'block';
       statusEl.innerHTML = 'Signed in as <strong>' + _escapeHtml(auth.email)
-        + '</strong>. Your setup choices are still here; choose Save and Start Reading to finish and sync them.';
+        + '</strong>. Your setup choices are still here; choose Continue to finish and sync them.';
     }
     if (btn) btn.textContent = 'Switch Account';
     return true;
@@ -1850,10 +1839,10 @@ function _restoreFirstTimeSetupState() {
 }
 
 document.addEventListener('input', (event) => {
-  if (SETUP_DRAFT_FIELD_IDS.includes(event.target?.id)) _persistSetupDraft();
+  if (event.target?.name === 'resume-mode') _persistSetupDraft();
 });
 document.addEventListener('change', (event) => {
-  if (SETUP_DRAFT_FIELD_IDS.includes(event.target?.id) || event.target?.id === 'setup-remember-login') _persistSetupDraft();
+  if (event.target?.name === 'resume-mode' || event.target?.id === 'setup-remember-login') _persistSetupDraft();
 });
 setTimeout(_restoreFirstTimeSetupState, 100);
 setTimeout(_restoreFirstTimeSetupState, 1200);
@@ -1887,6 +1876,7 @@ window._setupCloudLogin = async function() {
   // a frozen screen, especially on mobile/PWA.
   const reopenSetup = modal?.style.display === 'flex' || getComputedStyle(modal || document.body).display === 'flex';
   if (reopenSetup && modal) {
+    window.deactivatePocketModal?.(modal);
     modal.style.display = 'none';
     modal.setAttribute('aria-hidden', 'true');
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -1919,7 +1909,7 @@ window._setupCloudLogin = async function() {
     if (reopenSetup && modal) {
       _restoreSetupDraft();
       if (typeof window.activatePocketModal === 'function') {
-        window.activatePocketModal(modal, '#setup-username');
+        window.activatePocketModal(modal, '#first-time-setup-title');
       } else {
         modal.style.display = 'flex';
         modal.setAttribute('aria-hidden', 'false');
@@ -1932,44 +1922,11 @@ window.completeFirstTimeSetup = () => {
   const p = window.userProfile = window.userProfile || {};
   p.settings = p.settings || {};
 
-  const username = (document.getElementById('setup-username')?.value || '').trim() || 'Guest Reader';
-  const companion = 'virtue';
-  const theme = document.getElementById('setup-theme')?.value || 'dark';
-  const narratorPref = document.getElementById('setup-narrator-pref')?.value || '';
-
-  // Canonical profile fields — about-you / goals live on Profile Edit now.
-  p.displayName = username;
-  p.companion = companion;
-  p.settings.theme = theme;
-  p.settings.companion = companion;
-  if (!p.settings.readerFontFamily) p.settings.readerFontFamily = "'Literata Local', Georgia, serif";
-  ['displayName', 'companion'].forEach((field) => window.stampProfileField?.(field));
-  ['theme', 'companion', 'readerFontFamily'].forEach((field) => window.stampSyncedSetting?.(field));
-
-  if (narratorPref === 'Male' || narratorPref === 'Female') {
-    const defaultVoice = narratorPref === 'Male' ? 'charles' : 'alba';
-    const voiceSelector = document.getElementById('voice-selector');
-    if (voiceSelector) {
-      voiceSelector.value = defaultVoice;
-      if (typeof window.onVoiceSelectionChange === 'function') {
-        window.onVoiceSelectionChange(defaultVoice);
-      }
-    }
-  }
-
-  // Sync the matching Settings controls so they reflect the wizard choices.
-  const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined && val !== '') el.value = val; };
-  set('app-theme-select', theme);
-  set('companion-select', companion);
-  set('reading-font-select', p.settings.readerFontFamily);
-
-  if (typeof window.updateDisplayName === 'function') window.updateDisplayName(username);
-  if (typeof window.applySettings === 'function') window.applySettings();
-  if (typeof window.renderProfileExtras === 'function') window.renderProfileExtras();
-  // The wizard is a deliberate settings choice — stamp it so it wins over an
-  // older cloud profile on the next cross-device sync (Issue 9).
-  if (typeof window.markSettingsEdited === 'function') window.markSettingsEdited();
-  if (typeof window.saveLocalData === 'function') window.saveLocalData();
+  p.settings.resumeMode = document.querySelector('input[name="resume-mode"]:checked')?.value || 'read';
+  window.stampSyncedSetting?.('resumeMode');
+  if (!p.displayName) p.displayName = 'Guest Reader';
+  window.saveLocalData?.();
+  window.updateContinueReading?.();
 
   // Verify active authentication state so newly logged-in accounts (via Google OAuth or email)
   // are properly attached and synchronized before completing onboarding.
@@ -1978,6 +1935,7 @@ window.completeFirstTimeSetup = () => {
     const activeEmail = p.cloudEmail || sessionOwner;
     if (activeEmail && activeEmail !== 'Guest Reader') {
       prLocal.setItem('pr_profile_owner', activeEmail);
+      prLocal.setItem('pr_remember_login', String(document.getElementById('setup-remember-login')?.checked !== false));
       p.isLoggedIn = true;
       p.cloudEmail = activeEmail;
       window._cloudPushAllowed = true;
@@ -2006,10 +1964,7 @@ window.completeFirstTimeSetup = () => {
   if (typeof window._maybeShowPWABanner === 'function') window._maybeShowPWABanner();
   setTimeout(() => window.maybeShowDeviceSupportNotice?.(), 250);
 
-  if (companion === 'virtue' && typeof window.triggerVirtue === 'function') {
-    window.triggerVirtue('virtue_waving_bubble');
-    window.virtueSpeak("All set! I'm so excited to start reading with you, " + username + "!", 5000);
-  }
+
 };
 
 // "Skip for now" — nothing is required; set a sensible default name and dismiss.
@@ -2019,7 +1974,7 @@ window.skipFirstTimeSetup = () => {
   if (!p.displayName) { p.displayName = 'Guest Reader'; if (typeof window.updateDisplayName === 'function') window.updateDisplayName('Guest Reader'); }
   if (p.companion === undefined) p.companion = 'virtue';
   if (p.settings.companion === undefined) p.settings.companion = p.companion;
-  if (p.settings.theme === undefined) p.settings.theme = 'slate';
+  if (p.settings.theme === undefined) p.settings.theme = 'dark';
   if (p.settings.touchTargetSize === undefined) p.settings.touchTargetSize = false;
   if (typeof window.saveLocalData === 'function') window.saveLocalData();
   prLocal.setItem('pr_setup_complete', 'true');

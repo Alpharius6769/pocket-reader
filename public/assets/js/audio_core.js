@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v48';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v50';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -2165,6 +2165,7 @@ function _updatePlayButton(playing) {
   if (btn && !btn.dataset.prevHtml) {
     btn.innerHTML = playing ? 'Pause' : 'Play';
   }
+  window.updateDeckTransport?.(playing);
   _updateMediaSession(playing);
 }
 
@@ -3965,6 +3966,9 @@ export function togglePlayState() {
     return;
   }
 
+  if (!window.isPlaying && _isNeuralEngine(_resolveActiveEngine())
+      && window.deferForDeviceSetup?.(() => togglePlayState())) return;
+
   // Away Mode guard: block playback while Permanent mode is actively caching
   if (!window.isPlaying && window.BufferManager?.isActive &&
       window.BufferManager.mode === 'Permanent' && !window.BufferManager.paused) {
@@ -4689,7 +4693,7 @@ async function _preloadNextParagraphAudio() {
 
   const title = story.title;
   const storyRef = story.storyKey || window.getStoryStableKey?.(story) || title;
-  const selVoice = document.getElementById('voice-selector')?.value || POCKET_DEFAULT_VOICE;
+  const selVoice = _effectiveVoiceForEngine(engine);
   const cleanVoice = resolveVoiceWithSentiment(engine, selVoice, text, {
     storyTitle: title, chapIdx: next.c, paraIdx: next.p,
   });

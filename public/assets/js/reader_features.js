@@ -340,13 +340,13 @@ function queueMarkup(data) {
     if (key && !byKey.has(key)) byKey.set(key, story);
   }
   const stories = data.readingQueue.map((key) => byKey.get(key)).filter(Boolean);
-  if (!stories.length) return '<div class="empty-state"><strong>Your queue is clear.</strong><span>Add stories from the library when you want a deliberate next read.</span></div>';
+  if (!stories.length) return '<div class="empty-state"><strong>Your queue is clear.</strong><span>Queue a story from its library menu.</span></div>';
   return stories.map((story, index) => `<article class="workflow-row"><button class="row-main" onclick="window.loadStory(${inlineArg(stableKey(story) || story.title || story.url || '')})"><strong>${esc(story.title)}</strong><span>${esc(story.author || 'Unknown author')}</span></button><div class="row-actions"><button class="icon-btn" title="Move up" aria-label="Move up" onclick="moveReadingQueue(${inlineArg(stableKey(story))},-1)" ${index === 0 ? 'disabled' : ''}>${window.prIcon('chevron-up')}</button><button class="icon-btn" title="Move down" aria-label="Move down" onclick="moveReadingQueue(${inlineArg(stableKey(story))},1)" ${index === stories.length - 1 ? 'disabled' : ''}>${window.prIcon('chevron-down')}</button></div></article>`).join('');
 }
 
 function historyMarkup(data) {
   const recent = [...data.history].sort((a, b) => Number(b.lastAt) - Number(a.lastAt)).slice(0, 5);
-  if (!recent.length) return '<div class="empty-state"><strong>No history yet.</strong><span>Stories appear here after you open them.</span></div>';
+  if (!recent.length) return '<div class="empty-state"><span>No stories opened yet.</span></div>';
   return recent.map((item) => `<button class="history-item" onclick="window.loadStory(${inlineArg(item.storyKey || item.title)})"><strong>${esc(item.title)}</strong><span>Chapter ${Number(item.progressChapter) + 1} | ${new Date(item.lastAt).toLocaleDateString()}</span></button>`).join('');
 }
 
@@ -391,8 +391,7 @@ export function renderWorkflowSurfaces() {
   const data = ensureReaderFeatures();
   const home = document.getElementById('home-workflow-band');
   if (home) {
-    const goal = goalProgress(data);
-    home.innerHTML = `<section class="workflow-panel"><header><div><span class="eyebrow">Up next</span><h2>Reading queue</h2></div><button class="pr-btn-sub" onclick="showView('library-view')">Browse library</button></header><div class="workflow-list">${queueMarkup(data)}</div></section><section class="workflow-panel"><header><div><span class="eyebrow">Return to</span><h2>Recent history</h2></div></header><div class="history-grid">${historyMarkup(data)}</div></section><section class="goal-panel"><span class="eyebrow">Weekly rhythm</span><strong>${goal.minutes} / ${goal.target} min</strong><div class="progress-track"><span style="width:${goal.pct}%"></span></div><small>${goal.pct}% of your goal</small></section>`;
+    home.innerHTML = `<section class="workflow-panel"><header><h2>Reading queue</h2><button class="pr-btn-sub" onclick="showView('library-view')">Library</button></header><div class="workflow-list">${queueMarkup(data)}</div></section><section class="workflow-panel"><header><h2>Recently opened</h2></header><div class="history-grid">${historyMarkup(data)}</div></section>`;
   }
   const profileTarget = document.getElementById('profile-insights');
   if (profileTarget) {
