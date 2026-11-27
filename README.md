@@ -2,7 +2,7 @@
 
 Pocket Reader is a phone-first story reader that narrates in the browser. Stories, generated audio, model files, and settings stay on the device. There are no accounts and no cloud profile.
 
-This branch (`rebuild/v2`) is the v2 rebuild: a Svelte 5 interface in `web/` running on the existing narration cores in `public/assets/js/`. Until it is merged to `main`, GitHub Pages still serves the previous shell; the v2 build is previewed at `https://pocket-reader-next.alpharius67.workers.dev`.
+This is the v2 rebuild: a Svelte 5 interface in `web/` running on the existing narration cores in `public/assets/js/`. It is what GitHub Pages serves. A separate preview deployment at `https://pocket-reader-next.alpharius67.workers.dev` is used to try a build before it reaches `main`.
 
 ## The app
 
@@ -102,7 +102,7 @@ npm run build
 - **Frontend:** a push to `main` runs the tests and, if they pass, builds `dist/` and publishes it to GitHub Pages.
 - **Backend:** `.github/workflows/deploy-backend.yml` deploys `backend/` to the Hugging Face Space.
 - **Worker:** not deployed by a push. Run `wrangler deploy` from `worker/`.
-- **v2 preview:** `npm run build`, then `wrangler deploy` from `preview/`. Its origin is listed in `ALLOWED_ORIGINS` in `worker/wrangler.toml` and should be removed there at cutover.
+- **Preview:** `npm run build`, then `wrangler deploy` from `preview/`. Its origin is listed in `ALLOWED_ORIGINS` in `worker/wrangler.toml`; remove it there if the preview is retired.
 
 ## Backend API
 
