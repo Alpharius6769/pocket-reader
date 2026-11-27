@@ -11,6 +11,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Pocket Reader" />
     <meta name="description" content="Stories, read aloud on your phone." />
+    <!-- GitHub Pages sends no custom headers, so public/_headers never reaches
+         a browser there. This meta is the only way to set the policy. -->
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./assets/img/pocket_reader_icon-logo.jpeg" />
     <link rel="preload" href="./assets/fonts/literata-400.woff2" as="font" type="font/woff2" crossorigin />
