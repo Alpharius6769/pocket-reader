@@ -1,7 +1,7 @@
 {
   "api_core.js": {
-    "version": "search-v44",
-    "sha256": "c3e7448185e8d3f0"
+    "version": "search-v48",
+    "sha256": "ab725eed58745e5c"
   },
   "audio_core.js": {
     "version": "audio-v260",
@@ -36,7 +36,7 @@
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-381",
+    "version": "sw-383",
     "sha256": "b5a8a08242bd18b8"
   },
   "hmofa_catalog_core.js": {
@@ -64,15 +64,15 @@
     "sha256": "6a444a978159c6dc"
   },
   "library_manager.js": {
-    "version": "library-v111",
-    "sha256": "7555dcb384e5f04c"
+    "version": "library-v113",
+    "sha256": "64bf45d886b58e78"
   },
   "memory_headroom_worker.js": {
     "version": "memory-probe-v1",
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-381",
+    "version": "sw-383",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
@@ -84,7 +84,7 @@
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-381",
+    "version": "sw-383",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -116,7 +116,7 @@
     "sha256": "7d3865f6619784e4"
   },
   "sw.js": {
-    "version": "sw-381",
-    "sha256": "923f023d3453300c"
+    "version": "sw-383",
+    "sha256": "695819fe0686c3b0"
   }
 }

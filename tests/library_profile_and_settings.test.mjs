@@ -1,4 +1,4 @@
-// Guards for the curated-library split, first-run modal, cache manager,
+// Guards for the curated-story retirement, first-run modal, cache manager,
 // diagnostics clarity, and the feedback link.
 
 import test from 'node:test';
@@ -7,24 +7,26 @@ import { readFile } from 'node:fs/promises';
 
 const read = (p) => readFile(p, 'utf8');
 
-test('curated stories do not unlock First Edition or Hoarder', async () => {
-  // Twenty stories ship in every library at launch. Counting them handed out
-  // First Edition and Hoarder Bronze/Silver for installing the app.
+test('the bundled curated stories are gone, and purged from existing libraries', async () => {
+  // Retired 2026-11-26 at the owner's request: no seeding, no curated shelf,
+  // no Curated Author achievement, no fetch path.
   const source = await read('public/assets/js/library_manager.js');
-  assert.match(source, /export function isCuratedStory/);
-  assert.match(source, /const ownLibrary = window\.userProfile\.library\.filter\(\(s\) => !isCuratedStory\(s\)\)/);
+  assert.doesNotMatch(source, /seedCuratedLibrary|isCuratedStory|curated_author|curatedAuthor|filter === 'curated'/);
+  // Copies already in a library are dropped on load with their stored chapters,
+  // by the sanitize pass loadLocalData runs with purgeStorage.
+  const sanitize = source.slice(source.indexOf('function sanitizeProfileLibrary('), source.indexOf('window.sanitizeProfileLibrary ='));
+  assert.match(sanitize, /const retired = isRetiredCuratedStory\(story\);/);
+  assert.match(sanitize, /if \(retired \|\| isWithdrawnLibraryStory\(story\)\)/);
+  // Not tombstoned: adding the same work from AO3 later must still work.
+  assert.match(sanitize, /if \(!retired\) _markDeletedStory\(target, story\);/);
+  const retiredFn = source.slice(source.indexOf('function isRetiredCuratedStory('), source.indexOf('window.isRetiredCuratedStory'));
+  assert.match(retiredFn, /story\.source === 'curated'/);
+  assert.match(retiredFn, /startsWith\('\/api\/library\/curated\/'\)/);
+  // First Edition and Unread now simply count the whole library.
   assert.match(source, /stats\.firstStory = ownLibrary\.length > 0/);
-  assert.match(source, /stats\.unread = ownLibrary\.filter/);
-  // Favourites still counts the whole library on purpose: favouriting a
-  // curated story is a deliberate act by the reader.
-  assert.match(source, /stats\.favorites = window\.userProfile\.library\.filter/);
-});
-
-test('the curated tag is backfilled onto older profiles', async () => {
-  // Profiles created before the tag existed hold these stories untagged, which
-  // would keep them counting toward achievements and hide them from the tab.
-  const source = await read('public/assets/js/library_manager.js');
-  assert.match(source, /if \(existing\.source !== 'curated'\)[\s\S]{0,120}existing\.source = 'curated'/);
+  const api = await read('public/assets/js/api_core.js');
+  assert.doesNotMatch(api, /startsWith\('\/api\/library\/curated\/'\)/);
+  assert.doesNotMatch(api, /CURATED_FETCH_FAILED/);
 });
 
 test('cache manager pin and delete scan one story, not the whole store', async () => {
@@ -121,7 +123,7 @@ test('the boot chain that hangs off the profile read is still intact', async () 
   // These all live INSIDE loadLocalData, so the missing call disabled every one
   // of them for everyone, not just local persistence.
   assert.ok(!body.includes('checkCloudSyncOnStartup'), 'cloud sync was retired');
-  for (const step of ['seedCuratedLibrary()', '_loadUserAvatar', 'pr_engine_auto_detected']) {
+  for (const step of ['sanitizeProfileLibrary(window.userProfile, { purgeStorage: true })', '_loadUserAvatar', 'pr_engine_auto_detected']) {
     assert.ok(body.includes(step), `${step} must still run as part of the profile read`);
   }
 });

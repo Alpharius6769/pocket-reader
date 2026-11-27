@@ -1,7 +1,8 @@
 /*
  * Pocket Reader v2 tokens.
- * Direction: a bedside reading lamp. Warm paper by day, warm near-black (OLED) by
- * night, one accent taken from Virtue's coat. Type is the system face so Dynamic
+ * Direction: slate gray with dark red highlights (owner's choice, 2026-11-26).
+ * Light slate by day, deep slate by night; the red is for fills and accents,
+ * with a lighter red for accent text on dark slate so it stays legible. Type is the system face so Dynamic
  * Type and SF optical sizes come for free; stories are set in Literata.
  */
 
@@ -26,29 +27,29 @@
 
 :root {
   color-scheme: light;
-  --bg: #f6f1e9;
-  --bg-elev: #fffcf7;
-  --bg-elev-2: #f0e9de;
-  --bg-sunk: #ebe3d6;
-  --bg-glass: rgb(250 246 239 / 0.78);
-  --ink: #1f1a15;
-  --ink-2: #5b5248;
-  --ink-3: #776c60;
-  --line: rgb(31 26 21 / 0.12);
-  --line-strong: rgb(31 26 21 / 0.22);
-  --accent: #b94a22;
-  --accent-ink: #9e3d18;
+  --bg: #e7ebef;
+  --bg-elev: #f6f8fa;
+  --bg-elev-2: #dce2e8;
+  --bg-sunk: #d2d9e0;
+  --bg-glass: rgb(236 240 244 / 0.8);
+  --ink: #1a2027;
+  --ink-2: #47525e;
+  --ink-3: #5f6b78;
+  --line: rgb(26 32 39 / 0.12);
+  --line-strong: rgb(26 32 39 / 0.22);
+  --accent: #9b1c24;
+  --accent-ink: #8a1820;
   --accent-on: #ffffff;
-  --accent-soft: #f5ddd0;
+  --accent-soft: #f0d5d7;
   --hoodie: #4f6f9f;
   --hoodie-soft: #dde6f2;
   --ok: #2f7a47;
   --warn: #9a6512;
   --danger: #b3261e;
-  --highlight: rgb(185 74 34 / 0.12);
-  --scrim: rgb(20 16 12 / 0.38);
-  --shadow-1: 0 1px 2px rgb(40 28 16 / 0.08), 0 2px 8px rgb(40 28 16 / 0.06);
-  --shadow-2: 0 6px 24px rgb(40 28 16 / 0.16), 0 1px 3px rgb(40 28 16 / 0.1);
+  --highlight: rgb(155 28 36 / 0.12);
+  --scrim: rgb(12 16 20 / 0.4);
+  --shadow-1: 0 1px 2px rgb(20 28 36 / 0.08), 0 2px 8px rgb(20 28 36 / 0.06);
+  --shadow-2: 0 6px 24px rgb(20 28 36 / 0.16), 0 1px 3px rgb(20 28 36 / 0.1);
 
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, system-ui, sans-serif;
@@ -89,26 +90,26 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #0e0c0a;
-    --bg-elev: #1a1714;
-    --bg-elev-2: #24201b;
-    --bg-sunk: #050403;
-    --bg-glass: rgb(22 19 16 / 0.78);
-    --ink: #f3ece2;
-    --ink-2: #bdb2a4;
-    --ink-3: #978b7d;
-    --line: rgb(243 236 226 / 0.1);
-    --line-strong: rgb(243 236 226 / 0.2);
-    --accent: #f07b45;
-    --accent-ink: #f59a6e;
-    --accent-on: #1b0d06;
-    --accent-soft: #3b2216;
+    --bg: #1b2027;
+    --bg-elev: #252b33;
+    --bg-elev-2: #2f363f;
+    --bg-sunk: #13171c;
+    --bg-glass: rgb(30 35 42 / 0.8);
+    --ink: #e9edf1;
+    --ink-2: #b3bdc8;
+    --ink-3: #96a1ad;
+    --line: rgb(233 237 241 / 0.1);
+    --line-strong: rgb(233 237 241 / 0.2);
+    --accent: #b3262e;
+    --accent-ink: #ef8a8e;
+    --accent-on: #ffffff;
+    --accent-soft: #3c2128;
     --hoodie: #8fa8cf;
     --hoodie-soft: #1d2533;
     --ok: #6cc28a;
     --warn: #e0a84a;
     --danger: #ff7a70;
-    --highlight: rgb(240 123 69 / 0.16);
+    --highlight: rgb(179 38 46 / 0.24);
     --scrim: rgb(0 0 0 / 0.55);
     --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5);
     --shadow-2: 0 10px 30px rgb(0 0 0 / 0.6);
@@ -116,26 +117,26 @@
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0e0c0a;
-  --bg-elev: #1a1714;
-  --bg-elev-2: #24201b;
-  --bg-sunk: #050403;
-  --bg-glass: rgb(22 19 16 / 0.78);
-  --ink: #f3ece2;
-  --ink-2: #bdb2a4;
-  --ink-3: #978b7d;
-  --line: rgb(243 236 226 / 0.1);
-  --line-strong: rgb(243 236 226 / 0.2);
-  --accent: #f07b45;
-  --accent-ink: #f59a6e;
-  --accent-on: #1b0d06;
-  --accent-soft: #3b2216;
+  --bg: #1b2027;
+  --bg-elev: #252b33;
+  --bg-elev-2: #2f363f;
+  --bg-sunk: #13171c;
+  --bg-glass: rgb(30 35 42 / 0.8);
+  --ink: #e9edf1;
+  --ink-2: #b3bdc8;
+  --ink-3: #96a1ad;
+  --line: rgb(233 237 241 / 0.1);
+  --line-strong: rgb(233 237 241 / 0.2);
+  --accent: #b3262e;
+  --accent-ink: #ef8a8e;
+  --accent-on: #ffffff;
+  --accent-soft: #3c2128;
   --hoodie: #8fa8cf;
   --hoodie-soft: #1d2533;
   --ok: #6cc28a;
   --warn: #e0a84a;
   --danger: #ff7a70;
-  --highlight: rgb(240 123 69 / 0.16);
+  --highlight: rgb(179 38 46 / 0.24);
   --scrim: rgb(0 0 0 / 0.55);
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow-2: 0 10px 30px rgb(0 0 0 / 0.6);

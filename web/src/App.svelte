@@ -32,7 +32,7 @@
     else document.documentElement.dataset.theme = t;
     const dark = t === 'dark' || (t === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
-      if (t !== 'system') m.setAttribute('content', dark ? '#0e0c0a' : '#f6f1e9');
+      if (t !== 'system') m.setAttribute('content', dark ? '#1b2027' : '#e7ebef');
     });
   });
 

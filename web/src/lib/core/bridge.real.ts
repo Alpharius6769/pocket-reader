@@ -101,7 +101,9 @@ function toSummary(story: any): StorySummary {
 
 function toStory(story: any): Story {
   const chapters = (Array.isArray(story?.chapters) ? story.chapters : []).map((c: any, i: number) => ({
-    title: String(c?.title || `Chapter ${i + 1}`),
+    // "upload" is the backend's temp-file name, stored as the title of
+    // heading-less uploads made before api_core started replacing it.
+    title: String(c?.title && !/^upload(\.[a-z0-9]+)?$/i.test(String(c.title).trim()) ? c.title : `Chapter ${i + 1}`),
     paragraphs: Array.isArray(c?.paragraphs) ? c.paragraphs.map(String) : [],
   }));
   return { ...toSummary(story), chapterCount: chapters.length || toSummary(story).chapterCount, chapters };

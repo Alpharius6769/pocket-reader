@@ -15,7 +15,6 @@ window._ACH_ICONS = {
   'avid_listener': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMjU2IDUxYy01NC45OTQgMC0xMDcuMzIgMjUuMDUzLTE0OC4yMiA2Ni44MjZsMTYuNTI1IDguMjY0QzE2My4yMiA4OC4wMTIgMjEwLjU1OCA2NSAyNTYgNjVjNDUuNDUgMCA5Mi44MDMgMjIuOTk3IDEzMS43MjUgNjEuMDc0bDE2LjQ5Ni04LjI0OEMzNjMuMzIgNzYuMDUzIDMxMC45OTUgNTEgMjU2IDUxek05NS4xNzggMTMxLjY1MkM1NC4xMyAxODAuMDIyIDI3LjIxNSAyNDYuNTE0IDI1LjE5NSAzMjFoMTQuMDIyYzIuMjI1LTcwLjY0NyAzMC4zMjUtMTMzLjI5IDY5Ljk5Mi0xNzguOTA2LjY5NS0uOCAxLjQwMy0xLjU4MyAyLjEwNi0yLjM3M2wtMTYuMTM4LTguMDY4em0zMjEuNjQ0IDAtMTYuMTA3IDguMDU1Yy42OTIuNzc4IDEuMzkgMS41NDggMi4wNzYgMi4zMzZDNDQyLjQ2IDE4Ny42NDYgNDcwLjU2IDI1MC4yOSA0NzIuNzg0IDMyMWgxNC4wMjJjLTIuMDItNzQuNDg2LTI4LjkzNS0xNDAuOTc4LTY5Ljk4My0xODkuMzQ4ek0xMjguMDQyIDI2Mi44Yy0zLjQ4NS0uMDEzLTYuOTggMS4wNzgtNy4wNDIgMy40MTVWNDU4YzAgNCAxNCA0IDE0IDBWMjY2YzAtMi4wNzQtMy40NzMtMy4xOS02Ljk2LTMuMnptMjU1LjkxNyAwYy0zLjQ4Ny4wMS02Ljk2IDEuMTI2LTYuOTYgMy4ydjE5MmMwIDQgMTQgNCAxNCAwVjI2Ni4yMTVjLS4wNi0yLjMzNy0zLjU1Ny0zLjQyOC03LjA0LTMuNDE2ek0xMDMgMjc1LjczYy0xNS42MjMgMi4zOTMtMjUuNjQ0IDExLjE2LTMzLjEzMyAyNC42NEM2MS4wMjIgMzE2LjI5NCA1NyAzMzkgNTcgMzYyczQuMDIyIDQ1LjcwNyAxMi44NjcgNjEuNjNjNy40OSAxMy40OCAxNy41MSAyMi4yNDcgMzMuMTMzIDI0LjY0VjI3NS43M3ptMzA2IDB2MTcyLjU0YzE1LjYyMy0yLjM5MyAyNS42NDQtMTEuMTYgMzMuMTMzLTI0LjY0QzQ1MC45NzggNDA3LjcwNiA0NTUgMzg1IDQ1NSAzNjJzLTQuMDIyLTQ1LjcwNy0xMi44NjctNjEuNjNjLTcuNDktMTMuNDgtMTcuNTEtMjIuMjQ3LTMzLjEzMy0yNC42NHpNMjUgMzM5djQ2aDE0di00NkgyNXptNDQ4IDB2NDZoMTR2LTQ2aC0xNHoiLz48L3N2Zz4=',
   'chapter_two': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMjY0LjQgOTUuMDFjLTM1LjYtLjA2LTgwLjIgMTEuMTktMTI0LjIgMzQuMDlDOTYuMjcgMTUyIDYxLjQ1IDE4MiA0MS4wMSAyMTEuM2MtMjAuNDUgMjkuMi0yNS45OCA1Ni40LTE1LjkyIDc1LjggMTAuMDcgMTkuMyAzNS41MyAzMC40IDcxLjIyIDMwLjQgMzUuNjkuMSA4MC4yOS0xMS4yIDEyNC4xOS0zNCA0NC0yMi45IDc4LjgtNTMgOTkuMi04Mi4yIDIwLjUtMjkuMiAyNS45LTU2LjQgMTUuOS03NS44LTEwLjEtMTkuMy0zNS41LTMwLjQ5LTcxLjItMzAuNDl6bTkxLjkgNzAuMjljLTMuNSAxNS4zLTExLjEgMzEtMjEuOCA0Ni4zLTIyLjYgMzIuMy01OS41IDYzLjgtMTA1LjcgODcuOC00Ni4yIDI0LjEtOTMuMSAzNi4yLTEzMi41IDM2LjItMTguNiAwLTM1Ljg0LTIuOC01MC4zNy04LjdsMTAuNTkgMjAuNGMxMC4wOCAxOS40IDM1LjQ3IDMwLjUgNzEuMTggMzAuNSAzNS43IDAgODAuMy0xMS4yIDEyNC4yLTM0LjEgNDQtMjIuOCA3OC44LTUyLjkgOTkuMi04Mi4yIDIwLjQtMjkuMiAyNi01Ni40IDE1LjktNzUuN3ptMjguOCAxNi44YzExLjIgMjYuNyAyLjIgNTkuMi0xOS4yIDg5LjctMTguOSAyNy4xLTQ3LjggNTMuNC04My42IDc1LjQgMTEuMSAxLjIgMjIuNyAxLjggMzQuNSAxLjggNDkuNSAwIDk0LjMtMTAuNiAxMjUuOS0yNy4xIDMxLjctMTYuNSA0OS4xLTM4LjEgNDkuMS01OS45IDAtMjEuOC0xNy40LTQzLjQtNDkuMS01OS45LTE2LjEtOC40LTM1LjctMTUuMy01Ny42LTIwem0xMDYuNyAxMjQuOGMtMTAuMiAxMS45LTI0LjIgMjIuNC00MC43IDMxLTM1IDE4LjItODIuMiAyOS4xLTEzNC4zIDI5LjEtMjEuMiAwLTQxLjYtMS44LTYwLjctNS4yLTIzLjIgMTEuNy00Ni41IDIwLjQtNjguOSAyNi4xIDEuMi43IDIuNCAxLjMgMy43IDIgMzEuNiAxNi41IDc2LjQgMjcuMSAxMjUuOSAyNy4xczk0LjMtMTAuNiAxMjUuOS0yNy4xYzMxLjctMTYuNSA0OS4xLTM4LjEgNDkuMS01OS45eiIvPjwvc3ZnPg==',
   'critic': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMTcuNDcgMjUwLjlDODguODIgMzI4LjEgMTU4IDM5Ny42IDIyNC41IDQ4NS41YzcyLjMtMTQzLjggMTQ2LjMtMjg4LjEgMjY4LjQtNDQ0LjM3TDQ2MCAyNi4wNkMzNTYuOSAxMzUuNCAyNzYuOCAyMzguOSAyMDcuMiAzNjEuOWMtNDguNC00My42LTEyNi42Mi0xMDUuMy0xNzQuMzgtMTM3eiIvPjwvc3ZnPg==',
-  'curated_author': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNNDcwLjcgMjAgMzY4LjIgNDkuODFsNDEuNS0yOC4wOWMtMjYuMiA1LjkyLTU5LjMgMTcuNS0xMDAuOSAzNi4xOWwtNjcuOSA3MC43OUwyNjUgNzkuMjVjLTIzLjMgMTIuOTYtNDggMjkuOTUtNzEuOCA0OS44NWwtMTUuOCA2NC4zLTMuNC00Ny42Yy0yMy41IDIxLjYtNDUuNiA0NS42LTYzLjkgNzAuOS0xOS4yMyAyNi41LTM0LjI2IDU0LjUtNDEuNzkgODIuNGwtMjguMTItMTguOGMyLjUyIDIzLjcgMTAuMzEgNDQuMyAyMy4wOSA2My4ybC0zMy42Mi0xMC4zYzcuNjQgMjMuNSAyMC4xMyAzOC43IDQxLjI1IDUxLTExLjgzIDMzLjMtMTcuMzggNjguMS0yMy4zNCAxMDIuOGwxOC40IDMuMUM4Ny4zMSAyNzcuNCAyMzcuOSAxNDEuOCAzNzQgODEuNzJsNi45IDE3LjM4Yy0xMjEuNyA1NC41LTIxNi4zIDE0Ni41LTI2NS44IDI3OS4xIDE4LjEuMSAzNS44LTIuMSA1Mi4yLTYuM2w0LjktNjAuOSAxMy4xIDU1LjVjMTAuOS00IDIwLjktOC44IDI5LjgtMTQuNGwtMjAuNy00My41IDMyLjggMzQuOGM4LTYuNCAxNC42LTEzLjYgMTkuNi0yMS41IDMwLjQtNDcuNSA2Mi4yLTk0LjcgMTI0LjgtMTM0LjJsLTQ1LjctMTYuMiA3MC4xIDIuMWMxMS40LTUuOCAyMy40LTEyLjkgMzIuNS0xOS42bC00OS43LTQgNzQuNy0xNy42YzUuOC01LjggMTEuMi0xMS45IDE2LjEtMTggMTcuMy0yMS45NCAyOS00NC43OCAyNi4yLTY1LjU1LTEuMy0xMC4zOS03LjUtMjAuMTYtMTcuNi0yNS42My0yLjUtMS4zLTUuMi0yLjQ1LTcuNS0zLjIyeiIvPjwvc3ZnPg==',
   'days_streak': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMjQ1LjA1IDE1LjUxNGMzNC4yOSA0OC44MTUtMjMuNTM1IDMyMC41NC05MC4zMDIgMTM2LjcyQzEwNi43OTYgMzI1LjExIDM4Ljk1NiAzMzIuNTE4IDM4Ljg3NiAyNTIuNTVjLTcxLjYgNzkuMzEgNDMuODI0IDIyMC43NjcgODcuMzc2IDI0My45MzVoNTIuMTI3Yy00NS45Mi00MC4wMTYtNzYuNzg0LTc4LTgyLjE3Ni0xMzUuOTY4IDQ3LjMxMiA5LjQyMyA3MS44NTUgMjAuOTYgODEuMjYzLTYyLjA0OCA2MC43MzYgODYuNTkgMTAwLjk0NC00OS4zNzYgMTM3LjE4NC0xMDcuMTItMS42NDcgNDAuMzItMy4zNDMgOTMuNDU2IDIyLjg0OCAxMjkuODg4IDguNzM2IDEyLjE0MyAzMy4yMzIgMTYuMTEgNTQuNzM2IDE1LjgwNy05LjkyIDE2LjA4LTQ0Ljg0OCA2OS4zNzYtMTcuMDA4IDg5LjIgMjcuODQgMTkuODI0IDMzLjA3Mi0uMzg0IDI1Ljg1NiAxNi4xNzYtMTMuMjY0IDIwLjg4LTIyLjk5MiAzOS4zNzUtNTkuMDcyIDU0LjA2M2g1Ni4wNjRjNTkuNDQtMTguNzIgMTExLjgwNy05MS42NjMgOTQuNjA3LTEzNS41MzUtMjIuMDE1IDE4LjY1Ny00My43NzQgMzAuODk3LTYxLjI5NCAyOS41MzcgNDkuMTItNzIuMDggMzcuODQtMTQ1LjkwMyAxNC43NTItMjIxLjM0Mi0yMC4yMjQgNzIuMzgzLTMzLjQ4OCA4Mi40OTUtNTQuNTc2IDk5LjUyIDI5LjEwNC02OC42NTctODUuNDQtMjE0LjQ0OC0xNDYuNTEtMjUzLjE1eiIvPjwvc3ZnPg==',
   'drifting_off': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMjM5LjgwMiA3NC40NHYuMTloMTIuMjc1djI5LjQzM2guMDA0djMxLjI2NWE4NS4yNzUgODUuMjc1IDAgMCAwLTEwLjA5NS0xLjA4NGMtMjYuOC0xLjI5My01NS4wMzMgOC43MzgtNzMuMjMgMTMuMzZsLTcuNTQ1IDEuOTIuNTgyIDUuNTY0Yy0uNDYtLjE3Ni0uOTE3LS4zNTYtMS4zODctLjUyNWwtLjcwNS0uMjU2LS43NC0uMTM1Yy00LjA5Ny0uNzQ3LTguMjctMS4xOTMtMTIuNDgtMS4zOS0yOS40NzctMS4zNzItNjAuODM0IDkuNDYzLTgxLjE3NCAxNC41MjNsLTcuNjEyIDEuODkyLjgzNiA3LjhjLjYwNSA1LjY0NCAxLjIxOCAxMS41OSAyLjc3NCAxNy40OTMtMTAuNjQyIDEzLjA3Mi0xMC4wNzggMTguMzUtOC40MTcgMjcuMTg0bDIxMS4xNCA3My45MTZ2NzQuMDUzQzE4NC4wMyAzMzYuNDUgMTA2LjI1MiAyOTUuODI4IDI1LjU4MiAyNjQuNDl2LTE3MGgxOHYuMTI1aDEyLjM3NHYzNC43N2wxNjUuODQ4LTIxLjQxNFY3NC40NHptLTIuMDg4IDc3Ljg0NWMxLjIwMy0uMDEzIDIuMzkgMCAzLjU2NC4wNCAyLjgxOC4wOTUgNS41MDUuMzk2IDguMDkuODQgMTMuNTQ4IDUuMTk3IDIwLjI5NiAxMi42MzcgMjQuMjUgMjEuNDYyLTIzLjI1NSA5LjY0NC00NC4xNzQgMTMuNTA3LTYyLjUxNSAxNS43MzYtNS4yNzctMS4xNS05LjUwMy0yLjQ2Ni0xMi45NDQtMy44OTRhNjMuMzEyIDYzLjMxMiAwIDAgMC0xNi41MjItMjAuMTYgOTEuNjAzIDkxLjYwMyAwIDAgMS0uNTg0LTMuMzNjMTcuNDE0LTQuNjMgMzguNjE0LTEwLjUwNCA1Ni42Ni0xMC42OTV6bS05NC4zNSAxOC41MjhjMS4zOC0uMDE0IDIuNzQzIDAgNC4wOS4wNDZhNjkuMTggNjkuMTggMCAwIDEgOS4yNi45NWMxNS43NTcgNS44OSAyMy41NDYgMTQuNDM1IDI4LjAwMiAyNC41MjYtMjYuNDQgMTAuODUtNTAuMjIgMTUuMTYyLTcwLjk2NSAxNy42Mi0xNy40Mi0zLjY5Mi0yNS4xMTYtOC45OS0yOS4xNy0xNC42NjUtMy4wNzItNC4zMDItNC41MjQtOS43NTMtNS41My0xNi41MTggMTkuNDk1LTUuMDc3IDQzLjYyLTExLjc1MyA2NC4zMTQtMTEuOTZ6TTI5MS44IDE4Ni4yOTVsMjYuNDA2IDcuNDUzYy01OS4xOTQgMTAuNDEtMTI1LjA5NSAyOC43MzItMTY1LjE4IDQ1Ljc2NmwtMjcuNDQzLTkuMTdjMjEuMjM1LTMuMTQ2IDQ1Ljc4NS04Ljc1MyA3Mi41NjgtMjAuODQ2bDUuMjktMi4zOWMxLjcyLjQ0IDMuNS44NTMgNS4zNSAxLjIzMmwxLjQyLjI5IDEuNDQtLjE3YzIxLjU2Mi0yLjU0IDQ3LjkwNS03LjI5NCA3Ny4xNS0yMC43ODJ6bTY4Ljc5NyAxOS40MTggNTEuMzM2IDE0LjQ5LTE0Ny45MDUgMzguMzc3djE3LjZsLTgyLjUxNy0yNy4xNDctMS43Ny0uNTljNDkuMTc2LTE3LjcxNyAxMjQuNDM4LTM2LjMwMyAxODAuODU3LTQyLjczem0xMjcuNzkgMTMuNjh2OTAuNTdMMjgzLjY5IDM3Mi4xMjd2LTk5LjYyek0yMy42MTMgMjgyLjQ1IDYwLjgzNyAyOTl2MTQuNjc0TDM5Ljk4IDMyMi4xM2wtMTYuMzY2LTEwLjU3em00NjMuMjYgNDkuMjQzdjM0Ljk5NWwtMjEuOTEgOS41MTUtMTYuMzY3LTcuNHYtMjUuNDg3em0tMjM0LjQ1MyA1Mi40OSAxMS42MDggNS4xNiA5LjQ0MiA0LjE5NiAxOS4zNDItNi44N3Y0MC44NDhsLTIyLjcwNCAxMC4wNDMtMTcuNjg3LTEyLjY4NXoiLz48L3N2Zz4=',
   'eclectic': 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMjU1LjcwMyA0NC43NjRjLTYuMTc2IDAtMTIuMzUzIDEuMzg0LTE3LjEzNyA0LjE1MmwtMTUyLjc1MiA4OC4zNmMtOS41NyA1LjUzNS05LjU3IDE0LjI5IDAgMTkuODI2bDE1Mi43NTIgODguMzU5YzkuNTcgNS41MzYgMjQuNzAzIDUuNTM2IDM0LjI3MiAwbDE1Mi43NTQtODguMzZjOS41Ny01LjUzNCA5LjU3LTE0LjI4OSAwLTE5LjgyNEwyNzIuODM4IDQ4LjkxNmMtNC43ODUtMi43Ny0xMC45Ni00LjE1Mi0xNy4xMzUtNC4xNTJ6TTIzOC42OTUgODcuMjdsMjIuODM4IDE0LjI3M2MtNi43NDcgMS4wMDctMTIuNTg2IDIuMjgtMTcuNTE1IDMuODE4LTQuOTg1IDEuNTA0LTkuMjcyIDMuMzM0LTEyLjg2NCA1LjQ4OS03LjcyMSA0LjYzMy0xMS4wOSA5Ljg5Ny0xMC4xMDUgMTUuNzkzLjkzIDUuODYgNi4yMjMgMTIuMjQ3IDE1Ljg3NSAxOS4xNi4yNi0zLjQ2NyAxLjQ1Ny02LjY1MiAzLjU5LTkuNTUzIDIuMDc3LTIuOTM2IDUuMTU5LTUuNjI5IDkuMjQ0LTguMDggMTAuMjgtNi4xNjggMjIuMjU5LTguODMgMzUuOTM1LTcuOTggMTMuNzIyLjgyMSAyNi41NjggNC45NzMgMzguNTM3IDEyLjQ1NSAxMy4yMzkgOC4yNzQgMjAuMzM0IDE3LjAyNCAyMS4yODQgMjYuMjUxLjg5NCA5LjE5NC00LjU4NCAxNy4zNDYtMTYuNDM2IDI0LjQ1OC0xMy4wNjQgNy44MzgtMjguNTkzIDEwLjUzMy00Ni41ODggOC4wODUtMTguMDA0LTIuNTA4LTM2Ljk2NC05Ljk4Ni01Ni44NzctMjIuNDMxLTIwLjQxLTEyLjc1Ni0zMi4yNTgtMjUuMjc2LTM1LjU0Ny0zNy41Ni0zLjI5OS0xMi4zNDcgMi4zNDgtMjIuODk1IDE2LjkzOC0zMS42NSA0LjYyNC0yLjc3NCA5LjU1NC01LjE5MiAxNC43OS03LjI1MyA1LjIzOC0yLjA2MSAxMC44NzEtMy44MiAxNi45MDEtNS4yNzV6bTM4LjY3OCA1My4yM2MtNC4xNjktLjAwNy03Ljk3MiAxLjAyLTExLjQwNiAzLjA4LTQuNTM0IDIuNzItNi4xMjUgNS45MDYtNC43NzQgOS41NTUgMS4zNDEgMy41ODcgNS42MjQgNy42NCAxMi44NSAxMi4xNTYgNy4yMjYgNC41MTYgMTMuNzggNy4yMzcgMTkuNjY2IDguMTY2IDUuODc1Ljg2NyAxMS4wODEtLjA1OSAxNS42MTUtMi43OCA0LjU4LTIuNzQ3IDYuMTk4LTUuOTE1IDQuODU4LTkuNTAzLTEuMzUxLTMuNjUtNS42NC03LjczMi0xMi44NjYtMTIuMjQ4LTcuMjI2LTQuNTE2LTEzLjc3Ny03LjIwNy0xOS42NTItOC4wNzRhMjcuODI2IDI3LjgyNiAwIDAgMC00LjI5MS0uMzUyem0xNTguNDk0IDMzLjMxNGMtMS45MzguMDc0LTQuMjE4Ljg1OC02Ljk1NSAyLjQxM2wtMTQ2LjkzNSA4NC44NDdjLTkuNTcgNS41MjctMTcuMTQgMTguNjM4LTE3LjE0IDI5LjY5djE1Ny42OTljMCAxMS4wNSA3LjU3IDE1LjQxOSAxNy4xNCA5Ljg5bDE0Ni45MzctODQuODQzYzkuNTctNS41MjcgMTcuMTM3LTE4LjYzNiAxNy4xMzctMjkuNjg4di0xNTcuN2MtMi40OTctOC4wNDgtNS4yMy0xMi40OTUtMTAuMTg0LTEyLjMwOHptLTM1OS43NjMuNDhjLTYuMjI3IDAtMTAuMDMzIDUuMzI1LTEwLjE1NSAxMS44MjV2MTU3LjY5N2MwIDExLjA1MiA3LjU3IDI0LjE2MyAxNy4xNCAyOS42OWwxNDYuOTMgODQuODQ4YzkuNTcgNS41MjYgMTcuMTQxIDEuMTU2IDE3LjE0MS05Ljg5NXYtMTU3LjdjMC0xMS4wNTEtNy41Ny0yNC4xNTktMTcuMTQtMjkuNjg3TDgzLjA5IDE3Ni4yMjVjLTIuNTY3LTEuMzM4LTQuOTExLTEuOTMtNi45ODYtMS45M3ptNDAuMDk1IDUyLjIyNiA2OC4xMTQgNDAuODY5djI1LjI4N2wtNDYuMjYyLTI3Ljc1OHYyMC42NGE0My4yNzkgNDMuMjc5IDAgMCAxIDYuMjYyIDIuMTUxYzIuMTM1Ljg2NCA0LjM0MSAxLjk4IDYuNjE5IDMuMzQ2IDEyLjk1MyA3Ljc3MiAyMy4wMzcgMTcuOTAyIDMwLjI1IDMwLjM5IDcuMjEyIDEyLjQzIDEwLjgxOCAyNS45MTIgMTAuODE4IDQwLjQ0OCAwIDE0LjQxNi0zLjkzOCAyMy4zNDItMTEuODE0IDI2Ljc3Ny03LjgzIDMuNDY0LTE4LjcyIDEuMDEtMzIuNjctNy4zNi02LjAyNi0zLjYxNS0xMi4wMDUtNy45NDgtMTcuOTM2LTEyLjk5Ni01Ljg4NC00Ljk2LTExLjc0NC0xMC42OC0xNy41OC0xNy4xNnYtMjcuMDc2YzUuNzg5IDcuNjQzIDExLjI3IDE0LjA2IDE2LjQ0MSAxOS4yNDggNS4yMiA1LjIxNyAxMC4xMyA5LjIwNSAxNC43MzMgMTEuOTY3IDYuNjQzIDMuOTg2IDExLjg2MiA1LjA5MiAxNS42NTggMy4zMTggMy44NDMtMS44MDQgNS43NjYtNi4xOSA1Ljc2Ni0xMy4xNiAwLTcuMDMtMS45MjMtMTMuNzIzLTUuNzY2LTIwLjA4LTMuNzk2LTYuMzI4LTkuMDE1LTExLjQ4NS0xNS42NTgtMTUuNDdhNTYuNTg1IDU2LjU4NSAwIDAgMC0xMi41OTgtNS41OTRjLTQuNDYtMS40MjYtOS4yNTItMi4zMzUtMTQuMzc3LTIuNzI5VjIyNi41MnptMjcwLjA0NyA1LjczMnY4NS44MDlMNDAwIDMwOS44MDl2MjUuNDE0bC0xMy43NTQgOC4yNTJ2MjQuNzc3bC0yMy41MDIgMTQuMTAydi0yNC43NzhMMzIwIDM4My4yMjN2LTMwLjA2bDM4LjYxMS0xMDQuMzMxIDI3LjYzNS0xNi41OHptLTIzLjUwMiA0Mi45NzgtMjcuMjQ4IDczLjI4IDI3LjI0OC0xNi4zNDhWMjc1LjIzeiIvPjwvc3ZnPg==',
@@ -33,7 +32,6 @@ window.ACHIEVEMENTS_DB = [
   { id: 'eclectic', title: 'Eclectic Taste', desc: 'Add stories from different genres to your collection.', metric: 'genres', tiers: [ { t: 'Bronze', v: 3 }, { t: 'Silver', v: 7 }, { t: 'Gold', v: 12 }, { t: 'Platinum', v: 25 }, ], },
   { id: 'avid_listener', title: 'Avid Listener', desc: 'Total hours of narration listened to.', metric: 'hoursListened', tiers: [ { t: 'Bronze', v: 1 }, { t: 'Silver', v: 10 }, { t: 'Gold', v: 100 }, { t: 'Platinum', v: 500 }, ], },
   { id: 'days_streak', title: 'Days Listening Streak', desc: 'Longest run of consecutive days with any playback.', metric: 'streak', tiers: [ { t: 'Bronze', v: 3 }, { t: 'Silver', v: 7 }, { t: 'Gold', v: 30 }, { t: 'Platinum', v: 90 }, ], },
-  { id: 'curated_author', title: 'Curated Author', desc: 'Unlocked when one of your stories drops in the curated list.', metric: 'curatedAuthor', target: 1 },
   { id: 'page_one', title: 'Page One', desc: 'Celebrate 1 week since your first day with the app.', metric: 'daysSinceFirst', target: 7 },
   { id: 'chapter_two', title: 'Chapter Two', desc: 'Celebrate 1 month with the app.', metric: 'daysSinceFirst', target: 30 },
   { id: 'annual_edition', title: 'The Annual Edition', desc: '1 year anniversary with the app.', metric: 'daysSinceFirst', target: 365 },
@@ -290,13 +288,25 @@ function _markDeletedStory(profile, story) {
   profile.deletedStoryKeys[getStoryStableKey(story)] = Date.now();
 }
 
+// The 20 bundled "curated" stories were retired on 2026-11-26: the app no
+// longer seeds them, and any copy already in a library is dropped on load with
+// its stored chapters. They are not tombstoned -- a reader who later adds the
+// same work from AO3 gets it normally.
+function isRetiredCuratedStory(story) {
+  if (!story) return false;
+  if (story.source === 'curated') return true;
+  return [story.url, story.id].some((v) => typeof v === 'string' && v.startsWith('/api/library/curated/'));
+}
+window.isRetiredCuratedStory = isRetiredCuratedStory;
+
 function sanitizeProfileLibrary(profile, options = {}) {
   const target = normalizeProfileObject(profile);
   const before = target.library.length;
   const kept = [];
   target.library.forEach((story) => {
-    if (isWithdrawnLibraryStory(story)) {
-      _markDeletedStory(target, story);
+    const retired = isRetiredCuratedStory(story);
+    if (retired || isWithdrawnLibraryStory(story)) {
+      if (!retired) _markDeletedStory(target, story);
       if (options.purgeStorage && typeof window._deleteStoryChapters === 'function') {
         Promise.allSettled([
           window._deleteStoryChapters(story.storyKey || getStoryStableKey(story)),
@@ -310,7 +320,7 @@ function sanitizeProfileLibrary(profile, options = {}) {
     }
   });
   target.library = kept;
-  if (window.currentStory && isWithdrawnLibraryStory(window.currentStory)) {
+  if (window.currentStory && (isWithdrawnLibraryStory(window.currentStory) || isRetiredCuratedStory(window.currentStory))) {
     window.currentStory = null;
   }
   target.updatedAt = Date.now();
@@ -473,87 +483,6 @@ function _defaultProfile() {
   });
 }
 
-// ── Curated library seeding ──────────────────────────────────────────────────
-// The bundled curated stories appear in every user's library by default at app
-// launch. A curated story the user deleted stays deleted (deletedStoryKeys
-// tombstone), and withdrawn works are never added.
-export async function seedCuratedLibrary() {
-  if (window.curatedLibraryLoaded) return;
-  if (!window.HF_API_BASE) return;
-  // Set the guard before the fetch so overlapping calls (boot + library view
-  // during a slow HF cold start) don't kick off duplicate requests.
-  window.curatedLibraryLoaded = true;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 20000);
-  try {
-    const r = await fetch(`${window.HF_API_BASE}/api/library/curated`, { signal: ac.signal });
-    const data = typeof window._safeParseJson === 'function'
-      ? await window._safeParseJson(r, 'API')
-      : await r.json();
-    if (!data || !Array.isArray(data.items) || data.items.length === 0) return;
-
-    window.userProfile = normalizeProfileObject(window.userProfile);
-    const tombstones = window.userProfile.deletedStoryKeys || {};
-    let added = false;
-
-    data.items.forEach((item) => {
-      if (isWithdrawnLibraryStory(item)) return;
-      const key = getStoryStableKey({ sourceUrl: item.source_url, url: item.url, title: item.title, author: item.author });
-      // Deletions recorded before the AO3 source-link backfill were keyed by
-      // the curated URL instead of the source URL — honor both.
-      const legacyKey = getStoryStableKey({ url: item.url, title: item.title, author: item.author });
-      if (tombstones[key] || tombstones[legacyKey]) return; // the user deleted this curated story — respect that
-      const existing = window.userProfile.library.find(
-        (s) => (s.url || s.id) === item.url || (s.storyKey || getStoryStableKey(s)) === key);
-      if (existing) {
-        // Backfill the AO3 source link onto curated stories added before the
-        // backend started reporting it, so "Check for New Chapters" works.
-        if (item.source_url && !existing.sourceUrl) {
-          existing.sourceUrl = item.source_url;
-          added = true;
-        }
-        // Backfill the curated tag too. Profiles created before this tag
-        // existed hold these stories untagged, which would keep counting them
-        // toward First Edition and Hoarder and would hide them from the
-        // Curated tab. The backend's list is the authority on what is curated.
-        if (existing.source !== 'curated') {
-          existing.source = 'curated';
-          added = true;
-        }
-        return;
-      }
-      window.userProfile.library.push({
-        id: item.url,
-        url: item.url,
-        sourceUrl: item.source_url || '',
-        title: item.title,
-        author: item.author,
-        storyKey: key,
-
-        isFinished: false,
-        progressChapter: 0,
-        progressParagraph: 0,
-        addedAt: Date.now(),
-        source: 'curated',
-      });
-      added = true;
-    });
-
-    if (sanitizeProfileLibrary(window.userProfile, { purgeStorage: true })) added = true;
-    if (added) {
-      saveLocalData();
-      if (typeof window.renderLibrary === 'function') window.renderLibrary();
-      if (typeof window.updateContinueReading === 'function') window.updateContinueReading();
-    }
-  } catch (err) {
-    window.curatedLibraryLoaded = false; // allow a retry (e.g. next library-view visit)
-    console.error("Failed to seed curated library", err);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-window.seedCuratedLibrary = seedCuratedLibrary;
-
 // ── Local profile reset (logout / account switch) ────────────────────────────
 // Removes this device's copy of the profile plus all cached story text, audio,
 // and the avatar, then rebuilds the default guest profile. Cloud data is
@@ -570,7 +499,6 @@ export async function resetLocalProfile({ preserveSetup = true } = {}) {
   }
   window.userProfile = _defaultProfile();
   window.currentStory = null;
-  window.curatedLibraryLoaded = false;
   if (typeof window._wipeLocalUserData === 'function') {
     try { await window._wipeLocalUserData(); } catch (e) {}
   }
@@ -708,10 +636,6 @@ export async function loadLocalData() {
     // until the first narration/caching action. Starting them behind onboarding
     // competes with diagnostics and can create avoidable memory pressure.
 
-    // Seed the bundled curated stories into the library at every launch
-    // (deleted ones stay deleted via tombstones). Fire-and-forget.
-    seedCuratedLibrary();
-
     // First-time setup modal — checked here so it fires after all async init
     // (avatar load, engine detection, cloud sync) has had a chance to run.
     // Python's init_ui also checks this, but as a fallback only — any exception
@@ -748,7 +672,7 @@ window.loadLocalData = loadLocalData;
 // latch, because the default profile is then genuinely authoritative and
 // blocking every future write would be worse than starting fresh.
 //
-// seedCuratedLibrary(), the avatar restore, the theme and voice-engine
+// The curated-story purge, the avatar restore, the theme and voice-engine
 // migrations, the first-run setup check and checkCloudSyncOnStartup all live
 // inside loadLocalData, so they are all downstream of this call running.
 async function _hydrateLocalProfile() {
@@ -1028,7 +952,7 @@ window.clearTextCache = clearTextCache;
 export function addToLibrary(storyData) {
   if (isWithdrawnLibraryStory(storyData)) {
     if (typeof window.virtueSpeak === 'function') {
-      window.virtueSpeak('That story is no longer available in the curated library.', 4500);
+      window.virtueSpeak('That story is no longer available.', 4500);
     }
     return;
   }
@@ -1587,10 +1511,6 @@ export function renderLibrary(skipAnimation = false) {
     library = library.filter((s) => !s.isFinished && s.progressChapter === 0 && s.progressParagraph === 0);
   else if (filter === 'finished') library = library.filter((s) => s.isFinished);
   else if (filter === 'favorites') library = library.filter((s) => s.favorite || s.isFavorite);
-  // The bundled stories get their own shelf. "All" stays literally all — the
-  // request was for a tab, not for hiding them — so this is a convenience
-  // filter alongside Favorites rather than a change to the other views.
-  else if (filter === 'curated') library = library.filter((s) => isCuratedStory(s));
 
   // Apply Library Search Filter
   const searchInput = document.getElementById('library-search-input');
@@ -1722,7 +1642,7 @@ function resumeEntry() {
   const lastVisit = story => Math.max(Number(story.lastRead) || 0, history.get(deckStoryKey(story)) || 0);
   return library.find(story => !story.isFinished && deckStoryKey(story) === active)
     || library.filter(story => !story.isFinished && (history.has(deckStoryKey(story))
-      || story.progressChapter || story.progressParagraph || (!isCuratedStory(story) && lastVisit(story))))
+      || story.progressChapter || story.progressParagraph || lastVisit(story)))
       .sort((a, b) => lastVisit(b) - lastVisit(a))[0];
 }
 
@@ -1770,7 +1690,7 @@ export function updateContinueReading() {
   panel.innerHTML = `<div class="deck-display">
     <div class="deck-legend"><span><i aria-hidden="true"></i>${story ? 'Selected story' : 'Library input'}</span><span>${story ? 'CH ' + String(index + 1).padStart(2,'0') : 'Standby'}</span></div>
     <h2>${story ? _escapeHtml(story.title || 'Untitled') : 'Open your first story.'}</h2>
-    <p>${story ? _escapeHtml(story.author || 'Unknown author') : 'Start with a file, a story link, or the curated shelves.'}</p>
+    <p>${story ? _escapeHtml(story.author || 'Unknown author') : 'Start with a file or a story link.'}</p>
     <div class="deck-tuning" aria-hidden="true"><i></i></div>
     <div class="deck-scale"><span>${story ? _escapeHtml(chapter?.title || 'Chapter ' + (index + 1)) : 'Chapter position'}</span><span>${story ? (index + 1) + ' / ' + total : '— / —'}</span></div>
     </div><div class="deck-keys"></div>`;
@@ -1909,26 +1829,11 @@ window.deleteBookmark = deleteBookmark;
 // _masterlistSortAsc and _masterlistSortCol, which were assigned and never
 // read. Nothing in the app, the tests or the tools referenced any of them.
 
-// A story that shipped with the app rather than one the reader sought out.
-// The tag is the only marker — curated entries use ordinary stable keys — and
-// seedCuratedLibrary() backfills it onto older untagged profiles from the
-// backend's list, which is the authority on what is curated.
-export function isCuratedStory(story) {
-  return Boolean(story) && story.source === 'curated';
-}
-window.isCuratedStory = isCuratedStory;
-
 export function checkForNewAchievements() {
   if (!window.userProfile || !window.userProfile.stats) return;
 
   if (window.userProfile.library) {
-    // The 20 curated stories ship in every library at launch, so counting them
-    // handed out First Edition and Hoarder Bronze/Silver before the reader had
-    // added anything — an achievement for installing the app. Both now measure
-    // only what the reader chose to add. Favourites and genres are unchanged:
-    // favouriting a curated story IS a deliberate act, and its genre is a real
-    // part of the reader's taste.
-    const ownLibrary = window.userProfile.library.filter((s) => !isCuratedStory(s));
+    const ownLibrary = window.userProfile.library;
     window.userProfile.stats.favorites = window.userProfile.library.filter(s => s.favorite || s.isFavorite).length;
     window.userProfile.stats.firstStory = ownLibrary.length > 0 ? 1 : 0;
     window.userProfile.stats.unread = ownLibrary.filter((s) => !s.progressChapter && !s.progressParagraph && !s.isFinished).length;
@@ -1938,10 +1843,6 @@ export function checkForNewAchievements() {
       if (s.tags) s.tags.forEach((t) => uniqueGenres.add(t));
     });
     window.userProfile.stats.genres = uniqueGenres.size;
-    const _me = (window.userProfile.displayName || '').trim().toLowerCase();
-    window.userProfile.stats.curatedAuthor = (_me && window.userProfile.library.some((s) =>
-      (s.author || '').split(/\s*(?:,|&|;|\band\b)\s*/i).some((a) => a.trim().toLowerCase() === _me)
-                                                                                    )) ? 1 : 0;
   }
 
   const stats = window.userProfile.stats;
@@ -2033,7 +1934,6 @@ export function renderAchievements() {
       firstBookmark: 0,
       firstSleepTimer: 0,
       firstRating: 0,
-      curatedAuthor: 0,
     };
   }
   const stats = window.userProfile.stats;

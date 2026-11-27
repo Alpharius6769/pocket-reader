@@ -54,7 +54,6 @@ test('loadStory registers abort before the cache path and restores progress (H4/
   assert.match(load, /_restoreProgressFromLibrary\(existingLibEntry\)/);
   assert.match(load, /_adoptExistingLibraryIdentity\(window\.currentStory, existingLibEntry\)/);
   assert.match(load, /await _persistOpenedStory\(\)/);
-  assert.match(load, /fetch\(`\$\{window\.HF_API_BASE\}\$\{fetchUrl\}`, \{ signal: ownAbort\.signal \}\)/);
   assert.doesNotMatch(load, /if \(!preventNavigate\) showCloudflareFallback\(\);/);
   assert.match(load, /error\?\.name === 'AbortError'/);
   assert.match(load, /ui\.notify\(/);

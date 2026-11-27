@@ -7,8 +7,8 @@
   "description": "A private offline-capable story reader with Pocket TTS narration and optional cross-device profile sync.",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#111214",
-  "theme_color": "#111214",
+  "background_color": "#1b2027",
+  "theme_color": "#1b2027",
   "icons": [
     {
       "src": "assets/img/pocket_reader_icon.webp",

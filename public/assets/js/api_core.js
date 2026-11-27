@@ -349,6 +349,14 @@ export async function processUploadedFile(file, fichubMeta, options = {}) {
   if (!parsedData) {
     throw new Error('Document parsing failed. Check your connection or try a different file format.');
   }
+    // A document with no headings comes back from /api/upload as one chapter
+    // named after the backend's temporary file, "upload", which the reader
+    // then shows as the chapter heading.
+    if (Array.isArray(parsedData.chapters)) {
+      parsedData.chapters.forEach((ch, i) => {
+        if (ch && (!ch.title || /^upload(\.[a-z0-9]+)?$/i.test(String(ch.title).trim()))) ch.title = `Chapter ${i + 1}`;
+      });
+    }
     const cleanFilename = (parsedData.filename || 'Unknown')
       .replace(/\.[^/.]+$/, '')
       .replace(/[_\-]+/g, ' ')
@@ -1155,14 +1163,7 @@ export async function loadStory(url, options = {}) {
       return;
     }
 
-    if (fetchUrl.startsWith('/api/library/curated/')) {
-      // ── Curated library stories — simple direct fetch ──
-      const response = await fetch(`${window.HF_API_BASE}${fetchUrl}`, { signal: ownAbort.signal });
-      if (!response.ok) throw new Error('CURATED_FETCH_FAILED');
-      if (ownAbort._superseded) return;
-      data = await _safeParseJson(response, 'General');
-
-    } else if (_isAo3) {
+    if (_isAo3) {
       // ── AO3 stories: FicHub EPUB first, backend scrape fallback ──
       // FicHub gets its own 120s budget. Aborting ownAbort here used to kill
       // the scrape fallback too — scrape then saw an already-aborted signal,
@@ -1388,13 +1389,6 @@ export async function _silentFetchStoryChapters(url, forceScrape = false) {
   // background. Signal a clean skip instead of POSTing a doomed scrape (400).
   if (/^(\/local-upload\/|local:\/\/)/i.test(url)) {
     throw new Error('LOCAL_UPLOAD_NO_SOURCE');
-  }
-
-  if (url.startsWith('/api/library/curated/')) {
-    const response = await fetch(`${window.HF_API_BASE}${url}`);
-    if (!response.ok) throw new Error('CURATED_FETCH_FAILED');
-    data = await _safeParseJson(response, 'General');
-    return window.normalizeStoryChapters?.(data.chapters) || data.chapters || null;
   }
 
   // ── AO3: FicHub first, backend scrape fallback ──

@@ -29,8 +29,12 @@
   let showAll = $state(false);
 
   async function open(mode: 'listen' | 'read') {
+    // Read the key BEFORE closing: the prop is a live getter on $ui.sheet,
+    // which closeSheet() nulls, and reading it afterwards threw (Listen and
+    // Read silently did nothing).
+    const key = storyKey;
     closeSheet();
-    await openStory({ kind: 'key', key: storyKey }, { mode });
+    await openStory({ kind: 'key', key }, { mode });
   }
 
   async function rate(stars: 0 | 1 | 2 | 3 | 4 | 5) {

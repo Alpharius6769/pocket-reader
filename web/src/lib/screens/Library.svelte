@@ -198,8 +198,10 @@
     margin: 8px 0 0;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 20px 12px;
+    /* Four across on a phone (~76 px covers on a 393 pt iPhone); three was
+       too large a card for a shelf people scroll. */
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 16px 10px;
   }
   .tile {
     display: grid;
@@ -248,6 +250,7 @@
     font-size: var(--t-foot);
     font-weight: 600;
     line-height: 1.25;
+    overflow-wrap: anywhere;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;

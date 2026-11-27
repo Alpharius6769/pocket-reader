@@ -34,8 +34,15 @@
   const px = $derived(size === 'fluid' ? 0 : size);
   const height = $derived(Math.round(px * 1.5));
   // Type scales with the cover via container units; long titles step down.
-  const divisor = $derived(story.title.length > 28 ? 8.2 : story.title.length > 16 ? 7.2 : 6.4);
-  const titleSize = $derived(`max(9px, ${100 / divisor}cqi)`);
+  // A single long word must fit the cover's text column (~77% of the width):
+  // at 6.4 "lighthouse" was clipped to "lighthous".
+  const longestWord = $derived(Math.max(...story.title.split(/\s+/).map((w) => w.length), 1));
+  const divisor = $derived(
+    Math.max(story.title.length > 28 ? 9 : story.title.length > 16 ? 8 : 7.4, longestWord * 0.9),
+  );
+  // The floor is low because shelf covers are ~76 px and the title is also
+  // printed under them; a 9 px floor broke 13-letter words mid-word.
+  const titleSize = $derived(`max(6.5px, ${100 / divisor}cqi)`);
   const authorSize = $derived(`max(7px, ${54 / divisor}cqi)`);
 </script>
 
@@ -112,6 +119,7 @@
     line-clamp: 5;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    overflow-wrap: anywhere;
     text-wrap: balance;
   }
   .author {

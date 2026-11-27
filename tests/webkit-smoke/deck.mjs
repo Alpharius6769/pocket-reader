@@ -123,6 +123,17 @@ try {
   assert.deepEqual(restored, { title, bookmarks: 1, speed: 1.25 });
   assert.equal(await page.getByText('Stories, read aloud.').count(), 0, 'onboarding does not return');
 
+  // ── Open by tapping: Library tab → story → Read ───────────────────────────
+  // The story sheet's Listen and Read buttons closed the sheet and then read
+  // their story from it, threw, and did nothing; opening through the bridge
+  // above never noticed. (Read, not Listen: Listen would start the voice model.)
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /Library/ }).click();
+  await page.getByRole('button', { name: new RegExp(`^${title} by `) }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: /^Read$/ }).click();
+  await page.getByRole('dialog', { name: 'Reader' }).waitFor({ timeout: 10000 });
+  assert.equal(await page.evaluate(() => window.currentStory?.title), title, 'Read opens the tapped story');
+  await page.getByRole('button', { name: 'Close reader' }).click();
+
   // ── Offline: the whole app comes from the service worker ──────────────────
   // Chromium only. Playwright's WebKit cannot reload a service-worker-controlled
   // page under offline emulation ("WebKit encountered an internal error"), which
