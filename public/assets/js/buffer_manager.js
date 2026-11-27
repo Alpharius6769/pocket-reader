@@ -1998,8 +1998,13 @@ async function _ensureCachingStory(storyRef) {
 function _showConstrainedCacheNotice(mode) {
   _pendingConstrainedCacheMode = mode || 'Normal';
   if (typeof window.showFeatureDialog !== 'function') {
+    // No dialog to ask in. The memory-safe default still applies -- saving a
+    // whole story with expressive narration is what crashed low-memory
+    // phones -- but a setting must not change without the reader being told.
     writePocketExpressiveChoice(localStorage, 'disabled');
     window.setPocketExpressiveProsodyChoice?.(false);
+    ui.notify('Expressive narration was turned off so saving for offline cannot run this phone out of memory. You can turn it back on in Settings.', 9000);
+    ui.engineControlsChanged();
     _continueCaching(_pendingConstrainedCacheMode);
     _pendingConstrainedCacheMode = null;
     return;

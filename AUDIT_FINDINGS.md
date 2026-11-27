@@ -1,7 +1,58 @@
 # Audit findings, 2026-11-26
 
-Code audit of `main` at `ce97801` (v2 live on GitHub Pages). Every item is open.
-Nothing here has been fixed yet.
+Code audit of `main` at `ce97801` (v2 live on GitHub Pages), and the fixes made
+for it. The findings below are kept as written at audit time; the Status section
+says where each one stands now.
+
+## Status
+
+Fixed in the working tree on `rebuild/v2`. **Not yet live**: the backend needs
+a deploy (a push to `main` does it), the Worker needs `wrangler deploy`, and the
+app needs the Pages build.
+
+| # | Status | How it was checked |
+|---|---|---|
+| 1 | Fixed | `tests/backend_text_extraction_regressions.py`; real `parse_epub` |
+| 2 | Fixed | Same suite; the live AO3 page now parses as 1 chapter, 106 paragraphs |
+| 3 | Fixed | Same suite, against AO3's real banner markup |
+| 4 | Fixed | `tests/audit_2026_11_26_fixes.test.mjs`; in the browser the real engine started at paragraph 4 of a story whose first three lines were a link, a title echo and a separator |
+| 5 | Fixed | Bridge tests. Add now needs no fetch. Saving another story offline while one plays is refused with a message |
+| 6 | Fixed in code, **untested end to end** | Push was ported back (`web/src/lib/core/push.ts`). The toggle now reflects the real subscription and can cancel an old one. Needs a real device: permission prompt, a subscription, a delivered alert |
+| 7 | Fixed | Bridge tests. Followed stories are also checked when the app opens |
+| 8 | Fixed | Bridge tests: the deadline is checked at every paragraph, and the timer survives the reload |
+| 9 | Fixed | Bridge test; in the browser on the real cores |
+| 10 | Fixed | Start screen and an error with "Try again"; smoke tests in Chromium and WebKit |
+| 11 | Fixed | The setting still changes (it is the memory-safe default) but the reader is told and the toggle updates |
+| 12 | Fixed | The four names are routed to notices; long messages stay on screen longer |
+| 13 | Fixed | Bridge tests |
+| 14 | Fixed | Bridge test; Settings and the voice sheet say when the device voice is reading |
+| 15 | Fixed in code, **needs a phone** | Source test. Cannot be exercised without a lock screen |
+| 16 | Fixed | In the browser with the page marked hidden: 8 of 8 paragraphs were handed over already staged |
+| 17 | Fixed | Bridge test |
+| 18 | Fixed | In the browser: a clip paused behind the app's back was restarted |
+| 19 | **Mitigated, not proven** | Phones now render up to about 15 minutes ahead instead of 8 paragraphs, and the player shows how many paragraphs are ready. Whether a locked iPhone keeps rendering is still unknown |
+| 20 | Fixed | In the browser: the record was written through and closed on return. Shown under Settings, About, long-press the version |
+| 21 | Fixed | Source test |
+| 22 | Fixed | Type check; not exercised against a failing search |
+| 23 | Fixed | Source test. Needs `wrangler deploy` |
+| 24 | **Guard only** | A test now fails when a core calls a global nothing defines. The dead old-shell code itself was not removed: it is entangled with code that tests pin, and removing it risks the live narration path for no user-visible gain |
+
+Found while fixing, and fixed:
+
+- **25.** A story added from search or the catalog still showed "Add": the row is
+  keyed by address, the library by its own key. Now matched by address too.
+- **26.** Home said "Your shelf is empty" when the library had stories but none
+  had been started. It now offers the newest one as "Up next".
+- **27.** The AO3 scraper dropped any paragraph of five characters or fewer
+  ("No." "Okay."). Kept now; only lines with no letter or digit are dropped.
+
+Still to do by hand:
+
+- Deploy the backend and the Worker, then re-fetch stories saved with damaged
+  text (remove and add again, or use "Check for new chapters").
+- Run the phone test at the end of this file on an iPhone and an Android phone.
+- Try alerts once on a real device.
+- `ANTHRONOMICON_BRIDGE.md` still describes the old shell's masterlist view.
 
 **How to read the Evidence column**
 
@@ -95,6 +146,9 @@ need re-fetching; the backend's 30-minute scrape cache clears on deploy.
 3. Listen for ten minutes. Note the paragraph where narration stops, if it does.
 4. On the lock screen, press Pause, wait ten seconds, press Play.
 5. Unlock and open Settings, About, long-press the version for diagnostics.
+   The "Locked-screen listening" rows say how many paragraphs played, where
+   each came from, how many were rendered meanwhile, and whether narration was
+   still running when you came back.
 
 ## Coverage
 

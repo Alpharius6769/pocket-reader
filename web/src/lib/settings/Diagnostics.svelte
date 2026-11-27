@@ -12,6 +12,11 @@
     d = (await attempt(() => bridge().getDiagnostics())) ?? null;
   });
 
+  function lockMinutes(s: Diagnostics['lockSessions'][number]) {
+    const end = s.shownAt ?? (s as { lastEventAt?: number }).lastEventAt ?? s.hiddenAt;
+    return Math.max(0, Math.round((end - s.hiddenAt) / 60000));
+  }
+
   async function copy() {
     if (!d) return;
     try {
@@ -39,6 +44,17 @@
     <Row label="Engine" value={d.engine.engine} />
     <Row label="Status" value={d.engine.status} />
     <Row label="Backend" value={d.engine.backend ?? '—'} />
+  </Group>
+  <Group title="Locked-screen listening" footer="Each row is one stretch with the screen off while narrating. “Stopped” means narration was not running when you came back.">
+    {#each [...d.lockSessions].reverse() as s (s.hiddenAt)}
+      <Row
+        label="{new Date(s.hiddenAt).toLocaleTimeString()} · {lockMinutes(s)} min"
+        sub="{s.played} played ({s.staged} ready, {s.fromStorage} from storage, {s.synthesized} rendered late) · {s.rendered} rendered ahead{s.recovered ? ` · ${s.recovered} restarted` : ''}{s.playRefused ? ` · ${s.playRefused} refused` : ''}"
+        value={s.ended === 'page-closed-while-hidden' ? 'Closed by the system' : s.stillPlaying ? 'Kept playing' : 'Stopped'}
+      />
+    {:else}
+      <Row label="Nothing recorded yet" sub="Lock the phone while a story is playing, then come back here." />
+    {/each}
   </Group>
   <section class="log-wrap">
     <h2 class="eyebrow">Recent log</h2>

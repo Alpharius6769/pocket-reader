@@ -50,6 +50,7 @@ import {
   type VoiceId,
 } from './bridge';
 import { bootCores, importCore } from './coreLoader';
+import { disablePush, enablePush, PushError, syncPushProfile } from './push';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type AnyFn = (...args: any[]) => any;
@@ -57,6 +58,7 @@ const w = window as unknown as Record<string, any>;
 
 const ENGINE_OVERRIDE_KEY = 'pr_narration_engine_override_v1';
 const SETUP_COMPLETE_KEY = 'pr_setup_complete';
+const SLEEP_KEY = 'pr_v2_sleep_timer';
 const PAGE_SIZE = 20;
 
 /* ----------------------------------------------------------- mapping */
@@ -133,6 +135,12 @@ function position(): Position {
 
 function activeEngine(): EngineId {
   return w._resolveActiveEngine?.() === 'kokoro' ? 'kokoro' : 'pocket';
+}
+
+/** The phone's own speech voice is what would narrate right now. */
+function deviceVoiceActive(): boolean {
+  const engine = w._resolveActiveEngine?.();
+  return typeof engine === 'string' && engine !== 'pocket' && engine !== 'kokoro';
 }
 
 function settingsBag(): Record<string, any> {
@@ -238,7 +246,16 @@ export class RealBridge implements CoreBridge {
     };
     w.showFirstTimeProfileSetup = () => {};
 
-    on(E.PARAGRAPH, () => this.onParagraph());
+    // Deferred to a microtask on purpose. The cores raise this synchronously
+    // at a paragraph boundary, BEFORE they start the next clip, and on a locked
+    // phone that boundary is the only time the page is given to run. Answering
+    // it inline put two snapshots and every store update ahead of play().
+    on(E.PARAGRAPH, () => queueMicrotask(() => this.onParagraph()));
+    on(E.BUFFER, (d: any) => {
+      if (d.state !== 'ahead' || !w.currentStory) return;
+      const ahead = w.getNarrationAhead?.() || {};
+      this.emit('buffer', { storyKey: keyOf(w.currentStory), ready: Number(ahead.paragraphs) || 0, target: Number(ahead.target) || 0 });
+    });
     on(E.PLAYSTATE, (d: any) => this.setState(d.playing ? 'playing' : this.state === 'ended' ? 'ended' : 'paused'));
     on(E.PLAY_LOADING, (d: any) => {
       if (d.loading) this.setState(this.engine.status === 'ready' ? 'buffering' : 'loading');
@@ -247,6 +264,9 @@ export class RealBridge implements CoreBridge {
     on(E.STORY_OPENED, (d: any) => {
       if (!d.story) return;
       this.endResumeWatch();
+      // Opening a story is how its new chapters get seen.
+      const opened = this.libraryStory(keyOf(d.story));
+      if (opened?.newChaptersAvailable) { opened.newChaptersAvailable = false; opened.newChapterCount = 0; save(); }
       this.rememberParagraphCounts(d.story);
       this.emit('story-loaded', { story: toStory(d.story), position: position() });
       this.onParagraph();
@@ -265,6 +285,9 @@ export class RealBridge implements CoreBridge {
         this.updateEngine({ status, stage: status === 'loading' ? 'download' : undefined });
       } else {
         this.updateEngine({});
+        // A core changed a narration setting itself (a tier step-down, the
+        // memory-safe default while saving offline): the toggles must show it.
+        this.emit('settings', this.settingsNow());
       }
     });
     on(E.PROGRESS, () => {
@@ -288,8 +311,30 @@ export class RealBridge implements CoreBridge {
       this.emit('buffer', { storyKey, ready, target });
     });
 
-    this.engine = { engine: activeEngine(), status: this.engineStatusNow() };
+    this.engine = { engine: activeEngine(), status: this.engineStatusNow(), ...(deviceVoiceActive() ? { deviceVoice: true } : {}) };
     if (w.currentStory) this.state = w.isPlaying ? 'playing' : 'paused';
+
+    // Names the cores still call that belonged to the old interface. Routed to
+    // the same notices everything else uses, so their messages are shown
+    // again instead of going nowhere. (Dialogs with their own buttons have
+    // no equivalent here; their callers already handle that.)
+    const coreUi = w.prCoreUi;
+    if (coreUi) {
+      w.virtueSpeak ??= (speech: string, duration?: number) => coreUi.say(speech, duration);
+      w.triggerVirtue ??= (beat: string) => coreUi.companion(beat);
+      w.pocketNotify ??= (message: string, duration?: number) => coreUi.notify(message, duration);
+      w.showSettingsModal ??= (title: string, bodyHtml: string) => coreUi.dialog(title, bodyHtml);
+    }
+    w.queueAchievementUnlock = (d: any) => {
+      void this.listAchievements().then((list) => {
+        const unlocked = list.find((a) => a.id === d?.ach_id);
+        if (unlocked) this.emit('achievement', unlocked);
+      });
+    };
+    w.syncPushProfileIfEnabled = () => void syncPushProfile();
+
+    this.restoreSleepTimer();
+    this.listenForStoryUpdates();
 
     // Reloaded into the fast-narration session with a story still to reopen:
     // say so until the cores have it back, or give up on it.
@@ -353,6 +398,8 @@ export class RealBridge implements CoreBridge {
       engine: activeEngine(),
       backend: runtime.selectedBackend === 'webgpu' ? 'webgpu' : 'wasm',
     };
+    if (deviceVoiceActive()) next.deviceVoice = true;
+    else delete next.deviceVoice;
     if (next.status !== 'loading') {
       delete next.stage; delete next.loadedBytes; delete next.totalBytes;
       if (patch.message === undefined) delete next.message;
@@ -398,10 +445,14 @@ export class RealBridge implements CoreBridge {
       paragraphCount: chapters[pos.chapter]?.paragraphs?.length ?? 0,
       chapterCount: chapters.length,
     });
+    // A locked phone suspends page timers, so the timed sleep is also checked
+    // here: this runs at every paragraph, which keeps happening while audio does.
+    if (this.sleep.kind === 'minutes' && Date.now() >= this.sleep.endsAt) this.fireSleepTimer();
     if (this.sleep.kind === 'end-of-chapter' && this.sleepChapter !== null && pos.chapter !== this.sleepChapter) {
       this.pause();
       this.sleep = { kind: 'off' };
       this.sleepChapter = null;
+      this.storeSleepTimer();
       this.emit('sleep', { ...this.sleep });
       this.notice('info', 'Stopped at the end of the chapter.', 'kneeling');
     }
@@ -475,7 +526,10 @@ export class RealBridge implements CoreBridge {
   }
 
   getEngineState(): EngineState {
-    return { ...this.engine, engine: activeEngine(), status: this.engineStatusNow() };
+    const state: EngineState = { ...this.engine, engine: activeEngine(), status: this.engineStatusNow() };
+    if (deviceVoiceActive()) state.deviceVoice = true;
+    else delete state.deviceVoice;
+    return state;
   }
 
   /* ----------------------------------------------------------- stories */
@@ -558,6 +612,43 @@ export class RealBridge implements CoreBridge {
     return toSummary(added);
   }
 
+  private libraryStoryByUrl(url: string): any {
+    const norm = (value: unknown) => String(value || '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase();
+    const wanted = norm(url);
+    if (!wanted || !/^https?:/.test(wanted)) return undefined;
+    return (w.userProfile?.library || []).find((s: any) => norm(s.url) === wanted || norm(s.sourceUrl) === wanted);
+  }
+
+  /**
+   * Followed stories are checked when the app opens, and a tapped alert leads
+   * to its story. Without the first, "new chapters" only ever appeared after
+   * pressing Check on one story at a time.
+   */
+  private listenForStoryUpdates() {
+    const announce = async (keys: StoryKey[]) => {
+      const titles = keys.map((k) => this.libraryStory(k)?.title).filter(Boolean);
+      if (titles.length === 1) this.notice('success', `New chapters in “${titles[0]}”`, 'point');
+      else if (titles.length > 1) this.notice('success', `New chapters in ${titles.length} stories you follow`, 'point');
+    };
+    const fromAlert = async (url: string) => {
+      const story = this.libraryStoryByUrl(url);
+      if (!story) return;
+      await announce(await this.library.checkForUpdates(keyOf(story)));
+    };
+    try {
+      navigator.serviceWorker?.addEventListener('message', (event) => {
+        if (event.data?.type === 'story-update' && event.data.storyUrl) void fromAlert(String(event.data.storyUrl));
+      });
+      const fromLaunch = new URLSearchParams(location.search).get('story_update');
+      if (fromLaunch) void fromAlert(fromLaunch);
+    } catch { /* no service worker here */ }
+    setTimeout(() => {
+      if (document.hidden || w.isPlaying || w.BufferManager?.isActive) return;
+      const followed = (w.userProfile?.library || []).some((s: any) => s.updateSubscribed);
+      if (followed) void this.library.checkForUpdates().then(announce).catch(() => {});
+    }, 12_000);
+  }
+
   private libraryStory(key: StoryKey): any {
     return w.findLibraryStoryByRef?.(key) || (w.userProfile?.library || []).find((s: any) => keyOf(s) === key);
   }
@@ -630,25 +721,55 @@ export class RealBridge implements CoreBridge {
   }
 
   setSleepTimer(timer: { kind: 'off' } | { kind: 'minutes'; minutes: number } | { kind: 'end-of-chapter' }) {
+    if (timer.kind === 'minutes') this.armSleepTimer(timer.minutes, Date.now() + timer.minutes * 60_000);
+    else {
+      if (this.sleepTimer) clearTimeout(this.sleepTimer);
+      this.sleepTimer = null;
+      this.sleepChapter = timer.kind === 'end-of-chapter' ? position().chapter : null;
+      this.sleep = timer.kind === 'end-of-chapter' ? { kind: 'end-of-chapter' } : { kind: 'off' };
+    }
+    this.storeSleepTimer();
+    this.emit('sleep', { ...this.sleep });
+  }
+
+  private armSleepTimer(minutes: number, endsAt: number) {
+    if (this.sleepTimer) clearTimeout(this.sleepTimer);
+    this.sleepChapter = null;
+    this.sleep = { kind: 'minutes', minutes, endsAt };
+    // The page timer is exact while the phone is awake; onParagraph is what
+    // still fires when it is not.
+    this.sleepTimer = setTimeout(() => this.fireSleepTimer(), Math.max(0, endsAt - Date.now()));
+  }
+
+  private fireSleepTimer() {
+    if (this.sleep.kind !== 'minutes') return;
     if (this.sleepTimer) clearTimeout(this.sleepTimer);
     this.sleepTimer = null;
-    this.sleepChapter = null;
-    if (timer.kind === 'minutes') {
-      const endsAt = Date.now() + timer.minutes * 60_000;
-      this.sleep = { kind: 'minutes', minutes: timer.minutes, endsAt };
-      this.sleepTimer = setTimeout(() => {
-        this.pause();
-        this.sleep = { kind: 'off' };
-        this.emit('sleep', { ...this.sleep });
-        this.notice('info', 'Sleep timer ended. Sweet dreams.', 'kneeling');
-      }, timer.minutes * 60_000);
-    } else if (timer.kind === 'end-of-chapter') {
-      this.sleep = { kind: 'end-of-chapter' };
-      this.sleepChapter = position().chapter;
-    } else {
-      this.sleep = { kind: 'off' };
-    }
+    this.pause();
+    this.sleep = { kind: 'off' };
+    this.storeSleepTimer();
     this.emit('sleep', { ...this.sleep });
+    this.notice('info', 'Sleep timer ended. Sweet dreams.', 'kneeling');
+  }
+
+  // The first narration of a session reloads the page. A timer set before
+  // that used to vanish with it.
+  private storeSleepTimer() {
+    try {
+      if (this.sleep.kind === 'off') sessionStorage.removeItem(SLEEP_KEY);
+      else sessionStorage.setItem(SLEEP_KEY, JSON.stringify({ ...this.sleep, chapter: this.sleepChapter }));
+    } catch { /* private mode */ }
+  }
+
+  private restoreSleepTimer() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(SLEEP_KEY) || 'null');
+      if (saved?.kind === 'minutes' && Number(saved.endsAt) > Date.now()) this.armSleepTimer(Number(saved.minutes) || 0, Number(saved.endsAt));
+      else if (saved?.kind === 'end-of-chapter') {
+        this.sleep = { kind: 'end-of-chapter' };
+        this.sleepChapter = Number.isInteger(saved.chapter) ? saved.chapter : position().chapter;
+      } else sessionStorage.removeItem(SLEEP_KEY);
+    } catch { /* nothing saved */ }
   }
 
   /* --------------------------------------------------------- bookmarks */
@@ -744,7 +865,12 @@ export class RealBridge implements CoreBridge {
 
   async startCaching(key: StoryKey) {
     if (!w.currentStory || keyOf(w.currentStory) !== key) {
-      await this.loadStory({ kind: 'key', key }, { background: true });
+      // The cores save the story that is open, so saving another one means
+      // opening it. Doing that behind a story that is playing swapped the
+      // text under the narrator; doing it silently left the screen showing
+      // one story while the cores held another.
+      if (w.isPlaying) throw new BridgeError('busy', 'Pause the story that is playing before saving another one for offline listening.');
+      await this.loadStory({ kind: 'key', key }, { autoplay: false });
     }
     await w.ensureNarrationRuntime?.();
     await w.startCaching('Permanent', key);
@@ -758,22 +884,67 @@ export class RealBridge implements CoreBridge {
 
   library: LibraryApi = {
     list: async () => (w.userProfile?.library || []).map((s: any) => this.toEntry(s)),
-    add: async (ref) => {
+    add: async (ref, summary) => {
       if (ref.kind === 'file') {
-        const summary = await this.importFile(ref.file);
-        return this.toEntry(this.libraryStory(summary.key));
+        const imported = await this.importFile(ref.file);
+        return this.toEntry(this.libraryStory(imported.key));
       }
       const target = ref.kind === 'key' ? ref.key : ref.url;
-      const existing = this.libraryStory(ref.kind === 'key' ? ref.key : target);
+      const existing = this.libraryStory(target) || this.libraryStoryByUrl(target);
       if (existing) return this.toEntry(existing);
-      await w.loadStory(target, { preventNavigate: true });
-      const added = this.libraryStory(keyOf(w.currentStory)) || w.currentStory;
+      const url = ref.kind === 'url' ? ref.url : summary?.url;
+      if (summary && url) {
+        // What the row already shows is enough for a library entry. Nothing is
+        // fetched and nothing is opened; the text is fetched on first open.
+        w.addToLibrary({
+          title: summary.title, author: summary.author, url, synopsis: summary.synopsis || '',
+          words: summary.words ? summary.words.toLocaleString() : '-', totalChapters: summary.chapterCount || 0,
+          fandoms: summary.fandoms || [], tags: summary.tags || [],
+        });
+        const added = this.libraryStoryByUrl(url);
+        if (!added) throw new BridgeError('not-found', 'That story could not be added.');
+        this.scheduleLibrary();
+        this.notice('success', `Added “${added.title}” to your library`, 'holding');
+        return this.toEntry(added);
+      }
+      // No details to go on: the story has to be fetched. The cores make a
+      // fetched story the open one, so put back what was open before.
+      if (w.isPlaying) throw new BridgeError('busy', 'Pause the story that is playing, then add this one.');
+      const before = { story: w.currentStory, chapter: w.currentChapterIndex, paragraph: w.currentParagraphIndex };
+      try {
+        await w.loadStory(target, { preventNavigate: true });
+      } finally {
+        var fetched = w.currentStory !== before.story ? w.currentStory : null;
+        w.currentStory = before.story;
+        w.currentChapterIndex = before.chapter;
+        w.currentParagraphIndex = before.paragraph;
+      }
+      const added = fetched ? this.libraryStory(keyOf(fetched)) || fetched : null;
       if (!added) throw new BridgeError('not-found', 'That story could not be added.');
       this.scheduleLibrary();
       return this.toEntry(added);
     },
     remove: async (key) => {
+      const open = w.currentStory && keyOf(w.currentStory) === key;
+      if (open) {
+        // It used to keep narrating, and stay on screen, after it had left
+        // the library.
+        if (w.BufferManager?.isActive) w._stopCaching?.();
+        w.cancelNarrationRunway?.();
+        w.releaseAudioSession?.();
+        w.isPlaying = false;
+        w.currentStory = null;
+        w.currentChapterIndex = 0;
+        w.currentParagraphIndex = 0;
+      }
       w.removeStory(key, { confirm: false });
+      if (open) {
+        this.state = 'idle';
+        this.emit('playstate', { state: 'idle' });
+        this.emit('story-closed', { storyKey: key });
+        this.emit('runway', this.getRunway());
+      }
+      void syncPushProfile();
       this.scheduleLibrary();
     },
     setFavourite: async (key, favourite) => {
@@ -788,6 +959,7 @@ export class RealBridge implements CoreBridge {
     setSubscribed: async (key, subscribed) => {
       const s = this.libraryStory(key);
       if (s && !!s.updateSubscribed !== subscribed) await w.toggleStorySubscription(key);
+      void syncPushProfile();
       this.scheduleLibrary();
     },
     checkForUpdates: async (key) => {
@@ -797,8 +969,20 @@ export class RealBridge implements CoreBridge {
         const before = Number(s.publishedChapters || s.totalChapters || 0);
         try { await w.checkStoryUpdate(keyOf(s), s.url, null, { silent: true }); } catch { /* one failure must not stop the rest */ }
         const after = this.libraryStory(keyOf(s));
-        if (Number(after?.publishedChapters || after?.totalChapters || 0) > before) changed.push(keyOf(s));
+        const now = Number(after?.publishedChapters || after?.totalChapters || 0);
+        if (after && now > before) {
+          changed.push(keyOf(s));
+          // The check adds the chapters straight away, so nothing else
+          // recorded that there was news: the badge, the "New" pill and
+          // Home's list read a flag that nothing ever set.
+          const open = w.currentStory && keyOf(w.currentStory) === keyOf(s);
+          if (!open) {
+            after.newChaptersAvailable = true;
+            after.newChapterCount = (Number(after.newChapterCount) || 0) + (now - before);
+          }
+        }
       }
+      if (changed.length) { save(); void syncPushProfile(); }
       this.scheduleLibrary();
       return changed;
     },
@@ -885,7 +1069,9 @@ export class RealBridge implements CoreBridge {
       readerSize: Number(v2.readerSize || s.readerFontSize) || 19,
       readerLineHeight: Number(s.readerLineHeight) || 1.6,
       defaultMode: v2.defaultMode === 'read' ? 'read' : 'listen',
-      updateNotifications: v2.updateNotifications !== false,
+      // Whether this device is really subscribed, in the field the old app
+      // used, so an existing subscriber sees it on and can turn it off.
+      updateNotifications: s.pushUpdates === true,
       companion: s.companionFrequency === 'quiet' && v2.companionHidden ? 'none' : (v2.companion === 'none' ? 'none' : 'virtue'),
       companionChatter: s.companionFrequency === 'quiet' ? 'quiet' : 'normal',
       layout: v2.layout === 'phone' ? 'phone' : 'auto',
@@ -900,6 +1086,21 @@ export class RealBridge implements CoreBridge {
   async setSettings(patch: Partial<Settings>): Promise<Settings> {
     const s = settingsBag();
     const v2 = uiBag();
+    // First, and before any await: turning alerts on shows the browser's
+    // permission prompt, which is only allowed straight from the tap.
+    if (patch.updateNotifications !== undefined && patch.updateNotifications !== (s.pushUpdates === true)) {
+      const change = patch.updateNotifications ? enablePush() : disablePush();
+      try {
+        await change;
+        s.pushUpdates = patch.updateNotifications;
+        this.notice('success', patch.updateNotifications ? 'Alerts are on. You will hear about new chapters in stories you follow.' : 'Alerts are off.', 'wink');
+      } catch (error) {
+        s.pushUpdates = false;
+        save();
+        this.emit('settings', this.settingsNow());
+        throw new BridgeError('blocked', error instanceof PushError ? error.message : 'Alerts could not be turned on. Check your connection and try again.');
+      }
+    }
     if (patch.engine && patch.engine !== this.settingsNow().engine) await this.setEngine(patch.engine);
     if (patch.voice) {
       const current = this.settingsNow();
@@ -924,7 +1125,6 @@ export class RealBridge implements CoreBridge {
     if (patch.readerSize !== undefined) { v2.readerSize = patch.readerSize; s.readerFontSize = patch.readerSize; }
     if (patch.readerLineHeight !== undefined) s.readerLineHeight = patch.readerLineHeight;
     if (patch.defaultMode) v2.defaultMode = patch.defaultMode;
-    if (patch.updateNotifications !== undefined) v2.updateNotifications = patch.updateNotifications;
     if (patch.companion) v2.companion = patch.companion;
     if (patch.layout) v2.layout = patch.layout;
     if (patch.companionChatter) s.companionFrequency = patch.companionChatter === 'quiet' ? 'quiet' : 'contextual';
@@ -1139,9 +1339,12 @@ export class RealBridge implements CoreBridge {
     const unlocked = new Map((profile.achievements || []).map((a: any) => [typeof a === 'string' ? a : a.id, a]));
     const stats = profile.stats || this.libCore.aggregateStats?.(this.libCore.normalizeProfileV3?.(profile) || profile) || {};
     return db.map((a) => {
-      const got: any = unlocked.get(a.id);
-      const value = Number(stats[a.metric]) || 0;
       const tiers: any[] = Array.isArray(a.tiers) ? a.tiers : [];
+      // A tiered achievement is stored once per tier, as `<id>_t<index>`; the
+      // bare id never exists for one, so it always looked locked.
+      const got: any = unlocked.get(a.id)
+        ?? tiers.map((_t, index) => unlocked.get(`${a.id}_t${index}`)).filter(Boolean).pop();
+      const value = Number(stats[a.metric]) || 0;
       const reached = tiers.filter((t) => value >= t.v).pop();
       const next = tiers.find((t) => value < t.v);
       return {
@@ -1149,7 +1352,7 @@ export class RealBridge implements CoreBridge {
         title: a.title,
         description: a.desc,
         icon: `ach_${a.id}`,
-        unlockedAt: got ? Number(got.unlockedAt) || undefined : undefined,
+        unlockedAt: got ? Number(got.unlockedAt) || 1 : undefined,
         tier: reached?.t,
         progress: next
           ? { value, target: next.v, ...(a.metric === 'hoursListened' ? { unit: 'hours' as const } : {}) }
@@ -1189,6 +1392,7 @@ export class RealBridge implements CoreBridge {
       engine: this.getEngineState(),
       threads: Number(runtime.wasmThreadCount) || 1,
       crossOriginIsolated: window.crossOriginIsolated === true,
+      lockSessions: Array.isArray(w.getLockScreenReport?.()) ? w.getLockScreenReport() : [],
       recentLog: logs.map((l: any) => ({
         at: Number(l.at || l.ts || l.time) || Date.now(),
         level: /err/i.test(l.level) ? 'error' : /warn/i.test(l.level) ? 'warn' : 'info',

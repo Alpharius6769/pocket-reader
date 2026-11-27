@@ -58,7 +58,7 @@
     <div class="page" in:pushIn>
       {#if page === 'root' && $settings}
         <Group title="Narration">
-          <Row icon={AudioLines} tint="var(--accent)" label="Voice & speed" value="{voice?.name} · {speedLabel($player.speed)}" sub="{ENGINES[$player.engine].name} engine" onclick={() => pushSettings('voice')} />
+          <Row icon={AudioLines} tint="var(--accent)" label="Voice & speed" value="{voice?.name} · {speedLabel($player.speed)}" sub={$player.engineState.deviceVoice ? "This device's own voice" : `${ENGINES[$player.engine].name} engine`} onclick={() => pushSettings('voice')} />
           <Row icon={Sparkles} tint="#8a5cc2" label="Expressive narration" sub="Voice reacts to the scene">
             {#snippet trailing()}<Toggle label="Expressive narration" checked={$settings!.expressive} onchange={(v) => updateSettings({ expressive: v })} />{/snippet}
           </Row>
@@ -134,7 +134,7 @@
           {/if}
         </Group>
 
-        <Group title="Notifications" footer="Get a notification when a story you follow posts a new chapter. Choose which stories in each story’s options.">
+        <Group title="Notifications" footer="Get a notification when an AO3 story you follow posts a new chapter. Choose which stories in each story’s options. Followed stories are also checked whenever you open the app.">
           <Row icon={Bell} tint="#c0392b" label="New chapter alerts">
             {#snippet trailing()}<Toggle label="New chapter alerts" checked={$settings!.updateNotifications} onchange={(v) => updateSettings({ updateNotifications: v })} />{/snippet}
           </Row>

@@ -130,7 +130,9 @@ export function toast(notice: Omit<Notice, 'id'> & { id?: string }) {
   ui.update((u) => ({ ...u, toasts: [...u.toasts.filter((t) => t.message !== n.message), n].slice(-3) }));
   // A toast with an action is waiting on the reader (the post-reload "Start
   // narration" tap); it stays until used or replaced, not 3 s.
-  if (!n.actionLabel) setTimeout(() => dismissToast(n.id), n.level === 'error' ? TOAST_MS * 1.6 : TOAST_MS);
+  // Long enough to read: some of these are whole sentences from the cores.
+  const reading = Math.min(9000, Math.max(0, n.message.length - 60) * 45);
+  if (!n.actionLabel) setTimeout(() => dismissToast(n.id), (n.level === 'error' ? TOAST_MS * 1.6 : TOAST_MS) + reading);
   if (n.mood) say(n.mood, null);
 }
 

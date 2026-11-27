@@ -26,7 +26,11 @@
     [achievements, stats] = await Promise.all([bridge().listAchievements(), bridge().getStats()]);
   });
 
-  const hero = $derived($player.story ? $library.entries.find((e) => e.story.key === $player.story!.key) : $inProgress[0]);
+  // The open story, else the one in progress, else the newest on the shelf. A
+  // library of stories that had not been started yet used to fall through to
+  // "Your shelf is empty".
+  const newest = $derived([...$library.entries].sort((x, y) => y.addedAt - x.addedAt)[0]);
+  const hero = $derived($player.story ? $library.entries.find((e) => e.story.key === $player.story!.key) : ($inProgress[0] ?? newest));
   const others = $derived($inProgress.filter((e) => e.story.key !== hero?.story.key).slice(0, 8));
   const updates = $derived($library.entries.filter((e) => e.hasUpdate));
   const heroIsCurrent = $derived(!!$player.story && hero?.story.key === $player.story.key);
@@ -83,7 +87,7 @@
 
   {#if hero}
     <section class="block" aria-labelledby="cont-title">
-      <h2 class="section-title" id="cont-title">Continue</h2>
+      <h2 class="section-title" id="cont-title">{heroProgress > 0 || heroIsCurrent ? 'Continue' : 'Up next'}</h2>
       <div class="hero card">
         <button class="hero-open" type="button" onclick={() => (heroIsCurrent ? openNowPlaying(true) : openSheet({ kind: 'story', key: hero!.story.key }))}>
           <Cover story={hero.story} size={92} />

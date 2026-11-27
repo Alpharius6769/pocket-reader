@@ -2243,6 +2243,8 @@ function _updatePlayButton(playing) {
 }
 
 let _mediaSessionActionsBound = false;
+// Set by a Play that came from outside the page (lock screen, headset).
+let _autoStartWhenReady = false;
 
 function _setMediaPositionState() {
   if (!('mediaSession' in navigator) || !(window.currentAudio instanceof HTMLAudioElement)) return;
@@ -2279,7 +2281,17 @@ function _bindMediaSessionActions() {
   const bind = (action, handler) => {
     try { navigator.mediaSession.setActionHandler(action, handler); } catch (_) {}
   };
-  bind('play', () => { if (!window.isPlaying && window.currentStory) window.togglePlayState?.(); });
+  // Play from the lock screen, Control Centre or a headset. There is no screen
+  // to show a "preparing" state on and nobody to tap a second time, so a start
+  // the runway gate holds back must begin on its own once the paragraphs are
+  // ready (_autoStartWhenReady). And if the app already believes it is playing
+  // but no audio is running, this press is the listener asking why: recover.
+  bind('play', () => {
+    if (!window.currentStory) return;
+    if (window.isPlaying) { _recoverStalledPlayback('media-session'); return; }
+    _autoStartWhenReady = true;
+    window.togglePlayState?.();
+  });
   bind('pause', () => { if (window.isPlaying) window.pausePlayback?.(); });
   // Stop is not Pause. This was bound to pausePlayback, which leaves the
   // metadata in place -- so the lock-screen / Control Centre entry stayed on
@@ -2465,11 +2477,9 @@ window.addEventListener('pagehide', (event) => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     _updateMediaSession(window.isPlaying);
-    // If audio stalled while backgrounded, restart the current paragraph
-    if (window.isPlaying && window.currentAudio instanceof HTMLAudioElement &&
-        window.currentAudio.paused && !window.currentAudio.ended) {
-      window.currentAudio.play().catch(() => {});
-    }
+    // Narration that stalled while the page was hidden starts again here.
+    _recoverStalledPlayback('visible');
+    _closeLockSession();
     const isCachingActive = Boolean(window.BufferManager?.isActive && !window.BufferManager?.paused);
     if (!window.isPlaying && !isCachingActive) {
       stopBgKeepAlive();
@@ -2479,8 +2489,131 @@ document.addEventListener('visibilitychange', () => {
     if (window.isPlaying || isCachingActive) {
       startBgKeepAlive();
     }
+    _openLockSession();
   }
 });
+
+// ── Stall recovery ──────────────────────────────────────────────────────────
+// The app can believe it is playing while nothing is: the hand-over at a
+// paragraph boundary did not happen while the phone was locked (the page was
+// suspended, or play() was refused). The old handler only restarted a clip that
+// was paused part-way; a clip that had ENDED with no successor was left as it
+// was, showing "playing" in silence until Play was toggled twice.
+let _playInFlight = 0;
+let _playInFlightSince = 0;
+const PLAY_IN_FLIGHT_STALE_MS = 20000;
+
+function _recoverStalledPlayback(reason) {
+  if (!window.isPlaying || !window.currentStory) return false;
+  if (!_isNeuralEngine(_resolveActiveEngine())) return false;
+  if (window._pocketLiveSynthActive === true) return false;          // rendering this paragraph now
+  if (_activePocketStream) return false;                             // desktop streaming path
+  const audio = window.currentAudio;
+  const narrating = audio instanceof HTMLAudioElement && audio.dataset?.pocketNarration === '1';
+  if (narrating && !audio.paused && !audio.ended) return false;      // healthy
+  // A start that is genuinely under way is left alone, unless it has been
+  // "under way" for longer than any hand-over takes.
+  if (_playInFlight > 0 && Date.now() - _playInFlightSince < PLAY_IN_FLIGHT_STALE_MS) return false;
+  _lockNote('recovered');
+  window.Diagnostics?.log?.('WARN', 'Narration had stalled; restarting the current paragraph', {
+    reason,
+    clip: narrating ? (audio.ended ? 'ended' : 'paused') : 'none',
+    chapIdx: window.currentChapterIndex,
+    paraIdx: window.currentParagraphIndex,
+  });
+  if (narrating && audio.paused && !audio.ended) {
+    audio.play().catch(() => { _releaseCurrentAudio(); if (window.isPlaying) playCurrentParagraph(); });
+    return true;
+  }
+  playCurrentParagraph();
+  return true;
+}
+window._recoverStalledPlayback = _recoverStalledPlayback;
+window.addEventListener('pageshow', () => { _recoverStalledPlayback('pageshow'); });
+
+// ── Locked-screen record ────────────────────────────────────────────────────
+// Background playback fails with the phone in a pocket and nobody watching a
+// console. This records what happened between the page being hidden and shown
+// again while narration was on: how many paragraphs played and where each came
+// from, how many were rendered meanwhile, and whether narration was still
+// running at the end. It is written through as it goes, so a page the system
+// killed while locked still leaves its record for the next launch.
+const LOCK_SESSIONS_KEY = 'pr_lock_sessions_v1';
+const LOCK_SESSION_OPEN_KEY = 'pr_lock_session_open_v1';
+const LOCK_SESSIONS_KEPT = 6;
+let _lockSession = null;
+
+function _readLockSessions() {
+  try {
+    const list = JSON.parse(localStorage.getItem(LOCK_SESSIONS_KEY) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch (_) { return []; }
+}
+
+function _storeLockSession(record) {
+  try {
+    const list = _readLockSessions();
+    list.push(record);
+    localStorage.setItem(LOCK_SESSIONS_KEY, JSON.stringify(list.slice(-LOCK_SESSIONS_KEPT)));
+  } catch (_) { /* storage full or blocked: the record is lost, nothing else is */ }
+}
+
+function _persistOpenLockSession() {
+  if (!_lockSession) return;
+  try { localStorage.setItem(LOCK_SESSION_OPEN_KEY, JSON.stringify(_lockSession)); } catch (_) {}
+}
+
+function _lockNote(field) {
+  if (!_lockSession) return;
+  _lockSession[field] = (_lockSession[field] || 0) + 1;
+  _lockSession.lastEventAt = Date.now();
+  _persistOpenLockSession();
+}
+
+function _openLockSession() {
+  if (_lockSession || !window.isPlaying || !window.currentStory) return;
+  const now = Date.now();
+  _lockSession = {
+    hiddenAt: now,
+    lastEventAt: now,
+    engine: _resolveActiveEngine(),
+    from: { chapter: window.currentChapterIndex || 0, paragraph: window.currentParagraphIndex || 0 },
+    played: 0, staged: 0, fromStorage: 0, synthesized: 0, rendered: 0,
+    recovered: 0, gateHeld: 0, autoStarted: 0, playRefused: 0,
+  };
+  _persistOpenLockSession();
+}
+
+function _closeLockSession() {
+  if (!_lockSession) return;
+  const audio = window.currentAudio;
+  const record = {
+    ..._lockSession,
+    shownAt: Date.now(),
+    to: { chapter: window.currentChapterIndex || 0, paragraph: window.currentParagraphIndex || 0 },
+    // Was narration actually audible when the reader came back?
+    stillPlaying: Boolean(window.isPlaying && audio instanceof HTMLAudioElement && !audio.paused && !audio.ended),
+    ended: 'returned',
+  };
+  _lockSession = null;
+  try { localStorage.removeItem(LOCK_SESSION_OPEN_KEY); } catch (_) {}
+  _storeLockSession(record);
+  window.Diagnostics?.log?.(record.stillPlaying ? 'INFO' : 'WARN', 'Locked-screen session', record);
+}
+
+// A record left open means the page did not survive: the system closed it
+// while it was hidden. That is itself the finding.
+(function _adoptOrphanedLockSession() {
+  try {
+    const raw = localStorage.getItem(LOCK_SESSION_OPEN_KEY);
+    if (!raw) return;
+    localStorage.removeItem(LOCK_SESSION_OPEN_KEY);
+    const open = JSON.parse(raw);
+    if (open && open.hiddenAt) _storeLockSession({ ...open, stillPlaying: false, ended: 'page-closed-while-hidden' });
+  } catch (_) {}
+})();
+
+window.getLockScreenReport = () => _readLockSessions();
 
 function _setPlayBtnLoading(loading, message = '⏳ Loading...') {
   ui.playLoading(loading, message);
@@ -4073,6 +4206,8 @@ function _signalColdStartOnce() {
 }
 
 export function togglePlayState() {
+  const autoStart = _autoStartWhenReady;
+  _autoStartWhenReady = false;
   if (!window.currentStory || !window.currentStory.chapters) {
     ui.notify('No story loaded yet — open one from your library first.', 4000);
     return;
@@ -4100,8 +4235,19 @@ export function togglePlayState() {
     const bypass = window.__narrationRunwayBypassOnce === true;
     window.__narrationRunwayBypassOnce = false;
     if (!resumePausedPocketAudio && !bypass && !isNarrationRunwayReady()) {
-      prepareNarrationRunway();
+      const preparing = prepareNarrationRunway();
       ui.playstate(false);
+      _lockNote('gateHeld');
+      if (autoStart) {
+        // The media element was unlocked synchronously above, inside the
+        // press, so starting it once the paragraphs are ready is permitted.
+        Promise.resolve(preparing).then((runway) => {
+          if (runway?.ok && !window.isPlaying && window.currentStory && isNarrationRunwayReady()) {
+            _lockNote('autoStarted');
+            togglePlayState();
+          }
+        }).catch(() => {});
+      }
       return;
     }
   }
@@ -4125,7 +4271,20 @@ window.togglePlayState = togglePlayState;
 
 export async function playCurrentParagraph() {
   if (!window.isPlaying) return;
+  _playInFlight += 1;
+  _playInFlightSince = Date.now();
+  try {
+    await _playCurrentParagraphNow();
+  } finally {
+    _playInFlight = Math.max(0, _playInFlight - 1);
+  }
+}
+window.playCurrentParagraph = playCurrentParagraph;
 
+// Runs synchronously up to the first await, exactly as before: at a paragraph
+// boundary with the next clip staged, play() is still called inside the
+// `ended` event.
+async function _playCurrentParagraphNow() {
   const story = window.currentStory;
   if (!story || !story.chapters) {
     pausePlayback();
@@ -4171,7 +4330,6 @@ export async function playCurrentParagraph() {
     pausePlayback();
   }
 }
-window.playCurrentParagraph = playCurrentParagraph;
 
 let _premiumAudio = window.__pocketMobileMediaElement || null;
 let _audioCtx = window.__pocketMobileAudioContext || null;
@@ -4315,7 +4473,31 @@ function _onsetFadeSecFor(voiceAsset) {
 // iOS screen denies. Con (as flagged to the user): more eager synthesis =
 // more battery while playing uncached stretches.
 const POCKET_PLAYBACK_LOOKAHEAD = 8;
+// On a phone the listener locks the screen, and what has been rendered by
+// then may be all there is until it is unlocked: iOS gives a hidden page very
+// little time to compute. Eight paragraphs is a minute or two of audio. So on
+// phones the lookahead works to a budget of listening time instead, and keeps
+// rendering while the screen is on until that much is ready ahead.
+const POCKET_LOCKSAFE_LOOKAHEAD_PARAGRAPHS = 60;
+const POCKET_LOCKSAFE_LOOKAHEAD_WORDS = 2300;   // about 15 minutes at 155 wpm
+
+function _lookaheadBudget() {
+  return _preferDirectMobileMediaPlayback()
+    ? { paragraphs: POCKET_LOCKSAFE_LOOKAHEAD_PARAGRAPHS, words: POCKET_LOCKSAFE_LOOKAHEAD_WORDS }
+    : { paragraphs: POCKET_PLAYBACK_LOOKAHEAD, words: Infinity };
+}
+
+// What is rendered ahead of the cursor, as of the lookahead's last pass.
+let _narrationAhead = { paragraphs: 0, words: 0, target: 0, at: 0 };
+window.getNarrationAhead = () => ({ ..._narrationAhead });
+
+function _publishNarrationAhead(paragraphs, words, target) {
+  const changed = paragraphs !== _narrationAhead.paragraphs || target !== _narrationAhead.target;
+  _narrationAhead = { paragraphs, words, target, at: Date.now() };
+  if (changed) ui.bufferChanged('ahead');
+}
 let _lookaheadRunning = false;
+let _lookaheadSatisfiedFor = null;
 let _lastAudioClockPumpAt = 0;
 
 export function _onAudioClockPump() {
@@ -4323,6 +4505,11 @@ export function _onAudioClockPump() {
   const now = Date.now();
   if (now - _lastAudioClockPumpAt < 2000) return;
   _lastAudioClockPumpAt = now;
+  // Staging the next paragraph was tried once, when this one started. If it
+  // had not been rendered yet, nothing tried again, and the boundary fell
+  // back to a storage read inside the window a locked phone allows. This
+  // runs on the audio clock, which keeps ticking when page timers do not.
+  _preloadNextParagraphAudio();
   _ensurePlaybackLookahead();
 }
 window._onAudioClockPump = _onAudioClockPump;
@@ -4347,7 +4534,13 @@ async function _ensurePlaybackLookahead() {
   if (_lookaheadShouldYield()) return;
   const story = window.currentStory;
   if (!story?.chapters) return;
+  // A pass that found the whole budget already rendered has nothing to add
+  // until the cursor moves; without this the audio clock re-read every slot
+  // from storage every two seconds.
+  const passKey = `${story.storyKey || story.title}::${window.currentChapterIndex}::${window.currentParagraphIndex}::${_effectiveVoiceForEngine(_resolveActiveEngine())}`;
+  if (_lookaheadSatisfiedFor === passKey) return;
   _lookaheadRunning = true;
+  let interrupted = false;
   try {
     // Must be the RESOLVED engine, not the literal. Pinned to 'pocket' this
     // rewrote every Kokoro voice into a Pocket emotion asset, read and wrote
@@ -4360,28 +4553,46 @@ async function _ensurePlaybackLookahead() {
     const storyRef = story.storyKey || window.getStoryStableKey?.(story) || title;
     const selVoice = _effectiveVoiceForEngine(engine);
     let c = window.currentChapterIndex, p = window.currentParagraphIndex;
-    for (let i = 0; i < POCKET_PLAYBACK_LOOKAHEAD; i++) {
-      if (_lookaheadShouldYield()) break;
+    const budget = _lookaheadBudget();
+    let aheadParagraphs = 0;
+    let aheadWords = 0;
+    for (let i = 0; i < budget.paragraphs; i++) {
+      if (_lookaheadShouldYield()) { interrupted = true; break; }
+      if (aheadWords >= budget.words) break;
       const nxt = _peekNextIndices(c, p);
       if (!nxt) break;              // end of story
       c = nxt.c; p = nxt.p;
       const text = story.chapters[c]?.paragraphs?.[p];
       if (!text || text.trim() === '' || _isMetaParagraph(text)) continue;
+      const slotWords = text.split(/\s+/).filter(Boolean).length;
       const cleanVoice = resolveVoiceWithSentiment(engine, selVoice, text, { storyTitle: title, chapIdx: c, paraIdx: p });
       // Already rendered under either render-mode tag? Then this slot is safe.
       let cached = false;
       for (const tag of _prosodyCacheTagVariants(engine)) {
         if (await getAudioChunk(storyRef, c, p, engine, cleanVoice + tag, text)) { cached = true; break; }
       }
-      if (cached) continue;
-      if (_lookaheadShouldYield()) break;   // re-check right before committing the worker
+      if (cached) {
+        aheadParagraphs += 1;
+        aheadWords += slotWords;
+        _publishNarrationAhead(aheadParagraphs, aheadWords, budget.paragraphs);
+        continue;
+      }
+      if (_lookaheadShouldYield()) { interrupted = true; break; }   // re-check right before committing the worker
       const audioBlob = await window.generateChunk(text, cleanVoice, { storyTitle: title, chapIdx: c, paraIdx: p });
+      if (!audioBlob) { interrupted = true; break; }   // could not render it: stop here, the next pass retries
       if (audioBlob) {
         const cacheVoice = cleanVoice + (typeof _prosodyCacheTag === 'function' ? _prosodyCacheTag(engine) : '');
         await saveAudioChunk(storyRef, c, p, engine, cacheVoice, audioBlob, false, text).catch(() => {});
+        _lockNote('rendered');
+        aheadParagraphs += 1;
+        aheadWords += slotWords;
+        _publishNarrationAhead(aheadParagraphs, aheadWords, budget.paragraphs);
+        // It may be the very next paragraph: stage it now rather than at the boundary.
+        _preloadNextParagraphAudio();
         window.Diagnostics?.log?.('INFO', 'Playback lookahead cached paragraph ahead of the cursor', { chapIdx: c, paraIdx: p });
       }
     }
+    if (!interrupted) _lookaheadSatisfiedFor = passKey;
   } catch (e) {
     window.Diagnostics?.log?.('WARN', 'Playback lookahead prefetch skipped', { error: e?.message || String(e) });
   } finally {
@@ -4556,6 +4767,7 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
   // is the whole point: with the screen locked, the `ended` window is too short
   // to reliably complete an IndexedDB read before play() must be called.
   let audioBlob = _takePreloadedParagraph(storyRef, chapIdx, paraIdx, cleanVoice);
+  const _wasStaged = audioBlob instanceof Blob;
   if (!audioBlob) {
     for (const tag of _prosodyCacheTagVariants(engine)) {
       audioBlob = await getAudioChunk(storyRef, chapIdx, paraIdx, engine, cleanVoice + tag, text);
@@ -4715,6 +4927,8 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
       try { await _audioCtx.resume(); } catch (e) {}
     }
     await window.currentAudio.play();
+    _lockNote('played');
+    _lockNote(_wasStaged ? 'staged' : _cacheHit ? 'fromStorage' : 'synthesized');
     // Resolve the next paragraph now, while this one is playing and the tab
     // still has normal execution. At the boundary it is handed over
     // synchronously, so a locked screen never has to complete a storage read
@@ -4734,6 +4948,7 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
     if (window.isPlaying) _ensurePlaybackLookahead();
   } catch (playError) {
     console.warn('Autoplay blocked:', playError);
+    _lockNote('playRefused');
     pausePlayback();
     ui.say('Tap Play to begin - your browser needs a user gesture first.', 5000);
   }
@@ -5525,19 +5740,125 @@ export function saveBookmark() {
 }
 window.saveBookmark = saveBookmark;
 
+// ── Non-story paragraphs ────────────────────────────────────────────────────
+// The one detector for paragraphs that are not story: author's notes, export
+// metadata, bare links, separators, title and author echoes. Playback, the
+// lookahead, the starting runway and the offline cacher all skip exactly what
+// this returns true for.
+//
+// It lived in ui_controller.js, which the v2 rebuild deleted, and the two
+// callers fell back to "skip only empty paragraphs" without anything failing:
+// narration simply started reading the metadata aloud. It belongs to
+// narration, so it lives here now and cannot be lost with a UI again.
+// ── Author-note detection ──────────────────────────────────────────────────
+// Design rule: false-positives (reading a real note as story) are ACCEPTABLE.
+// False-negatives (skipping real story content) are NOT acceptable.
+// Only return true when confidence is very high.  If in doubt, return false.
+export function isMetaParagraph(text, storyTitle = null, chapterTitle = null, storyAuthor = null) {
+  if (!text || !text.trim()) return true; // empty
+  const raw   = text.trim();
+  const lower = raw.toLowerCase();
+
+  // ── Tier 1: Unambiguous structural markers ──────────────────────────────
+  // These patterns appear exclusively in author notes / metadata, never in prose.
+
+  // Explicit A/N headers (all common variants)
+  if (/^a\/n\b/i.test(raw))                          return true; // A/N: or A/N -
+  if (/^\[a\/n\]/i.test(raw))                         return true; // [A/N]
+  if (/^\(a\/n\)/i.test(raw))                         return true; // (A/N)
+  if (/^~a\/n~/i.test(raw))                           return true; // ~A/N~
+  if (/^\*+a\/n\*+/i.test(raw))                       return true; // *A/N* **A/N**
+  if (/^author['']?s?\s+note/i.test(raw))             return true; // Author's Note / Author Note:
+  if (/^note from (the )?author/i.test(raw))          return true;
+  if (/^from (the )?author\b/i.test(raw))             return true;
+
+  // AO3 chapter-note section headers
+  if (/^notes?:\s/i.test(raw) && raw.length < 600)   return true; // "Notes: ..." header block
+  if (/^end\s*notes?:/i.test(raw))                    return true;
+  if (/^chapter\s+notes?:/i.test(raw))                return true;
+  if (/^beginning\s+notes?:/i.test(raw))              return true;
+
+  // Fanfic disclaimer boilerplate
+  if (/^disclaimer:/i.test(raw) && raw.length < 500) return true;
+  if (/^summary:/i.test(raw))                         return true;
+  if (/^title:\s/i.test(raw))                         return true;
+
+  // Story / export metadata lines
+  if (lower.startsWith('content warning') || lower.startsWith('cw:') || lower.startsWith('tw:'))   return true;
+  if (lower.startsWith('status:'))                                        return true;
+  if (lower.startsWith('published:') && raw.length < 80)                 return true;
+  if (lower.startsWith('updated:')   && raw.length < 80)                 return true;
+  if (lower.startsWith('words:')     && raw.length < 80)                 return true;
+  if (lower.startsWith('original source:'))                               return true;
+  if (lower.startsWith('exported with the assistance of'))                return true;
+  if (lower.startsWith('fichub.net'))                                     return true;
+  if (lower.startsWith('http://') || lower.startsWith('https://'))       return true;
+  if (/^[=\-\*_~]{3,}$/.test(raw))                                       return true; // --- === ~~~
+
+  // ── Tier 2: Story / chapter title echoes ────────────────────────────────
+  // Very short paragraph that IS essentially just the title
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normText = norm(lower);
+  if (storyTitle) {
+    const nt = norm(storyTitle);
+    if (nt.length >= 3 && normText === nt) return true;
+    if (nt.length >= 3 && normText.startsWith(nt) && normText.length <= nt.length + 8) return true;
+  }
+  if (chapterTitle) {
+    const nc = norm(chapterTitle);
+    if (nc.length >= 3 && normText === nc) return true;
+    if (nc.length >= 3 && normText.startsWith(nc) && normText.length <= nc.length + 8) return true;
+    // AO3/PDF exports often emit "Chapter 1" as a separate line immediately
+    // before the fuller "Chapter 1: Title" heading.
+    if (/^(chapter|part|book)\s+(?:\d+|[ivxlcdm]+)$/i.test(raw)
+        && nc.startsWith(normText)) return true;
+  }
+  if (storyAuthor) {
+    const na = norm(storyAuthor);
+    if (na.length >= 3 && normText === na) return true;
+  }
+
+  // ── Tier 3: Multi-signal detection for SHORT paragraphs only ────────────
+  // Only applied to paragraphs ≤ 75 words.  Requires 2 independent signals
+  // from different signal groups so a single phrase in story dialogue can't
+  // accidentally trip the filter.
+  const wordCount = lower.split(/\s+/).filter(Boolean).length;
+  if (wordCount <= 75) {
+    let hits = 0;
+
+    // Group A – Direct reader address
+    if (/\b(dear readers?|hello (everyone|all|guys|folks)|hey (everyone|all|guys|folks)|hi (everyone|all|guys|folks))\b/.test(lower)) hits++;
+
+    // Group B – Explicit thanks-for-reading phrasing
+    if (/\bthank(s| you) (so much )?for (reading|your support|the kudos|all the)\b/.test(lower)) hits++;
+
+    // Group C – Beta / editing acknowledgement
+    if (/\b(beta.?read(er|ers|ing)?|proofread(er|ers|ing)?|edited by|my beta)\b/.test(lower)) hits++;
+
+    // Group D – Comment / kudos call-to-action
+    if (/\b(leave a comment|drop (a|some) kudos?|let me know (what|in the)|your thoughts( and| below| are))\b/.test(lower)) hits++;
+
+    // Group E – Author's own publishing meta
+    if (/\b(cross.?post(ed|ing)?|next chapter (will|should|is)|see you (next|in the next)|until next (chapter|time|update))\b/.test(lower)) hits++;
+
+    // Group F – Self-referential social / platform links in an author context
+    if (/\b(find me (on|at)|follow me (on|at)|my (tumblr|twitter|instagram|ao3 profile))\b/.test(lower)) hits++;
+
+    if (hits >= 2) return true;
+  }
+
+  return false;
+}
+
+window.isMetaParagraph = isMetaParagraph;
+
 function _isMetaParagraph(text) {
-  // Delegates to the canonical detector (defined in ui_controller, exposed as
-  // window.isMetaParagraph) so playback skips exactly the paragraphs the cache
-  // and word-count skip. Derives the current story/chapter titles to match the
-  // canonical (text, storyTitle, chapterTitle) signature.
+  // The current story and chapter give the detector its title-echo context.
   const story = window.currentStory;
   const chapTitle = (story && story.chapters && story.chapters[window.currentChapterIndex])
     ? story.chapters[window.currentChapterIndex].title
     : null;
-  if (typeof window.isMetaParagraph === 'function') {
-    return window.isMetaParagraph(text, story ? story.title : null, chapTitle, story ? story.author : null);
-  }
-  return !text || !text.trim();
+  return isMetaParagraph(text, story ? story.title : null, chapTitle, story ? story.author : null);
 }
 
 /**

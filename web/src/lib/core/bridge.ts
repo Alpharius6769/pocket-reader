@@ -150,7 +150,12 @@ export interface LibraryEntry {
 
 export interface LibraryApi {
   list(): Promise<LibraryEntry[]>;
-  add(ref: StoryRef): Promise<LibraryEntry>;
+  /**
+   * Add a story to the library without opening it. With `summary` (what a
+   * search or catalog row already shows) nothing is fetched and the story that
+   * is open is not touched; its text is fetched when it is first opened.
+   */
+  add(ref: StoryRef, summary?: StorySummary): Promise<LibraryEntry>;
   remove(key: StoryKey): Promise<void>;
   setFavourite(key: StoryKey, favourite: boolean): Promise<void>;
   rate(key: StoryKey, stars: 0 | 1 | 2 | 3 | 4 | 5): Promise<void>;
@@ -204,6 +209,12 @@ export interface EngineState {
   totalBytes?: number;
   backend?: 'webgpu' | 'wasm';
   message?: string;
+  /**
+   * The phone's own speech voice is narrating: the device could not hold a
+   * neural engine, or one failed to load. `engine` then names the engine the
+   * reader chose, not what is speaking.
+   */
+  deviceVoice?: boolean;
 }
 
 /**
@@ -374,6 +385,31 @@ export interface Diagnostics {
   threads: number;
   crossOriginIsolated: boolean;
   recentLog: { at: number; level: 'info' | 'warn' | 'error'; message: string }[];
+  /** Narration while the page was hidden, newest last. See audio_core.js getLockScreenReport. */
+  lockSessions: LockSession[];
+}
+
+/** What happened between the page being hidden and shown again while narrating. */
+export interface LockSession {
+  hiddenAt: number;
+  shownAt?: number;
+  /** 'returned', or 'page-closed-while-hidden' when the system closed the page. */
+  ended: string;
+  stillPlaying: boolean;
+  engine: string;
+  from: Position;
+  to?: Position;
+  /** Paragraphs that started while hidden, and where each came from. */
+  played: number;
+  staged: number;
+  fromStorage: number;
+  synthesized: number;
+  /** Paragraphs rendered ahead while hidden. */
+  rendered: number;
+  recovered: number;
+  gateHeld: number;
+  autoStarted: number;
+  playRefused: number;
 }
 
 export interface Notice {
@@ -419,6 +455,8 @@ export interface BridgeEvents {
   'story-loaded': { story: Story; position: Position };
   /** A story started or stopped being on its way; null when nothing is. */
   'pending-story': PendingStory | null;
+  /** The open story was closed (removed from the library): nothing is current. */
+  'story-closed': { storyKey: StoryKey };
   'caching-progress': { storyKey: StoryKey; state: CacheState; done: number; total: number };
   /** Library contents changed (add/remove/favourite/rate/progress). Payload is the full list. */
   library: LibraryEntry[];

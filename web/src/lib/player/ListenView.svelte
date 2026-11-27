@@ -15,6 +15,7 @@
   import { openSheet } from '../stores/ui';
   import { reducedMotion } from '../motion';
   import { clockLeft, speedLabel } from '../format';
+  import { deviceNoun } from '../layout';
   import PlayButton from '../components/PlayButton.svelte';
   import Preparing from './Preparing.svelte';
 
@@ -118,6 +119,10 @@
       <span>¶ {para + 1} of {count}</span>
       <span>{paragraphsLeft === 0 ? 'Last paragraph' : `about ${minutesLeft} min left in chapter`}</span>
     </div>
+    {#if $deviceNoun === 'phone' && $player.state === 'playing' && $player.buffer.ready > 0}
+      <!-- What will keep playing if the screen is locked now. -->
+      <p class="ahead">{$player.buffer.ready} {$player.buffer.ready === 1 ? 'paragraph' : 'paragraphs'} ready ahead</p>
+    {/if}
   </div>
 
   <div class="transport">
@@ -266,6 +271,13 @@
     border: 0;
     border-radius: 50%;
     background: var(--ink);
+  }
+  .ahead {
+    font-size: var(--t-caption);
+    color: var(--ink-3);
+    text-align: center;
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
   }
   .scrub-meta {
     display: flex;

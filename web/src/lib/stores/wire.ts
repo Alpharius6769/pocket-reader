@@ -51,6 +51,13 @@ export async function connectStores(b: CoreBridge): Promise<() => void> {
         paragraphCount: e.story.chapters[e.position.chapter]?.paragraphs.length ?? 0,
       })),
     ),
+    b.on('story-closed', (e) =>
+      player.update((p) =>
+        p.story && p.story.key !== e.storyKey
+          ? p
+          : { ...p, story: null, pending: null, state: 'idle', position: { chapter: 0, paragraph: 0 }, paragraphCount: 0, chapterCount: 0 },
+      ),
+    ),
     b.on('sleep', (s) => player.update((p) => ({ ...p, sleep: s }))),
     b.on('speed', (s) => player.update((p) => ({ ...p, speed: s.speed }))),
     b.on('settings', (s) => {

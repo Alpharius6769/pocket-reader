@@ -25,6 +25,23 @@ if (sim) document.documentElement.classList.add('sim-iphone');
 // The real cores by default. Sample data only for design captures and demos:
 // ?mock=1, or ?sim=iphone (the screenshot tool, web/tools/capture-screens.mjs).
 const useMock = params.get('mock') === '1' || sim;
+// Starting can fail: on a first visit every core comes over the network, and
+// one that does not arrive used to leave an empty page with no way to tell
+// why. index.html paints a start screen; a failure replaces it with words and
+// a way to try again.
+function startFailed(error: unknown): never {
+  console.error('[PocketReader] The app could not start', error);
+  const host = document.getElementById('app');
+  if (host) {
+    host.innerHTML =
+      '<div class="boot" role="alert"><p class="boot-title">Pocket Reader could not start</p>' +
+      '<p class="boot-sub">Part of the app did not load. Check your connection and try again.</p>' +
+      '<button class="boot-retry" type="button">Try again</button></div>';
+    host.querySelector('button')?.addEventListener('click', () => location.reload());
+  }
+  throw error;
+}
+
 const bridge =
   window.__pocketCoreBridge ??
   (useMock
@@ -33,12 +50,12 @@ const bridge =
         empty: params.get('empty') === '1',
         engineReady: params.get('cold') !== '1',
       })
-    : await createRealBridge());
+    : await createRealBridge().catch(startFailed));
 setBridge(bridge);
 // Published so browser smoke tests and diagnostics can drive the same bridge.
 window.__pocketCoreBridge = bridge;
 
-await connectStores(bridge);
+await connectStores(bridge).catch(startFailed);
 
 // Phone or desktop layout, settled before the first paint so the app never
 // draws one and then jumps to the other. The iPhone simulator is always phone;
@@ -52,4 +69,6 @@ initLayout({
 
 await applyDeepLink(location.hash, params);
 
+// The start screen from index.html is plain markup inside #app; mount() appends.
+document.getElementById('app')!.replaceChildren();
 mount(App, { target: document.getElementById('app')!, props: { sim } });

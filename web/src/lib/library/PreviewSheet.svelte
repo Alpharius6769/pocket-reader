@@ -16,7 +16,10 @@
   }
   let { story }: Props = $props();
 
-  const inLibrary = $derived($library.entries.some((e) => e.story.key === story.key));
+  // A search or catalog row is keyed by its address; a library entry by its
+  // own stable key. Comparing only keys meant an added story still said "Add".
+  const sameUrl = (a?: string, b?: string) => !!a && !!b && a.replace(/[?#].*$/, '').replace(/\/+$/, '') === b.replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const inLibrary = $derived($library.entries.some((e) => e.story.key === story.key || sameUrl(e.story.url, story.url)));
   let adding = $state(false);
 
   function ref() {
@@ -25,7 +28,9 @@
 
   async function add() {
     adding = true;
-    await attempt(() => bridge().library.add(ref()));
+    // With the row's own details, adding fetches nothing and leaves whatever
+    // is open or playing exactly as it is.
+    await attempt(() => bridge().library.add(ref(), story));
     adding = false;
   }
 

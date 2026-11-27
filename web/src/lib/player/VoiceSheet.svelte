@@ -45,6 +45,9 @@
       onchange={(v: EngineId) => attempt(() => bridge().setEngine(v))}
     />
     <p class="hint">{ENGINES[engine].blurb}</p>
+    {#if $player.engineState.deviceVoice}
+      <p class="hint device" role="status">Right now this device's own voice is reading: it could not run {ENGINES[engine].name}. The voices below apply once it can.</p>
+    {/if}
   </section>
 
   {#each groups as g (g.label)}
@@ -104,6 +107,10 @@
 {/if}
 
 <style>
+  .device {
+    color: var(--warn);
+    font-weight: 600;
+  }
   .block {
     padding: 12px 0;
   }

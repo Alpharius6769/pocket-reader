@@ -605,7 +605,11 @@ const handlers = {
 
     let targetUrl;
     try {
-      targetUrl = new URL(decodeURIComponent(targetUrlString));
+      // searchParams.get() has already percent-decoded the value once.
+      // Decoding again turned a literal %25 into a bare %, so an address
+      // that legitimately contains one was rejected as malformed or sent on
+      // changed. Every check below runs on this parsed URL either way.
+      targetUrl = new URL(targetUrlString);
     } catch (err) {
       return new Response("Invalid 'url' parameter", {
         status: 400,

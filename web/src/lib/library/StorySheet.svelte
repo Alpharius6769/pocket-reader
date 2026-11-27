@@ -11,7 +11,7 @@
   import { bridge, type StoryKey } from '../core';
   import { attempt, openStory } from '../actions';
   import { library } from '../stores/library';
-  import { closeSheet, say } from '../stores/ui';
+  import { closeSheet, say, toast } from '../stores/ui';
   import { listenTime, percent, words } from '../format';
   import { pickLine } from '../virtue/sprites';
   import Sheet from '../components/Sheet.svelte';
@@ -46,8 +46,10 @@
 
   async function check() {
     checking = true;
-    await attempt(() => bridge().library.checkForUpdates(storyKey));
+    const changed = await attempt(() => bridge().library.checkForUpdates(storyKey));
     checking = false;
+    // It used to finish without a word either way.
+    if (changed) toast({ level: changed.length ? 'success' : 'info', message: changed.length ? 'New chapters were added.' : 'No new chapters yet.', mood: changed.length ? 'point' : undefined });
   }
 
   async function remove() {

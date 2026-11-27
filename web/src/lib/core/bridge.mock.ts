@@ -531,6 +531,7 @@ export class MockBridge implements CoreBridge {
         this.stopTick();
         this.current = null;
         this.setState('idle');
+        this.emit('story-closed', { storyKey: key });
       }
       this.emitLibrary();
       if (entry) this.notice('info', `Removed “${entry.story.title}”`, 'annoyed');
@@ -721,6 +722,7 @@ export class MockBridge implements CoreBridge {
       engine: { ...this.engine },
       threads: Math.min(4, navigator.hardwareConcurrency || 2),
       crossOriginIsolated: globalThis.crossOriginIsolated ?? false,
+      lockSessions: [],
       recentLog: [
         { at: Date.now() - 60_000, level: 'info' as const, message: 'Mock bridge started' },
         { at: Date.now() - 30_000, level: 'info' as const, message: `Engine ${this.engine.engine}: ${this.engine.status}` },

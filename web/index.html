@@ -20,7 +20,24 @@
     <title>Pocket Reader</title>
   </head>
   <body>
-    <div id="app"></div>
+    <!-- Shown until the app has loaded its cores and mounted. Inline on
+         purpose: it has to paint before any script or stylesheet arrives. -->
+    <style>
+      .boot { background: #e7ebef; color: #1a2027; }
+      @media (prefers-color-scheme: dark) { .boot { background: #1b2027; color: #e9edf1; } }
+      .boot { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; text-align: center; font: 16px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif; }
+      .boot img { border-radius: 18px; }
+      .boot-title { margin: 6px 0 0; font-weight: 700; font-size: 20px; }
+      .boot-sub { margin: 0; opacity: 0.7; max-width: 30ch; }
+      .boot-retry { margin-top: 8px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: #9b1c24; color: #fff; font: inherit; font-weight: 600; }
+    </style>
+    <div id="app">
+      <div class="boot" role="status">
+        <img src="./assets/img/pocket_reader_icon.webp" alt="" width="72" height="72" />
+        <p class="boot-title">Pocket Reader</p>
+        <p class="boot-sub">Opening your library…</p>
+      </div>
+    </div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

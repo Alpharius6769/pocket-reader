@@ -365,4 +365,164 @@ describe('RealBridge', () => {
     const b = await makeBridge();
     expect(b.getPendingStory()).toBeNull();
   });
+
+  it('adds a story from a search or catalog row without fetching it or touching the open story', async () => {
+    const b = await makeBridge();
+    const open = { ...story({ storyKey: 's_open', title: 'Open Story' }), chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    w.currentStory = open;
+    w.loadStory = vi.fn();
+    w.addToLibrary = vi.fn((data: any) => w.userProfile.library.push({ storyKey: 's_new', ...data }));
+    const entry = await b.library.add(
+      { kind: 'url', url: 'https://archiveofourown.org/works/77' },
+      { key: 'https://archiveofourown.org/works/77', title: 'New One', author: 'B', source: 'ao3', url: 'https://archiveofourown.org/works/77', chapterCount: 3, words: 4200 },
+    );
+    expect(w.loadStory).not.toHaveBeenCalled();
+    expect(w.currentStory).toBe(open);
+    expect(entry.story).toMatchObject({ key: 's_new', title: 'New One' });
+  });
+
+  it('refuses to save another story offline while one is playing, instead of swapping it', async () => {
+    const b = await makeBridge();
+    w.currentStory = { ...story({ storyKey: 's_playing' }), chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    w.isPlaying = true;
+    w.loadStory = vi.fn();
+    await expect(b.startCaching('s_1')).rejects.toThrow(/Pause the story/);
+    expect(w.loadStory).not.toHaveBeenCalled();
+  });
+
+  it('closes the open story when it is removed from the library', async () => {
+    const b = await makeBridge();
+    w.currentStory = { ...story(), chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    w.isPlaying = true;
+    w.removeStory = vi.fn();
+    w.releaseAudioSession = vi.fn();
+    const closed: any[] = [];
+    b.on('story-closed', (e) => closed.push(e));
+    await b.library.remove('s_1');
+    expect(w.currentStory).toBeNull();
+    expect(w.isPlaying).toBe(false);
+    expect(w.releaseAudioSession).toHaveBeenCalled();
+    expect(closed).toEqual([{ storyKey: 's_1' }]);
+    expect(b.getCurrentStory()).toBeNull();
+  });
+
+  it('marks a story as having new chapters when a check finds some, and clears it on open', async () => {
+    const b = await makeBridge();
+    w.checkStoryUpdate = vi.fn(async () => {
+      w.userProfile.library[0].publishedChapters = 5;
+    });
+    const changed = await b.library.checkForUpdates('s_1');
+    expect(changed).toEqual(['s_1']);
+    expect((await b.library.list())[0].hasUpdate).toBe(true);
+    fire(CORE_EVENT.STORY_OPENED, { story: { ...w.userProfile.library[0], chapters: [{ title: 'One', paragraphs: ['a'] }] } });
+    expect((await b.library.list())[0].hasUpdate).toBe(false);
+  });
+
+  it('reports no change when a check finds nothing new', async () => {
+    const b = await makeBridge();
+    w.checkStoryUpdate = vi.fn(async () => {});
+    expect(await b.library.checkForUpdates('s_1')).toEqual([]);
+    expect((await b.library.list())[0].hasUpdate).toBe(false);
+  });
+
+  it('shows a tiered achievement as unlocked once any tier is', async () => {
+    w.ACHIEVEMENTS_DB = [{ id: 'avid_listener', title: 'Avid Listener', desc: 'd', metric: 'hoursListened', tiers: [{ t: 'Bronze', v: 1 }, { t: 'Silver', v: 10 }] }];
+    w.userProfile.achievements = [{ id: 'avid_listener_t0', unlockedAt: 1234 }];
+    w.userProfile.stats = { hoursListened: 2 };
+    const b = await makeBridge();
+    const [a] = await b.listAchievements();
+    expect(a.unlockedAt).toBe(1234);
+    expect(a.tier).toBe('Bronze');
+    expect(a.progress).toMatchObject({ target: 10, unit: 'hours' });
+  });
+
+  it('announces an achievement the cores unlock', async () => {
+    w.ACHIEVEMENTS_DB = [{ id: 'first_book', title: 'First Edition', desc: 'd', metric: 'firstStory', target: 1 }];
+    const b = await makeBridge();
+    const seen: any[] = [];
+    b.on('achievement', (a) => seen.push(a));
+    w.queueAchievementUnlock({ ach_id: 'first_book', ach_title: 'First Edition', tier: '' });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(seen.map((a) => a.id)).toEqual(['first_book']);
+  });
+
+  it('answers a paragraph change after the cores have started the next clip, not before', async () => {
+    const b = await makeBridge();
+    w.currentStory = { ...story(), chapters: [{ title: 'One', paragraphs: ['a', 'b'] }] };
+    const seen: any[] = [];
+    b.on('paragraph', (e) => seen.push(e));
+    fire(CORE_EVENT.PARAGRAPH, {});
+    // Still inside the cores' synchronous boundary: nothing has run yet.
+    expect(seen).toHaveLength(0);
+    await Promise.resolve();
+    expect(seen).toHaveLength(1);
+  });
+
+  it('ends a timed sleep at the next paragraph when the page timer never fired', async () => {
+    vi.useFakeTimers();
+    try {
+      const b = await makeBridge();
+      w.currentStory = { ...story(), chapters: [{ title: 'One', paragraphs: ['a', 'b'] }] };
+      w.isPlaying = true;
+      w.pausePlayback = vi.fn(() => {
+        w.isPlaying = false;
+      });
+      b.setSleepTimer({ kind: 'minutes', minutes: 15 });
+      // A locked phone: the clock moves on, the timer does not run.
+      vi.setSystemTime(Date.now() + 16 * 60_000);
+      fire(CORE_EVENT.PARAGRAPH, {});
+      await Promise.resolve();
+      expect(w.pausePlayback).toHaveBeenCalled();
+      expect(b.getPlayback().sleep).toEqual({ kind: 'off' });
+    } finally {
+      sessionStorage.removeItem('pr_v2_sleep_timer');
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a sleep timer across the fast-narration reload', async () => {
+    const endsAt = Date.now() + 10 * 60_000;
+    sessionStorage.setItem('pr_v2_sleep_timer', JSON.stringify({ kind: 'minutes', minutes: 15, endsAt }));
+    try {
+      const b = await makeBridge();
+      expect(b.getPlayback().sleep).toEqual({ kind: 'minutes', minutes: 15, endsAt });
+      b.setSleepTimer({ kind: 'off' });
+      expect(sessionStorage.getItem('pr_v2_sleep_timer')).toBeNull();
+    } finally {
+      sessionStorage.removeItem('pr_v2_sleep_timer');
+    }
+  });
+
+  it('shows alerts as on only when this device is really subscribed', async () => {
+    const b = await makeBridge();
+    expect((await b.getSettings()).updateNotifications).toBe(false);
+    w.userProfile.settings.pushUpdates = true;
+    expect((await b.getSettings()).updateNotifications).toBe(true);
+  });
+
+  it('says when the device voice is narrating instead of the chosen engine', async () => {
+    w._resolveActiveEngine = () => 'webspeech';
+    const b = await makeBridge();
+    expect(b.getEngineState().deviceVoice).toBe(true);
+    w._resolveActiveEngine = () => 'kokoro';
+    expect(b.getEngineState().deviceVoice).toBeUndefined();
+  });
+
+  it('routes the old interface names the cores still call to notices', async () => {
+    const say = vi.fn();
+    w.prCoreUi = { say, companion: vi.fn(), notify: vi.fn(), dialog: vi.fn() };
+    delete w.virtueSpeak;
+    try {
+      await makeBridge();
+      w.virtueSpeak('This story is complete.', 4000);
+      expect(say).toHaveBeenCalledWith('This story is complete.', 4000);
+    } finally {
+      delete w.prCoreUi;
+      delete w.virtueSpeak;
+      delete w.triggerVirtue;
+      delete w.pocketNotify;
+      delete w.showSettingsModal;
+    }
+  });
 });

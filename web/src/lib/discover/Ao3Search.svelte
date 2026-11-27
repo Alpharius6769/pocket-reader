@@ -10,18 +10,25 @@
 
   const SUGGESTIONS = ['Slow burn', 'Found family', 'Cozy', 'Adventure', 'Hurt/Comfort', 'Mystery'];
 
+  // Only the newest request may write results: a slow answer to an earlier
+  // search used to land on top of a newer one, or be appended to it.
+  let latest = 0;
+
   async function run(page = 1) {
+    const mine = ++latest;
     patch({ loading: true });
     if (page === 1) say('point', null);
     const res = await attempt(() => bridge().search({ ...$ui.ao3.query, page }));
+    if (mine !== latest) return;
     const s = $ui.ao3;
     patch({
       loading: false,
       searched: true,
       results: res ? (page === 1 ? res.items : [...s.results, ...res.items]) : s.results,
       page: res?.page ?? s.page,
-      hasMore: res?.hasMore ?? false,
-      total: res?.total,
+      // A failed page keeps the button, so "Load more" can simply be tried again.
+      hasMore: res ? res.hasMore : page > 1 ? s.hasMore : false,
+      total: res ? res.total : s.total,
     });
   }
 
