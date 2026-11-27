@@ -100,6 +100,18 @@ export interface LoadOptions {
   autoplay?: boolean;
   /** Load without making it the current story (prefetch / add). */
   background?: boolean;
+  /** The story's title when the caller already knows it, shown while it opens. */
+  title?: string;
+}
+
+/**
+ * A story that is on its way but is not the current story yet: its text is
+ * being fetched, or the page has just reloaded into the fast-narration session
+ * and the cores are reopening it. The Player shows this instead of "Nothing
+ * playing". `title` may be empty when it is not known yet.
+ */
+export interface PendingStory {
+  title: string;
 }
 
 /* -------------------------------------------------------------- library */
@@ -405,6 +417,8 @@ export interface BridgeEvents {
   runway: RunwayState;
   notice: Notice;
   'story-loaded': { story: Story; position: Position };
+  /** A story started or stopped being on its way; null when nothing is. */
+  'pending-story': PendingStory | null;
   'caching-progress': { storyKey: StoryKey; state: CacheState; done: number; total: number };
   /** Library contents changed (add/remove/favourite/rate/progress). Payload is the full list. */
   library: LibraryEntry[];
@@ -470,6 +484,8 @@ export interface CoreBridge {
   getEngineState(): EngineState;
   /** The starting runway at the current position. */
   getRunway(): RunwayState;
+  /** A story being opened right now (see PendingStory), else null. */
+  getPendingStory(): PendingStory | null;
   /**
    * Render the paragraphs Play needs, without playing. Returns false when it
    * could not start here (the first Play has to reload into the fast session).

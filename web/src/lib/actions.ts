@@ -6,7 +6,7 @@ import { get } from 'svelte/store';
 import { bridge, BridgeError, type StoryRef, type Settings, type LoadOptions } from './core';
 import { settings } from './stores/settings';
 import { player } from './stores/player';
-import { openNowPlaying, openReader, openPlayer, toast, say } from './stores/ui';
+import { ui, openPlayer, setTab, toast, say } from './stores/ui';
 
 export async function attempt<T>(fn: () => Promise<T>, fallback = 'Something went wrong. Please try again.'): Promise<T | undefined> {
   try {
@@ -22,10 +22,19 @@ export async function attempt<T>(fn: () => Promise<T>, fallback = 'Something wen
 export async function openStory(ref: StoryRef, opts: LoadOptions & { mode?: 'listen' | 'read' } = {}) {
   const mode = opts.mode ?? get(settings)?.defaultMode ?? 'listen';
   say('loading', null);
-  const story = await attempt(() => bridge().loadStory(ref, { position: opts.position, autoplay: mode === 'listen' && opts.autoplay !== false }));
-  if (!story) return;
-  if (mode === 'read') openReader(true);
-  else openNowPlaying(true);
+  // Go to the Player at once: fetching the text can take several seconds, and
+  // the Player shows the story as on its way for that whole time. Waiting for
+  // the fetch before moving left the tap with no visible effect.
+  const from = get(ui).tab;
+  openPlayer(mode);
+  const story = await attempt(() =>
+    bridge().loadStory(ref, { position: opts.position, title: opts.title, autoplay: mode === 'listen' && opts.autoplay !== false }),
+  );
+  if (!story) {
+    // It could not be opened (the reason is in the toast): back where the tap was made.
+    if (get(ui).tab === 'player') setTab(from);
+    return;
+  }
   say('holding', null);
 }
 

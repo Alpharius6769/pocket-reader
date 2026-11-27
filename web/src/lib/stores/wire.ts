@@ -13,6 +13,7 @@ export async function connectStores(b: CoreBridge): Promise<() => void> {
   player.set({
     ...initialPlayer,
     story: b.getCurrentStory(),
+    pending: b.getPendingStory(),
     state: snap.state,
     position: snap.position,
     paragraphCount: snap.paragraphCount,
@@ -40,6 +41,7 @@ export async function connectStores(b: CoreBridge): Promise<() => void> {
     b.on('buffer', (e) => player.update((p) => ({ ...p, buffer: { ready: e.ready, target: e.target } }))),
     b.on('engine', (e) => player.update((p) => ({ ...p, engineState: e, engine: e.engine }))),
     b.on('runway', (r) => player.update((p) => ({ ...p, runway: r }))),
+    b.on('pending-story', (pending) => player.update((p) => ({ ...p, pending }))),
     b.on('story-loaded', (e) =>
       player.update((p) => ({
         ...p,

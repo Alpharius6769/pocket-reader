@@ -28,7 +28,7 @@
   let autoKey = '';
   $effect(() => {
     const p = $player;
-    if ($ui.tab !== 'player' || !p.story) return;
+    if ($ui.tab !== 'player' || !p.story || p.pending) return;
     if (p.state === 'playing' || p.state === 'buffering') return;
     const r = p.runway;
     if (r.ok || r.preparing || r.error) return;
@@ -52,7 +52,17 @@
 </script>
 
 <main class="player-page" aria-labelledby="player-title">
-  {#if !$player.story}
+  {#if $player.pending}
+    <!-- A story is on its way: its text is being fetched, or the page has just
+         reloaded into the fast-narration session and it is being reopened. -->
+    <div class="empty" role="status" aria-live="polite">
+      <Virtue mood="loading" height={150} />
+      <h1 class="large-title opening" id="player-title">Opening your story</h1>
+      {#if $player.pending.title}<p class="pending-title">{$player.pending.title}</p>{/if}
+      <div class="progress-track busy" aria-hidden="true"><span></span></div>
+      <p class="muted">Getting the text ready. This can take a few seconds.</p>
+    </div>
+  {:else if !$player.story}
     <div class="empty">
       <Virtue mood="waving" height={150} />
       <h1 class="large-title" id="player-title">Nothing playing</h1>
@@ -149,5 +159,33 @@
   }
   .empty p {
     max-width: 30ch;
+  }
+  .opening {
+    font-size: var(--t-title1);
+    padding-bottom: 0;
+  }
+  .pending-title {
+    font-family: var(--font-read);
+    font-size: var(--t-head);
+    font-weight: 600;
+    text-wrap: balance;
+  }
+  .busy {
+    width: 100%;
+    max-width: 220px;
+    height: 5px;
+    margin: 6px 0 2px;
+  }
+  .busy span {
+    width: 35%;
+    animation: busy 1.4s var(--ease-out) infinite alternate;
+  }
+  @keyframes busy {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(186%);
+    }
   }
 </style>

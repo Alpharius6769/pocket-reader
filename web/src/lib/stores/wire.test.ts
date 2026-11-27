@@ -38,4 +38,15 @@ describe('connectStores', () => {
     expect(get(library).entries.find((e) => e.story.key === 'mock-orchard')?.favourite).toBe(true);
     expect(get(ui).toasts.some((t) => t.message === 'Added to favourites')).toBe(true);
   });
+
+  it('shows a story as pending while it opens, then as the current story', async () => {
+    b = new MockBridge({ latency: 0 });
+    off = await connectStores(b);
+    expect(get(player).pending).toBeNull();
+    const loading = b.loadStory({ kind: 'key', key: 'mock-orchard' }, { title: 'An Orchard of Small Hours' });
+    expect(get(player).pending).toEqual({ title: 'An Orchard of Small Hours' });
+    await loading;
+    expect(get(player).pending).toBeNull();
+    expect(get(player).story?.key).toBe('mock-orchard');
+  });
 });

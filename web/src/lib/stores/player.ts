@@ -1,8 +1,10 @@
 import { derived, writable } from 'svelte/store';
-import type { EngineState, PlayState, Position, RunwayState, SleepTimer, Story, VoiceId, EngineId } from '../core/bridge';
+import type { EngineState, PendingStory, PlayState, Position, RunwayState, SleepTimer, Story, VoiceId, EngineId } from '../core/bridge';
 
 export interface PlayerState {
   story: Story | null;
+  /** A story being opened; the Player shows it in place of whatever is current. */
+  pending: PendingStory | null;
   state: PlayState;
   position: Position;
   paragraphCount: number;
@@ -18,6 +20,7 @@ export interface PlayerState {
 
 export const initialPlayer: PlayerState = {
   story: null,
+  pending: null,
   state: 'idle',
   position: { chapter: 0, paragraph: 0 },
   paragraphCount: 0,
@@ -44,7 +47,7 @@ export const preparing = derived(player, ($p) => $p.engineState.status === 'load
  */
 // Unknown counts as not ready: before the first narration of a session the
 // runtime has not answered yet, and the start is the status card's own button.
-const stopped = (p: PlayerState) => !!p.story && p.state !== 'playing' && p.state !== 'buffering';
+const stopped = (p: PlayerState) => !!p.story && !p.pending && p.state !== 'playing' && p.state !== 'buffering';
 
 export const playLocked = derived(player, ($p) => stopped($p) && !$p.runway.ok);
 

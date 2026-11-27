@@ -287,4 +287,82 @@ describe('RealBridge', () => {
     await b.library.remove('s_1');
     expect(w.removeStory).toHaveBeenCalledWith('s_1', { confirm: false });
   });
+
+  it('reports a story as on its way from the tap until it has opened', async () => {
+    const b = await makeBridge();
+    const seen: any[] = [];
+    b.on('pending-story', (p) => seen.push(p));
+    let finish: () => void = () => {};
+    w.loadStory = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = () => {
+            w.currentStory = { ...story(), chapters: [{ title: 'One', paragraphs: ['a'] }] };
+            resolve();
+          };
+        }),
+    );
+    const loading = b.loadStory({ kind: 'url', url: 'https://archiveofourown.org/works/9' }, { title: 'The Lighthouse' });
+    // Still fetching: the Player has a title to show instead of "Nothing playing".
+    expect(b.getPendingStory()).toEqual({ title: 'The Lighthouse' });
+    finish();
+    await loading;
+    expect(b.getPendingStory()).toBeNull();
+    expect(seen).toEqual([{ title: 'The Lighthouse' }, null]);
+  });
+
+  it('clears the pending story when the load fails', async () => {
+    const b = await makeBridge();
+    w.loadStory = vi.fn(async () => {
+      throw new Error('AO3 is not answering');
+    });
+    await expect(b.loadStory({ kind: 'key', key: 's_1' })).rejects.toThrow('AO3 is not answering');
+    expect(b.getPendingStory()).toBeNull();
+  });
+
+  it('keeps the story pending across the fast-narration reload until the cores reopen it', async () => {
+    vi.useFakeTimers();
+    const realUrl = location.href;
+    history.replaceState(null, '', '?tts_fast=1');
+    sessionStorage.setItem('pr_fast_narration_resume_v1', JSON.stringify({ title: 'Pocket Raptor Surprise', requestedAt: Date.now() }));
+    try {
+      const b = await makeBridge();
+      expect(b.getPendingStory()).toEqual({ title: 'Pocket Raptor Surprise' });
+      const seen: any[] = [];
+      b.on('pending-story', (p) => seen.push(p));
+      vi.advanceTimersByTime(2000);
+      expect(b.getPendingStory()).not.toBeNull();
+      // The cores reopen it and say so.
+      w.currentStory = { ...story(), chapters: [{ title: 'One', paragraphs: ['a'] }] };
+      fire(CORE_EVENT.STORY_OPENED, { story: w.currentStory });
+      expect(b.getPendingStory()).toBeNull();
+      expect(seen).toEqual([null]);
+    } finally {
+      sessionStorage.removeItem('pr_fast_narration_resume_v1');
+      history.replaceState(null, '', realUrl);
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops waiting when the cores give up on the reload handoff', async () => {
+    vi.useFakeTimers();
+    const realUrl = location.href;
+    history.replaceState(null, '', '?tts_fast=1');
+    sessionStorage.setItem('pr_fast_narration_resume_v1', JSON.stringify({ title: 'Gone', requestedAt: Date.now() }));
+    try {
+      const b = await makeBridge();
+      expect(b.getPendingStory()).toEqual({ title: 'Gone' });
+      sessionStorage.removeItem('pr_fast_narration_resume_v1');
+      vi.advanceTimersByTime(2500);
+      expect(b.getPendingStory()).toBeNull();
+    } finally {
+      history.replaceState(null, '', realUrl);
+      vi.useRealTimers();
+    }
+  });
+
+  it('has nothing pending on an ordinary start', async () => {
+    const b = await makeBridge();
+    expect(b.getPendingStory()).toBeNull();
+  });
 });

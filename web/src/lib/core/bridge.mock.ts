@@ -150,6 +150,8 @@ export class MockBridge implements CoreBridge {
     };
   }
 
+  private pending: { title: string } | null = null;
+
   getCurrentStory(): Story | null {
     return this.current ? structuredClone(this.current) : null;
   }
@@ -171,7 +173,27 @@ export class MockBridge implements CoreBridge {
 
   /* ---------------------------------------------------------- stories */
 
-  async loadStory(ref: StoryRef, options: { position?: Position; autoplay?: boolean; background?: boolean } = {}) {
+  getPendingStory() {
+    return this.pending ? { ...this.pending } : null;
+  }
+
+  async loadStory(ref: StoryRef, options: { position?: Position; autoplay?: boolean; background?: boolean; title?: string } = {}) {
+    const foreground = !options.background;
+    if (foreground) {
+      this.pending = { title: options.title ?? '' };
+      this.emit('pending-story', { ...this.pending });
+    }
+    try {
+      return await this.loadStoryNow(ref, options);
+    } finally {
+      if (foreground) {
+        this.pending = null;
+        this.emit('pending-story', null);
+      }
+    }
+  }
+
+  private async loadStoryNow(ref: StoryRef, options: { position?: Position; autoplay?: boolean; background?: boolean }) {
     await this.wait(500);
     let story: Story | undefined;
     if (ref.kind === 'key') story = this.stories.get(ref.key) ?? this.fromSearch(ref.key);

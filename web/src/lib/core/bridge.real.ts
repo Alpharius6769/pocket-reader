@@ -38,6 +38,7 @@ import {
   type Position,
   type RestoreResult,
   type RunwayState,
+  type PendingStory,
   type Settings,
   type SleepTimer,
   type StorageUsage,
@@ -171,6 +172,22 @@ function stripHtml(html: string): string {
 
 type Handler = (payload: never) => void;
 
+/**
+ * The cores' handoff record for the fast-narration reload (buffer_manager.js
+ * FAST_NARRATION_RESUME_KEY). Present and fresh only while a story is still to
+ * be reopened after that reload.
+ */
+function pendingResume(): { title: string } | null {
+  try {
+    if (new URLSearchParams(location.search).get('tts_fast') !== '1') return null;
+    const record = JSON.parse(sessionStorage.getItem('pr_fast_narration_resume_v1') || 'null');
+    if (!record?.title || Date.now() - Number(record.requestedAt || 0) > 120_000) return null;
+    return { title: String(record.title) };
+  } catch {
+    return null;
+  }
+}
+
 export class RealBridge implements CoreBridge {
   /** Survives minification, unlike the class name: tests and diagnostics read it. */
   readonly kind = 'real' as const;
@@ -191,6 +208,8 @@ export class RealBridge implements CoreBridge {
   private engineTrailing: ReturnType<typeof setTimeout> | null = null;
   private api: Record<string, AnyFn> = {};
   private catalogCore: Record<string, any> = {};
+  private pending: PendingStory | null = null;
+  private resumeWatch: ReturnType<typeof setInterval> | null = null;
   private libCore: Record<string, AnyFn> = {};
 
   /** Called once by createRealBridge after the cores are loaded. */
@@ -227,6 +246,7 @@ export class RealBridge implements CoreBridge {
     });
     on(E.STORY_OPENED, (d: any) => {
       if (!d.story) return;
+      this.endResumeWatch();
       this.rememberParagraphCounts(d.story);
       this.emit('story-loaded', { story: toStory(d.story), position: position() });
       this.onParagraph();
@@ -270,6 +290,14 @@ export class RealBridge implements CoreBridge {
 
     this.engine = { engine: activeEngine(), status: this.engineStatusNow() };
     if (w.currentStory) this.state = w.isPlaying ? 'playing' : 'paused';
+
+    // Reloaded into the fast-narration session with a story still to reopen:
+    // say so until the cores have it back, or give up on it.
+    const resume = pendingResume();
+    if (resume && !w.currentStory) {
+      this.pending = { title: resume.title };
+      this.watchResume();
+    }
 
     // A tap request raised before this bridge subscribed (the cores resume
     // narration while still loading after the isolation reload): claim it.
@@ -452,27 +480,64 @@ export class RealBridge implements CoreBridge {
 
   /* ----------------------------------------------------------- stories */
 
+  getPendingStory(): PendingStory | null {
+    return this.pending ? { ...this.pending } : null;
+  }
+
+  private setPending(next: PendingStory | null) {
+    if (!next && !this.pending) return;
+    this.pending = next;
+    this.emit('pending-story', next);
+  }
+
+  /** After the reload: hold the pending story until the cores reopen it or stop trying. */
+  private watchResume() {
+    const startedAt = Date.now();
+    this.resumeWatch = setInterval(() => {
+      const reopened = Array.isArray(w.currentStory?.chapters) && w.currentStory.chapters.length > 0;
+      // The record is removed when the restore finishes, and when it fails.
+      const abandoned = !pendingResume() && Date.now() - startedAt > 1500;
+      if (reopened || abandoned || Date.now() - startedAt > 45_000) this.endResumeWatch();
+    }, 400);
+  }
+
+  private endResumeWatch() {
+    if (this.resumeWatch === null) return;
+    clearInterval(this.resumeWatch);
+    this.resumeWatch = null;
+    this.setPending(null);
+  }
+
   async loadStory(ref: StoryRef, options: LoadOptions = {}): Promise<Story> {
     if (ref.kind === 'file') {
       const summary = await this.importFile(ref.file);
       return this.loadStory({ kind: 'key', key: summary.key }, options);
     }
-    const target = ref.kind === 'key' ? this.libraryStory(ref.key)?.url || ref.key : ref.url;
+    const known = ref.kind === 'key' ? this.libraryStory(ref.key) : null;
+    const target = ref.kind === 'key' ? known?.url || ref.key : ref.url;
     if (!target) throw new BridgeError('not-found', 'That story could not be found.');
-    if (w.isPlaying) w.pausePlayback?.();
+    // Fetching a story can take several seconds: say which one is coming so
+    // the Player has something to show from the tap onwards.
+    const foreground = options.background !== true;
+    if (foreground) this.setPending({ title: options.title || known?.title || '' });
     try {
-      await w.loadStory(target, { preventNavigate: options.background === true });
-    } catch (error: any) {
-      throw new BridgeError('network', error?.message || 'The story could not be opened.');
+      if (w.isPlaying) w.pausePlayback?.();
+      try {
+        await w.loadStory(target, { preventNavigate: options.background === true });
+      } catch (error: any) {
+        throw new BridgeError('network', error?.message || 'The story could not be opened.');
+      }
+      const story = w.currentStory;
+      if (!story || !Array.isArray(story.chapters) || !story.chapters.length) {
+        throw new BridgeError('not-found', 'The story text could not be loaded.');
+      }
+      if (options.position) await this.seekToParagraph(options.position.paragraph, options.position.chapter);
+      this.setState('paused');
+      if (options.autoplay) void this.play();
+      return toStory(story);
+    } finally {
+      if (foreground && this.resumeWatch === null) this.setPending(null);
     }
-    const story = w.currentStory;
-    if (!story || !Array.isArray(story.chapters) || !story.chapters.length) {
-      throw new BridgeError('not-found', 'The story text could not be loaded.');
-    }
-    if (options.position) await this.seekToParagraph(options.position.paragraph, options.position.chapter);
-    this.setState('paused');
-    if (options.autoplay) void this.play();
-    return toStory(story);
   }
 
   async importFile(file: File): Promise<StorySummary> {

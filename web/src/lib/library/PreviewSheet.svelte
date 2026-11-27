@@ -32,8 +32,9 @@
   async function listen() {
     // ref() reads the story prop, which closeSheet() nulls: capture it first.
     const target = ref();
+    const title = story.title;
     closeSheet();
-    await openStory(target, { mode: 'listen' });
+    await openStory(target, { mode: 'listen', title });
   }
 </script>
 
