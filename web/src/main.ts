@@ -1,5 +1,9 @@
 import './app.css';
+import './desktop.css';
 import { mount } from 'svelte';
+import { derived } from 'svelte/store';
+import { initLayout, type Layout } from './lib/layout';
+import { settings } from './lib/stores/settings';
 import App from './App.svelte';
 import { setBridge, type CoreBridge } from './lib/core';
 import { MockBridge } from './lib/core/bridge.mock';
@@ -35,6 +39,17 @@ setBridge(bridge);
 window.__pocketCoreBridge = bridge;
 
 await connectStores(bridge);
+
+// Phone or desktop layout, settled before the first paint so the app never
+// draws one and then jumps to the other. The iPhone simulator is always phone;
+// ?layout=desktop|phone skips detection for design review.
+const layoutParam = params.get('layout');
+initLayout({
+  forcePhone: sim,
+  override: layoutParam === 'desktop' || layoutParam === 'phone' ? (layoutParam as Layout) : null,
+  preference: derived(settings, ($s) => $s?.layout ?? 'auto'),
+});
+
 await applyDeepLink(location.hash, params);
 
 mount(App, { target: document.getElementById('app')!, props: { sim } });

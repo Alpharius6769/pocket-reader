@@ -1,0 +1,223 @@
+/*
+ * Desktop layout.
+ *
+ * Every rule here is keyed on `html.layout-desktop`, which lib/layout.ts sets
+ * only on Windows, macOS, Linux and ChromeOS, with a mouse or trackpad, in a
+ * window at least 960 x 560. Without that class this file does nothing, so the
+ * phone layout cannot be affected by anything in it.
+ *
+ * The class names belong to the components (their styles are scoped, so the
+ * `html.layout-desktop` prefix is what lets these rules win). A component that
+ * renames a class used here must update this file.
+ */
+
+html.layout-desktop {
+  --side-w: 248px;
+  --gutter: 36px;
+  --tabbar-h: 0px;
+  --content-max: 940px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+html.layout-desktop * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* ------------------------------------------------------------- the frame */
+
+html.layout-desktop .app {
+  padding-left: var(--side-w);
+}
+html.layout-desktop .status-scrim {
+  display: none;
+}
+
+/* The tab bar becomes a sidebar. */
+html.layout-desktop .tabbar {
+  top: 0;
+  right: auto;
+  width: var(--side-w);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 22px 14px 18px;
+  background: var(--bg-elev);
+  border-top: 0;
+  border-right: 1px solid var(--line);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html.layout-desktop .tabbar .brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 10px 20px;
+  font-family: var(--font-display);
+  font-size: var(--t-head);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+html.layout-desktop .tabbar .brand img {
+  border-radius: 8px;
+}
+html.layout-desktop .tabbar .tab {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 14px;
+  height: 46px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: var(--t-sub);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink-2);
+  transition: background var(--dur-1), color var(--dur-1);
+}
+html.layout-desktop .tabbar .tab:hover {
+  background: var(--bg-elev-2);
+  color: var(--ink);
+}
+html.layout-desktop .tabbar .tab[aria-current='page'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+html.layout-desktop .tabbar .badge {
+  box-shadow: 0 0 0 2px var(--bg-elev);
+}
+
+/* --------------------------------------------------------------- screens */
+
+html.layout-desktop .screen {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 28px var(--gutter) calc(var(--mini-h) + 56px);
+}
+/* Settings is a list of rows; a narrower column keeps labels near their controls. */
+html.layout-desktop .screen[aria-labelledby='set-title'] {
+  max-width: 720px;
+}
+html.layout-desktop .large-title {
+  font-size: 2.5rem;
+  padding-bottom: 18px;
+}
+
+/* Rows that scroll sideways under a thumb wrap instead: a mouse wheel cannot pan them. */
+html.layout-desktop .h-scroll {
+  flex-wrap: wrap;
+  overflow: visible;
+  scroll-snap-type: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+/* Library shelf: larger covers. */
+html.layout-desktop .screen .grid {
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 26px 20px;
+}
+
+/* Home: the companion does not need the whole column. */
+html.layout-desktop .screen .companion {
+  max-width: 620px;
+}
+html.layout-desktop .screen .badges .badge {
+  width: 108px;
+}
+
+/* ---------------------------------------------------------------- player */
+
+html.layout-desktop .player-page {
+  height: 100dvh;
+  max-width: 900px;
+  margin: 0 auto;
+  padding-top: 22px;
+  padding-bottom: 14px;
+}
+/* Story text stays at a readable measure however wide the window is. */
+html.layout-desktop .player-page .pane {
+  padding-left: max(var(--gutter), calc((100% - 700px) / 2));
+  padding-right: max(var(--gutter), calc((100% - 700px) / 2));
+}
+html.layout-desktop .player-page .read .text {
+  padding-left: max(var(--gutter), calc((100% - 700px) / 2));
+  padding-right: max(var(--gutter), calc((100% - 700px) / 2));
+}
+html.layout-desktop .player-page .deck {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+/* The mini player sits at the foot of the content column. */
+html.layout-desktop .mini {
+  left: calc(var(--side-w) + 24px);
+  right: 24px;
+  bottom: 18px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* ---------------------------------------------------------------- layers */
+
+/* Sheets are centred dialogs, not panels rising from the bottom edge. */
+html.layout-desktop .layer {
+  justify-content: center;
+  align-items: center;
+  padding: 32px;
+}
+html.layout-desktop .layer .panel {
+  width: min(560px, 100%);
+  max-height: min(780px, calc(100dvh - 64px));
+  border-radius: var(--r-xl);
+}
+html.layout-desktop .layer .panel.large {
+  height: min(780px, calc(100dvh - 64px));
+}
+html.layout-desktop .layer .panel .grab {
+  height: 16px;
+}
+html.layout-desktop .layer .panel .grab span {
+  display: none;
+}
+html.layout-desktop .layer .panel .body {
+  padding-bottom: 24px;
+}
+html.layout-desktop .layer .panel .foot {
+  padding-bottom: 16px;
+}
+
+html.layout-desktop .toasts {
+  left: calc(var(--side-w) + 12px);
+  top: 18px;
+}
+
+/* First run: a centred column instead of an edge-to-edge page. */
+html.layout-desktop .onb {
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+html.layout-desktop .onb > * {
+  width: min(480px, 100%);
+}
+html.layout-desktop .onb .art {
+  flex: none;
+}
+
+/* ----------------------------------------------------------------- hover */
+
+html.layout-desktop .btn:hover {
+  filter: brightness(1.07);
+}
+html.layout-desktop .icon-btn:hover:not(:disabled) {
+  background: var(--bg-elev-2);
+}
+html.layout-desktop .chip:hover:not(.on):not([aria-pressed='true']) {
+  background: var(--bg-elev-2);
+}
+html.layout-desktop button:disabled {
+  cursor: default;
+}

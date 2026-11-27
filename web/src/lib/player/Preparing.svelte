@@ -2,7 +2,9 @@
   import Check from '@lucide/svelte/icons/check';
   import type { EngineState, RunwayState } from '../core/bridge';
   import { ENGINES } from '../core/bridge';
-  import { bytes } from '../format';
+  import { bytes, etaLabel } from '../format';
+  import { runwayEta } from '../stores/eta';
+  import { deviceNoun } from '../layout';
   import Virtue from '../components/Virtue.svelte';
 
   interface Props {
@@ -44,7 +46,7 @@
       {#if runway.ok}
         The first {runway.target} paragraphs are ready. Tap Play.
       {:else}
-        {ENGINES[state.engine].name} runs entirely on your phone. Play unlocks once the next {runway.target || 10} paragraphs are ready, so narration never stops to catch up.
+        {ENGINES[state.engine].name} runs entirely on your {$deviceNoun}. Play unlocks once the next {runway.target || 10} paragraphs are ready, so narration never stops to catch up.
       {/if}
     </p>
   {/if}
@@ -52,6 +54,9 @@
   <div class="progress-track big" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(fraction * 100)}>
     <span style:width="{fraction * 100}%"></span>
   </div>
+  {#if step === 1 && runway.preparing && !runway.error}
+    <p class="eta">{etaLabel($runwayEta)}</p>
+  {/if}
 
   <ol class="steps">
     <li class:done={step > 0} class:now={step === 0}>
@@ -122,6 +127,13 @@
   }
   .big span {
     transition: width var(--dur-3) var(--ease-out);
+  }
+  .eta {
+    font-size: var(--t-foot);
+    font-weight: 600;
+    color: var(--accent-ink);
+    font-variant-numeric: tabular-nums;
+    min-height: 1.4em;
   }
   .steps {
     list-style: none;

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deviceNoun } from '../layout';
   import Minus from '@lucide/svelte/icons/minus';
   import Plus from '@lucide/svelte/icons/plus';
   import { updateSettings } from '../actions';
@@ -29,7 +30,7 @@
   </li>
 </Group>
 
-<Group title="Size" footer="Text also follows the iPhone’s Text Size setting.">
+<Group title="Size" footer={$deviceNoun === 'phone' ? 'Text also follows the iPhone’s Text Size setting.' : undefined}>
   <li class="pad stepper">
     <button class="icon-btn" type="button" aria-label="Smaller" disabled={size <= 14} onclick={() => updateSettings({ readerSize: size - 1 })}><Minus size={20} /></button>
     <input

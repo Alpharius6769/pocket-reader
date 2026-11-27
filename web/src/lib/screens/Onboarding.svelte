@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deviceNoun } from '../layout';
   import Headphones from '@lucide/svelte/icons/headphones';
   import BookOpenText from '@lucide/svelte/icons/book-open-text';
   import { updateSettings } from '../actions';
@@ -17,7 +18,7 @@
   <div class="copy">
     <h1 id="onb-title">Stories, read aloud.</h1>
     <p class="muted">
-      Pocket Reader narrates stories with a voice that runs right on your phone. No account, nothing to sign in to — your library stays
+      Pocket Reader narrates stories with a voice that runs right on your {$deviceNoun}. No account, nothing to sign in to — your library stays
       with you.
     </p>
   </div>

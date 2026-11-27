@@ -19,6 +19,11 @@
 </script>
 
 <nav class="tabbar" aria-label="Main">
+  <!-- Desktop sidebar only (desktop.css); hidden in the phone tab bar. -->
+  <span class="brand" aria-hidden="true">
+    <img src="./assets/img/pocket_reader_icon.webp" alt="" width="32" height="32" />
+    <span>Pocket Reader</span>
+  </span>
   {#each tabs as t (t.id)}
     {@const Icon = t.icon}
     <button
@@ -39,6 +44,9 @@
 </nav>
 
 <style>
+  .brand {
+    display: none;
+  }
   .tabbar {
     position: fixed;
     left: 0;

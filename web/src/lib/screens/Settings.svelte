@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { desktopCapable } from '../layout';
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import AudioLines from '@lucide/svelte/icons/audio-lines';
   import Moon from '@lucide/svelte/icons/moon';
@@ -93,6 +94,22 @@
               />
             </span>
           </li>
+          {#if $desktopCapable}
+            <li class="inline split">
+              <span>Layout</span>
+              <span class="seg-s">
+                <Segmented
+                  label="Layout"
+                  value={$settings.layout}
+                  options={[
+                    { value: 'auto', label: 'Desktop' },
+                    { value: 'phone', label: 'Compact' },
+                  ]}
+                  onchange={(v) => updateSettings({ layout: v })}
+                />
+              </span>
+            </li>
+          {/if}
         </Group>
 
         <Group title="Virtue" footer="Your reading companion comments on what happens in the app. Quiet keeps her to the important moments.">

@@ -63,6 +63,7 @@ const DEFAULT_SETTINGS: Settings = {
   updateNotifications: true,
   companion: 'virtue',
   companionChatter: 'normal',
+  layout: 'auto',
   onboarded: true,
 };
 

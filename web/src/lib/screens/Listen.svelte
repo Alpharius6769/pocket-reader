@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deviceNoun } from '../layout';
   import Flame from '@lucide/svelte/icons/flame';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Compass from '@lucide/svelte/icons/compass';
@@ -10,7 +11,7 @@
   import { inProgress, library } from '../stores/library';
   import { settings } from '../stores/settings';
   import { ui, openNowPlaying, openSheet, setTab, say } from '../stores/ui';
-  import { greeting, listenTime, percent } from '../format';
+  import { greeting, listenTime, percent, progressLabel } from '../format';
   import { LINES } from '../virtue/sprites';
   import Cover from '../components/Cover.svelte';
   import PlayButton from '../components/PlayButton.svelte';
@@ -109,7 +110,7 @@
     <section class="empty card">
       <Virtue mood="waving" line="Hello!" height={220} />
       <h2>Your shelf is empty</h2>
-      <p class="muted">Find something on Discover, or bring your own file. Everything stays on this phone.</p>
+      <p class="muted">Find something on Discover, or bring your own file. Everything stays on this {$deviceNoun}.</p>
       <div class="empty-cta">
         <button class="btn btn-primary" type="button" onclick={() => setTab('discover')}><Compass size={18} /> Find a story</button>
         <button
@@ -170,7 +171,7 @@
           <div class="badge" class:locked={!a.unlockedAt}>
             <span class="medal"><span class="glyph" style:--icon="url({iconUrl(a.icon)})"></span></span>
             <span class="bt">{a.title}</span>
-            {#if a.tier}<span class="tier {a.tier.toLowerCase()}">{a.tier}</span>{:else if a.progress && !a.unlockedAt}<span class="faint bp">{a.progress.value}/{a.progress.target}</span>{/if}
+            {#if a.tier}<span class="tier {a.tier.toLowerCase()}">{a.tier}</span>{:else if a.progress && !a.unlockedAt}<span class="faint bp">{progressLabel(a.progress)}</span>{/if}
           </div>
         {/each}
       </div>
@@ -407,6 +408,12 @@
   .locked .glyph {
     background: var(--ink-3);
     opacity: 0.5;
+  }
+  /* Nothing inside a badge may push past its 92px card. */
+  .badge > :global(*) {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
   .bt {
     font-size: var(--t-caption);

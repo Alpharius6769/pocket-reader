@@ -823,6 +823,7 @@ export class RealBridge implements CoreBridge {
       updateNotifications: v2.updateNotifications !== false,
       companion: s.companionFrequency === 'quiet' && v2.companionHidden ? 'none' : (v2.companion === 'none' ? 'none' : 'virtue'),
       companionChatter: s.companionFrequency === 'quiet' ? 'quiet' : 'normal',
+      layout: v2.layout === 'phone' ? 'phone' : 'auto',
       onboarded: localStorage.getItem(SETUP_COMPLETE_KEY) === 'true',
     };
   }
@@ -860,6 +861,7 @@ export class RealBridge implements CoreBridge {
     if (patch.defaultMode) v2.defaultMode = patch.defaultMode;
     if (patch.updateNotifications !== undefined) v2.updateNotifications = patch.updateNotifications;
     if (patch.companion) v2.companion = patch.companion;
+    if (patch.layout) v2.layout = patch.layout;
     if (patch.companionChatter) s.companionFrequency = patch.companionChatter === 'quiet' ? 'quiet' : 'contextual';
     if (patch.onboarded !== undefined) {
       try { localStorage.setItem(SETUP_COMPLETE_KEY, patch.onboarded ? 'true' : 'false'); } catch { /* storage blocked */ }
@@ -1084,7 +1086,9 @@ export class RealBridge implements CoreBridge {
         icon: `ach_${a.id}`,
         unlockedAt: got ? Number(got.unlockedAt) || undefined : undefined,
         tier: reached?.t,
-        progress: next ? { value, target: next.v } : a.target ? { value: Math.min(value, a.target), target: a.target } : undefined,
+        progress: next
+          ? { value, target: next.v, ...(a.metric === 'hoursListened' ? { unit: 'hours' as const } : {}) }
+          : a.target ? { value: Math.min(value, a.target), target: a.target } : undefined,
       };
     });
   }

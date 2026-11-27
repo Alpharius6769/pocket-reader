@@ -237,6 +237,8 @@ export interface Settings {
   /** Virtue companion: shown or hidden; how often she speaks. */
   companion: 'virtue' | 'none';
   companionChatter: 'quiet' | 'normal';
+  /** 'auto' uses the desktop layout on a computer; 'phone' keeps the phone layout everywhere. */
+  layout: 'auto' | 'phone';
   onboarded: boolean;
 }
 
@@ -340,7 +342,8 @@ export interface Achievement {
   unlockedAt?: number;
   /** Tiered achievements: current tier name and progress to the next. */
   tier?: 'Bronze' | 'Silver' | 'Gold' | 'Platinum';
-  progress?: { value: number; target: number };
+  /** `unit: 'hours'` marks fractional listening hours; everything else is a count. */
+  progress?: { value: number; target: number; unit?: 'hours' };
 }
 
 export interface ListeningStats {

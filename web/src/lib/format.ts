@@ -59,3 +59,26 @@ export function clockLeft(endsAt: number, now = Date.now()) {
   const m = Math.floor(s / 60);
   return `${m}:${String(s % 60).padStart(2, '0')}`;
 }
+
+/**
+ * Progress toward an achievement. Counts are whole numbers; listening time is
+ * stored as fractional hours (words / 9000), which must never be printed raw.
+ */
+export function progressLabel(p: { value: number; target: number; unit?: 'hours' }) {
+  const value = Number.isFinite(p.value) ? Math.max(0, p.value) : 0;
+  if (p.unit === 'hours') {
+    if (value < 1) return `${Math.floor(value * 60)} min / ${p.target} h`;
+    const shown = value < 10 ? Math.floor(value * 10) / 10 : Math.floor(value);
+    return `${shown} / ${p.target} h`;
+  }
+  return `${Math.floor(value)}/${p.target}`;
+}
+
+/** Time left while the first paragraphs are prepared. `null` = not measurable yet. */
+export function etaLabel(seconds: number | null) {
+  if (seconds === null || !Number.isFinite(seconds)) return 'Estimating time…';
+  if (seconds < 5) return 'Almost ready';
+  if (seconds < 60) return `About ${Math.max(5, Math.round(seconds / 5) * 5)} seconds left`;
+  const mins = Math.ceil(seconds / 60);
+  return `About ${mins} min left`;
+}

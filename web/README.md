@@ -37,6 +37,17 @@ Four stores, nothing else: `player`, `library`, `settings`, `ui`
 (`src/lib/stores/`). `wire.ts` is the only place bridge events are subscribed.
 Components read stores and call `src/lib/actions.ts` or the bridge.
 
+## Phone and desktop layouts
+
+The phone layout is the default and the fallback. `src/lib/layout.ts` adds the
+class `layout-desktop` to `<html>` only when the OS is Windows, macOS, Linux or
+ChromeOS, the primary input is a mouse or trackpad, the window is at least
+960 x 560, and the reader has not picked Compact in Settings. Every desktop rule
+lives in `src/desktop.css` behind that class, so the phone styles cannot be
+affected by it. `layout.test.ts` pins the detection, including an iPad or an
+Android phone asking for the desktop site. `?layout=desktop|phone` skips
+detection for design review; `?sim=iphone` is always phone.
+
 ## Design review links
 
 `?sim=iphone` draws an iPhone 16 Pro status bar + Dynamic Island and applies its

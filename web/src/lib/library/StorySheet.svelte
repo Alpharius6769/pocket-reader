@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deviceNoun } from '../layout';
   import Headphones from '@lucide/svelte/icons/headphones';
   import BookOpenText from '@lucide/svelte/icons/book-open-text';
   import Heart from '@lucide/svelte/icons/heart';
@@ -119,7 +120,7 @@
         <span class="lbl">
           Offline narration
           <span class="sub">
-            {#if entry.cache.state === 'complete'}Saved on this phone
+            {#if entry.cache.state === 'complete'}Saved on this {$deviceNoun}
             {:else if entry.cache.state === 'caching'}Saving… {entry.cache.total ? percent(entry.cache.done / entry.cache.total) : ''}
             {:else if entry.cache.state === 'partial'}Partly saved{:else}Narrate the whole story ahead of time{/if}
           </span>
@@ -146,7 +147,7 @@
 
     {#if confirmRemove}
       <div class="confirm">
-        <p>Remove “{s.title}” and its saved narration from this phone?</p>
+        <p>Remove “{s.title}” and its saved narration from this {$deviceNoun}?</p>
         <div class="row2">
           <button class="btn btn-plain" type="button" onclick={() => (confirmRemove = false)}>Cancel</button>
           <button class="btn danger-solid" type="button" onclick={remove}>Remove</button>

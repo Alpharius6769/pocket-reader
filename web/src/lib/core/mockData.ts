@@ -342,7 +342,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'alexandrian', title: 'Alexandrian', description: 'Build up a personal library of several favorites.', icon: 'ach_alexandrian', progress: { value: 2, target: 5 } },
   { id: 'hoarder', title: 'Hoarder', description: 'Stack up unread stories — the to-be-listened pile.', icon: 'ach_hoarder', progress: { value: 3, target: 10 } },
   { id: 'eclectic', title: 'Eclectic Taste', description: 'Add stories from different genres to your collection.', icon: 'ach_eclectic', tier: 'Bronze', unlockedAt: now - 12 * DAY, progress: { value: 5, target: 7 } },
-  { id: 'avid_listener', title: 'Avid Listener', description: 'Total hours of narration listened to.', icon: 'ach_avid_listener', tier: 'Silver', unlockedAt: now - 3 * DAY, progress: { value: 14, target: 100 } },
+  { id: 'avid_listener', title: 'Avid Listener', description: 'Total hours of narration listened to.', icon: 'ach_avid_listener', tier: 'Silver', unlockedAt: now - 3 * DAY, progress: { value: 14, target: 100, unit: 'hours' } },
   { id: 'days_streak', title: 'Days Listening Streak', description: 'Longest run of consecutive days with any playback.', icon: 'ach_days_streak', tier: 'Bronze', unlockedAt: now - 2 * DAY, progress: { value: 5, target: 7 } },
   { id: 'page_one', title: 'Page One', description: 'Celebrate 1 week since your first day with the app.', icon: 'ach_page_one', unlockedAt: now - 23 * DAY },
   { id: 'chapter_two', title: 'Chapter Two', description: 'Celebrate 1 month with the app.', icon: 'ach_chapter_two', progress: { value: 30, target: 30 }, unlockedAt: now - 1 * DAY },

@@ -4,6 +4,8 @@
   import { attempt } from '../actions';
   import { player, preparing, storyProgress, currentChapter, playLocked } from '../stores/player';
   import { ui, openPlayer } from '../stores/ui';
+  import { runwayEta } from '../stores/eta';
+  import { etaLabel } from '../format';
   import Cover from './Cover.svelte';
   import PlayButton from './PlayButton.svelte';
 
@@ -13,7 +15,7 @@
 
   const subtitle = $derived(
     $preparing || $player.runway.preparing
-      ? `Preparing narration… ${$player.runway.ready} of ${$player.runway.target || 10}`
+      ? `Preparing narration… ${$player.runway.ready} of ${$player.runway.target || 10}${$runwayEta === null ? '' : ` · ${etaLabel($runwayEta).toLowerCase()}`}`
       : $player.state === 'buffering'
         ? 'Getting the next lines ready…'
         : ($currentChapter?.title ?? ''),

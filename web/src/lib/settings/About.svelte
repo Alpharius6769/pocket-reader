@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deviceNoun } from '../layout';
   import { pushSettings, toast } from '../stores/ui';
   import { longPress } from '../motion';
   import Group from './Group.svelte';
@@ -21,7 +22,7 @@
   <img src="./assets/img/pocket_reader_icon.webp" alt="" width="84" height="84" />
   <h2>Pocket Reader</h2>
   <button class="ver" type="button" use:longPress={openDiagnostics} aria-label="Version {version}. Long-press for diagnostics.">Version {version}</button>
-  <p class="muted">Stories, read aloud on your phone. Narration runs on-device; nothing you read leaves this phone.</p>
+  <p class="muted">Stories, read aloud on your {$deviceNoun}. Narration runs on-device; nothing you read leaves this {$deviceNoun}.</p>
 </div>
 
 <Group title="Credits">

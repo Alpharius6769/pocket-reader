@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deviceNoun } from '../layout';
   import { onMount } from 'svelte';
   import { bridge, type StorageUsage } from '../core';
   import { attempt } from '../actions';
@@ -28,7 +29,7 @@
 {#if usage}
   <div class="card meter">
     <div class="big">{bytes(total)}</div>
-    <div class="muted small">used on this phone{#if usage.quotaBytes}&nbsp;of {bytes(usage.quotaBytes)} available to the app{/if}</div>
+    <div class="muted small">used on this {$deviceNoun}{#if usage.quotaBytes}&nbsp;of {bytes(usage.quotaBytes)} available to the app{/if}</div>
     <div class="bar" aria-hidden="true">
       <span class="m" style:flex={usage.voiceModelsBytes}></span>
       <span class="a" style:flex={usage.audioCacheBytes}></span>

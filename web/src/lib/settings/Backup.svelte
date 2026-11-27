@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deviceNoun } from '../layout';
   import Download from '@lucide/svelte/icons/download';
   import Upload from '@lucide/svelte/icons/upload';
   import { bridge } from '../core';
@@ -31,8 +32,8 @@
 <div class="intro">
   <Virtue mood="holding" line="Keep it safe." height={170} crop={0.35} />
   <p class="muted">
-    Pocket Reader keeps everything on this phone — there is no account. A backup file holds your library, progress, bookmarks and
-    settings so you can move to a new phone or recover after deleting the app.
+    Pocket Reader keeps everything on this {$deviceNoun} — there is no account. A backup file holds your library, progress, bookmarks and
+    settings so you can move to a new device or recover after deleting the app.
   </p>
 </div>
 

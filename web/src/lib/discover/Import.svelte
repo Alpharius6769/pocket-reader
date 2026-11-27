@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deviceNoun } from '../layout';
   import Link from '@lucide/svelte/icons/link';
   import FileUp from '@lucide/svelte/icons/file-up';
   import ClipboardPaste from '@lucide/svelte/icons/clipboard-paste';
@@ -54,7 +55,7 @@
 
 <section class="card block">
   <h2 class="h"><FileUp size={20} /> From a file</h2>
-  <p class="muted sub">EPUB, PDF, TXT, HTML or DOCX from Files, iCloud Drive or a download. The file stays on this phone.</p>
+  <p class="muted sub">EPUB, PDF, TXT, HTML or DOCX from Files, iCloud Drive or a download. The file stays on this {$deviceNoun}.</p>
   <button class="btn btn-tonal btn-block" type="button" disabled={busy !== null} onclick={() => input?.click()}>
     {busy === 'file' ? 'Importing…' : 'Choose a file'}
   </button>
