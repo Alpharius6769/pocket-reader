@@ -52,3 +52,6 @@ backend/.curated_updates/
 
 # v2 UI build output (vite build -> dist/)
 /dist/
+
+# Local cache written by the code-audit skill
+.claude/code-audit.cache.json
