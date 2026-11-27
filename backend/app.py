@@ -1925,14 +1925,20 @@ async def scrape_story(req: ScrapeRequest, request: Request):
             status_code=400,
             detail="That address is not reachable from this service.")
 
+    cookies = req.cookies if isinstance(req.cookies, dict) else None
+    # A request that carries the reader's own site cookies is theirs alone. The
+    # cache is keyed by URL, so sharing it both ways was wrong: a signed-in
+    # fetch of gated content was served to everyone for half an hour, and a
+    # cached sign-in wall was served to the reader who had signed in.
+    cacheable = not cookies
     cache_key = url.split("#")[0]
-    cached = await SCRAPE_CACHE.get(cache_key)
-    if cached is not None:
-        return cached
+    if cacheable:
+        cached = await SCRAPE_CACHE.get(cache_key)
+        if cached is not None:
+            return cached
 
     _require_scrape_budget(request)
 
-    cookies = req.cookies if isinstance(req.cookies, dict) else None
     try:
         async with _SCRAPE_CONCURRENCY:
             result = await scrape_url(url, cookies)
@@ -1955,7 +1961,8 @@ async def scrape_story(req: ScrapeRequest, request: Request):
             status_code=502)
 
     payload = _scrape_result_payload(result, url)
-    await SCRAPE_CACHE.put(cache_key, payload)
+    if cacheable:
+        await SCRAPE_CACHE.put(cache_key, payload)
     log.info("scrape: parsed %d chapters for '%s'",
              len(payload["chapters"]), payload["title"])
     return payload

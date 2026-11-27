@@ -2,7 +2,7 @@ import re
 from typing import Optional
 from bs4 import BeautifulSoup
 from scrapers_core import fetch
-from parsers_core import Chapter, ScrapeResult, clean_text, split_paragraphs
+from parsers_core import Chapter, ScrapeResult, html_paragraphs
 
 
 async def scrape_sofurry(
@@ -42,7 +42,7 @@ async def scrape_sofurry(
         raise RuntimeError(
             "Could not find story text on SoFurry. The story may require login.")
 
-    paras = split_paragraphs(clean_text(content.get_text("\n\n")))
+    paras = html_paragraphs(content)
     if not paras:
         raise RuntimeError("Story appears empty or requires login.")
 

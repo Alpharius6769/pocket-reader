@@ -1,7 +1,7 @@
 import re
 from bs4 import BeautifulSoup
 from scrapers_core import fetch, make_client, log
-from parsers_core import Chapter, ScrapeResult, clean_text, split_paragraphs
+from parsers_core import Chapter, ScrapeResult, html_paragraphs
 
 
 async def scrape_wattpad(url: str, **kwargs) -> ScrapeResult:
@@ -15,11 +15,8 @@ async def scrape_wattpad(url: str, **kwargs) -> ScrapeResult:
                     f"https://www.wattpad.com/apiv2/storytext?id={part_id}",
                     timeout=20)
                 if resp.ok and resp.text.strip():
-                    paras = split_paragraphs(
-                        clean_text(
-                            BeautifulSoup(
-                                resp.text,
-                                "html.parser").get_text("\n\n")))
+                    paras = html_paragraphs(
+                        BeautifulSoup(resp.text, "html.parser"))
                     if paras:
                         title, synopsis, genres, artwork_url, meta = "Wattpad Story", "", [], None, {}
                         try:
@@ -69,7 +66,7 @@ async def scrape_wattpad(url: str, **kwargs) -> ScrapeResult:
                         class_="part-content") or soup.find("div",
                                                             class_=re.compile(r"story-part|part-content"))
     if content:
-        paras = split_paragraphs(clean_text(content.get_text("\n\n")))
+        paras = html_paragraphs(content)
         if paras:
             return ScrapeResult(
                 title=title, chapters=[Chapter(title=title, paragraphs=paras)],

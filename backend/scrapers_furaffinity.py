@@ -2,7 +2,7 @@ import re
 from typing import Optional
 from bs4 import BeautifulSoup
 from scrapers_core import fetch
-from parsers_core import Chapter, ScrapeResult, clean_text, split_paragraphs
+from parsers_core import Chapter, ScrapeResult, html_paragraphs
 
 
 async def scrape_furaffinity(
@@ -40,7 +40,7 @@ async def scrape_furaffinity(
         raise RuntimeError(
             "Could not find story text on this FurAffinity page.")
 
-    paras = split_paragraphs(clean_text(content.get_text("\n\n")))
+    paras = html_paragraphs(content)
     if not paras:
         raise RuntimeError("The submission appears to be empty or image-only.")
 

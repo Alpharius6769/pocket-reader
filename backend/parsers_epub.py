@@ -5,7 +5,7 @@ from typing import List, Optional
 from lxml import etree
 from bs4 import BeautifulSoup
 from parsers_core import (
-    Chapter, clean_text, split_paragraphs, drop_front_back_matter,
+    Chapter, html_paragraphs, drop_front_back_matter,
     MAX_PARSED_TEXT_CHARS)
 
 MAX_EPUB_SPINE_ITEMS = int(os.environ.get("MAX_EPUB_SPINE_ITEMS", 5000))
@@ -171,7 +171,7 @@ def parse_epub(path) -> List[Chapter]:
                      or posixpath.basename(full))
             if heading:
                 heading.decompose()
-            paras = split_paragraphs(clean_text(soup.get_text("\n\n")))
+            paras = html_paragraphs(soup.body or soup)
             if not paras:
                 continue
             parsed_chars += sum(len(paragraph) for paragraph in paras)

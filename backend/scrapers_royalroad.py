@@ -5,7 +5,7 @@ from typing import List
 from bs4 import BeautifulSoup
 from scrapers_core import fetch, make_client, log
 from scrapers_cloudflare import CloudflareBlocked
-from parsers_core import Chapter, ScrapeResult, clean_text, split_paragraphs
+from parsers_core import Chapter, ScrapeResult, html_paragraphs
 
 
 async def scrape_royalroad(url: str, **kwargs) -> ScrapeResult:
@@ -37,7 +37,7 @@ async def scrape_royalroad(url: str, **kwargs) -> ScrapeResult:
     content = soup.find("div", class_=re.compile(
         r"chapter-inner|chapter-content"))
     if content:
-        paras = split_paragraphs(clean_text(content.get_text("\n\n")))
+        paras = html_paragraphs(content)
         if paras:
             return ScrapeResult(
                 title=title, chapters=[Chapter(title=title, paragraphs=paras)],
@@ -80,8 +80,7 @@ async def scrape_royalroad(url: str, **kwargs) -> ScrapeResult:
                 ch_content = ch_soup.find(
                     "div", class_=re.compile(r"chapter-inner|chapter-content"))
                 if ch_content:
-                    paras = split_paragraphs(
-                        clean_text(ch_content.get_text("\n\n")))
+                    paras = html_paragraphs(ch_content)
                     if paras:
                         chapters.append(Chapter(title=ch_title, paragraphs=paras))
             except CloudflareBlocked:

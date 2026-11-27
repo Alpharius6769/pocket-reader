@@ -36,6 +36,103 @@ def split_paragraphs(text: str) -> List[str]:
     return [p.strip() for p in text.split("\n\n") if len(p.strip()) > 0]
 
 
+# Elements that end a paragraph. Everything else is inline: its text belongs to
+# the sentence around it.
+_BLOCK_TAGS = frozenset({
+    "address", "article", "aside", "blockquote", "body", "caption", "center",
+    "dd", "details", "dialog", "div", "dl", "dt", "fieldset", "figcaption",
+    "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header",
+    "hgroup", "html", "li", "main", "nav", "ol", "p", "pre", "section",
+    "summary", "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul",
+})
+_BREAK_TAGS = frozenset({"br", "hr"})
+_UNREAD_TAGS = frozenset({
+    "script", "style", "head", "title", "noscript", "template", "svg", "iframe",
+    "button", "select", "textarea", "audio", "video", "object",
+})
+_INLINE_SPACE_RE = re.compile(r"[ \t\r\n\f\v\u00a0]+")
+
+
+def html_paragraphs(node, max_chars: Optional[int] = None) -> List[str]:
+    """Paragraphs of an HTML fragment, one per block of prose.
+
+    Replaces ``node.get_text("\\n\\n")`` followed by ``split_paragraphs``, and
+    AO3's ``p.get_text(strip=True)``. Both treated every text node as its own
+    unit, and a sentence is several text nodes as soon as it holds one inline
+    tag:
+
+    * a separator between nodes cut "the <em>very</em> big dog" into three
+      paragraphs, read aloud with a paragraph pause after "the" and after
+      "very";
+    * stripping each node and joining with nothing gave "theverybig dog", and
+      fused lines separated by ``<br>`` into one paragraph.
+
+    Here only block elements and line breaks end a paragraph. Inline elements
+    contribute their text in place, with the author's spacing, and whitespace is
+    collapsed the way a browser renders it. A ``<br>`` ends the paragraph on
+    purpose: authors who do not use ``<p>`` separate paragraphs with it, and a
+    line of verse or greentext is its own unit for narration.
+    """
+    # Imported here so this module stays importable without bs4 for the
+    # callers that only use the plain-text helpers.
+    from bs4 import NavigableString, Tag
+
+    paragraphs: List[str] = []
+    buffer: List[str] = []
+    total = 0
+    full = False
+
+    def flush():
+        nonlocal total, full
+        text = _INLINE_SPACE_RE.sub(" ", "".join(buffer)).strip()
+        buffer.clear()
+        if not text or full:
+            return
+        if max_chars is not None and total + len(text) > max_chars:
+            text = text[:max(0, max_chars - total)].rstrip()
+            full = True
+            if not text:
+                return
+        total += len(text)
+        paragraphs.append(text)
+
+    def walk(element, preformatted=False):
+        for child in element.children:
+            if full:
+                return
+            if isinstance(child, NavigableString):
+                # Comment, Doctype, CData, Script and Stylesheet all subclass
+                # NavigableString; only a plain string is prose.
+                if type(child) is not NavigableString:
+                    continue
+                text = str(child)
+                if preformatted:
+                    # Inside <pre> a blank line is the author's paragraph break.
+                    pieces = re.split(r"\n[ \t]*\n", text)
+                    for index, piece in enumerate(pieces):
+                        if index:
+                            flush()
+                        buffer.append(piece)
+                else:
+                    buffer.append(text)
+            elif isinstance(child, Tag):
+                name = (child.name or "").lower()
+                if name in _UNREAD_TAGS:
+                    continue
+                if name in _BREAK_TAGS:
+                    flush()
+                elif name in _BLOCK_TAGS:
+                    flush()
+                    walk(child, preformatted or name == "pre")
+                    flush()
+                else:
+                    walk(child, preformatted)
+
+    walk(node)
+    flush()
+    return paragraphs
+
+
 # Front- and back-matter section titles that should never be listed as a chapter
 # or narrated. Matched against the whole normalized title, so a real chapter
 # like "Notes from the Underground" or "The Afterword Incident" is not dropped.

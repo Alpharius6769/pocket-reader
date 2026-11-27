@@ -4,7 +4,7 @@ from typing import Optional
 from bs4 import BeautifulSoup
 from scrapers_core import fetch
 from scrapers_cloudflare import CloudflareBlocked
-from parsers_core import Chapter, ScrapeResult
+from parsers_core import Chapter, ScrapeResult, html_paragraphs
 
 
 def _with_query_flag(url: str, flag: str) -> str:
@@ -107,13 +107,68 @@ async def ao3_published_chapter_count(
         return None
 
 
+_HAS_WORD_RE = re.compile(r"\w", re.UNICODE)
+
+
 def _chapter_paragraphs(node) -> list[str]:
-    """Narratable paragraphs of one chapter body."""
-    return [
-        text
-        for text in (p.get_text(strip=True) for p in node.find_all("p"))
-        if len(text) > 5
-    ]
+    """Narratable paragraphs of one chapter body.
+
+    Takes the whole body, not just its ``<p>`` tags: AO3 authors routinely post
+    ``<div>``- or ``<br>``-separated text, and a body with no ``<p>`` used to
+    come back empty. Lines with no letter or digit (scene-break rules such as
+    ``* * *``) are dropped; short lines of dialogue ("No." "Okay.") are kept --
+    the old ``len(text) > 5`` filter silently deleted them.
+    """
+    # AO3 puts a screen-reader landmark ("Chapter Text") inside the body div.
+    for landmark in node.select(".landmark"):
+        landmark.decompose()
+    return [text for text in html_paragraphs(node) if _HAS_WORD_RE.search(text)]
+
+
+# Site chrome that also uses div.userstuff. The admin banner is the one that
+# matters: while AO3 shows a site notice, it is the first userstuff div on every
+# page, and it was being saved as Chapter 1 of every single-chapter work.
+_AO3_CHROME_IDS = frozenset({
+    "admin-banner", "header", "footer", "dashboard", "tos_prompt", "login",
+    "small_login", "outer", "skiplinks",
+})
+_AO3_CHROME_CLASSES = ("preface", "notes", "summary", "announcement", "flash",
+                       "admin", "banner", "endnotes", "afterword")
+
+
+def _is_story_body(div) -> bool:
+    """True when a div.userstuff is story text rather than notes or site chrome."""
+    for parent in div.parents:
+        if parent.get("id") in _AO3_CHROME_IDS and parent.get("id") != "outer":
+            return False
+        classes = parent.get("class") or []
+        if any(name in classes for name in _AO3_CHROME_CLASSES):
+            return False
+    return True
+
+
+def _story_body_divs(soup) -> list:
+    """The div(s) holding the work's text.
+
+    A multi-chapter work marks each body ``div.userstuff[role='article']``. A
+    single-chapter work does not: there the role sits on ``div#chapters`` and
+    the body is a bare ``div.userstuff`` inside it. Matching only the first
+    shape sent every single-chapter work to a page-wide search.
+
+    So the search is scoped to the work itself (``#chapters``, then
+    ``#workskin``) before it is ever allowed to look at the whole page, and
+    whatever it finds must not sit inside notes or site chrome.
+    """
+    for scope in (soup.select_one("#chapters"), soup.select_one("#workskin"), soup):
+        if scope is None:
+            continue
+        marked = [d for d in scope.select("div.userstuff[role='article']") if _is_story_body(d)]
+        if marked:
+            return marked
+        bare = [d for d in scope.find_all("div", class_="userstuff") if _is_story_body(d)]
+        if bare:
+            return bare
+    return []
 
 
 def _collect_ao3_chapters(soup, content_divs) -> list[Chapter]:
@@ -152,7 +207,7 @@ def _collect_ao3_chapters(soup, content_divs) -> list[Chapter]:
             if body is None:
                 body = next(
                     (d for d in section.find_all("div", class_="userstuff")
-                     if not d.find_parent(class_=["preface", "notes", "summary"])),
+                     if _is_story_body(d)),
                     None,
                 )
             chapters.append(Chapter(
@@ -179,12 +234,9 @@ async def scrape_ao3(url: str) -> ScrapeResult:
         from scrapers_cloudflare import CloudflareBlocked
         raise CloudflareBlocked(url, "TOS gate")
 
-    # Find chapter content divs, carefully avoiding summary/notes which also use .userstuff
-    content_divs = soup.select("div.userstuff[role='article']")
-    if not content_divs:
-        # Fallback: get all userstuff divs but exclude those inside preface/notes/summaries
-        all_userstuff = soup.find_all("div", class_="userstuff")
-        content_divs = [d for d in all_userstuff if not d.find_parent(class_=["preface", "notes", "summary"])]
+    # The work's own text only: summaries, notes and AO3's site banner also use
+    # .userstuff.
+    content_divs = _story_body_divs(soup)
 
     if not content_divs:
         raise RuntimeError("No story content found. The parser is blind.")

@@ -7,7 +7,8 @@ try:
 except ImportError:
     Document = None
 from parsers_core import (
-    Chapter, clean_text, split_paragraphs, MAX_PARSED_TEXT_CHARS)
+    Chapter, clean_text, split_paragraphs, html_paragraphs,
+    MAX_PARSED_TEXT_CHARS)
 
 
 def parse_docx(path) -> List[Chapter]:
@@ -78,12 +79,9 @@ def parse_html_string(
             class_=re.compile(
                 r"content|story|chapter|text",
                 re.I)) or soup.body)
-    text = (main or soup).get_text("\n\n")
-    # Cap extracted text (matches EPUB/PDF) so a huge HTML upload or scrape
-    # cannot emit a story beyond the intended size limit.
-    if len(text) > MAX_PARSED_TEXT_CHARS:
-        text = text[:MAX_PARSED_TEXT_CHARS]
-    paras = split_paragraphs(clean_text(text))
+    # Capped (matches EPUB/PDF) so a huge HTML upload or scrape cannot emit a
+    # story beyond the intended size limit.
+    paras = html_paragraphs(main or soup, max_chars=MAX_PARSED_TEXT_CHARS)
     return [Chapter(title=title, paragraphs=paras)] if paras else []
 
 
