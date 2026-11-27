@@ -1,4 +1,5 @@
 <script lang="ts">
+  import House from '@lucide/svelte/icons/house';
   import Headphones from '@lucide/svelte/icons/headphones';
   import LibraryBig from '@lucide/svelte/icons/library-big';
   import Compass from '@lucide/svelte/icons/compass';
@@ -7,8 +8,9 @@
   import { library } from '../stores/library';
 
   const tabs: { id: Tab; label: string; icon: typeof Headphones }[] = [
-    { id: 'listen', label: 'Listen', icon: Headphones },
+    { id: 'listen', label: 'Home', icon: House },
     { id: 'library', label: 'Library', icon: LibraryBig },
+    { id: 'player', label: 'Player', icon: Headphones },
     { id: 'discover', label: 'Discover', icon: Compass },
     { id: 'settings', label: 'Settings', icon: Settings2 },
   ];
@@ -44,7 +46,7 @@
     bottom: 0;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     padding: 0 var(--safe-right) var(--safe-bottom) var(--safe-left);
     background: var(--bg-glass);
     -webkit-backdrop-filter: saturate(1.6) blur(20px);

@@ -194,6 +194,22 @@ export interface EngineState {
   message?: string;
 }
 
+/**
+ * The starting runway: paragraphs from the reading position that are already
+ * rendered. Play unlocks when `ready >= target` (`ok`). `target` is 10, or what
+ * is left of the story. The device voice needs none (`ok` with target 0).
+ */
+export interface RunwayState {
+  storyKey: StoryKey | null;
+  ready: number;
+  target: number;
+  preparing: boolean;
+  ok: boolean;
+  error?: string;
+  /** False until the narration runtime has loaded and answered. */
+  known: boolean;
+}
+
 /* ------------------------------------------------------------- settings */
 
 export interface PronunciationRule {
@@ -383,6 +399,7 @@ export interface BridgeEvents {
   /** Narration rendered ahead of the playhead. `ready`/`target` are paragraphs. */
   buffer: { storyKey: StoryKey; ready: number; target: number };
   engine: EngineState;
+  runway: RunwayState;
   notice: Notice;
   'story-loaded': { story: Story; position: Position };
   'caching-progress': { storyKey: StoryKey; state: CacheState; done: number; total: number };
@@ -448,6 +465,13 @@ export interface CoreBridge {
   /** Speak a short sample with this voice without touching the story. */
   previewVoice(voice: VoiceId): Promise<void>;
   getEngineState(): EngineState;
+  /** The starting runway at the current position. */
+  getRunway(): RunwayState;
+  /**
+   * Render the paragraphs Play needs, without playing. Returns false when it
+   * could not start here (the first Play has to reload into the fast session).
+   */
+  prepareRunway(): Promise<boolean>;
 
   // offline
   startCaching(key: StoryKey): Promise<void>;

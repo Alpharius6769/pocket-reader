@@ -1,5 +1,5 @@
 // buffer_manager.js - Updated with auto worker detection and concurrency control
-import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v58';
+import { saveAudioChunk, getAudioChunk } from './storage_core.js?v=storage-v59';
 import {
   evaluateCpuThermalRest,
   POCKET_MAX_CACHE_WORKERS,
@@ -10,7 +10,7 @@ import {
   voicesForEngine,
 } from './pocket_backend_policy.js?v=backend-v64';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
-import { ui } from './core_events.js?v=core-events-v9';
+import { ui } from './core_events.js?v=core-events-v11';
 import { adoptNarrationPreset } from './library_core.js?v=library-core-v4';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
@@ -687,6 +687,9 @@ async function _resumeFastNarrationCache() {
           // audio inside a user gesture: starting here, unprompted, left a
           // phone "playing" in silence. Ask for one more tap (the v2 UI's Play
           // button), then start inside it. Desktop autoplays and needs none.
+          // Prepare the starting runway first (no gesture needed to render),
+          // so the tap starts audio instead of starting a wait.
+          await window.prepareNarrationRunway?.();
           if (_isMobileNarrationPlatform()) await _awaitMobileNarrationGesture('playback');
           window.togglePlayState?.();
         } else {

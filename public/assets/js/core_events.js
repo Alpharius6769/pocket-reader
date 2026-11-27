@@ -40,6 +40,7 @@ export const CORE_EVENT = Object.freeze({
   PLAY_LOADING: 'pr:play-loading',   // { loading, message }
   CACHING: 'pr:caching-progress',    // { active, paused, mode, cached, total, skipped, pct, runway, text }
   GESTURE: 'pr:gesture-needed',      // { verb, onContinue } -- call onContinue inside a user tap
+  RUNWAY: 'pr:runway',               // { storyRef, voice, chapter, paragraph, ready, target, preparing, ok, error }
 });
 
 let _lastStatus = '';
@@ -104,6 +105,9 @@ export const ui = Object.freeze({
   // spends the one that pressed Play. A UI that handles this sets
   // detail.result = true and calls onContinue from inside its next tap.
   requestGesture: (verb, onContinue) => emit(CORE_EVENT.GESTURE, { verb, onContinue }),
+  // The starting runway: paragraphs from the reading position that are already
+  // rendered. Play unlocks at target (10, or what is left of the story).
+  runway: (snapshot) => emit(CORE_EVENT.RUNWAY, { ...snapshot }),
   cachingProgress: (snapshot) => {
     if (snapshot?.text) _lastStatus = String(snapshot.text);
     return emit(CORE_EVENT.CACHING, { ...snapshot });

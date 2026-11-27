@@ -136,13 +136,68 @@ describe('RealBridge', () => {
   it('starts playback inside the tap: togglePlayState is called before any await', async () => {
     const b = await makeBridge();
     w.currentStory = { storyKey: 's_1', title: 'T', chapters: [{ title: 'One', paragraphs: ['a'] }] };
-    w.togglePlayState = vi.fn(() => Promise.resolve());
+    w.togglePlayState = vi.fn(() => { w.isPlaying = true; return Promise.resolve(); });
     const states: string[] = [];
     b.on('playstate', (p) => states.push(p.state));
     const done = b.play();
     expect(w.togglePlayState).toHaveBeenCalledTimes(1);
     await done;
     expect(states).toEqual(['loading']);
+  });
+
+  it('a Play held back by the starting runway ends paused, not loading', async () => {
+    const b = await makeBridge();
+    w.currentStory = { storyKey: 's_1', title: 'T', chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    w.togglePlayState = vi.fn(() => Promise.resolve()); // the core's gate: preparing, not playing
+    w.isNarrationRunwayReady = () => false;
+    w.getNarrationRunway = () => ({ ready: 3, target: 10, preparing: true, current: true });
+    const runways: any[] = [];
+    b.on('runway', (r) => runways.push(r));
+    const states: string[] = [];
+    b.on('playstate', (p) => states.push(p.state));
+    await b.play();
+    expect(states.at(-1)).toBe('paused');
+    expect(runways.at(-1)).toMatchObject({ storyKey: 's_1', ready: 3, target: 10, preparing: true, ok: false, known: true });
+    delete w.isNarrationRunwayReady;
+    delete w.getNarrationRunway;
+  });
+
+  it('reports the runway for the current position only', async () => {
+    const b = await makeBridge();
+    w.currentStory = { storyKey: 's_1', title: 'T', chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    expect(b.getRunway()).toMatchObject({ known: false, ok: false });
+    w.isNarrationRunwayReady = () => false;
+    w.getNarrationRunway = () => ({ ready: 10, target: 10, preparing: false, current: false });
+    expect(b.getRunway()).toMatchObject({ ready: 0, ok: false, known: true }); // prepared somewhere else
+    w.isNarrationRunwayReady = () => true;
+    w.getNarrationRunway = () => ({ ready: 10, target: 10, preparing: false, current: true });
+    expect(b.getRunway()).toMatchObject({ ready: 10, target: 10, ok: true });
+    w._resolveActiveEngine = () => 'webspeech';
+    expect(b.getRunway()).toMatchObject({ ok: true, target: 0 });
+    delete w.isNarrationRunwayReady;
+    delete w.getNarrationRunway;
+  });
+
+  it('a voice change mid-listen drops the old clip and plays on in the new voice', async () => {
+    const b = await makeBridge();
+    w.currentStory = { storyKey: 's_1', title: 'T', chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    w.isPlaying = true;
+    w.pausePlayback = vi.fn(() => { w.isPlaying = false; });
+    w.onVoiceSelectionChange = vi.fn(() => Promise.resolve());
+    w._releaseCurrentNarrationAudio = vi.fn();
+    w.cancelNarrationRunway = vi.fn();
+    let bypassSeen = false;
+    w.togglePlayState = vi.fn(() => { bypassSeen = w.__narrationRunwayBypassOnce === true; w.isPlaying = true; return Promise.resolve(); });
+    await b.setVoice('paul');
+    expect(w._releaseCurrentNarrationAudio).toHaveBeenCalledTimes(1);
+    expect(w.togglePlayState).toHaveBeenCalledTimes(1);
+    expect(bypassSeen).toBe(true);
+    // Paused at the time: the old clip still goes, but nothing starts.
+    w.isPlaying = false;
+    w.togglePlayState = vi.fn();
+    await b.setVoice('alba');
+    expect(w._releaseCurrentNarrationAudio).toHaveBeenCalledTimes(2);
+    expect(w.togglePlayState).not.toHaveBeenCalled();
   });
 
   it('turns core events into bridge events', async () => {

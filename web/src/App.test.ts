@@ -15,7 +15,7 @@ async function boot(opts: ConstructorParameters<typeof MockBridge>[0] = {}) {
   b = new MockBridge({ latency: 0, ...opts });
   setBridge(b);
   off = await connectStores(b);
-  ui.update((u) => ({ ...u, tab: 'listen', nowPlaying: false, reader: false, sheet: null, settingsStack: ['root'], toasts: [] }));
+  ui.update((u) => ({ ...u, tab: 'listen', playerMode: 'listen', sheet: null, settingsStack: ['root'], toasts: [] }));
   return render(App);
 }
 
@@ -29,11 +29,11 @@ afterEach(() => {
 });
 
 describe('App shell', () => {
-  it('shows four tabs and the mini-player', async () => {
+  it('shows five tabs, with a dedicated Player, and the mini-player', async () => {
     await boot();
     const nav = screen.getByRole('navigation', { name: 'Main' });
     const tabs = Array.from(nav.querySelectorAll('.lbl')).map((t) => t.textContent?.trim());
-    expect(tabs).toEqual(['Listen', 'Library', 'Discover', 'Settings']);
+    expect(tabs).toEqual(['Home', 'Library', 'Player', 'Discover', 'Settings']);
     expect(screen.getByRole('region', { name: 'Now playing' })).toBeTruthy();
   });
 
@@ -48,11 +48,25 @@ describe('App shell', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeTruthy();
   });
 
-  it('opens Now Playing from the mini-player with the current paragraph marked', async () => {
+  it('the mini-player opens the Player tab with the current paragraph marked', async () => {
     await boot();
     await fireEvent.click(screen.getByRole('button', { name: /Open player for/ }));
-    const dialog = await screen.findByRole('dialog', { name: 'Now playing' });
-    expect(dialog.querySelector('[aria-current="true"]')?.textContent).toBe(b.getCurrentStory()!.chapters[6].paragraphs[4]);
+    const pane = await screen.findByRole('region', { name: 'Story text' });
+    expect(pane.querySelector('[aria-current="true"]')?.textContent).toBe(b.getCurrentStory()!.chapters[6].paragraphs[4]);
+    // The mini-player is redundant on the Player itself.
+    expect(screen.queryByRole('button', { name: /Open player for/ })).toBeNull();
+    const nav = within(screen.getByRole('navigation', { name: 'Main' }));
+    expect(nav.getByRole('button', { name: 'Player' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('the Player switches between listening and reading', async () => {
+    await boot();
+    await fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('button', { name: 'Player' }));
+    await fireEvent.click(await screen.findByRole('radio', { name: 'Read' }));
+    expect(await screen.findByRole('button', { name: 'Text size and font' })).toBeTruthy();
+    expect(document.querySelector('.narrating')?.textContent).toBe(b.getCurrentStory()!.chapters[6].paragraphs[4]);
+    await fireEvent.click(screen.getByRole('radio', { name: 'Listen' }));
+    expect(await screen.findByRole('region', { name: 'Story text' })).toBeTruthy();
   });
 
   it('shows one-screen onboarding with no sign-in, and choosing a mode finishes it', async () => {

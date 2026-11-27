@@ -1,4 +1,4 @@
-import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v58';
+import { getAudioChunk, saveAudioChunk } from './storage_core.js?v=storage-v59';
 import {
   PRONUNCIATION_RULESET_VERSION,
   DEFAULT_POCKET_TEMPERATURE_PRESET,
@@ -6,7 +6,7 @@ import {
   DEFAULT_LSD_STEPS,
   getPocketTuningPreset,
   normalizePronunciationOverrides as normalizeTtsPronunciationOverrides,
-} from './tts_pronunciation_core.js?v=pron-v37';
+} from './tts_pronunciation_core.js?v=pron-v39';
 import {
   POCKET_ORT_VERSION,
   POCKET_CALIBRATION_VERSION,
@@ -58,7 +58,7 @@ import {
   shouldRetryPocketQuality,
 } from './pocket_performance_policy.js?v=performance-v2';
 import { prLocal, prSession } from './safe_storage.js?v=safe-storage-v1';
-import { ui, lastStatus } from './core_events.js?v=core-events-v9';
+import { ui, lastStatus } from './core_events.js?v=core-events-v11';
 
 window.isPlaying = false;
 window.currentAudio = null;
@@ -196,7 +196,10 @@ const POCKET_VOICE_PACK_REV = 'r1';
 // initials, closing quotes stay with their sentence, and an over-cap sentence
 // is cut at a clause mark instead of an arbitrary word. Every seam in a
 // paragraph moves, so cached audio from chunkv3 must not be replayed.
-const POCKET_CHUNKING_VERSION = 'chunkv4';
+// chunkv5: a quotation is never split across chunks and never ends one
+// (the dropped "Hey!"), ellipses render as "..", and expanded contractions
+// keep their capital.
+const POCKET_CHUNKING_VERSION = 'chunkv5';
 const POCKET_ARTIFACT_GUARD_VERSION = 'agv3'; // agv3: fatal-only, single identity-preserving retry
 const POCKET_PAUSE_PROFILE_VERSION = 'pausev2';
 const POCKET_PARAGRAPH_PAUSE_SEC = 0.5;
@@ -1625,8 +1628,8 @@ async function _loadPocketEngineOnce(options = {}) {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v56',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v140',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v57',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v142',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -4075,36 +4078,6 @@ export function togglePlayState() {
   // queue puts playback first and preempts the cache render (pocket_worker
   // enqueueGeneration), so blocking the listener here only added a stall.
 
-  // Keep a full twenty-successful-paragraph runway. This check is deliberately
-  // independent of the worker's active/paused state: a failed or paused cache
-  // job must not turn a partial runway into an accidental playback unlock.
-  if (!window.isPlaying && window.BufferManager?.isPlaybackReadyForStory
-      && !window.BufferManager.isPlaybackReadyForStory(window.currentStory)) {
-    const readyCount = window.BufferManager.getReadyCount?.() || 0;
-    const total = window.BufferManager.totalToCache || 0;
-    const minReady = window.getPocketPlaybackReadyCount?.(total) ?? Math.min(20, total);
-    // Restart the job this gate is waiting on. Reporting a shortfall and then
-    // leaving the thing that would clear it stopped is what made Play look
-    // broken: the reader stopped caching, pressed Play, was told 8 of 20 were
-    // ready, and no further press ever changed that number. The only exits were
-    // opening a different story or finding the Resume control on the idle bar --
-    // which is exactly the call below, reached by the gesture they made.
-    const paused = window.BufferManager.paused === true;
-    const running = window.BufferManager.isActive === true && !paused;
-    let restarting = false;
-    if (paused) {
-      try { window.BufferManager.resume(); restarting = true; } catch (_) {}
-    } else if (!running) {
-      try { window._resumeCaching?.(); restarting = window.BufferManager.isActive === true; } catch (_) {}
-    }
-    const message = restarting
-      ? `Picking caching back up — ${readyCount} of ${minReady} paragraphs ready. I'll start as soon as the runway is safe.`
-      : `Still securing the text! ${readyCount} of ${minReady} paragraphs are ready.`;
-    ui.companion('virtue_explaining');
-    ui.say(message, 4500, true);
-    return;
-  }
-
   let resumePausedPocketAudio = false;
   if (!window.isPlaying && _isNeuralEngine(_resolveActiveEngine())) {
     // Run synchronously in the tap before any model/network await. If isolation
@@ -4112,6 +4085,18 @@ export function togglePlayState() {
     preparePocketMobileMediaSession();
     if (window.requestPocketNarrationIsolation?.('playback', 'Normal')) return;
     resumePausedPocketAudio = _canResumePausedPocketAudio();
+    // The starting runway gate, after the isolation reload so preparation runs
+    // in the fast session. It replaced a cache-job gate that counted paragraphs
+    // from the START of the story, not from where the reader is. Resuming a
+    // paused clip is exempt (it is mid-paragraph), and a voice switch asks for
+    // one bypass so the new voice takes over at once.
+    const bypass = window.__narrationRunwayBypassOnce === true;
+    window.__narrationRunwayBypassOnce = false;
+    if (!resumePausedPocketAudio && !bypass && !isNarrationRunwayReady()) {
+      prepareNarrationRunway();
+      ui.playstate(false);
+      return;
+    }
   }
 
   window.isPlaying = !window.isPlaying;
@@ -4397,6 +4382,153 @@ async function _ensurePlaybackLookahead() {
   }
 }
 window._ensurePlaybackLookahead = _ensurePlaybackLookahead;
+
+// ── Starting runway (Play unlocks at 10 ready paragraphs) ────────────────────
+// Owner's requirement (2026-11-26): narration may not start until the
+// paragraphs from the reading position on are already rendered -- ten of them,
+// or the rest of the story if fewer remain. Starting on one live-rendered
+// paragraph meant the listener waited mid-chapter whenever synthesis fell
+// behind; a ten-paragraph head start is the runway the lookahead then keeps
+// topped up. The model's load progress and this count are what the UI shows
+// until then.
+//
+// Renders here carry playback priority (_playPriority), so they preempt a
+// background cache job: that job walks the story from the first paragraph and
+// would otherwise reach a reader at chapter 5 last.
+export const NARRATION_START_RUNWAY = 10;
+let _runwayGen = 0;
+let _runway = null; // { key, storyRef, voice, chapter, paragraph, ready, target, preparing, ok, error }
+
+function _runwayContext() {
+  const story = window.currentStory;
+  const engine = _resolveActiveEngine();
+  if (!story?.chapters || !_isNeuralEngine(engine)) return null;
+  const title = story.title;
+  const storyRef = story.storyKey || window.getStoryStableKey?.(story) || title;
+  const voice = _effectiveVoiceForEngine(engine);
+  const chapter = Number(window.currentChapterIndex) || 0;
+  const paragraph = Number(window.currentParagraphIndex) || 0;
+  return { story, engine, title, storyRef, voice, chapter, paragraph, key: `${storyRef}::${engine}::${voice}::${chapter}::${paragraph}` };
+}
+
+// The current paragraph and the speakable ones after it, up to `target`.
+function _runwaySlots(ctx, target) {
+  const slots = [];
+  let pos = { c: ctx.chapter, p: ctx.paragraph };
+  while (pos && slots.length < target) {
+    const text = ctx.story.chapters[pos.c]?.paragraphs?.[pos.p];
+    if (text && text.trim() && !_isMetaParagraph(text)) slots.push({ c: pos.c, p: pos.p, text });
+    pos = _peekNextIndices(pos.c, pos.p);
+  }
+  return slots;
+}
+
+async function _runwaySlotCached(ctx, slot) {
+  const { text } = slot;
+  const cleanVoice = resolveVoiceWithSentiment(ctx.engine, ctx.voice, text, { storyTitle: ctx.title, chapIdx: slot.c, paraIdx: slot.p });
+  for (const tag of _prosodyCacheTagVariants(ctx.engine)) {
+    if (await getAudioChunk(ctx.storyRef, slot.c, slot.p, ctx.engine, cleanVoice + tag, text)) return true;
+  }
+  return false;
+}
+
+function _publishRunway(ctx, fields) {
+  _runway = {
+    key: ctx?.key || null,
+    storyRef: ctx?.storyRef || null,
+    voice: ctx?.voice || null,
+    chapter: ctx?.chapter ?? 0,
+    paragraph: ctx?.paragraph ?? 0,
+    ready: 0,
+    target: 0,
+    preparing: false,
+    ok: false,
+    error: null,
+    ...fields,
+  };
+  _runway.ok = !_runway.error && _runway.target > 0 && _runway.ready >= _runway.target;
+  ui.runway({ ..._runway });
+  return _runway;
+}
+
+// True when Play may start narration at the current position.
+export function isNarrationRunwayReady() {
+  const ctx = _runwayContext();
+  if (!ctx) return true;               // device voice: nothing to render ahead
+  if (_canResumePausedPocketAudio()) return true; // mid-paragraph: resume, not a fresh start
+  return !!(_runway && _runway.ok && _runway.key === ctx.key);
+}
+window.isNarrationRunwayReady = isNarrationRunwayReady;
+// `current`: the snapshot is for the reading position as it is now (a seek or
+// voice change since leaves it describing somewhere else).
+window.getNarrationRunway = () => {
+  if (!_runway) return null;
+  const ctx = _runwayContext();
+  return { ..._runway, current: !!ctx && _runway.key === ctx.key };
+};
+
+// Render (or find in the cache) the paragraphs Play needs. Idempotent for the
+// same position: a call while one is running for it just returns that run.
+let _runwayPromise = null;
+let _runwayPromiseKey = null;
+export function prepareNarrationRunway({ target = NARRATION_START_RUNWAY } = {}) {
+  const ctx = _runwayContext();
+  if (!ctx) return Promise.resolve(null);
+  const wanted = `${ctx.key}::${target}`;
+  if (_runwayPromise && _runwayPromiseKey === wanted) return _runwayPromise;
+  const gen = ++_runwayGen;
+  _runwayPromiseKey = wanted;
+  _runwayPromise = (async () => {
+    const slots = _runwaySlots(ctx, Math.max(1, target));
+    const need = slots.length;
+    let ready = 0;
+    const stale = () => gen !== _runwayGen;
+    _publishRunway(ctx, { ready, target: need, preparing: need > 0 });
+    try {
+      for (const slot of slots) {
+        if (stale()) return _runway;
+        if (!(await _runwaySlotCached(ctx, slot))) {
+          if (stale()) return _runway;
+          const cleanVoice = resolveVoiceWithSentiment(ctx.engine, ctx.voice, slot.text, { storyTitle: ctx.title, chapIdx: slot.c, paraIdx: slot.p });
+          window._playPriority = true;
+          let blob = null;
+          try {
+            if (ctx.engine === 'pocket') await _ensurePocketBackendOptimizedForVoice(cleanVoice);
+            blob = await window.generateChunk(slot.text, cleanVoice, { storyTitle: ctx.title, chapIdx: slot.c, paraIdx: slot.p });
+          } finally {
+            window._playPriority = false;
+          }
+          if (stale()) return _runway;
+          if (!(blob instanceof Blob) || blob.size < 100) {
+            return _publishRunway(ctx, { ready, target: need, preparing: false, error: 'The voice could not render this paragraph.' });
+          }
+          const cacheVoice = cleanVoice + _prosodyCacheTag(ctx.engine);
+          await saveAudioChunk(ctx.storyRef, slot.c, slot.p, ctx.engine, cacheVoice, blob, false, slot.text).catch(() => {});
+        }
+        ready += 1;
+        _publishRunway(ctx, { ready, target: need, preparing: ready < need });
+      }
+      return _publishRunway(ctx, { ready, target: need, preparing: false });
+    } catch (error) {
+      if (stale()) return _runway;
+      window.Diagnostics?.log?.('WARN', 'Starting runway failed', { error: error?.message || String(error) });
+      return _publishRunway(ctx, { ready, target: need, preparing: false, error: error?.message || String(error) });
+    } finally {
+      if (!stale()) { _runwayPromise = null; _runwayPromiseKey = null; }
+    }
+  })();
+  return _runwayPromise;
+}
+window.prepareNarrationRunway = prepareNarrationRunway;
+
+// A new story, seek or voice makes the old runway irrelevant; its in-flight
+// render finishes (it cannot be cancelled) but nothing more is queued for it.
+export function cancelNarrationRunway() {
+  _runwayGen += 1;
+  _runwayPromise = null;
+  _runwayPromiseKey = null;
+}
+window.cancelNarrationRunway = cancelNarrationRunway;
 
 async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
   const engine = _resolveActiveEngine();
@@ -4703,6 +4835,11 @@ function _releaseCurrentAudio() {
   }
   window.currentAudio = null;
 }
+// A voice change: the loaded clip and the staged next paragraph are in the old
+// voice. Without this, Play resumed the old clip mid-paragraph and the next
+// paragraph waited on the re-cache, so the switch only landed a paragraph or
+// more later.
+window._releaseCurrentNarrationAudio = _releaseCurrentAudio;
 
 // recordDailyActivity now lives in library_manager.js (an eagerly-loaded
 // module) so daily-streak tracking fires on every app open, not only sessions

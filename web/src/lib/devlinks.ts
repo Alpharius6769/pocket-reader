@@ -31,13 +31,13 @@ export async function applyDeepLink(hash: string, params: URLSearchParams) {
   if (head === 'settings' && sub === 'sleep') set({ settingsStack: ['root'], sheet: { kind: 'sleep' } });
 
   if (head === 'now-playing') {
-    set({ nowPlaying: true });
+    set({ tab: 'player', playerMode: 'listen' });
     if (sub === 'chapters' || sub === 'bookmarks') set({ sheet: { kind: 'chapters', tab: sub } });
     if (sub === 'voice') set({ sheet: { kind: 'voice' } });
     if (sub === 'sleep') set({ sheet: { kind: 'sleep' } });
     if (sub === 'playing' || sub === 'preparing') void bridge().play();
   }
-  if (head === 'reader') set({ reader: true });
+  if (head === 'reader') set({ tab: 'player', playerMode: 'read' });
   if (head === 'story' && sub) set({ sheet: { kind: 'story', key: decodeURIComponent(sub) } });
   if (head === 'preview') {
     const res = await bridge().search({ query: '', page: 1 });

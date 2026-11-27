@@ -11,8 +11,7 @@
   import Discover from './lib/screens/Discover.svelte';
   import Settings from './lib/screens/Settings.svelte';
   import Onboarding from './lib/screens/Onboarding.svelte';
-  import NowPlaying from './lib/player/NowPlaying.svelte';
-  import Reader from './lib/player/Reader.svelte';
+  import Player from './lib/screens/Player.svelte';
   import VoiceSheet from './lib/player/VoiceSheet.svelte';
   import SleepSheet from './lib/player/SleepSheet.svelte';
   import ChaptersSheet from './lib/player/ChaptersSheet.svelte';
@@ -57,7 +56,7 @@
   });
 
   // Freeze the page underneath full-screen layers so iOS does not scroll it.
-  const covered = $derived($ui.nowPlaying || $ui.reader || !!$ui.sheet || ($settings ? !$settings.onboarded : false));
+  const covered = $derived(!!$ui.sheet || ($settings ? !$settings.onboarded : false));
   $effect(() => {
     document.documentElement.classList.toggle('covered', covered);
   });
@@ -67,9 +66,11 @@
 
 <div class="status-scrim" class:on={scrolled} aria-hidden="true"></div>
 
-<div class="app" inert={$ui.nowPlaying || $ui.reader || undefined}>
+<div class="app">
   {#if $ui.tab === 'listen'}
     <Listen />
+  {:else if $ui.tab === 'player'}
+    <Player />
   {:else if $ui.tab === 'library'}
     <Library />
   {:else if $ui.tab === 'discover'}
@@ -80,9 +81,6 @@
   <MiniPlayer />
   <TabBar />
 </div>
-
-{#if $ui.nowPlaying}<NowPlaying />{/if}
-{#if $ui.reader}<Reader />{/if}
 
 {#if $ui.sheet?.kind === 'story'}
   <StorySheet storyKey={$ui.sheet.key} />

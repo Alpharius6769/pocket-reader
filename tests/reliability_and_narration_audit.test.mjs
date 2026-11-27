@@ -19,7 +19,8 @@ test('playback runway counts successful audio and cannot be bypassed by a paused
   assert.match(buffer, /getReadyCount\(\)/);
   assert.match(buffer, /Number\(this\.cachedCount[\s\S]*?-\s*Number\(this\.skippedCount/);
   assert.match(buffer, /isPlaybackReadyForStory/);
-  assert.match(audio, /isPlaybackReadyForStory/);
+  // Play is gated by the starting runway from the reading position (audio_core).
+  assert.match(audio, /!isNarrationRunwayReady\(\)/);
   const toggle = audio.match(/export function togglePlayState\(\)[\s\S]*?\n}\nwindow\.togglePlayState/)?.[0] || '';
   assert.doesNotMatch(toggle, /BufferManager\.isActive\)\s*\{/,
     'runway enforcement must survive a paused/failed cache worker');

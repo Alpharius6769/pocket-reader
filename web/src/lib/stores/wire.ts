@@ -22,6 +22,7 @@ export async function connectStores(b: CoreBridge): Promise<() => void> {
     voice: snap.voice,
     sleep: snap.sleep,
     engineState: b.getEngineState(),
+    runway: b.getRunway(),
   });
 
   const offs = [
@@ -38,6 +39,7 @@ export async function connectStores(b: CoreBridge): Promise<() => void> {
     }),
     b.on('buffer', (e) => player.update((p) => ({ ...p, buffer: { ready: e.ready, target: e.target } }))),
     b.on('engine', (e) => player.update((p) => ({ ...p, engineState: e, engine: e.engine }))),
+    b.on('runway', (r) => player.update((p) => ({ ...p, runway: r }))),
     b.on('story-loaded', (e) =>
       player.update((p) => ({
         ...p,

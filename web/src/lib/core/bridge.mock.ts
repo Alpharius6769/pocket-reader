@@ -20,6 +20,7 @@ import {
   type PlaybackSnapshot,
   type PlayState,
   type Position,
+  type RunwayState,
   type Settings,
   type SleepTimer,
   type Story,
@@ -154,6 +155,17 @@ export class MockBridge implements CoreBridge {
 
   getEngineState(): EngineState {
     return { ...this.engine };
+  }
+
+  // The mock renders nothing, so its runway is always there.
+  getRunway(): RunwayState {
+    const target = this.current ? 10 : 0;
+    return { storyKey: this.current?.key ?? null, ready: target, target, preparing: false, ok: true, known: true };
+  }
+
+  async prepareRunway() {
+    this.emit('runway', this.getRunway());
+    return true;
   }
 
   /* ---------------------------------------------------------- stories */

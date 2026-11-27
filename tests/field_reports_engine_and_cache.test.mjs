@@ -86,22 +86,28 @@ test('the quality-guard retry re-resolves the route after the engine reload', as
 
 // ── Play on a short runway ──────────────────────────────────────────────────
 
-test('Play restarts the cache job the runway gate is waiting on', async () => {
+test('Play on a short runway prepares it instead of reporting a shortfall', async () => {
   // Reported on both platforms: stop caching, press Play before 20/20, and
-  // Virtue reports the shortfall forever. Nothing resumed. The gate was right
-  // to refuse playback and wrong to leave the job stopped.
+  // Virtue reported the shortfall forever. That gate (a cache-job count from
+  // the start of the story) is gone; the starting runway is now the ten
+  // paragraphs from the reading position, and a held-back Play is what starts
+  // rendering them.
   const source = await read('public/assets/js/audio_core.js');
   const toggle = source.slice(
     source.indexOf('export function togglePlayState'),
-    source.indexOf('let resumePausedPocketAudio = false;'),
+    source.indexOf('window.togglePlayState = togglePlayState;'),
   );
-  assert.match(toggle, /window\.BufferManager\.resume\(\)/, 'a paused job resumes');
-  assert.match(toggle, /window\._resumeCaching\?\.\(\)/, 'a stopped job restarts');
-  assert.match(toggle, /Picking caching back up/, 'and says so, instead of repeating the shortfall');
-  // Still a gate: it must not fall through into playback.
-  const returnAt = toggle.lastIndexOf('return;');
-  const resumeAt = toggle.indexOf('window._resumeCaching');
-  assert.ok(resumeAt < returnAt, 'playback stays blocked until the runway is real');
+  assert.doesNotMatch(toggle, /isPlaybackReadyForStory|Still securing the text/);
+  const isolationAt = toggle.indexOf("requestPocketNarrationIsolation?.('playback'");
+  const gateAt = toggle.indexOf('!isNarrationRunwayReady()');
+  const playAt = toggle.indexOf('window.isPlaying = !window.isPlaying');
+  assert.ok(isolationAt !== -1 && gateAt > isolationAt, 'prepared in the fast session, after the reload');
+  assert.ok(playAt > gateAt, 'and before playback starts');
+  const gate = toggle.slice(gateAt, playAt);
+  assert.match(gate, /prepareNarrationRunway\(\);[\s\S]*?return;/, 'held back, and preparing');
+  assert.match(toggle, /if \(!resumePausedPocketAudio && !bypass && !isNarrationRunwayReady\(\)\)/,
+    'resuming a paused clip and a mid-listen voice switch are exempt');
+  assert.match(source, /export const NARRATION_START_RUNWAY = 10;/);
 });
 
 // ── A rating beat for something that was not a rating ───────────────────────

@@ -116,7 +116,9 @@ function loadPlaywright() {
 // the same module instance it would in production (a different ?v= is a
 // different module with its own state).
 function appSpecifiers() {
-  const index = readFileSync(join(publicRoot, 'index.html'), 'utf8');
+  // The old shell's index.html is gone (v2 UI); sw.js precaches every core by
+  // the exact specifier the app loads it with.
+  const sw = readFileSync(join(publicRoot, 'sw.js'), 'utf8');
   const loader = readFileSync(join(publicRoot, 'assets', 'js', 'narration_runtime_loader.js'), 'utf8');
   const pick = (source, pattern, label) => {
     const match = source.match(pattern);
@@ -124,8 +126,8 @@ function appSpecifiers() {
     return match[1];
   };
   return {
-    engineUtils: `/${pick(index, /src='(assets\/js\/engine_utils\.js[^']*)'/, 'engine_utils')}`,
-    pronunciation: `/${pick(index, /src='(assets\/js\/tts_pronunciation_core\.js[^']*)'/, 'tts_pronunciation_core')}`,
+    engineUtils: `/${pick(sw, /'(assets\/js\/engine_utils\.js[^']*)'/, 'engine_utils')}`,
+    pronunciation: `/${pick(sw, /'(assets\/js\/tts_pronunciation_core\.js[^']*)'/, 'tts_pronunciation_core')}`,
     audioCore: `/assets/js/${pick(loader, /import\('\.\/(audio_core\.js[^']*)'\)/, 'audio_core')}`,
   };
 }

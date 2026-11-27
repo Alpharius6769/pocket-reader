@@ -1,7 +1,9 @@
 import { writable, get } from 'svelte/store';
 import type { Ao3Query, Ao3Result, Notice, StoryKey, VirtueMood, StorySummary } from '../core/bridge';
 
-export type Tab = 'listen' | 'library' | 'discover' | 'settings';
+/** 'listen' is the Home screen; 'player' is the dedicated listen/read page. */
+export type Tab = 'listen' | 'library' | 'player' | 'discover' | 'settings';
+export type PlayerMode = 'listen' | 'read';
 
 /** Settings sub-pages, pushed onto a stack like iOS navigation. */
 export type SettingsPage = 'root' | 'voice' | 'pronunciation' | 'display' | 'storage' | 'backup' | 'about' | 'diagnostics';
@@ -18,8 +20,7 @@ export type SheetState =
 
 export interface UiState {
   tab: Tab;
-  nowPlaying: boolean;
-  reader: boolean;
+  playerMode: PlayerMode;
   sheet: SheetState;
   settingsStack: SettingsPage[];
   discoverMode: 'search' | 'catalog' | 'import';
@@ -38,10 +39,23 @@ export interface UiState {
   };
 }
 
+// The tab survives the one-time fast-narration reload (?tts_fast=1), which
+// would otherwise land a reader who pressed Play back on Home.
+const TAB_KEY = 'pr_v2_tab';
+function savedTab(): { tab: Tab; playerMode: PlayerMode } {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(TAB_KEY) || 'null');
+    if (saved && ['listen', 'library', 'player', 'discover', 'settings'].includes(saved.tab)) {
+      return { tab: saved.tab, playerMode: saved.playerMode === 'read' ? 'read' : 'listen' };
+    }
+  } catch {
+    /* private mode or no storage */
+  }
+  return { tab: 'listen', playerMode: 'listen' };
+}
+
 export const ui = writable<UiState>({
-  tab: 'listen',
-  nowPlaying: false,
-  reader: false,
+  ...savedTab(),
   sheet: null,
   settingsStack: ['root'],
   discoverMode: 'search',
@@ -62,16 +76,35 @@ export function activeFilterCount(q: Ao3Query) {
   return [q.fandom, q.rating && q.rating !== 'Any', q.completeOnly, q.wordsMin, q.wordsMax, q.language, q.sort && q.sort !== 'revised_at'].filter(Boolean).length;
 }
 
+ui.subscribe((u) => {
+  try {
+    sessionStorage.setItem(TAB_KEY, JSON.stringify({ tab: u.tab, playerMode: u.playerMode }));
+  } catch {
+    /* ignore */
+  }
+});
+
 export function setTab(tab: Tab) {
   ui.update((u) => (u.tab === tab && tab === 'settings' ? { ...u, settingsStack: ['root'] } : { ...u, tab }));
 }
 
+/** The Player tab in a given mode. */
+export function openPlayer(mode?: PlayerMode) {
+  ui.update((u) => ({ ...u, tab: 'player', playerMode: mode ?? u.playerMode, sheet: null }));
+}
+
+export function setPlayerMode(mode: PlayerMode) {
+  ui.update((u) => ({ ...u, playerMode: mode }));
+}
+
+// Now Playing and the Reader used to be full-screen overlays; they are the
+// Player tab's two modes now. Kept so every caller reads the same.
 export function openNowPlaying(open = true) {
-  ui.update((u) => ({ ...u, nowPlaying: open, sheet: open ? u.sheet : null }));
+  if (open) openPlayer('listen');
 }
 
 export function openReader(open = true) {
-  ui.update((u) => ({ ...u, reader: open }));
+  if (open) openPlayer('read');
 }
 
 export function openSheet(sheet: SheetState) {

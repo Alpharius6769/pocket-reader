@@ -4,7 +4,7 @@ import {
   DEFAULT_LSD_STEPS,
   getPocketTuningPreset,
   normalizeForPocketTts,
-} from './tts_pronunciation_core.js?v=pron-v37';
+} from './tts_pronunciation_core.js?v=pron-v39';
 import {
   FUSED_BLOCK_MIN_HEADROOM_MB,
   POCKET_ORT_VERSION,
@@ -1541,7 +1541,8 @@ function splitTextIntoSentences(text) {
     const run = s.slice(i, end + 1);
 
     // An ellipsis is a pause inside a sentence, not the end of one.
-    if (run.length >= 3 && /^\.+$/.test(run)) { i = end; continue; }
+    // normalizeForPocketTts writes ellipses as ".." (a shorter rendered pause).
+    if (run.length >= 2 && /^\.+$/.test(run)) { i = end; continue; }
 
     let j = end + 1;
     while (j < s.length && SENTENCE_CLOSERS.has(s[j])) j++;
@@ -1645,6 +1646,48 @@ function splitLongTextSafely(text, maxTokens) {
   }
   flush();
   return chunks;
+}
+
+// True when `s` leaves a double quotation open: more “ than ”, or an odd
+// number of straight " marks.
+function _opensQuotation(s) {
+  const t = String(s || "");
+  const curlyOpen = (t.match(/“/g) || []).length;
+  const curlyClose = (t.match(/”/g) || []).length;
+  const straight = (t.match(/"/g) || []).length;
+  return curlyOpen > curlyClose || straight % 2 === 1;
+}
+
+// Dialogue must not sit at the END of a chunk. Heard on `begin waving,
+// “Hey! That's mine!”` (Paul, measured with an offline recognizer):
+//  - the chunk filled up at `waving, “Hey!` and the model ended on the open
+//    quote without saying "Hey";
+//  - keeping the quotation whole but still last in the chunk dropped the
+//    entire line;
+//  - with narration continuing after the quote in the same chunk, every
+//    variant was spoken.
+// So a sentence that leaves a quote open is joined to what follows until it
+// closes (up to maxWords, so an unclosed quote cannot swallow a paragraph),
+// and a short sentence ending on a closing quote takes the next sentence with
+// it. Over-cap results are still split at clauses downstream.
+const QUOTE_TAIL_RE = /[”"]\s*$/;
+const QUOTE_TAIL_MAX_WORDS = 25;
+function joinOpenQuotations(sentences, maxWords) {
+  const cap = Math.max(10, maxWords || 60);
+  const out = [];
+  let carry = "";
+  for (const sentence of sentences) {
+    const piece = String(sentence || "").trim();
+    if (!piece) continue;
+    carry = carry ? `${carry} ${piece}` : piece;
+    const words = _wordCount(carry);
+    if (_opensQuotation(carry) && words < cap) continue;
+    if (QUOTE_TAIL_RE.test(carry) && words < QUOTE_TAIL_MAX_WORDS) continue;
+    out.push(carry);
+    carry = "";
+  }
+  if (carry) out.push(carry);
+  return out;
 }
 
 function mergeShortTextFragments(fragments, minWords) {
@@ -1832,7 +1875,7 @@ function splitIntoBestSentences(text, opts) {
     if (!prepared.text) continue;
     const framesAfterEos = prepared.framesAfterEos;
 
-    let sentences = splitTextIntoSentences(prepared.text);
+    let sentences = joinOpenQuotations(splitTextIntoSentences(prepared.text), 60);
     if (!sentences.length) sentences = [prepared.text];
 
     // Punctuation-pause mode: pre-split sentences at inner punctuation so each

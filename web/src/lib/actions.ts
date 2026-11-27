@@ -5,7 +5,8 @@
 import { get } from 'svelte/store';
 import { bridge, BridgeError, type StoryRef, type Settings, type LoadOptions } from './core';
 import { settings } from './stores/settings';
-import { openNowPlaying, openReader, toast, say } from './stores/ui';
+import { player } from './stores/player';
+import { openNowPlaying, openReader, openPlayer, toast, say } from './stores/ui';
 
 export async function attempt<T>(fn: () => Promise<T>, fallback = 'Something went wrong. Please try again.'): Promise<T | undefined> {
   try {
@@ -30,8 +31,15 @@ export async function openStory(ref: StoryRef, opts: LoadOptions & { mode?: 'lis
 
 export async function resumeOrPlay(key: string) {
   const current = bridge().getCurrentStory();
-  if (current?.key === key) {
+  if (current?.key === key && get(player).state === 'playing') {
     await attempt(() => bridge().togglePlay());
+    return;
+  }
+  // Starting is done on the Player, where the voice loading and the
+  // ten-paragraph preparation are visible until Play unlocks.
+  openPlayer('listen');
+  if (current?.key === key) {
+    await attempt(() => bridge().play());
     return;
   }
   await attempt(() => bridge().loadStory({ kind: 'key', key }, { autoplay: true }));

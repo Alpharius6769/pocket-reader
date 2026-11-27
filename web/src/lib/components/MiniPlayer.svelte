@@ -2,8 +2,8 @@
   import RotateCw from '@lucide/svelte/icons/redo-2';
   import { bridge } from '../core';
   import { attempt } from '../actions';
-  import { player, preparing, storyProgress, currentChapter } from '../stores/player';
-  import { openNowPlaying } from '../stores/ui';
+  import { player, preparing, storyProgress, currentChapter, playLocked } from '../stores/player';
+  import { ui, openPlayer } from '../stores/ui';
   import Cover from './Cover.svelte';
   import PlayButton from './PlayButton.svelte';
 
@@ -12,17 +12,17 @@
   );
 
   const subtitle = $derived(
-    $preparing
-      ? 'Preparing narration…'
+    $preparing || $player.runway.preparing
+      ? `Preparing narration… ${$player.runway.ready} of ${$player.runway.target || 10}`
       : $player.state === 'buffering'
         ? 'Getting the next lines ready…'
         : ($currentChapter?.title ?? ''),
   );
 </script>
 
-{#if $player.story}
+{#if $player.story && $ui.tab !== 'player'}
   <div class="mini" role="region" aria-label="Now playing">
-    <button class="open" type="button" onclick={() => openNowPlaying(true)} aria-label="Open player for {$player.story.title}">
+    <button class="open" type="button" onclick={() => openPlayer('listen')} aria-label="Open player for {$player.story.title}">
       <Cover story={$player.story} size={32} plain />
       <span class="text">
         <span class="title">{$player.story.title}</span>
@@ -34,7 +34,11 @@
       loading={$preparing ? loadFraction : null}
       variant="bare"
       size={44}
-      onclick={() => attempt(() => bridge().togglePlay())}
+      onclick={() => {
+        // Not ready to start: show the preparation rather than a Play that does nothing.
+        if ($playLocked) openPlayer('listen');
+        else attempt(() => bridge().togglePlay());
+      }}
     />
     <button class="icon-btn" type="button" aria-label="Next paragraph" onclick={() => attempt(() => bridge().skipParagraph(1))}>
       <RotateCw size={22} />

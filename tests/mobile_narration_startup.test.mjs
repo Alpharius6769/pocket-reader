@@ -71,8 +71,8 @@ test('caching requires a measured runway (twenty when slow or unknown) or story 
   // v2: the runway follows measured speed; 20 remains the ceiling and the default (voice_reliability_v2).
   assert.match(buffer, /function _minimumPlaybackReadyCount[\s\S]*?Math\.min\(playbackRunwayForRtf\(_medianRtf\(\)\),/);
   assert.match(buffer, /const PLAYBACK_RUNWAY_MAX = 20;/);
-  assert.match(audio, /getPocketPlaybackReadyCount\?\.\(total\)/);
-  assert.match(audio, /Math\.min\(20,\s*total\)/);
+  // Play itself is gated by the starting runway now (runway_gate in
+  // field_reports_engine_and_cache.test.mjs), not by this cache-job count.
 
   const startCaching = buffer.match(/window\.startCaching = async function[\s\S]*?\n};/)?.[0] || '';
   assert.match(startCaching, /preparePocketMobileMediaSession\?\.\(\)/);

@@ -10,8 +10,11 @@
     onclick: () => void;
     /** 0..1 progress of an engine download, drawn as a ring. */
     loading?: number | null;
+    /** Narration is not ready to start (the starting runway is still being prepared). */
+    disabled?: boolean;
+    label?: string;
   }
-  let { state, size = 44, variant = 'filled', onclick, loading = null }: Props = $props();
+  let { state, size = 44, variant = 'filled', onclick, loading = null, disabled = false, label }: Props = $props();
 
   const busy = $derived(state === 'loading' || state === 'buffering');
   const showPause = $derived(state === 'playing' || busy);
@@ -24,7 +27,8 @@
   class:busy
   style:width="{size}px"
   style:height="{size}px"
-  aria-label={showPause ? 'Pause' : 'Play'}
+  aria-label={label ?? (showPause ? 'Pause' : 'Play')}
+  {disabled}
   {onclick}
 >
   {#if busy}
@@ -57,8 +61,12 @@
     flex: none;
     transition: transform var(--dur-1) var(--ease-out);
   }
-  .play:active {
+  .play:active:not(:disabled) {
     transform: scale(0.92);
+  }
+  .play:disabled {
+    opacity: 0.45;
+    box-shadow: none;
   }
   .filled {
     background: var(--accent);

@@ -130,9 +130,11 @@ try {
   await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: /Library/ }).click();
   await page.getByRole('button', { name: new RegExp(`^${title} by `) }).first().click();
   await page.getByRole('dialog').getByRole('button', { name: /^Read$/ }).click();
-  await page.getByRole('dialog', { name: 'Reader' }).waitFor({ timeout: 10000 });
+  // Read opens the Player tab in its Read mode.
+  await page.getByRole('button', { name: 'Text size and font' }).waitFor({ timeout: 10000 });
   assert.equal(await page.evaluate(() => window.currentStory?.title), title, 'Read opens the tapped story');
-  await page.getByRole('button', { name: 'Close reader' }).click();
+  assert.equal(await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Player' }).getAttribute('aria-current'), 'page');
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Home' }).click();
 
   // ── Offline: the whole app comes from the service worker ──────────────────
   // Chromium only. Playwright's WebKit cannot reload a service-worker-controlled

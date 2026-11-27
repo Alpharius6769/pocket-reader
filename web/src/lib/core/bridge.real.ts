@@ -37,6 +37,7 @@ import {
   type PlayState,
   type Position,
   type RestoreResult,
+  type RunwayState,
   type Settings,
   type SleepTimer,
   type StorageUsage,
@@ -255,6 +256,7 @@ export class RealBridge implements CoreBridge {
       if (this.engine.status === 'loading' && d.text) this.updateEngine({ message: d.text });
     });
     on(E.GESTURE, (d: any) => this.handleGestureRequest(d));
+    on(E.RUNWAY, () => this.emit('runway', this.getRunway()));
     on(E.CACHING, (d: any) => {
       const story = w.currentStory;
       if (!story) return;
@@ -359,6 +361,7 @@ export class RealBridge implements CoreBridge {
   private onParagraph() {
     const story = w.currentStory;
     if (!story) return;
+    this.emit('runway', this.getRunway());
     const pos = position();
     const chapters = Array.isArray(story.chapters) ? story.chapters : [];
     this.emit('paragraph', {
@@ -406,6 +409,41 @@ export class RealBridge implements CoreBridge {
 
   getCurrentStory(): Story | null {
     return w.currentStory ? toStory(w.currentStory) : null;
+  }
+
+  getRunway(): RunwayState {
+    const story = w.currentStory;
+    const storyKey = story ? keyOf(story) : null;
+    const none = { storyKey, ready: 0, target: 0, preparing: false, ok: false, known: true };
+    if (!story) return none;
+    // The device voice renders nothing ahead.
+    if (!['pocket', 'kokoro'].includes(w._resolveActiveEngine?.() ?? 'pocket')) return { ...none, ok: true };
+    if (typeof w.isNarrationRunwayReady !== 'function') return { ...none, target: 10, known: false };
+    const snap = w.getNarrationRunway?.();
+    if (!snap || !snap.current) return { ...none, target: 10, ok: !!w.isNarrationRunwayReady() };
+    return {
+      storyKey,
+      ready: Number(snap.ready) || 0,
+      target: Number(snap.target) || 0,
+      preparing: !!snap.preparing,
+      ok: !!w.isNarrationRunwayReady(),
+      error: snap.error || undefined,
+      known: true,
+    };
+  }
+
+  async prepareRunway(): Promise<boolean> {
+    if (!w.currentStory) return false;
+    // The first narration of a session reloads into the fast (isolated)
+    // session, and only a tap may do that: Play. Rendering before it would run
+    // single-threaded and then be cut off by the reload.
+    const reloadPending = !globalThis.crossOriginIsolated
+      && !!(navigator.serviceWorker?.controller || w.__prServiceWorkerRegistration);
+    if (reloadPending) return false;
+    await w.ensureNarrationRuntime?.();
+    void w.prepareNarrationRunway?.();
+    this.emit('runway', this.getRunway());
+    return true;
   }
 
   getEngineState(): EngineState {
@@ -492,6 +530,10 @@ export class RealBridge implements CoreBridge {
     // Called synchronously inside the tap so iOS keeps the user gesture that
     // unlocks audio; the deferred stub returns a promise for the rest.
     await w.togglePlayState();
+    // Held back by the starting runway (it is now being prepared), or by the
+    // isolation reload: not playing, so not loading either.
+    if (!w.isPlaying) this.setState('paused');
+    this.emit('runway', this.getRunway());
   }
 
   pause() {
@@ -588,8 +630,20 @@ export class RealBridge implements CoreBridge {
     if (v.engine === 'pocket') settingsBag().pocketVoice = voice;
     else settingsBag().kokoroVoice = voice;
     save();
+    // Switch over now, not a paragraph later: drop the old-voice clip (Play
+    // used to resume it) and render the current paragraph again in the new
+    // voice. Live playback has priority over the re-cache that just started.
+    w._releaseCurrentNarrationAudio?.();
+    w.cancelNarrationRunway?.();
     this.emit('settings', this.settingsNow());
+    this.emit('runway', this.getRunway());
     this.notice('info', `Now reading as ${v.name}`, 'wink');
+    // Mid-listen, the new voice takes over at the current paragraph without
+    // waiting for a fresh ten-paragraph runway; the lookahead builds it.
+    if (wasPlaying) {
+      w.__narrationRunwayBypassOnce = true;
+      await this.play();
+    }
   }
 
   setSpeed(speed: number) {

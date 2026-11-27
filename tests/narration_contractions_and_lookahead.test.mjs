@@ -13,7 +13,7 @@ test("can't / shan't expand for the narrator", () => {
 });
 
 test("previously-handled contractions still expand (regression)", () => {
-  assert.equal(normalizeForPocketTts("Don't stop"), 'do not stop');
+  assert.equal(normalizeForPocketTts("Don't stop"), 'Do not stop');
   assert.equal(normalizeForPocketTts("I'm here"), 'I am here');
   assert.equal(normalizeForPocketTts("won't and didn't"), 'will not and did not');
 });
@@ -26,12 +26,14 @@ test("'s + been/got/gotten is 'has', not the broken 'is been'", () => {
 });
 
 test("plain 's stays 'is' — the has-rule never over-fires", () => {
-  // NB: the generic 's->is rules lowercase the leading letter (pre-existing;
-  // irrelevant to the case-insensitive TTS). The has-rule preserves case ($1).
-  assert.equal(normalizeForPocketTts("It's cold"), 'it is cold');
+  // Every expansion keeps the original capital. It used to lowercase it, which
+  // was thought harmless to a case-insensitive TTS; it is not: after "Hey!",
+  // "that is mine" read as a run-on and the model dropped the "Hey"
+  // (dialogue_chunking.test.mjs).
+  assert.equal(normalizeForPocketTts("It's cold"), 'It is cold');
   // "done" is a passive/adjectival 'is', not 'has' — must not become "that has done"
   assert.equal(normalizeForPocketTts("that's done"), 'that is done');
-  assert.equal(normalizeForPocketTts("What's that"), 'what is that');
+  assert.equal(normalizeForPocketTts("What's that"), 'What is that');
 });
 
 test("ambiguous 'd contractions are still left native (deliberate)", () => {
@@ -40,7 +42,7 @@ test("ambiguous 'd contractions are still left native (deliberate)", () => {
 });
 
 test("pronunciation ruleset version bumped so cached audio re-renders", () => {
-  assert.equal(PRONUNCIATION_RULESET_VERSION, 'pron-v15');
+  assert.equal(PRONUNCIATION_RULESET_VERSION, 'pron-v16');
 });
 
 // ── Typographic apostrophes ─────────────────────────────────────────────────

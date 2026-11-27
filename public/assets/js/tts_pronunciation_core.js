@@ -6,7 +6,7 @@
 // not change when Kokoro was given access to them (keepClausePunctuation
 // defaults off, so Pocket's output is byte-identical). Bumping it would
 // re-render every cached Pocket paragraph for no audible difference.
-export const PRONUNCIATION_RULESET_VERSION = 'pron-v15'; // v15: typographic apostrophes, past-tense "read", desert respelling dropped
+export const PRONUNCIATION_RULESET_VERSION = 'pron-v16'; // v16: contractions keep their capital; Pocket ellipses render as ".."
 export const DEFAULT_POCKET_PLAYBACK_SPEED = 1.0;
 export const DEFAULT_POCKET_TEMPERATURE_PRESET = 'balanced';
 // Folded into every Pocket latent-noise seed so cache jobs and live playback
@@ -352,8 +352,11 @@ export function normalizeForPocketTts(text, settings = {}) {
   // apostrophe as far as the phonemizer should be concerned.
   out = out.replace(/[’‘ʼ′‵]/g, "'");
 
+  // Keep the original capital: "That's mine!" became "that is mine!", and after
+  // "Hey!" the model read the lowercase word as a run-on and dropped the "Hey".
   for (const [pattern, expansion] of CONTRACTIONS) {
-    out = out.replace(pattern, expansion);
+    const single = new RegExp(pattern.source, pattern.flags.replace('g', ''));
+    out = out.replace(pattern, (match) => preserveCase(match, match.replace(single, expansion)));
   }
 
   out = applyPronunciationOverrides(out, overrides);
@@ -372,7 +375,14 @@ export function normalizeForPocketTts(text, settings = {}) {
   if (!keepClausePunctuation) {
     out = out.replace(/—/g, ', '); // em-dash to comma
   }
-  out = out.replace(/…/g, '...'); // ellipsis character to three dots
+  // Ellipses become TWO dots. Measured on Pocket (Paul): "..." gave a 1.02 s
+  // silence after ‘What is...’ and 0.60 s mid-sentence; ".." gave 0.54 s and
+  // 0.52 s -- still a hesitation, half as long. A comma (0.42 s) lost the
+  // trailing-off. The worker's splitter treats any run of 2+ dots as a pause.
+  // Pocket only: Kokoro (keepClausePunctuation) aligns clauses by counting
+  // marks, and was not measured.
+  out = out.replace(/…/g, '...');
+  if (!keepClausePunctuation) out = out.replace(/\.{3,}/g, '..');
   
   out = applyStressHeteronyms(out, STRESS_HETERONYMS);
   out = applyStressHeteronyms(out, ATE_HETERONYMS);

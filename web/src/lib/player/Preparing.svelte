@@ -1,55 +1,81 @@
 <script lang="ts">
   import Check from '@lucide/svelte/icons/check';
-  import type { EngineState } from '../core/bridge';
+  import type { EngineState, RunwayState } from '../core/bridge';
   import { ENGINES } from '../core/bridge';
   import { bytes } from '../format';
   import Virtue from '../components/Virtue.svelte';
 
   interface Props {
     state: EngineState;
+    runway: RunwayState;
+    /** The first narration of a session needs a tap (it reloads into the fast session). */
+    needsTap?: boolean;
+    onstart?: () => void;
     compact?: boolean;
   }
-  let { state, compact = false }: Props = $props();
+  let { state, runway, needsTap = false, onstart, compact = false }: Props = $props();
 
-  const STEPS = [
-    { id: 'download', label: 'Downloading the voice' },
-    { id: 'compile', label: 'Starting the engine' },
-    { id: 'warmup', label: 'Warming up' },
-    { id: 'first-paragraph', label: 'Reading the first lines' },
-  ] as const;
-
-  const current = $derived(Math.max(0, STEPS.findIndex((s) => s.id === state.stage)));
+  // Three steps, all visible until Play unlocks: the model, then the starting
+  // runway of ten rendered paragraphs, then ready.
+  const engineReady = $derived(state.status === 'ready' || (runway.ready > 0 && state.status !== 'loading'));
+  const step = $derived(runway.ok ? 2 : engineReady ? 1 : 0);
   const fraction = $derived.by(() => {
-    const dl = state.totalBytes ? (state.loadedBytes ?? 0) / state.totalBytes : 0;
-    if (state.stage === 'download') return dl * 0.7;
-    return 0.7 + (current / (STEPS.length - 1)) * 0.3;
+    if (runway.ok) return 1;
+    if (!engineReady) {
+      const dl = state.totalBytes ? (state.loadedBytes ?? 0) / state.totalBytes : 0;
+      return state.stage === 'download' ? dl * 0.4 : 0.4;
+    }
+    return 0.4 + (runway.target ? runway.ready / runway.target : 0) * 0.6;
+  });
+  const engineLine = $derived.by(() => {
+    if (state.status === 'error') return 'The voice could not load';
+    if (state.stage === 'download' && state.totalBytes) return `${bytes(state.loadedBytes ?? 0)} of ${bytes(state.totalBytes)}`;
+    return state.message || '';
   });
 </script>
 
 <section class="prep" class:compact aria-live="polite" aria-label="Preparing narration">
   {#if !compact}
-    <Virtue mood="loading" height={170} />
+    <Virtue mood={runway.ok ? 'holding' : 'loading'} height={140} />
   {/if}
-  <h3>Preparing narration</h3>
-  <p class="muted lede">
-    {ENGINES[state.engine].name} runs entirely on your phone. This happens once; after that, stories start in seconds.
-  </p>
+  <h3>{runway.ok ? 'Ready to listen' : 'Preparing narration'}</h3>
+  {#if !compact}
+    <p class="muted lede">
+      {#if runway.ok}
+        The first {runway.target} paragraphs are ready. Tap Play.
+      {:else}
+        {ENGINES[state.engine].name} runs entirely on your phone. Play unlocks once the next {runway.target || 10} paragraphs are ready, so narration never stops to catch up.
+      {/if}
+    </p>
+  {/if}
 
   <div class="progress-track big" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(fraction * 100)}>
     <span style:width="{fraction * 100}%"></span>
   </div>
 
   <ol class="steps">
-    {#each STEPS as step, i (step.id)}
-      <li class:done={i < current} class:now={i === current}>
-        <span class="dot">{#if i < current}<Check size={14} strokeWidth={3} />{/if}</span>
-        <span class="lbl">{step.label}</span>
-        {#if step.id === 'download' && i === current && state.totalBytes}
-          <span class="num">{bytes(state.loadedBytes ?? 0)} of {bytes(state.totalBytes)}</span>
-        {/if}
-      </li>
-    {/each}
+    <li class:done={step > 0} class:now={step === 0}>
+      <span class="dot">{#if step > 0}<Check size={14} strokeWidth={3} />{/if}</span>
+      <span class="lbl">Loading the voice</span>
+      {#if step === 0 && engineLine}<span class="num">{engineLine}</span>{/if}
+    </li>
+    <li class:done={step > 1} class:now={step === 1}>
+      <span class="dot">{#if step > 1}<Check size={14} strokeWidth={3} />{/if}</span>
+      <span class="lbl">Preparing paragraphs</span>
+      <span class="num">{runway.ready} of {runway.target || 10}</span>
+    </li>
+    <li class:done={runway.ok} class:now={runway.ok}>
+      <span class="dot">{#if runway.ok}<Check size={14} strokeWidth={3} />{/if}</span>
+      <span class="lbl">Ready to play</span>
+    </li>
   </ol>
+
+  {#if runway.error}
+    <p class="err">{runway.error}</p>
+  {/if}
+  {#if (needsTap || runway.error) && onstart && !runway.preparing && !runway.ok}
+    <button class="btn btn-primary" type="button" onclick={onstart}>{runway.error ? 'Try again' : 'Load the voice'}</button>
+  {/if}
 </section>
 
 <style>
@@ -64,6 +90,14 @@
     padding: 8px calc(var(--gutter) + 8px);
     gap: 10px;
   }
+  .prep.compact {
+    flex: none;
+    padding: 12px var(--gutter);
+    gap: 8px;
+    border-radius: 16px;
+    background: var(--bg-elev);
+    margin: 8px var(--gutter) 0;
+  }
   h3 {
     font-family: var(--font-display);
     font-size: var(--t-title2);
@@ -71,9 +105,13 @@
     letter-spacing: -0.01em;
     margin-top: 6px;
   }
+  .compact h3 {
+    font-size: var(--t-head);
+    margin: 0;
+  }
   .lede {
     font-size: var(--t-sub);
-    max-width: 30ch;
+    max-width: 32ch;
     text-wrap: pretty;
   }
   .big {
@@ -133,5 +171,9 @@
     font-weight: 500;
     color: var(--ink-2);
     font-variant-numeric: tabular-nums;
+  }
+  .err {
+    color: var(--danger);
+    font-size: var(--t-foot);
   }
 </style>
