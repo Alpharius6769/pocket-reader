@@ -105,7 +105,6 @@ const idsIn = (source, from, to) => {
   return [...block.matchAll(/id: '([a-z0-9_-]+)'/g)].map((m) => m[1]);
 };
 const kokoro = idsIn(policy, 'export const KOKORO_VOICES', ']);');
-const kitten = idsIn(policy, 'export const KITTEN_VOICES', ']);');
 // From `voices: [`, not from the pack object: POCKET_VOICE_PACK carries its own
 // `id` (the pack name, e.g. kyutai-curated-v1), which is not a voice and has no
 // asset behind it.
@@ -114,15 +113,15 @@ const pocket = idsIn(engineUtils, '  voices: [', 'window.POCKET_RETIRED_VOICES')
 const voiceUrls = [
   ...pocket.map((v) => [`pocket/${v}`, `${WORKER}/models/voices/v3/${v}_neutral.safetensors?rev=r1`]),
   ...kokoro.map((v) => [`kokoro/${v}`, `${WORKER}/models/kokoro/v1.0/voices/${v}.bin`]),
-  ...kitten.map((v) => [`kitten/${v}`, `${WORKER}/models/kitten/v2.0/voices/${v}.bin`]),
 ];
 await Promise.all(voiceUrls.map(async ([label, url]) => {
   const response = await fetch(url, { method: 'HEAD', headers: { Origin: WEB_ORIGIN } });
   if (!response.ok) problems.push(`voice asset missing: ${label} (${response.status})`);
 }));
-notes.push(`voices: ${pocket.length} pocket + ${kokoro.length} kokoro + ${kitten.length} kitten checked`);
-if (pocket.length !== 6 || kokoro.length !== 6 || kitten.length !== 6) {
-  problems.push(`each engine should ship 6 voices: pocket ${pocket.length}, kokoro ${kokoro.length}, kitten ${kitten.length}`);
+// Two neural engines: Kitten was retired, so there is no third catalog to check.
+notes.push(`voices: ${pocket.length} pocket + ${kokoro.length} kokoro checked`);
+if (pocket.length !== 6 || kokoro.length !== 6) {
+  problems.push(`each engine should ship 6 voices: pocket ${pocket.length}, kokoro ${kokoro.length}`);
 }
 
 // ── 5. The backend, on its own pipeline again ───────────────────────────────
