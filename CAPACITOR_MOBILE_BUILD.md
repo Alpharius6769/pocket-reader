@@ -11,7 +11,7 @@ Packaging as a native app grants direct operating-system permissions:
 
 ## Prerequisites
 
-1. **Node.js** (v18 or newer)
+1. **Node.js** 22 (the version CI builds with)
 2. **Android Studio** (for Android APK builds) with Android SDK 33+
 3. **Xcode** (for iOS builds, macOS required)
 
@@ -20,12 +20,15 @@ Packaging as a native app grants direct operating-system permissions:
 ## Step-by-Step Android Build
 
 ### 1. Initialize Capacitor Android Project
-In the root of the Pocket Reader workspace, run:
+Capacitor packages `dist/` (`webDir` in `capacitor.config.json`), so build the
+app first. In the root of the Pocket Reader workspace, run:
 ```bash
 npm install
+npm run build
 npx cap add android
 npx cap sync
 ```
+Re-run `npm run build` before every later `npx cap sync`.
 
 ### 2. Configure Android Permissions for Background Audio & Compute
 Open `android/app/src/main/AndroidManifest.xml` and ensure the following permissions are present inside the `<manifest>` tag:
@@ -136,6 +139,6 @@ In Android Studio:
 
 Once installed on your phone:
 1. Open a story.
-2. Hit Play or Start Away Mode.
+2. Hit Play.
 3. Lock your phone screen or switch to another app.
 4. Because the native media service and wake lock are active at the OS level, playback and synthesis will continue 24/7 without being stopped by mobile power managers.

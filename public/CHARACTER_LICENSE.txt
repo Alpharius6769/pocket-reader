@@ -22,8 +22,9 @@ The following works are proprietary and are not open source:
   `virtue_changed_settings.webp`, `virtue_favorite.webp`,
   `virtue_highscore.webp`, `virtue_lowscore.webp`, `virtue_point.webp`,
   `virtue_talking.webp`, and future Virtue artwork.
-- Virtue dialogue, lore, and character-defining content in
-  `virtue_controller.js` or any future character-data file.
+- Virtue dialogue, lore, and character-defining content in the application
+  source, including `web/src/lib/virtue/sprites.ts`, or any future
+  character-data file.
 - The "Alpharius' Pocket Reader" name, logo, icon, visual identity, and
   related branding.
 
@@ -81,4 +82,4 @@ Forking, cloning, downloading, caching, or viewing this repository does not
 grant any license to Virtue or Pocket Reader branding. Neither the application
 code nor the character and brand are available for reuse; see LICENSE.
 
-Last updated: 2026-07-26
+Last updated: 2026-11-26

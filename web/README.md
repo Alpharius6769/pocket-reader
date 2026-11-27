@@ -1,7 +1,7 @@
 # Pocket Reader v2 UI
 
-Phone-first rebuild in Svelte 5 + Vite + TypeScript. It runs on mock data until
-the real cores are wired in through `CoreBridge`.
+Phone-first rebuild in Svelte 5 + Vite + TypeScript. It runs on the real
+narration cores in `public/assets/js/` through `CoreBridge`.
 
 ```
 npm run dev        # http://localhost:5180  (launch config: pocket-reader-v2)
@@ -18,13 +18,14 @@ the top of that file. In short: methods are async and reject with `BridgeError`
 events (no polling), payloads are plain objects, indices are zero-based, and
 the bridge owns persistence.
 
-To plug in the real cores, set `window.__pocketCoreBridge` to an object that
-implements `CoreBridge` before `src/main.ts` runs, or call `setBridge()` from
-`src/lib/core/index.ts`. `main.ts` falls back to `MockBridge` otherwise.
+`src/main.ts` builds `RealBridge` (`bridge.real.ts`) by default. `?mock=1` or
+`?sim=iphone` selects `MockBridge` with sample data, for demos and design
+captures. A bridge placed on `window.__pocketCoreBridge` before `main.ts` runs
+takes precedence over both.
 
 `bridge.mock.ts` is the reference implementation: every event the UI listens
 for is emitted there, in the order the UI expects. `bridge.mock.test.ts` pins
-that behaviour; a real bridge should pass the same scenarios.
+that behaviour and `bridge.real.test.ts` covers the real bridge.
 
 Voice ids follow the cores: Pocket is `alba, mary, eve, charles, george, paul`
 (`noah` was retired in the english_2026-10 migration and aliases to `paul`),
@@ -53,4 +54,7 @@ installed).
 ## Not in v2
 
 Away mode, accounts / sign-in / cloud sync, the Kitten engine. `App.test.ts`
-fails if any of them reappear in the rendered UI or the UI source.
+fails if any of them reappear in the rendered UI or the UI source. The curated
+shelf is gone too, and the interface offers no device-voice option; the cores
+still step down to the device voice on a phone that cannot hold a neural
+session.

@@ -3,15 +3,16 @@ Proprietary Software License
 
 Copyright (c) 2026 Chris (Alpharius67 / Fluffarius). All rights reserved.
 
-Last updated: 2026-07-26.
+Last updated: 2026-11-26.
 
 
 1. OWNERSHIP
 
 Alpharius' Pocket Reader ("the Software"), including its source code, compiled
-and interpreted artifacts, frontend JavaScript modules, CSS, HTML, service
-worker, FastAPI backend, parser and scraper modules, Cloudflare Worker source,
-database schema and migrations, build tooling, configuration, and documentation,
+and interpreted artifacts, frontend JavaScript and TypeScript modules, Svelte
+components, CSS, HTML, service worker, FastAPI backend, parser and scraper
+modules, Cloudflare Worker source, database schema and migrations, build
+tooling, configuration, and documentation,
 is the exclusive property of Chris (Alpharius67 / Fluffarius) ("the Author").
 
 The Software is licensed, not sold. No title or ownership is transferred.
@@ -84,8 +85,11 @@ obligations continue to apply in full.
 Third-party components are inventoried in ATTRIBUTIONS.md and summarized in
 NOTICE. Obligations that survive this license include, without limitation:
 
-- SIL Open Font License 1.1 (Literata, IBM Plex Sans) — bundled license texts
-  must ship with the frontend.
+- Creative Commons Attribution 4.0 (the Kyutai Pocket TTS model, its voices
+  including those drawn from the VCTK corpus, and the exports derived from
+  them) — attribution and an indication of changes must be given.
+- SIL Open Font License 1.1 (Literata) — the bundled license text must ship
+  with the frontend.
 - Creative Commons Attribution 3.0 (Game-Icons.net achievement icons) — credit
   to Game-Icons.net and the icon authors must remain visible.
 - Mozilla Public License 2.0 (pywebpush) — file-level copyleft; modifications to

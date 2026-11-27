@@ -10,11 +10,12 @@ Pocket Reader branding are separately proprietary. See `LICENSE`, `NOTICE`, and
 `CHARACTER_LICENSE.md`.
 
 Going proprietary does not alter the terms of the third-party components listed
-below. Their licenses and obligations — notably OFL-1.1 bundled license texts,
-CC-BY-3.0 attribution for Game-Icons.net, and MPL-2.0 for pywebpush — continue
-to apply in full.
+below. Their licenses and obligations — notably CC BY 4.0 attribution for the
+Pocket TTS model and voices, OFL-1.1 bundled license texts, CC-BY-3.0
+attribution for Game-Icons.net, and MPL-2.0 for pywebpush — continue to apply
+in full.
 
-Last reviewed: 2026-09-04.
+Last reviewed: 2026-11-26.
 
 ## Browser TTS and ML Runtime
 
@@ -23,14 +24,8 @@ Last reviewed: 2026-09-04.
 - Author: Microsoft
 - License: MIT License
 - Source: https://github.com/microsoft/onnxruntime
-- Used as: WebAssembly/WebGPU inference runtime for browser-side TTS.
-
-### Motion
-
-- Maintainer: Motion One / Framer contributors
-- License: MIT License
-- Source: https://www.npmjs.com/package/motion
-- Used as: Frontend animation helper imported from jsDelivr.
+- Used as: WebAssembly/WebGPU inference runtime for browser-side TTS. Served
+  from the project asset path through the Cloudflare Worker.
 
 ### SentencePiece JavaScript/WASM bundle
 
@@ -49,7 +44,7 @@ Last reviewed: 2026-09-04.
 - Provider/maintainer: Project-controlled asset bucket; the ONNX INT8 and FP16
   bundles in that bucket are exports of the upstream Kyutai weights.
 - Location: Served through the Cloudflare Worker from Backblaze B2.
-- Used as: Highest browser-side TTS tier and precompiled voice state files.
+- Used as: The Pocket narration engine and its precompiled voice state files.
 - Commercial use: permitted. CC BY 4.0 allows commercial use and the creation
   and distribution of derivative works -- which is what the ONNX export and its
   quantized and FP16 variants are -- provided attribution is given and changes
@@ -77,7 +72,8 @@ Last reviewed: 2026-09-04.
 - ONNX build: https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX
 - DOI: 10.57967/hf/4329
 - Architecture: StyleTTS2, finetuned from `yl4579/StyleTTS2-LJSpeech`.
-- Used as: the middle narration tier, run in-browser through ONNX Runtime Web.
+- Used as: the lighter of the two neural narration engines, run in-browser
+  through ONNX Runtime Web.
   One 86 MB session, non-autoregressive.
 - Shipped voices: `af_heart`, `af_bella`, `bf_emma`, `am_michael`, `am_fenrir`,
   `am_puck`. Voice style tables ship as `.bin` files alongside the model.
@@ -112,11 +108,24 @@ Last reviewed: 2026-09-04.
 - Source embeddings:
   https://huggingface.co/kyutai/pocket-tts/tree/main/languages/english_2026-10/embeddings
 - Catalog/code: https://github.com/kyutai-labs/pocket-tts
-- License: **CC BY 4.0** (Kyutai TTS voices / VCTK where applicable)
-- Shipped narrator set: Alba, Mary, Eve, Charles, George, Paul — each
-  neutral-only (`*_neutral.safetensors`). Noah has no 2026-10 embedding and
-  migrates to Paul; Jane/Michael/Rayne and earlier custom clones remain
-  retired aliases.
+- Voice licences: https://huggingface.co/kyutai/tts-voices
+- License: **CC BY 4.0** for all six shipped voices.
+- Shipped narrator set, each neutral-only (`*_neutral.safetensors`), with the
+  reference recording Kyutai names for it:
+  - Alba: `alba-mackenna/casual.wav`, voice-acted by Alba MacKenna.
+  - Mary: VCTK speaker p333 (`vctk/p333_023_enhanced.wav`).
+  - Eve: VCTK speaker p361 (`vctk/p361_023_enhanced.wav`).
+  - Charles: VCTK speaker p254 (`vctk/p254_023_enhanced.wav`).
+  - George: VCTK speaker p315 (`vctk/p315_023_enhanced.wav`).
+  - Paul: VCTK speaker p259 (`vctk/p259_023_enhanced.wav`). Default voice.
+- VCTK credit: CSTR VCTK Corpus, Centre for Speech Technology Research,
+  University of Edinburgh (Yamagishi, Veaux, MacDonald), CC BY 4.0,
+  https://datashare.ed.ac.uk/handle/10283/3443. The `_enhanced` recordings
+  are cleaned versions made by Kyutai.
+- Modifications: the app serves Kyutai's voice embeddings converted to its
+  own precompiled voice state files.
+- Retired: Noah has no 2026-10 embedding and migrates to Paul;
+  Jane/Michael/Rayne and earlier custom clones remain retired aliases.
 - Distribution note: converted `.safetensors` files live on B2 under
   `voices/v3/` and are served through the Cloudflare Worker. Not stored in
   this source tree. Custom / Voice-Zero / Rayne packs are no longer distributed.
@@ -138,16 +147,52 @@ Last reviewed: 2026-09-04.
 
 ### Pocket TTS voice conversion maintainer tool
 
-- Location: `tools/build_voice_zero_pack.py` and `tools/convert_pocket_voice.py`
+- Location: `backend/tools/build_voice_zero_pack.py` and
+  `backend/tools/convert_pocket_voice.py`
 - Used as: Optional local maintainer utility for precompiling compatible voice
   samples into `.safetensors` files.
 - Runtime note: not loaded by the web app or backend API at runtime.
 - Optional dependencies: `pocket-tts`, `safetensors`, `numpy`, `soundfile`,
   `torch`, and `torchaudio`.
 
+## Frontend Libraries and Build Tooling
+
+### Svelte
+
+- Author: Rich Harris and Svelte contributors
+- License: MIT License
+- Source: https://github.com/sveltejs/svelte
+- Used as: UI framework for the v2 interface in `web/`. Its runtime is compiled
+  into the distributed bundle in `dist/app/`.
+
+### Lucide for Svelte (`@lucide/svelte`)
+
+- Maintainer: Lucide contributors
+- License: ISC License
+- Source: https://github.com/lucide-icons/lucide
+- Used as: Interface icons, compiled into the distributed bundle. See also the
+  Lucide entry under Icons, Artwork, and Fonts.
+
+### Capacitor
+
+- Maintainer: Ionic and Capacitor contributors
+- License: MIT License
+- Source: https://github.com/ionic-team/capacitor
+- Used as: Optional native Android and iOS wrapper (`@capacitor/core`,
+  `android`, `ios`, `app`, `haptics`, `keyboard`, `status-bar`, and the CLI).
+  Not part of the web bundle; it applies only to a packaged native build.
+
+### Development-only tooling
+
+Used to build and test the app. None of it is distributed to readers.
+
+- Vite, `@sveltejs/vite-plugin-svelte`, Vitest, `svelte-check`, jsdom, and
+  `@testing-library/svelte`: MIT License.
+- TypeScript and Playwright: Apache License 2.0.
+
 ## Backend Python Dependencies
 
-Pinned backend dependencies are listed in `requirements.txt`.
+Pinned backend dependencies are listed in `backend/requirements.txt`.
 
 ### FastAPI
 
@@ -233,6 +278,11 @@ Pinned backend dependencies are listed in `requirements.txt`.
 
 ## Infrastructure and Hosted Services
 
+### GitHub Pages
+
+- Provider: GitHub
+- Used as: Static hosting for the built frontend and PWA shell.
+
 ### Hugging Face Spaces
 
 - Provider: Hugging Face
@@ -241,7 +291,9 @@ Pinned backend dependencies are listed in `requirements.txt`.
 ### Cloudflare Workers
 
 - Provider: Cloudflare
-- Used as: Edge proxy for model assets and selected external fetches.
+- Used as: Edge proxy for model assets, backend API calls, the Anthronomicon
+  community routes, and selected external fetches. Also hosts the temporary
+  v2 preview deployment.
 
 ### Backblaze B2
 
@@ -263,12 +315,22 @@ Pinned backend dependencies are listed in `requirements.txt`.
 - Used as: Optional AO3 EPUB archive/relay source for works that can be
   resolved through FicHub.
 
+### Supabase
+
+- Provider: Supabase
+- Source: https://supabase.com/
+- Used as: Hosts the Anthronomicon `catalog-api` function that serves shared
+  story ratings, click counts, and weekly trending. Pocket Reader itself keeps
+  no accounts and no cloud profile there.
+
 ### jsDelivr
 
 - Provider: jsDelivr, Cloudflare, Fastly
 - Source: https://www.jsdelivr.com/
-- Used as: CDN for the remaining browser ESM animation import (Motion). ONNX
-  Runtime Web is self-hosted through the versioned Cloudflare/B2 asset path.
+- Used as: Upstream `onnxruntime-web` distribution referenced by the narration
+  worker. ONNX Runtime Web is otherwise self-hosted through the versioned
+  Cloudflare/B2 asset path. The app no longer imports Motion or any other
+  library from a CDN.
 
 ## Icons, Artwork, and Fonts
 
@@ -277,16 +339,19 @@ Pinned backend dependencies are listed in `requirements.txt`.
 - Maintainer: Lucide contributors
 - License: ISC License
 - Source: https://github.com/lucide-icons/lucide
-- Used as: Locally bundled interface icon sprite. The distributed frontend
-  includes the upstream license text as `LICENSE-LUCIDE.txt`.
+- Used as: Interface icons. The v2 interface compiles individual icons from
+  `@lucide/svelte` into its bundle; the earlier icon sprite still ships as
+  `public/assets/icons/lucide-sprite.svg`. The upstream license text ships
+  beside it as `LICENSE-LUCIDE.txt`.
 
 ### Literata
 
 - Author: The Literata Project Authors
 - License: SIL Open Font License 1.1
 - Source: https://github.com/googlefonts/literata
-- Used as: Locally bundled editorial and reader typography.
-
+- Used as: Locally bundled editorial and reader typography
+  (`public/assets/fonts/`). The upstream license text ships beside the font
+  files as `LICENSE-LITERATA.txt`.
 
 ### Virtue artwork and Pocket Reader branding
 
@@ -307,12 +372,11 @@ Pinned backend dependencies are listed in `requirements.txt`.
 - Authors: Lorc, Delapouite, and Game-Icons.net contributors
 - License: Creative Commons Attribution 3.0 Unported (CC BY 3.0)
 - Source: https://game-icons.net/
-- Used as: Achievement SVG icons in `public/assets/achievements/`.
+- Used as: Achievement SVG icons, `public/assets/icons/ach_*.svg`.
 - Attribution requirement: retain credit to Game-Icons.net and authors.
 
-The Cloudflare Pages frontend includes the complete upstream license text for
-both bundled font families. System and browser-provided fallback fonts retain their own
-platform licenses.
+Literata is the only bundled font family. System and browser-provided fallback
+fonts retain their own platform licenses.
 
 ## Story-Source Platforms
 
@@ -335,13 +399,17 @@ using the app consistently with source-site terms and author permissions.
 
 - Source & Live Site: https://alpharius6769.github.io/hmofa-story-index/
 - Created by: Chris (Alpharius67 / Fluffarius)
-- Used as: Embedded interactive catalog view in Pocket Reader with an app-specific postMessage bridge & story fetch wrapper. The live standalone HMOFA website remains independent.
+- Used as: Story catalog in the Discover tab, rendered natively from the
+  index's published catalog JSON. `public/assets/js/hmofa_catalog_core.js` is
+  a vendored copy of the index's own data layer. There is no iframe embed. The
+  live standalone HMOFA website remains independent. See
+  `ANTHRONOMICON_BRIDGE.md`.
 - Rights note: Individual stories remain the property of their respective authors.
 
 ## Bundled Curated PDFs
 
-The `curated_library` PDFs are bundled for reader convenience and app
-presentation. Copyright remains with each story's original author. Pocket
+The `backend/curated_library` PDFs are bundled with the backend. The v2
+interface no longer lists them, but the backend still serves them. Copyright remains with each story's original author. Pocket
 Reader claims no ownership over bundled story text. Authors may request removal
 by contacting the maintainer.
 
