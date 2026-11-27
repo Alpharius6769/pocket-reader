@@ -125,7 +125,10 @@ const MODEL_STALL_TIMEOUT_MS = 60000;
 const SESSION_CREATE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEBUG_LOGS = false;
 const LOAD_BUNDLED_VOICE_BIN = false;
-const CHUNK_GAP_SEC = 0.25;
+// Shortened 2026-11-26 with the punctuation table below (owner: "reduce
+// length of pauses after all punctuation types; keep the pause between
+// paragraphs"). Was 0.25.
+const CHUNK_GAP_SEC = 0.15;
 // Per-chunk generation ceiling. Pocket emits 80 ms/frame, so 600 frames = 48 s.
 // Raised from 500 (40 s) 2026-07-17: long/dense chunks near the token cap were
 // hitting the 40 s ceiling before EOS, clipping the last word or two. Only the
@@ -238,10 +241,69 @@ function seededGaussian(std = 1.0, clampAbs = null) {
 
 // Per-punctuation pause lengths (seconds) used when punctuation pauses are ON.
 // When OFF, inter-chunk spacing stays at CHUNK_GAP_SEC to preserve current output.
-const PUNCT_PAUSE_SEC = {
+// The paragraph-end gap keeps these full values (PARAGRAPH_END_PUNCT_SEC), so
+// the pause between paragraphs is unchanged; every inner one is 60% of it.
+const PARAGRAPH_END_PUNCT_SEC = {
   '.': 0.38, '!': 0.42, '?': 0.42, '\u2026': 0.60,
   ',': 0.18, ';': 0.26, ':': 0.26, '\u2014': 0.28,
 };
+const PUNCT_PAUSE_SCALE = 0.6;
+const PUNCT_PAUSE_SEC = Object.fromEntries(
+  Object.entries(PARAGRAPH_END_PUNCT_SEC).map(([mark, sec]) => [mark, Math.round(sec * PUNCT_PAUSE_SCALE * 100) / 100]),
+);
+
+// The model's own silences inside a paragraph (measured on Paul: 1.0-1.5 s at
+// sentence ends, ~0.6 s after an ellipsis) are most of what reads as slow.
+// A streaming limiter shortens them as audio is produced:
+//   silence up to KEEP is untouched (no word-internal dip ever reaches it);
+//   beyond that half of the excess is kept, up to CAP.
+// So 0.3 s -> 0.25 s, 0.54 s -> 0.37 s, 1.0+ s -> 0.5 s. Silence before the
+// paragraph's first word is exempt, and whatever is trimmed from the silence
+// after its last word is given back, so the gap BETWEEN paragraphs is the same.
+const SILENCE_KEEP_SEC = 0.2;
+const SILENCE_RATIO = 0.5;
+const SILENCE_CAP_SEC = 0.5;
+const SILENCE_WINDOW_SEC = 0.02;
+const SILENCE_RMS = Math.pow(10, -45 / 20);
+
+function createSilenceLimiter(sampleRate, opts = {}) {
+  const keep = Math.round((opts.keepSec ?? SILENCE_KEEP_SEC) * sampleRate);
+  const cap = Math.round((opts.capSec ?? SILENCE_CAP_SEC) * sampleRate);
+  const ratio = opts.ratio ?? SILENCE_RATIO;
+  const win = Math.max(1, Math.round(SILENCE_WINDOW_SEC * sampleRate));
+  // Kept length for a run of L silent samples.
+  const kept = (L) => (L <= keep ? L : Math.min(keep + Math.round((L - keep) * ratio), Math.max(keep, cap)));
+  let armed = false;   // true once the paragraph has spoken
+  let run = 0;         // samples of the current silent run (original timeline)
+  let runDropped = 0;  // samples dropped from it
+  return {
+    process(chunk) {
+      const n = chunk.length;
+      if (!n) return chunk;
+      const out = new Float32Array(n);
+      let o = 0;
+      for (let i = 0; i < n; i += win) {
+        const end = Math.min(n, i + win);
+        let sum = 0;
+        for (let j = i; j < end; j++) sum += chunk[j] * chunk[j];
+        const silent = Math.sqrt(sum / (end - i)) < SILENCE_RMS;
+        if (!silent || !armed) {
+          if (!silent) { armed = true; run = 0; runDropped = 0; }
+          out.set(chunk.subarray(i, end), o);
+          o += end - i;
+          continue;
+        }
+        const take = kept(run + (end - i)) - kept(run);
+        run += end - i;
+        runDropped += (end - i) - take;
+        if (take > 0) { out.set(chunk.subarray(i, i + take), o); o += take; }
+      }
+      return o === n ? out : out.slice(0, o);
+    },
+    // Samples trimmed from the silence still in progress (the paragraph's tail).
+    get trailingDropped() { return runDropped; },
+  };
+}
 
 function clampPocketTemperature(value) {
   const n = Number(value);
@@ -1836,6 +1898,7 @@ function splitIntoBestSentences(text, opts) {
     const pauseAfterSec = pausePunct
       ? (PUNCT_PAUSE_SEC[punct] != null ? PUNCT_PAUSE_SEC[punct] : CHUNK_GAP_SEC)
       : CHUNK_GAP_SEC;
+    const paragraphEndSec = PARAGRAPH_END_PUNCT_SEC[punct] != null ? PARAGRAPH_END_PUNCT_SEC[punct] : 0.25;
     // Emotion-aware EOS tail: high-energy emotions snap off sooner (eosBonus < 0),
     // quiet/fearful emotions trail longer (eosBonus > 0). Only active in expressive mode.
     const adjustedFrames = stableProsody
@@ -1845,6 +1908,7 @@ function splitIntoBestSentences(text, opts) {
     chunkMeta.push({
       framesAfterEos: adjustedFrames,
       pauseAfterSec,
+      paragraphEndSec,
       explicit: false,
       pauseOnly: false,
       emotion,
@@ -1928,7 +1992,10 @@ function splitIntoBestSentences(text, opts) {
   if (paragraphPauseSec > 0 && chunkMeta.length) {
     for (let i = chunkMeta.length - 1; i >= 0; i--) {
       if (!chunkMeta[i].pauseOnly) {
-        const baseTail = (!pausePunct && !chunkMeta[i].explicit) ? 0 : (chunkMeta[i].pauseAfterSec || 0);
+        // Full (unscaled) punctuation value here: the paragraph gap is unchanged.
+        const baseTail = (!pausePunct && !chunkMeta[i].explicit)
+          ? 0
+          : (chunkMeta[i].explicit ? (chunkMeta[i].pauseAfterSec || 0) : (chunkMeta[i].paragraphEndSec || 0));
         chunkMeta[i].pauseAfterSec = baseTail + paragraphPauseSec;
         chunkMeta[i].explicit = true;
         chunkMeta[i].paragraphTail = true;
@@ -2908,7 +2975,9 @@ async function loadBundle(language, {
 
   voiceConditioningCache = new Map();
   const availablePredefinedVoices = Object.keys(predefinedVoiceRecords);
-  let defaultVoice = availablePredefinedVoices.includes("alba") ? "alba" : (availablePredefinedVoices[0] || null);
+  // Warm the app's default voice (Paul since 2026-11-26), not a fixed one.
+  const preferredVoice = ["paul", "alba"].find((v) => availablePredefinedVoices.includes(v));
+  let defaultVoice = preferredVoice || availablePredefinedVoices[0] || null;
   currentVoiceName = defaultVoice;
 
   if (defaultVoice) {
@@ -3829,7 +3898,11 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
       backend: currentBackend,
     });
   };
+  const silenceLimiter = control.keepSilences ? null : createSilenceLimiter(currentSampleRate);
   const appendOutputChunk = (chunk, audible = true) => {
+    // Model audio goes through the pause limiter; explicit gaps are exact.
+    if (audible && silenceLimiter) chunk = silenceLimiter.process(chunk);
+    if (!chunk.length) return;
     allChunks.push(chunk);
     if (audible && firstSegmentMs == null) firstSegmentMs = performance.now() - generationStart;
     if (!control.streamSegments) return;
@@ -4359,7 +4432,10 @@ async function runGenerationPipeline(voiceName, chunks, chunkMeta, allChunks, co
       const isLast = chunkIdx >= chunks.length - 1;
       const gapSec = meta.pauseAfterSec != null ? meta.pauseAfterSec : CHUNK_GAP_SEC;
       if (!control.suppressPauses && (!isLast || meta.explicit) && gapSec > 0) {
-        const gapSamples = Math.max(1, Math.floor(gapSec * currentSampleRate));
+        // The paragraph's closing silence was shortened by the limiter like any
+        // other; give it back so the pause between paragraphs is unchanged.
+        const restored = meta.paragraphTail && silenceLimiter ? silenceLimiter.trailingDropped : 0;
+        const gapSamples = Math.max(1, Math.floor(gapSec * currentSampleRate) + restored);
         appendOutputChunk(new Float32Array(gapSamples), false);
       }
     }

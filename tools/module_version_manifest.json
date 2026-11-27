@@ -4,12 +4,12 @@
     "sha256": "bbcfecf057febe6f"
   },
   "audio_core.js": {
-    "version": "audio-v264",
-    "sha256": "66e8de1c615236c6"
+    "version": "audio-v268",
+    "sha256": "525ebf696bcb4aab"
   },
   "buffer_manager.js": {
-    "version": "buffer-v146",
-    "sha256": "00bff61fdb880188"
+    "version": "buffer-v148",
+    "sha256": "cc1e895a86c0dd88"
   },
   "core_events.js": {
     "version": "core-events-v11",
@@ -36,8 +36,8 @@
     "sha256": "99b48eec0d1ae3de"
   },
   "engine_utils.js": {
-    "version": "sw-385",
-    "sha256": "b5a8a08242bd18b8"
+    "version": "sw-389",
+    "sha256": "de3ef59e6198af7e"
   },
   "hmofa_catalog_core.js": {
     "version": "hmofa-core-v4",
@@ -56,35 +56,35 @@
     "sha256": "7b01cbdb5dc6f234"
   },
   "kokoro_worker.js": {
-    "version": "kokoro-v57",
-    "sha256": "038d18986932e366"
+    "version": "kokoro-v59",
+    "sha256": "8e94363c8fd0c5eb"
   },
   "library_core.js": {
     "version": "library-core-v4",
     "sha256": "6a444a978159c6dc"
   },
   "library_manager.js": {
-    "version": "library-v114",
-    "sha256": "b18973d0d653ee72"
+    "version": "library-v116",
+    "sha256": "8515ea7ddf7fa056"
   },
   "memory_headroom_worker.js": {
     "version": "memory-probe-v1",
     "sha256": "c47615a99828dd2e"
   },
   "motion_lite.js": {
-    "version": "sw-385",
+    "version": "sw-389",
     "sha256": "e2f5de2ef85912f1"
   },
   "narration_runtime_loader.js": {
-    "version": "narration-loader-v161",
-    "sha256": "311d512662fd4aa1"
+    "version": "narration-loader-v163",
+    "sha256": "5e2d08bd9117bcf2"
   },
   "native_app_key.js": {
     "version": "native-key-v1",
     "sha256": "f5f6c2d8666d18c0"
   },
   "ort_memory_probe_worker.js": {
-    "version": "sw-385",
+    "version": "sw-389",
     "sha256": "73b4f0dec5687477"
   },
   "pocket_backend_policy.js": {
@@ -100,8 +100,8 @@
     "sha256": "de97d3e9203f9445"
   },
   "pocket_worker.js": {
-    "version": "pocket-worker-v142",
-    "sha256": "e21c5856c184cf49"
+    "version": "pocket-worker-v144",
+    "sha256": "2b57e5fca8c2421a"
   },
   "safe_storage.js": {
     "version": "safe-storage-v1",
@@ -116,7 +116,7 @@
     "sha256": "c13cba99b640b8f7"
   },
   "sw.js": {
-    "version": "sw-385",
-    "sha256": "3661286d1ef6c922"
+    "version": "sw-389",
+    "sha256": "17dacdfa37453722"
   }
 }

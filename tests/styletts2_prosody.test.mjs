@@ -145,14 +145,16 @@ test('Kokoro breathes like Pocket', async () => {
   // matched: several of these marks are regex metacharacters, and building
   // patterns out of them produces a broken regex, not a failed assertion.
   const pocket = await readFile(path.join(ROOT, 'public/assets/js/pocket_worker.js'), 'utf8');
-  const start = pocket.indexOf('const PUNCT_PAUSE_SEC = {');
+  // Pocket's inner table is derived: its paragraph-end values x PUNCT_PAUSE_SCALE.
+  const start = pocket.indexOf('const PARAGRAPH_END_PUNCT_SEC = {');
   const table = pocket.slice(start, pocket.indexOf('};', start));
+  const scale = Number(pocket.match(/const PUNCT_PAUSE_SCALE = ([0-9.]+);/)[1]);
   const pocketPauses = {};
   for (const [, mark, sec] of table.matchAll(/'((?:\\u[0-9a-fA-F]{4})|[^'])': ([0-9.]+)/g)) {
     const key = mark.startsWith('\\u')
       ? String.fromCharCode(parseInt(mark.slice(2), 16))
       : mark;
-    pocketPauses[key] = Number(sec);
+    pocketPauses[key] = Math.round(Number(sec) * scale * 100) / 100;
   }
   assert.deepEqual(pocketPauses, kokoro.PUNCT_PAUSE_SEC,
     'both engines must breathe on the same table');
@@ -165,6 +167,6 @@ test('the prosody change is versioned, or cached flat audio would be replayed', 
   // that can invalidate them. Leaving it alone would ship the fix to nobody
   // who had already listened, and silently.
   const audio = await readFile(path.join(ROOT, 'public/assets/js/audio_core.js'), 'utf8');
-  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';/);
+  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov4';/);
   assert.match(audio, /if \(_isStyleTts2Engine\(engine\)\) return `#\$\{NEURAL_CACHE_VERSIONS\[engine\]\}`;/);
 });

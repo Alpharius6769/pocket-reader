@@ -402,7 +402,7 @@ test('per-emotion temperature tables are the sampling temps, not a ceiling on 0.
 
 test('a change in how audio is rendered busts the Pocket audio cache', async () => {
   const source = await read('public/assets/js/audio_core.js');
-  assert.match(source, /const POCKET_NARRATION_CACHE_VERSION = 'narrv24'/);
+  assert.match(source, /const POCKET_NARRATION_CACHE_VERSION = 'narrv25'/);
 });
 
 test('cache and live share one Pocket take: seed, token cap, pause, decode batch', async () => {

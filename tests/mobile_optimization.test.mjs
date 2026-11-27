@@ -111,7 +111,7 @@ test('the measured-worse model swap stays reverted, with the numbers kept', asyn
   // ritardando into a terminal. That genuinely changes the rendered audio, so
   // v2 chunks are stale and must not be replayed. The rule this test still
   // guards is the real one: bump for a changed RENDER, never for a no-op swap.
-  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';/);
+  assert.match(audio, /const KOKORO_NARRATION_CACHE_VERSION = 'kokorov4'/);
 
   // The reasoning above only holds while this stays a CPU-only path.
   assert.match(code, /executionProviders: \['wasm'\]/);

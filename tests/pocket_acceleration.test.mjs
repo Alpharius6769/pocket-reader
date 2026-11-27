@@ -168,7 +168,7 @@ test('mobile auto defaults to threaded WASM; WebGPU remains Settings opt-in', as
   assert.match(audio, /wasmReferenceRtf: _pocketBackendRuntime\.wasmReferenceRtf/);
   // Full ?v= form on purpose: a bare version string is invisible to
   // check_module_versions.mjs, so this pin silently rotted past a bump.
-  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v142/);
+  assert.match(audio, /pocket_worker\.js\?v=pocket-worker-v144/);
   assert.match(worker, /wasmReferenceRtf/);
   assert.match(worker, /releaseAllSessions/);
   assert.match(worker, /wasm_rtf_sample/);

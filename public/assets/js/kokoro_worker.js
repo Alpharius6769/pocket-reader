@@ -554,11 +554,13 @@ function wordPiecesOf(unitText) {
 //    is deliberately small -- a few percent -- because the failure mode of
 //    overdoing it is seasick delivery that sounds worse than flat.
 //
-// The pause table is Pocket's PUNCT_PAUSE_SEC verbatim, so a reader switching
-// engines hears the same breathing rather than a different narrator.
+// The pause table is Pocket's inner PUNCT_PAUSE_SEC verbatim, so a reader
+// switching engines hears the same breathing rather than a different narrator.
+// Both were cut to 60% on 2026-11-26 ("reduce length of pauses after all
+// punctuation types"); the paragraph tail below is separate and unchanged.
 const PUNCT_PAUSE_SEC = {
-  '.': 0.38, '!': 0.42, '?': 0.42, '\u2026': 0.60,
-  ',': 0.18, ';': 0.26, ':': 0.26, '\u2014': 0.28,
+  '.': 0.23, '!': 0.25, '?': 0.25, '\u2026': 0.36,
+  ',': 0.11, ';': 0.16, ':': 0.16, '\u2014': 0.17,
 };
 const DEFAULT_SEAM_PAUSE_SEC = 0.12;
 const PARAGRAPH_TAIL_PAUSE_SEC = 0.5;

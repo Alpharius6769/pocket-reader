@@ -48,7 +48,7 @@ export interface MockOptions {
 
 const DEFAULT_SETTINGS: Settings = {
   engine: 'pocket',
-  voice: { pocket: 'alba', kokoro: 'af_heart' },
+  voice: { pocket: 'paul', kokoro: 'af_heart' },
   speed: 1,
   expressive: true,
   pronunciations: [

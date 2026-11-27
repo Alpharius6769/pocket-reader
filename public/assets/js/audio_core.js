@@ -131,7 +131,7 @@ window.getNarrationEngineStatus = () => neuralState;
 
 // ── Voice lists and normalization layer ──────────────────────────────────────
 const POCKET_VOICES = window.POCKET_VOICES || [];
-const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'alba';
+const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'paul';
 const POCKET_SAFE_EMOTIONS = ['neutral', 'calm', 'happy', 'sad', 'worried', 'surprised', 'tired', 'frustrated'];
 const POCKET_GATED_EMOTIONS = ['anger', 'excited', 'enthused', 'shout'];
 const POCKET_ALL_EMOTIONS = [...POCKET_SAFE_EMOTIONS, ...POCKET_GATED_EMOTIONS, 'confused'];
@@ -156,7 +156,8 @@ const POCKET_EMOTION_PATTERN = new RegExp(`_(${POCKET_ALL_EMOTIONS.join('|')})$`
 // FP16 master, where the original per-tensor export scored 9.89). Both change
 // the waveform, so nothing cached under an older generation may be replayed.
 // narrv24: english_2026-10 (~110M) ready-made Kyutai voices, preset temp 0.3.
-const POCKET_NARRATION_CACHE_VERSION = 'narrv24';
+// narrv25: every per-emotion temperature +0.015 (a little more expression).
+const POCKET_NARRATION_CACHE_VERSION = 'narrv25';
 const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // Kokoro's render-shape version. Bump whenever anything that changes the audio
 // for the same (text, voice) changes: the chunk cap, the clause rejoin, the
@@ -171,7 +172,7 @@ const POCKET_BACKEND_CACHE_VERSION = 'backendv2';
 // v2 audio cached on THOSE devices was rendered without espeak's dictionaries.
 // Reverting the key re-serves it. That is not a regression -- it is the state
 // they were already in -- and fixing it would cost everyone else a re-render.
-const KOKORO_NARRATION_CACHE_VERSION = 'kokorov3';
+const KOKORO_NARRATION_CACHE_VERSION = 'kokorov4'; // kokorov4: punctuation pauses at 60%
 const NEURAL_CACHE_VERSIONS = Object.freeze({
   kokoro: KOKORO_NARRATION_CACHE_VERSION,
 });
@@ -201,7 +202,7 @@ const POCKET_VOICE_PACK_REV = 'r1';
 // keep their capital.
 const POCKET_CHUNKING_VERSION = 'chunkv5';
 const POCKET_ARTIFACT_GUARD_VERSION = 'agv3'; // agv3: fatal-only, single identity-preserving retry
-const POCKET_PAUSE_PROFILE_VERSION = 'pausev2';
+const POCKET_PAUSE_PROFILE_VERSION = 'pausev3'; // pausev3: shorter punctuation gaps + in-paragraph silence limiter (paragraph gap unchanged)
 const POCKET_PARAGRAPH_PAUSE_SEC = 0.5;
 
 // Per-emotion sampling temperature. Stability outranks expressiveness here.
@@ -219,30 +220,34 @@ const POCKET_PARAGRAPH_PAUSE_SEC = 0.5;
 // Per-emotion sampling temps around Kyutai's 0.3 default. These USED to sit
 // at 0.72-0.87 and silently overrode the preset; they are now the small
 // expressive offsets on top of that recipe, not a second hot band.
+// +0.015 on every state, 2026-11-26 (owner: "raise emotional resonance just a
+// hair more across the board"). Most narration is classed calm, so a change
+// only to the loud states would barely be heard; the spread between states is
+// unchanged and nothing approaches the worker's 0.5 clamp.
 const POCKET_BALANCED_TEMP_CAPS = {
-  neutral: 0.30,
-  calm: 0.28,
-  sad: 0.31,
-  tired: 0.29,
-  worried: 0.32,
-  happy: 0.32,
-  surprised: 0.33,
-  frustrated: 0.33,
+  neutral: 0.315,
+  calm: 0.295,
+  sad: 0.325,
+  tired: 0.305,
+  worried: 0.335,
+  happy: 0.335,
+  surprised: 0.345,
+  frustrated: 0.345,
 };
 const POCKET_FULL_TEMP_CAPS = {
-  neutral: 0.30,
-  calm: 0.28,
-  sad: 0.31,
-  tired: 0.30,
-  confused: 0.32,
-  worried: 0.33,
-  happy: 0.34,
-  enthused: 0.35,
-  surprised: 0.35,
-  frustrated: 0.35,
-  excited: 0.36,
-  anger: 0.36,
-  shout: 0.38,
+  neutral: 0.315,
+  calm: 0.295,
+  sad: 0.325,
+  tired: 0.315,
+  confused: 0.335,
+  worried: 0.345,
+  happy: 0.355,
+  enthused: 0.365,
+  surprised: 0.365,
+  frustrated: 0.365,
+  excited: 0.375,
+  anger: 0.375,
+  shout: 0.395,
 };
 function _normalizeVoice(engine, voice) {
   if (engine !== 'pocket') return voice || '';
@@ -734,7 +739,9 @@ function _artifactCappedTemperature(baseTemperature, emotion, retryLevel = 0) {
   const cooled = chosen - Math.min(0.12, retries * 0.04);
   // Floor is below Kyutai's 0.3 default so retries can cool further; the old
   // 0.5 floor made every "set temperature to 0.3" request impossible.
-  return Number(Math.max(0.15, Math.min(0.5, cooled)).toFixed(2));
+  // Three decimals: the table moves in 0.015 steps, and toFixed(2) rounded
+  // 0.295 down and 0.315 up (binary floats), so states moved unevenly.
+  return Number(Math.max(0.15, Math.min(0.5, cooled)).toFixed(3));
 }
 
 // The route carries the engine it was resolved FOR, because everything
@@ -1628,8 +1635,8 @@ async function _loadPocketEngineOnce(options = {}) {
         // timestamp cache-buster misses the app-shell cache and a relative URL
         // resolves consistently from every static-app route.
         const WORKER_SCRIPTS = {
-          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v57',
-          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v142',
+          kokoro: 'assets/js/kokoro_worker.js?v=kokoro-v59',
+          pocket: 'assets/js/pocket_worker.js?v=pocket-worker-v144',
         };
         const workerScript = new URL(
           WORKER_SCRIPTS[engine] || WORKER_SCRIPTS.pocket, document.baseURI,
@@ -5436,7 +5443,10 @@ window.onVoiceSelectionChange = function(newVoice, options = {}) {
     }
   }
 
-  if (engine === 'pocket') window.userProfile.settings.pocketVoice = cleanNewVoice;
+  if (engine === 'pocket') {
+    window.userProfile.settings.pocketVoice = cleanNewVoice;
+    window.userProfile.settings.pocketVoiceChosen = true;
+  }
   else window.userProfile.settings.webVoice = cleanNewVoice;
 
   if (typeof window.saveLocalData === 'function') window.saveLocalData();

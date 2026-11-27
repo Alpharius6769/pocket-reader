@@ -24,7 +24,7 @@ export const initialPlayer: PlayerState = {
   chapterCount: 0,
   speed: 1,
   engine: 'pocket',
-  voice: 'alba',
+  voice: 'paul',
   sleep: { kind: 'off' },
   buffer: { ready: 0, target: 0 },
   engineState: { engine: 'pocket', status: 'idle' },

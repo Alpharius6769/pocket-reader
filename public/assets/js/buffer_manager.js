@@ -14,7 +14,7 @@ import { ui } from './core_events.js?v=core-events-v11';
 import { adoptNarrationPreset } from './library_core.js?v=library-core-v4';
 
 const POCKET_VOICES = window.POCKET_VOICES || [];
-const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'alba';
+const POCKET_DEFAULT_VOICE = window.POCKET_DEFAULT_VOICE || 'paul';
 const _resolveActiveEngine = window._resolveActiveEngine;
 
 const FAST_NARRATION_PARAM = 'tts_fast';

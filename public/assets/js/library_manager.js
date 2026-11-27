@@ -195,8 +195,20 @@ function normalizeCompanionSetting(profile) {
 function normalizePocketVoiceSetting(profile) {
   const settings = profile?.settings;
   if (!settings || typeof settings !== 'object') return;
-  const defaultVoice = window.POCKET_DEFAULT_VOICE || 'alba';
+  const defaultVoice = window.POCKET_DEFAULT_VOICE || 'paul';
   const voices = window.POCKET_VOICES || [];
+  // The default moved from Alba to Paul (2026-11-26). Every profile was saved
+  // with the default it was created under, so a reader who never picked a
+  // voice still says 'alba'; those move with the default. A voice picked on
+  // purpose (pocketVoiceChosen, set by every voice control) is left alone.
+  // Gated on a version in the profile itself, not a one-shot flag, so it runs
+  // exactly once per profile whenever that profile next loads.
+  if ((Number(settings.voiceDefaultsVersion) || 1) < 2) {
+    if (!settings.pocketVoiceChosen && String(settings.pocketVoice || 'alba').toLowerCase() === 'alba') {
+      settings.pocketVoice = 'paul';
+    }
+    settings.voiceDefaultsVersion = 2;
+  }
   // The bespoke 'rayne' -> 'donald_malone' migration that used to sit here is
   // gone, and deliberately not replaced with a 'donald_malone' -> 'alba' one.
   // Both of those voices are retired now, and a chain of one-shot migrations
@@ -457,7 +469,8 @@ function _defaultProfile() {
     displayName: "Guest Reader",
     settings: {
       voiceEngine: "pocket",
-      pocketVoice: window.POCKET_DEFAULT_VOICE || "alba",
+      pocketVoice: window.POCKET_DEFAULT_VOICE || "paul",
+      voiceDefaultsVersion: 2,
       speed: DEFAULT_POCKET_PLAYBACK_SPEED,
       expressiveProsody: true,
       pausePunctuation: true,

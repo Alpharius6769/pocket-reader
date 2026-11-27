@@ -98,12 +98,12 @@ test('service worker install survives one failed optional asset', async () => {
     worker.indexOf('function cacheBestEffort('),
     worker.indexOf('// 1. INSTALLATION'),
   );
-  assert.match(bestEffort, /cache\.add\(asset\)\.catch\(/,
+  assert.match(bestEffort, /cache\.add\(freshRequest\(asset\)\)\.catch\(/,
     'each optional asset must be cached independently so one failure is contained');
 
   // The shell stays atomic: a half-populated core cache serves a broken app.
   const install = worker.slice(worker.indexOf('// 1. INSTALLATION'), worker.indexOf('// 2. ACTIVATION'));
-  assert.match(install, /cache\.addAll\(CORE_ASSETS\)/, 'the core shell must remain atomic');
+  assert.match(install, /cache\.addAll\(CORE_ASSETS\.map\(freshRequest\)\)/, 'the core shell must remain atomic');
   assert.match(install, /cacheBestEffort\(cache, DEFERRED_ASSETS\.concat\(OPTIONAL_ASSETS\)\)/);
   assert.match(install, /Install failed:[\s\S]{0,120}throw err;/,
     'a core shell failure must still reject the install');

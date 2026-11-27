@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v385';
+var CACHE_NAME = 'pocket-reader-core-v389';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -138,10 +138,10 @@ var OPTIONAL_ASSETS = [
 // connection these are the most likely single fetch to fail -- and losing the
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
-    'assets/js/buffer_manager.js?v=buffer-v146',
-    'assets/js/audio_core.js?v=audio-v264',
-    'assets/js/pocket_worker.js?v=pocket-worker-v142',
-    'assets/js/kokoro_worker.js?v=kokoro-v57',
+    'assets/js/buffer_manager.js?v=buffer-v148',
+    'assets/js/audio_core.js?v=audio-v268',
+    'assets/js/pocket_worker.js?v=pocket-worker-v144',
+    'assets/js/kokoro_worker.js?v=kokoro-v59',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
 ];
 
@@ -161,12 +161,12 @@ var CORE_ASSETS = [
     'assets/js/library_core.js?v=library-core-v4',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v57',
-    'assets/js/library_manager.js?v=library-v114',
+    'assets/js/library_manager.js?v=library-v116',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v17',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v4',
     'assets/js/hmofa_community.js?v=hmofa-community-v4',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v6',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v161',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v163',
     'assets/js/storage_core.js?v=storage-v59',
     // Imported, unversioned, by library_manager.js.
     'assets/js/motion_lite.js'
@@ -175,9 +175,18 @@ var CORE_ASSETS = [
 
 // Best-effort cache fill: each entry is independent, so one failure costs only
 // that entry rather than the entire install.
+// Precache from the network, never the browser's HTTP cache. addAll() goes
+// through it, so a new worker could store a STALE copy of every file loaded
+// without a ?v= token (engine_utils.js, sw.js-relative assets) for as long as
+// the host's max-age allows -- seen on the preview: a fresh cache, a fresh app
+// bundle, and last deploy's engine_utils with the old default voice.
+function freshRequest(asset) {
+    return new Request(asset, { cache: 'reload' });
+}
+
 function cacheBestEffort(cache, assets) {
     return Promise.all(assets.map(function (asset) {
-        return cache.add(asset).catch(function (error) {
+        return cache.add(freshRequest(asset)).catch(function (error) {
             console.warn('[Service Worker] Optional pre-cache skipped:', asset, error);
             return null;
         });
@@ -192,7 +201,7 @@ self.addEventListener('install', function (event) {
                 console.log('[Service Worker] Pre-caching App Shell');
                 // The shell itself stays atomic: a half-populated core cache
                 // would serve a broken app offline, so this must still reject.
-                return cache.addAll(CORE_ASSETS).then(function () {
+                return cache.addAll(CORE_ASSETS.map(freshRequest)).then(function () {
                     return cacheBestEffort(cache, DEFERRED_ASSETS.concat(OPTIONAL_ASSETS));
                 });
             })

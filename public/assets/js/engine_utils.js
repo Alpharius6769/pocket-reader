@@ -71,7 +71,8 @@ const NEUTRAL_ONLY_FALLBACKS = Object.freeze(
 // that duplicated Alba's and Charles's accent with weaker provenance, and
 // `michael` additionally collided by display name with Kokoro's am_michael,
 // which would have put two different "Michael" voices in one picker.
-window.POCKET_DEFAULT_VOICE = 'alba';
+// Paul is the default Pocket voice (owner's choice, 2026-11-26; was Alba).
+window.POCKET_DEFAULT_VOICE = 'paul';
 window.POCKET_DEFAULT_EMOTION = 'neutral';
 window.POCKET_VOICE_PACK = {
   id: 'kyutai-curated-v1',

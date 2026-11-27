@@ -399,7 +399,7 @@ test('switching the vocoder busts the narration cache', async () => {
   const audio = await readFile(
     new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
   );
-  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv24'/);
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv25'/);
 });
 
 test('the Pocket TTS upstream license is recorded with its attribution terms', async () => {
@@ -440,7 +440,7 @@ test('new latents mean a new cache generation', async () => {
   const audio = await readFile(
     new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
   );
-  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv24'/);
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv25'/);
 });
 
 test('the decode-block rebuild is reproducible from a checked-in tool', async () => {
@@ -552,7 +552,7 @@ test('the rebuilt models keep the cache honest', async () => {
   const audio = await readFile(
     new URL('../public/assets/js/audio_core.js', import.meta.url), 'utf8',
   );
-  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv24'/);
+  assert.match(audio, /const POCKET_NARRATION_CACHE_VERSION = 'narrv25'/);
 });
 
 // ── Forced first-run reset ──────────────────────────────────────────────────

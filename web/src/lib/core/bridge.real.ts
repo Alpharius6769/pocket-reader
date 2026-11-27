@@ -627,8 +627,10 @@ export class RealBridge implements CoreBridge {
     if (wasPlaying) this.pause();
     await w.ensureNarrationRuntime?.();
     await w.onVoiceSelectionChange(voice, { confirm: false });
-    if (v.engine === 'pocket') settingsBag().pocketVoice = voice;
-    else settingsBag().kokoroVoice = voice;
+    if (v.engine === 'pocket') {
+      settingsBag().pocketVoice = voice;
+      settingsBag().pocketVoiceChosen = true; // a later default change leaves it alone
+    } else settingsBag().kokoroVoice = voice;
     save();
     // Switch over now, not a paragraph later: drop the old-voice clip (Play
     // used to resume it) and render the current paragraph again in the new
@@ -805,7 +807,7 @@ export class RealBridge implements CoreBridge {
     return {
       engine,
       voice: {
-        pocket: (VOICES.find((v) => v.engine === 'pocket' && v.id === w.canonicalPocketVoice?.(s.pocketVoice))?.id || 'alba') as Settings['voice']['pocket'],
+        pocket: (VOICES.find((v) => v.engine === 'pocket' && v.id === w.canonicalPocketVoice?.(s.pocketVoice))?.id || 'paul') as Settings['voice']['pocket'],
         kokoro: (VOICES.find((v) => v.engine === 'kokoro' && v.id === s.kokoroVoice)?.id || 'af_heart') as Settings['voice']['kokoro'],
       },
       speed: Number(s.speed) || 1,
