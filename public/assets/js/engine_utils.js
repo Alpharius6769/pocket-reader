@@ -65,8 +65,10 @@ const NEUTRAL_ONLY_FALLBACKS = Object.freeze(
 // Kokoro indexes a (510, 1, 256) style table by token count and has no emotion
 // axis to swap.
 //
-// The accent spread is deliberate: one English and two American per gender, so
-// a listener has a real choice rather than three takes on the same voice.
+// The accent spread is deliberate, so a listener has a real choice rather than
+// three takes on the same voice: one English and two American women, and two
+// English and one American men. (Paul is VCTK p259, an English speaker; he was
+// labelled American until 2026-11-26, when the source recording was checked.)
 // Kyutai's `jane` and `michael` were the two dropped -- both English VCTK reads
 // that duplicated Alba's and Charles's accent with weaker provenance, and
 // `michael` additionally collided by display name with Kokoro's am_michael,
@@ -164,14 +166,14 @@ window.POCKET_VOICE_PACK = {
       id: 'paul',
       displayName: 'Paul',
       gender: 'male',
-      accent: 'American',
+      accent: 'English',
       recommended: true,
-      recommendedUse: 'American male narrator; Kyutai ready-made 2026-10 reference.',
-      sourceName: 'Kyutai paul',
-      sourceFolder: 'embeddings',
-      sourceUrl: 'https://huggingface.co/kyutai/pocket-tts/tree/main/languages/english_2026-10/embeddings',
-      originUrl: 'https://github.com/kyutai-labs/pocket-tts',
-      license: 'CC BY 4.0 via Kyutai TTS voices',
+      recommendedUse: 'Default narrator; English male, Kyutai ready-made 2026-10 reference.',
+      sourceName: 'VCTK p259',
+      sourceFolder: 'vctk',
+      sourceUrl: 'https://huggingface.co/kyutai/tts-voices/blob/main/vctk/p259_023_enhanced.wav',
+      originUrl: 'https://datashare.ed.ac.uk/handle/10283/3443',
+      license: 'CC BY 4.0 via VCTK / Kyutai TTS voices',
       availableEmotions: ['neutral'],
       fallbackEmotions: NEUTRAL_ONLY_FALLBACKS
     }
@@ -183,7 +185,7 @@ window.POCKET_VOICE_PACK = {
 // handed to the worker as an unknown id -- which is what previously resolved to
 // a Pocket voice pack that does not exist and hung for 60 s on every attempt.
 // Noah had no ready-made 2026-10 embedding; stored settings naming him land on
-// Paul, the replacement American male from Kyutai's shipped catalog.
+// Paul, the replacement male voice from Kyutai's shipped catalog.
 window.POCKET_RETIRED_VOICES = Object.freeze([
   'donald_malone', 'bill_boerst', 'jason_mayoff',
   'kristin_hughes', 'jodi_krangle_expressive', 'karen_savage',

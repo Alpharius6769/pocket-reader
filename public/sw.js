@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v389';
+var CACHE_NAME = 'pocket-reader-core-v391';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,

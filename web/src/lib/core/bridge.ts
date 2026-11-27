@@ -512,7 +512,7 @@ export const VOICES: readonly Voice[] = [
   { id: 'eve', engine: 'pocket', name: 'Eve', gender: 'female', accent: 'American', character: 'Brighter east-coast read' },
   { id: 'charles', engine: 'pocket', name: 'Charles', gender: 'male', accent: 'English', character: 'Measured English read' },
   { id: 'george', engine: 'pocket', name: 'George', gender: 'male', accent: 'American', character: 'Warmer New England read' },
-  { id: 'paul', engine: 'pocket', name: 'Paul', gender: 'male', accent: 'American', character: 'Ready-made studio reference' },
+  { id: 'paul', engine: 'pocket', name: 'Paul', gender: 'male', accent: 'English', character: 'Ready-made studio reference' },
   // Kokoro: labels from pocket_backend_policy.js KOKORO_VOICES.
   { id: 'af_heart', engine: 'kokoro', name: 'Heart', gender: 'female', accent: 'American', character: 'Warm' },
   { id: 'af_bella', engine: 'kokoro', name: 'Bella', gender: 'female', accent: 'American', character: 'Expressive' },

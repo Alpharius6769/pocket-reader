@@ -199,7 +199,7 @@ test('Pocket ships three female and three male Kyutai voices, each neutral-only'
     eve: ['female', 'American, New Jersey'],
     charles: ['male', 'English'],
     george: ['male', 'American, New England'],
-    paul: ['male', 'American'],
+    paul: ['male', 'English'],
   };
   const pack = source.slice(
     source.indexOf('window.POCKET_VOICE_PACK = {'),
