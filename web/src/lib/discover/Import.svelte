@@ -5,7 +5,7 @@
   import ClipboardPaste from '@lucide/svelte/icons/clipboard-paste';
   import { bridge } from '../core';
   import { attempt, openStory } from '../actions';
-  import { say } from '../stores/ui';
+  import { say, openSheet, toast } from '../stores/ui';
   import Virtue from '../components/Virtue.svelte';
 
   let url = $state('');
@@ -36,8 +36,14 @@
     if (!file) return;
     busy = 'file';
     say('thinking', null);
-    await attempt(() => bridge().importFile(file));
+    const added = await attempt(() => bridge().importFile(file));
     busy = null;
+    // It used to finish without a word and leave the reader on this page,
+    // wondering whether anything had happened.
+    if (added) {
+      toast({ level: 'success', message: `Added “${added.title}” to your library`, mood: 'holding' });
+      openSheet({ kind: 'story', key: added.key });
+    }
   }
 </script>
 
@@ -55,7 +61,9 @@
 
 <section class="card block">
   <h2 class="h"><FileUp size={20} /> From a file</h2>
-  <p class="muted sub">EPUB, PDF, TXT, HTML or DOCX from Files, iCloud Drive or a download. The file stays on this {$deviceNoun}.</p>
+  <!-- It said "The file stays on this device". It does not: the file is sent
+       to the Pocket Reader server to be split into chapters. -->
+  <p class="muted sub">EPUB, PDF, TXT, HTML or DOCX. The file is sent to the Pocket Reader server to be turned into chapters and is deleted there straight away; the story is then kept only on this {$deviceNoun}.</p>
   <button class="btn btn-tonal btn-block" type="button" disabled={busy !== null} onclick={() => input?.click()}>
     {busy === 'file' ? 'Importing…' : 'Choose a file'}
   </button>

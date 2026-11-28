@@ -3,6 +3,7 @@
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import ChevronRight from '@lucide/svelte/icons/chevron-right';
   import Headphones from '@lucide/svelte/icons/headphones';
+  import Pause from '@lucide/svelte/icons/pause';
   import Minus from '@lucide/svelte/icons/minus';
   import Plus from '@lucide/svelte/icons/plus';
   import { bridge } from '../core';
@@ -37,6 +38,15 @@
     selected = null;
     await attempt(() => bridge().skipChapter(delta));
     scroller?.scrollTo({ top: 0 });
+  }
+
+  // Narration carries on while the text is being read, and this view had no
+  // way to stop it: the only button said "Listen" over a story that already was.
+  const narrating = $derived($player.state === 'playing' || $player.state === 'buffering');
+
+  function pause() {
+    tick();
+    bridge().pause();
   }
 
   async function listenFromHere() {
@@ -92,10 +102,17 @@
   </article>
 
   <div class="listen">
-    <button class="btn btn-primary btn-block" type="button" onclick={listenFromHere}>
-      <Headphones size={20} />
-      {selected == null ? 'Listen' : 'Listen from here'}
-    </button>
+    {#if narrating && selected == null}
+      <button class="btn btn-primary btn-block" type="button" onclick={pause}>
+        <Pause size={20} fill="currentColor" />
+        Pause narration
+      </button>
+    {:else}
+      <button class="btn btn-primary btn-block" type="button" onclick={listenFromHere}>
+        <Headphones size={20} />
+        {selected == null ? 'Listen' : 'Listen from here'}
+      </button>
+    {/if}
   </div>
 </div>
 

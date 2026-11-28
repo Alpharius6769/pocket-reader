@@ -7,6 +7,7 @@
   import { settings } from '../stores/settings';
   import { closeSheet } from '../stores/ui';
   import { speedLabel } from '../format';
+  import { layout } from '../layout';
   import Sheet from '../components/Sheet.svelte';
   import Segmented from '../components/Segmented.svelte';
   import Toggle from '../components/Toggle.svelte';
@@ -44,7 +45,7 @@
       ]}
       onchange={(v: EngineId) => attempt(() => bridge().setEngine(v))}
     />
-    <p class="hint">{ENGINES[engine].blurb}</p>
+    <p class="hint">{$layout === 'desktop' ? ENGINES[engine].desktopBlurb : ENGINES[engine].blurb}</p>
     {#if $player.engineState.deviceVoice}
       <p class="hint device" role="status">Right now this device's own voice is reading: it could not run {ENGINES[engine].name}. The voices below apply once it can.</p>
     {/if}

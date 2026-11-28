@@ -1,3 +1,19 @@
+/** "1 story", "2 stories": a count with the right form of its noun. */
+export function plural(n: number, one: string, many = `${one}s`) {
+  return `${n.toLocaleString()} ${n === 1 ? one : many}`;
+}
+
+/**
+ * Whether a story is finished, when that is known. A document the reader
+ * imported, or a story nobody has checked yet, is neither: saying "Ongoing"
+ * about it was a guess.
+ */
+export function statusLabel(story: { complete?: boolean; source?: string; status?: string }) {
+  if (story.complete) return 'Complete';
+  if (story.status) return story.status === 'Unknown' ? '' : story.status;
+  return story.source === 'ao3' ? 'Ongoing' : '';
+}
+
 export function words(n?: number) {
   if (!n) return '';
   if (n < 1000) return `${n} words`;
@@ -7,7 +23,8 @@ export function words(n?: number) {
 /** Narration at ~155 words per minute at 1x. */
 export function listenTime(wordCount?: number, speed = 1) {
   if (!wordCount) return '';
-  const mins = Math.round(wordCount / 155 / speed);
+  // Never "0 min": a page of text still takes a moment to hear.
+  const mins = Math.max(1, Math.round(wordCount / 155 / speed));
   if (mins < 60) return `${mins} min`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;

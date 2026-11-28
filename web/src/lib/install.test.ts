@@ -72,3 +72,52 @@ describe('iOS install instructions', () => {
     expect(isAppleTouchDevice('Mozilla/5.0 (Linux; Android 14) Chrome/126')).toBe(false);
   });
 });
+
+describe('which way to install is offered', async () => {
+  const { installWayFor, menuInstallSteps } = await import('./install');
+  const way = (userAgent: string, extra: Partial<Parameters<typeof installWayFor>[0]> = {}) =>
+    installWayFor({ userAgent, maxTouchPoints: 0, installed: false, canPrompt: false, ...extra });
+  const android = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 Chrome/126.0 Mobile Safari/537.36';
+  const desktop = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36';
+
+  it('prefers the one-tap dialog wherever the browser has offered it', () => {
+    expect(way(android, { canPrompt: true })).toBe('prompt');
+    expect(way(desktop, { canPrompt: true })).toBe('prompt');
+  });
+
+  it('says so when the app is already installed, whatever else is true', () => {
+    expect(way(android, { installed: true, canPrompt: true })).toBe('installed');
+    expect(way(UA.ios18, { installed: true })).toBe('installed');
+  });
+
+  it('gives iPhone and iPad the Share steps, including the iPad desktop UA', () => {
+    expect(way(UA.ios26)).toBe('ios');
+    expect(way(UA.ios18)).toBe('ios');
+    expect(way(UA.ios26desktopUA, { maxTouchPoints: 5 })).toBe('ios');
+    // A real Mac is not an iPad.
+    expect(way(UA.ios26desktopUA, { maxTouchPoints: 0 })).toBe('none');
+  });
+
+  it('sends a page opened inside another app to Safari instead of to steps that cannot work', () => {
+    const inApp = [
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 [FBAN/FBIOS;FBAV/470.0]',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Instagram 330.0 Safari/604.1',
+    ];
+    for (const ua of inApp) expect(way(ua), ua.slice(-40)).toBe('ios-other');
+  });
+
+  it('falls back to the browser menu on Android and desktop Chromium, and to nothing elsewhere', () => {
+    expect(way(android)).toBe('menu');
+    expect(way(desktop)).toBe('menu');
+    expect(way('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) Gecko/20100101 Firefox/130.0')).toBe('none');
+  });
+
+  it('names the menu entry of the browser in use', () => {
+    const text = (ua: string) => menuInstallSteps(ua).map((s) => s.text).join(' | ');
+    expect(text(android)).toMatch(/Add to Home screen/);
+    expect(text('Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 SamsungBrowser/25.0 Chrome/121.0 Mobile Safari/537.36')).toMatch(/Home screen/);
+    expect(text('Mozilla/5.0 (Android 14; Mobile; rv:130.0) Gecko/130.0 Firefox/130.0')).toMatch(/Add app to Home screen/);
+    expect(text(desktop)).toMatch(/address bar/);
+  });
+});

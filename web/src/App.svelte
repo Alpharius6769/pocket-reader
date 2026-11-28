@@ -11,6 +11,7 @@
   import Discover from './lib/screens/Discover.svelte';
   import Settings from './lib/screens/Settings.svelte';
   import Onboarding from './lib/screens/Onboarding.svelte';
+  import InstallSheet from './lib/components/InstallSheet.svelte';
   import Player from './lib/screens/Player.svelte';
   import VoiceSheet from './lib/player/VoiceSheet.svelte';
   import SleepSheet from './lib/player/SleepSheet.svelte';
@@ -94,6 +95,8 @@
   <ChaptersSheet tab={$ui.sheet.tab} />
 {:else if $ui.sheet?.kind === 'ao3-filters'}
   <Ao3FiltersSheet />
+{:else if $ui.sheet?.kind === 'install'}
+  <InstallSheet />
 {/if}
 
 {#if $settings && !$settings.onboarded}<Onboarding />{/if}

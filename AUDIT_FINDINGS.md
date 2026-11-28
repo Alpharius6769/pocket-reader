@@ -171,3 +171,87 @@ their paragraph extraction.
 The automated style pass reported 767 findings (console logging, loose equality,
 `any`, commit-message format). None are bugs, and this project has no
 coding-standards folder for them to apply to. They are not logged here.
+
+# Live-site pass, 2026-11-27
+
+The published site was used end to end in a browser: every tab and sheet, a text
+file import, an AO3 story found by search, a catalog story, rating, favourite,
+alerts, removal, all six Pocket voices and all six Kokoro voices, both engines,
+speed, sleep timer, bookmarks, reading view, every Settings page. What went
+wrong is below. Everything is fixed in the working tree unless it says otherwise;
+none of it is deployed.
+
+How each was established: **Seen** (reproduced on the live site), **Code**
+(read in the source after a related symptom).
+
+## Narration
+
+| # | Finding | How | Fix |
+|---|---|---|---|
+| 28 | Playback stopped for good, showing "playing". On a desktop a paragraph that is not saved is streamed as it is rendered; when the quality check rejected one after its first second had played, the stream was stopped and nothing else happened. Seen at a one-word line after a voice change. | Seen | The paragraph is rendered whole (which has the retry chain) and played. `audio_core.js` `_playGeneratedAudio` |
+| 29 | Nothing noticed a stall unless the page became visible or Play was pressed on the lock screen. | Code | The silent keep-alive loop now drives a watchdog: six seconds of "playing" with nothing audible and nothing being rendered restarts the paragraph, or moves on if its clip had ended unheard. Verified in the browser for both cases. |
+| 30 | Skipping a paragraph or chapter while playing left the lock-screen card on "paused" and the keep-alive loop stopped, until the next cache miss. From a lock screen that means a Play button that does nothing, over audible narration. | Code, then seen fixed | `skipParagraph` and `skipChapter` restore both, as the seek functions already did. |
+| 31 | Every voice change started a render of the whole story in that voice (an old-shell behaviour). Trying six voices queued six stories' worth of audio, competing with the paragraph being heard and marking the story "saved for offline" in a voice nobody kept: 98 MB for a six-minute story. | Seen | The v2 voice change opts out; a job left running is stopped. |
+| 32 | After an engine change the leftover job was "re-pointed" at the new engine and rendered the story in a substituted voice (Paul became Michael), which made the real voice's first paragraph take 15 s. | Seen | Stopped on an engine change. |
+| 33 | An engine change mid-listen stopped and waited behind the ten-paragraph gate. | Seen | It plays on at the same paragraph, as a voice change does. |
+| 34 | Kokoro rendered at the speed of speech on a 16-core desktop: the thread policy answers 2 for every desktop. | Seen (12 s of audio took 13 s) | Four threads on a desktop with eight or more cores. Phones unchanged. Not measured after the change: the model cannot be fetched from a local build. |
+| 35 | Voice samples could overlap each other and the story, and were never stopped. | Code | One at a time, stopped by Play and by a voice change. |
+
+## Stories
+
+| # | Finding | How | Fix |
+|---|---|---|---|
+| 36 | A story that could not be fetched showed "SCRAPE_FAILED" after about 40 s, and the player then opened and prepared the previous story under it. | Seen | The server's reason is shown, a definite answer is not retried, and a load that leaves the previous story open is a failure that returns to where the tap was made. |
+| 37 | Importing a file made it the cores' open story while the player still showed the old one. Narration would have continued into the imported text; removing the import left the player in a state Play could not leave. | Seen | The open story and position are put back. The import now says it worked and opens the story's sheet. |
+| 38 | The Import tab said "The file stays on this computer". It is uploaded to the backend for parsing (and deleted there). | Code | The text says what happens. |
+| 39 | A text file was always one chapter, with its "Chapter 2" lines read as story text. | Seen | Heading lines split chapters when there are two or more. Backend. |
+| 40 | Removing a story left its text under its address key, and none of its narration was deleted although the confirmation says so. | Seen | Both removed. |
+| 41 | "Clear saved narration" kept every story saved for offline and left "saved" marks over narration it had deleted; the size shown was everything that is not a voice model. | Seen | Clears all of it; the size is counted from what is stored. |
+
+## Search and catalog
+
+| # | Finding | How | Fix |
+|---|---|---|---|
+| 42 | Any AO3 rating filter returned no works: the rating's name was sent where AO3 wants its id. | Seen, and confirmed against AO3 with the id | Backend maps ratings and categories to ids. |
+| 43 | Search results had no description, rating or kudos; the total was never sent. | Seen | Parsed from the result page. Backend. |
+| 44 | A pasted AO3 search link lost its sort order and language to the request defaults. | Seen | Backend. |
+| 45 | Applying filters left the old results on screen for the seconds AO3 takes. | Seen | A new search starts from an empty list. |
+| 46 | The catalog showed 20 stories and called that the total, with no way to the rest of 2,183. | Seen | Total shown, "Load more" added. |
+
+## Smaller
+
+"1 stories", "1 chapters", "0 ch", "0 min"; "Ongoing" on imports and on works
+nobody had checked; an alerts switch on stories that cannot be followed; a
+sleep timer that read 28:04 for its first second; "Bookmark saved!I'll…";
+toasts covering a sheet's Close button on desktop; the diagnostics log always
+empty (two field names that do not exist) and the device row overlapping its
+label; the reading view with no way to pause; a duplicate pronunciation word
+ignored without a word; old-shell loading announcements stacked as toasts.
+
+## Installing
+
+The manifest's only icons were 512x521 and 503x512 images declared as 512x512,
+with nothing at 192: Android Chrome will not offer to install without both.
+There are now square 192 and 512 icons, a maskable one and a 180 px iOS icon.
+The app captures the browser's install offer and shows an Install button
+(Android, desktop Chrome and Edge); on iPhone it shows the Share steps, and in
+another app's built-in browser it says to open Safari. Settings has an entry,
+and `…/pocket-reader/?install=1` opens it directly. Not tried on a phone.
+
+## Memory
+
+Measured on the live site and on a local build of the fixes, Pocket on WebGPU
+and on WASM: the page's own heap stayed between 6 and 19 MB across voice and
+engine changes and a 30-paragraph listen; every audio blob address was released
+(22 made, 21 released, one in use); one synthesis worker alive, two while a
+whole-story job ran; the browser processes' memory did not grow over the
+listen. The costs found were the two above (31, 41), not a leak.
+
+## Still not verified
+
+- Anything on a phone: lock-screen Play, how long a locked iPhone keeps
+  narrating, alerts, and the install flow. The phone test above still stands;
+  the record it reads now also counts streamed paragraphs.
+- Kokoro's speed with four threads.
+- The narration fixes run on a local build with Pocket on WASM. Kokoro and the
+  WebGPU path could not be run there (the model proxy refuses a local origin).

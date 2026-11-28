@@ -49,6 +49,9 @@ export async function applyDeepLink(hash: string, params: URLSearchParams) {
   }
   void arg;
 
+  // A link that goes straight to installing: .../pocket-reader/?install=1
+  if (params.get('install') === '1') set({ sheet: { kind: 'install' } });
+
   if (params.get('toast')) {
     toast({ level: 'success', message: params.get('toast') === '1' ? 'Bookmark saved' : params.get('toast')!, mood: 'favorite' });
   }

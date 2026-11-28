@@ -3,7 +3,7 @@
 // POCKET READER SERVICE WORKER (ES5 COMPATIBLE)
 // ==========================================
 
-var CACHE_NAME = 'pocket-reader-core-v392';
+var CACHE_NAME = 'pocket-reader-core-v394';
 
 // The Anthronomicon catalog is cached by hmofa_masterlist.js under its own
 // name so a schema bump of PocketReaderDB is not needed for a disposable,
@@ -139,7 +139,7 @@ var OPTIONAL_ASSETS = [
 // offline shell is a far worse outcome than re-fetching these on first play.
 var DEFERRED_ASSETS = [
     'assets/js/buffer_manager.js?v=buffer-v150',
-    'assets/js/audio_core.js?v=audio-v270',
+    'assets/js/audio_core.js?v=audio-v274',
     'assets/js/pocket_worker.js?v=pocket-worker-v144',
     'assets/js/kokoro_worker.js?v=kokoro-v59',
     'assets/js/pocket_pcm_worklet.js?v=pcm-v1'
@@ -156,17 +156,17 @@ var CORE_ASSETS = [
     'assets/js/safe_storage.js?v=safe-storage-v1',
     'assets/js/native_app_key.js?v=native-key-v1',
     'assets/js/diagnostics.js?v=diag-v9',
-    'assets/js/api_core.js?v=search-v49',
+    'assets/js/api_core.js?v=search-v51',
     'assets/js/engine_utils.js',
     'assets/js/library_core.js?v=library-core-v4',
     'assets/js/data_transfer.js?v=transfer-v5',
     'assets/js/device_setup.js?v=device-setup-v57',
-    'assets/js/library_manager.js?v=library-v116',
+    'assets/js/library_manager.js?v=library-v118',
     'assets/js/hmofa_masterlist.js?v=hmofa-list-v17',
     'assets/js/hmofa_catalog_core.js?v=hmofa-core-v4',
     'assets/js/hmofa_community.js?v=hmofa-community-v4',
     'assets/js/hmofa_preferences.js?v=hmofa-prefs-v6',
-    'assets/js/narration_runtime_loader.js?v=narration-loader-v164',
+    'assets/js/narration_runtime_loader.js?v=narration-loader-v166',
     'assets/js/storage_core.js?v=storage-v59',
     // Imported, unversioned, by library_manager.js.
     'assets/js/motion_lite.js'

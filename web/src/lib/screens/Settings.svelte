@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { desktopCapable } from '../layout';
+  import { desktopCapable, layout } from '../layout';
+  import { installWay } from '../install';
+  import Smartphone from '@lucide/svelte/icons/smartphone';
   import ChevronLeft from '@lucide/svelte/icons/chevron-left';
   import AudioLines from '@lucide/svelte/icons/audio-lines';
   import Moon from '@lucide/svelte/icons/moon';
@@ -139,6 +141,16 @@
             {#snippet trailing()}<Toggle label="New chapter alerts" checked={$settings!.updateNotifications} onchange={(v) => updateSettings({ updateNotifications: v })} />{/snippet}
           </Row>
         </Group>
+
+        {#if $installWay !== 'none'}
+          <Group title="App">
+            {#if $installWay === 'installed'}
+              <Row icon={Smartphone} tint="#2f7a6a" label="Pocket Reader is installed" value="Installed" />
+            {:else}
+              <Row icon={Smartphone} tint="#2f7a6a" label="Install Pocket Reader" sub={$layout === 'desktop' ? 'Run it in its own window' : 'Add it to your home screen'} onclick={() => openSheet({ kind: 'install' })} />
+            {/if}
+          </Group>
+        {/if}
 
         <Group title="Data">
           <Row icon={HardDrive} tint="#5d6b75" label="Storage" onclick={() => pushSettings('storage')} />

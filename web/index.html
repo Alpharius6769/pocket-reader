@@ -15,7 +15,9 @@
          a browser there. This meta is the only way to set the policy. -->
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="./assets/img/pocket_reader_icon-logo.jpeg" />
+    <!-- Square, opaque, 180px: what iOS asks for. The JPEG it replaced was
+         503x512, which iOS scales out of shape for the home screen. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./assets/img/apple-touch-icon.png" />
     <link rel="preload" href="./assets/fonts/literata-400.woff2" as="font" type="font/woff2" crossorigin />
     <title>Pocket Reader</title>
   </head>

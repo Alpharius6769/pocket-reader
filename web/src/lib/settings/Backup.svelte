@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { deviceNoun } from '../layout';
+  import { deviceNoun, layout } from '../layout';
+  import { plural } from '../format';
   import Download from '@lucide/svelte/icons/download';
   import Upload from '@lucide/svelte/icons/upload';
   import { bridge } from '../core';
@@ -16,7 +17,7 @@
     busy = null;
     if (!res) return;
     downloadBlob(res.blob, res.filename);
-    toast({ level: 'success', message: `Backup saved: ${res.stories} stories, ${res.bookmarks} bookmarks`, mood: 'happy' });
+    toast({ level: 'success', message: `Backup saved: ${plural(res.stories, 'story', 'stories')}, ${plural(res.bookmarks, 'bookmark')}`, mood: 'happy' });
   }
 
   async function restore(e: Event) {
@@ -42,7 +43,7 @@
     <span class="ic"><Download size={22} /></span>
     <span class="txt">
       <span class="t">{busy === 'export' ? 'Preparing backup…' : 'Export backup'}</span>
-      <span class="s">Saves a .prbackup file to Files or iCloud Drive</span>
+      <span class="s">{$layout === 'desktop' ? 'Saves a .prbackup file to your downloads folder' : 'Saves a .prbackup file to Files or iCloud Drive'}</span>
     </span>
   </button>
   <button class="act" type="button" disabled={busy !== null} onclick={() => input?.click()}>

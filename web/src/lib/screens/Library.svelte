@@ -9,7 +9,7 @@
   import X from '@lucide/svelte/icons/x';
   import { library, matchesFilter, sortEntries, type LibraryFilter, type LibrarySort } from '../stores/library';
   import { ui, openSheet } from '../stores/ui';
-  import { percent } from '../format';
+  import { percent, plural } from '../format';
   import Cover from '../components/Cover.svelte';
 
   let query = $state('');
@@ -93,7 +93,7 @@
     {/each}
   </div>
 
-  <p class="sr-only" aria-live="polite">{shown.length} stories</p>
+  <p class="sr-only" aria-live="polite">{plural(shown.length, 'story', 'stories')}</p>
 
   {#if !shown.length}
     <div class="none">

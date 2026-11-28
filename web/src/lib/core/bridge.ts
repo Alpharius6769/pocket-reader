@@ -579,9 +579,17 @@ export const VOICES: readonly Voice[] = [
   { id: 'am_puck', engine: 'kokoro', name: 'Puck', gender: 'male', accent: 'American', character: 'Bright' },
 ];
 
-export const ENGINES: Record<EngineId, { name: string; blurb: string }> = {
-  pocket: { name: 'Pocket', blurb: 'Most natural, with emotion. Best on recent iPhone Pro models.' },
-  kokoro: { name: 'Kokoro', blurb: 'Lighter and quicker to start. Good on any recent phone.' },
+export const ENGINES: Record<EngineId, { name: string; blurb: string; desktopBlurb: string }> = {
+  pocket: {
+    name: 'Pocket',
+    blurb: 'Most natural, with emotion. Best on recent iPhone Pro models.',
+    desktopBlurb: 'Most natural, with emotion. The better choice on most computers.',
+  },
+  kokoro: {
+    name: 'Kokoro',
+    blurb: 'Lighter and quicker to start. Good on any recent phone.',
+    desktopBlurb: 'A smaller voice model. Lighter on memory, usually slower than Pocket on a computer.',
+  },
 };
 
 export const SPEEDS = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2] as const;

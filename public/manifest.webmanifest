@@ -4,29 +4,50 @@
   "scope": "./",
   "name": "Alpharius' Pocket Reader",
   "short_name": "Pocket Reader",
-  "description": "A private offline-capable story reader with Pocket TTS narration and optional cross-device profile sync.",
+  "description": "Stories, read aloud on your device. Narration runs on the device itself, with no account.",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#1b2027",
+  "background_color": "#e7ebef",
   "theme_color": "#1b2027",
   "icons": [
     {
-      "src": "assets/img/pocket_reader_icon.webp",
-      "sizes": "512x512",
-      "type": "image/webp",
+      "src": "assets/img/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "assets/img/pocket_reader_icon.webp",
+      "src": "assets/img/app-icon-512.png",
       "sizes": "512x512",
-      "type": "image/webp",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/img/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "assets/img/pocket_reader_icon-logo.jpeg",
+      "src": "assets/img/reader%20192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "monochrome"
+    },
+    {
+      "src": "assets/img/reader%20512.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
-      "purpose": "any"
+      "type": "image/png",
+      "purpose": "monochrome"
     }
-  ]
+  ],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "categories": [
+    "books",
+    "entertainment"
+  ],
+  "prefer_related_applications": false
 }

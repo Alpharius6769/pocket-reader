@@ -31,11 +31,11 @@
 {#if d}
   <Group title="App">
     <Row label="App" value={d.appVersion} />
-    <Row label="Cores" value={d.coreVersion} />
+    <Row label="Voice model" value={d.coreVersion || '—'} />
     <Row label="Service worker" value={d.serviceWorker} />
   </Group>
   <Group title="Device">
-    <Row label="Device" value={d.device} />
+    <Row label="Device" sub={d.device} />
     <Row label="Memory headroom" value={d.memoryHeadroomMb ? `${d.memoryHeadroomMb} MB` : 'Unknown'} />
     <Row label="Threads" value={String(d.threads)} />
     <Row label="Cross-origin isolated" value={d.crossOriginIsolated ? 'Yes' : 'No'} />
@@ -58,7 +58,7 @@
   </Group>
   <section class="log-wrap">
     <h2 class="eyebrow">Recent log</h2>
-    <pre class="log card">{#each d.recentLog as l (l.at)}<span class="lv-{l.level}">{new Date(l.at).toLocaleTimeString()} {l.level.toUpperCase().padEnd(5)} {l.message}
+    <pre class="log card">{#each d.recentLog as l, i (i)}<span class="lv-{l.level}">{new Date(l.at).toLocaleTimeString()} {l.level.toUpperCase().padEnd(5)} {l.message}
 </span>{/each}</pre>
   </section>
   <button class="btn btn-plain btn-block" type="button" onclick={copy}><Copy size={18} /> Copy diagnostics</button>

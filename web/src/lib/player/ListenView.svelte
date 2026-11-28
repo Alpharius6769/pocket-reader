@@ -13,6 +13,7 @@
   import { attempt, tick } from '../actions';
   import { player, currentChapter, playLocked, narrationWarming } from '../stores/player';
   import { openSheet } from '../stores/ui';
+  import { library } from '../stores/library';
   import { reducedMotion } from '../motion';
   import { clockLeft, speedLabel } from '../format';
   import { deviceNoun } from '../layout';
@@ -33,6 +34,11 @@
   const para = $derived($player.position.paragraph);
   const count = $derived($currentChapter?.paragraphs.length ?? 0);
   const paragraphsLeft = $derived(Math.max(0, count - para - 1));
+  // A phone that is locked may stop preparing new paragraphs; what is already
+  // prepared plays on. So say how much that is, and whether the whole story is
+  // saved (which needs nothing prepared at all).
+  const savedOffline = $derived($library.entries.find((e) => e.story.key === $player.story?.key)?.cache.state === 'complete');
+  const aheadEnough = $derived($player.buffer.ready >= Math.min(5, paragraphsLeft));
   const minutesLeft = $derived.by(() => {
     const ch = $currentChapter;
     if (!ch) return 0;
@@ -42,6 +48,10 @@
 
   $effect(() => {
     if ($player.sleep.kind !== 'minutes') return;
+    // `now` was last set when this view was created. Until the first tick a
+    // second later, a new 15-minute timer showed 15 minutes plus however long
+    // the player had been open ("28:04").
+    now = Date.now();
     const id = setInterval(() => (now = Date.now()), 1000);
     return () => clearInterval(id);
   });
@@ -119,9 +129,16 @@
       <span>¶ {para + 1} of {count}</span>
       <span>{paragraphsLeft === 0 ? 'Last paragraph' : `about ${minutesLeft} min left in chapter`}</span>
     </div>
-    {#if $deviceNoun === 'phone' && $player.state === 'playing' && $player.buffer.ready > 0}
+    {#if $deviceNoun === 'phone' && $player.state === 'playing'}
       <!-- What will keep playing if the screen is locked now. -->
-      <p class="ahead">{$player.buffer.ready} {$player.buffer.ready === 1 ? 'paragraph' : 'paragraphs'} ready ahead</p>
+      {#if savedOffline}
+        <p class="ahead">Saved for offline. It keeps playing with the screen locked.</p>
+      {:else if $player.buffer.ready > 0}
+        <p class="ahead">
+          {$player.buffer.ready} {$player.buffer.ready === 1 ? 'paragraph' : 'paragraphs'} ready ahead.
+          {aheadEnough ? 'They keep playing if you lock the screen.' : 'Keep the screen on while more is prepared.'}
+        </p>
+      {/if}
     {/if}
   </div>
 

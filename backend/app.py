@@ -45,7 +45,7 @@ from scrapers_core import (
     _assert_public_connected_peer, _worker_proxy_headers,
 )
 from scrapers_ao3 import ao3_published_chapter_count, parse_ao3_chapter_info, parse_published_chapter_count
-from parsers_core import ScrapeResult, sanitize_narration_chapters
+from parsers_core import ScrapeResult, sanitize_narration_chapters, html_paragraphs
 import parsers_dispatcher
 
 try:
@@ -820,6 +820,35 @@ def get_server_logs(x_admin_secret: str = Header(default="")):
     return {"logs": list(_mem_handler.log_buffer)}
 
 
+# AO3's search form takes numeric ids for these two fields. The names the app
+# shows ("General", "F/M") match no work at all, so any rating filter returned
+# an empty page.
+_AO3_RATING_IDS = {
+    "not rated": "9",
+    "general": "10", "general audiences": "10",
+    "teen": "11", "teen and up": "11", "teen and up audiences": "11",
+    "mature": "12",
+    "explicit": "13",
+}
+_AO3_CATEGORY_IDS = {
+    "gen": "21", "f/m": "22", "m/m": "23", "other": "24", "f/f": "116", "multi": "2246",
+}
+_AO3_RATING_NAMES = {
+    "general audiences": "General",
+    "teen and up audiences": "Teen",
+    "mature": "Mature",
+    "explicit": "Explicit",
+    "not rated": "Not Rated",
+}
+
+
+def _ao3_field_id(value: str, table: dict) -> str:
+    text = (value or "").strip()
+    if text.isdigit():
+        return text
+    return table.get(text.lower(), "")
+
+
 def _ao3_search_payload_from_url(raw: str) -> dict:
     """Parse pasted AO3 works/search URLs into the same payload shape as fields."""
     try:
@@ -851,30 +880,39 @@ async def search_ao3(request: SearchRequest, http_request: Request):
     limit = min(15, max(1, int(request.limit or 15)))
 
     payload = {k: v for k, v in pasted_payload.items() if k != "page"}
+    # A pasted AO3 search link carries its own filters. The request model's
+    # defaults (English, recently updated) used to be written over them, so a
+    # link sorted by kudos came back sorted by date.
+    sent = getattr(request, "model_fields_set", None)
+    if sent is None:
+        sent = getattr(request, "__fields_set__", set())
+
+    def _put(key: str, value, field: str):
+        if value in (None, ""):
+            return
+        if pasted_payload and (field not in sent or key in pasted_payload):
+            return
+        payload[key] = value
+
     if raw_query and not pasted_payload:
         payload["work_search[query]"] = request.query
-    if request.title:
-        payload["work_search[title]"] = request.title
-    if request.author:
-        payload["work_search[creators]"] = request.author
-    if request.fandom:
-        payload["work_search[fandom_names]"] = request.fandom
+    _put("work_search[title]", request.title, "title")
+    _put("work_search[creators]", request.author, "author")
+    _put("work_search[fandom_names]", request.fandom, "fandom")
     if request.rating and request.rating != "Any":
-        payload["work_search[rating_ids]"] = request.rating
+        _put("work_search[rating_ids]", _ao3_field_id(request.rating, _AO3_RATING_IDS), "rating")
     if request.category and request.category != "Any":
-        payload["work_search[category_ids][]"] = request.category
+        _put("work_search[category_ids][]", _ao3_field_id(request.category, _AO3_CATEGORY_IDS), "category")
     if request.language and request.language != "Any":
-        payload["work_search[language_id]"] = request.language
-    if request.sort_column:
-        payload["work_search[sort_column]"] = request.sort_column
-    if request.sort_direction:
-        payload["work_search[sort_direction]"] = request.sort_direction
+        _put("work_search[language_id]", request.language, "language")
+    _put("work_search[sort_column]", request.sort_column, "sort_column")
+    _put("work_search[sort_direction]", request.sort_direction, "sort_direction")
     if request.words_min is not None:
-        payload["work_search[words_from]"] = str(request.words_min)
+        _put("work_search[words_from]", str(request.words_min), "words_min")
     if request.words_max is not None:
-        payload["work_search[words_to]"] = str(request.words_max)
-    if request.complete == "1":
-        payload["work_search[complete]"] = "1"
+        _put("work_search[words_to]", str(request.words_max), "words_max")
+    if request.complete in ("1", "T", "true", "True"):
+        _put("work_search[complete]", "T", "complete")
     if page > 1:
         payload["page"] = str(page)
 
@@ -893,10 +931,11 @@ async def search_ao3(request: SearchRequest, http_request: Request):
     def _url_for(search_payload: dict) -> str:
         return str(httpx.URL(search_url, params=search_payload))
 
-    def _search_response(*, results=None, status="ok", reason="", source="proxy", blocked=False, has_more=False, url=None):
+    def _search_response(*, results=None, status="ok", reason="", source="proxy", blocked=False, has_more=False, url=None, total=None):
         return {
             "query": request.query,
             "results": results or [],
+            "total": total,
             "page": page,
             "limit": limit,
             "has_more": bool(has_more),
@@ -929,7 +968,13 @@ async def search_ao3(request: SearchRequest, http_request: Request):
             tags_el = work.find("ul", class_="tags")
             words_dd = stats_el.find("dd", class_="words") if stats_el else None
             chapters_dd = stats_el.find("dd", class_="chapters") if stats_el else None
+            kudos_dd = stats_el.find("dd", class_="kudos") if stats_el else None
             datetime_el = work.find("p", class_="datetime")
+            # The blurb's summary and rating were never read, so a preview had
+            # no description and the list no rating badge.
+            summary_el = work.find("blockquote", class_="summary")
+            rating_el = work.select_one("ul.required-tags span.rating")
+            rating_text = (rating_el.get("title") or rating_el.get_text(" ", strip=True)) if rating_el else ""
             parsed_results.append({
                 "title": links[0].get_text(strip=True),
                 "url": "https://archiveofourown.org" + links[0].get("href", ""),
@@ -937,13 +982,23 @@ async def search_ao3(request: SearchRequest, http_request: Request):
                 "fandoms": [a.get_text(strip=True) for a in fandoms_el.find_all("a", class_="tag")] if fandoms_el else [],
                 "words": words_dd.get_text(strip=True) if words_dd else "",
                 "chapters": chapters_dd.get_text(strip=True) if chapters_dd else "",
+                "kudos": kudos_dd.get_text(strip=True) if kudos_dd else "",
+                "rating": _AO3_RATING_NAMES.get(rating_text.strip().lower(), ""),
+                "summary": "\n\n".join(html_paragraphs(summary_el, max_chars=1200)) if summary_el else "",
                 "updated": datetime_el.get_text(strip=True) if datetime_el else "",
                 "tags": [a.get_text(strip=True) for a in tags_el.find_all("a", class_="tag")] if tags_el else [],
             })
             if len(parsed_results) > limit:
                 break
         has_more_results = len(parsed_results) > limit or bool(soup.find("li", class_="next"))
-        return parsed_results[:limit], has_more_results
+        # "1,234 Found" above the list.
+        total_found = None
+        for heading in soup.find_all("h3", class_="heading"):
+            match = re.search(r"([\d,]+)\s+Found", heading.get_text(" ", strip=True))
+            if match:
+                total_found = int(match.group(1).replace(",", ""))
+                break
+        return parsed_results[:limit], has_more_results, total_found
 
     def _looks_ao3_overloaded(html_text: str) -> bool:
         body_lower = (html_text or "")[:8000].lower()
@@ -972,11 +1027,12 @@ async def search_ao3(request: SearchRequest, http_request: Request):
                 url=candidate_url,
                 reason="AO3 is currently overloaded. Try again in a minute.",
             )
-        parsed_results, has_more_results = _parse_ao3_search_results(html_text)
+        parsed_results, has_more_results, total_found = _parse_ao3_search_results(html_text)
         return _search_response(
             results=parsed_results,
             status="ok",
             has_more=has_more_results,
+            total=total_found,
             source=source,
             reason=reason,
             url=candidate_url,

@@ -16,6 +16,7 @@ export type SheetState =
   | { kind: 'voice' }
   | { kind: 'sleep' }
   | { kind: 'ao3-filters' }
+  | { kind: 'install' }
   | null;
 
 export interface UiState {

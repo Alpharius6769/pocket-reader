@@ -7,7 +7,7 @@
   import { attempt, openStory } from '../actions';
   import { library } from '../stores/library';
   import { closeSheet } from '../stores/ui';
-  import { listenTime, words } from '../format';
+  import { listenTime, statusLabel, words } from '../format';
   import Sheet from '../components/Sheet.svelte';
   import Cover from '../components/Cover.svelte';
 
@@ -48,9 +48,9 @@
     <Cover {story} size={96} />
     <div class="meta">
       <p class="author">{story.author}</p>
-      <p class="facts">{[story.rating, words(story.words), `${story.chapterCount} ch`].filter(Boolean).join(' · ')}</p>
+      <p class="facts">{[story.rating, words(story.words), story.chapterCount ? `${story.chapterCount} ch` : ''].filter(Boolean).join(' · ')}</p>
       <p class="facts faint">
-        {story.complete ? 'Complete' : (story.status ?? 'Ongoing')}{#if story.words}&nbsp;· about {listenTime(story.words)}{/if}
+        {[statusLabel(story), story.words ? `about ${listenTime(story.words)}` : ''].filter(Boolean).join(' · ')}
       </p>
       {#if story.fandoms?.length}<p class="facts faint">{story.fandoms.join(', ')}</p>{/if}
     </div>

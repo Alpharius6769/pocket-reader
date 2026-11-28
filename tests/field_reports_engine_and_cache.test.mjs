@@ -180,7 +180,9 @@ test('the StyleTTS2 plan stub carries a real thread count', async () => {
     source.indexOf('const vendor = _gpuVendor'),
   );
   assert.doesNotMatch(stub, /threadCount: 1,/);
-  assert.match(stub, /threadCount: recommendedWasmThreadCount\(\{/);
+  // Wrapped since: a desktop with eight or more cores gets four threads for
+  // Kokoro (the policy's flat 2 left it rendering at the speed of speech).
+  assert.match(stub, /threadCount: _styleTts2ThreadCount\(recommendedWasmThreadCount\(\{/);
   // The reason the stub exists at all must survive: the planner may appear only
   // as the OTHER branch of the ternary, never inside the StyleTTS2 one.
   const styleBranch = stub.slice(0, stub.indexOf(': await _preparePocketBackendPlan()'));

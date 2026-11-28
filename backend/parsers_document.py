@@ -90,8 +90,59 @@ def parse_html_file(path) -> List[Chapter]:
         return parse_html_string(f.read(), Path(str(path)).stem)
 
 
+# A line that is a chapter heading in a plain-text story: "Chapter 12",
+# "CHAPTER TWO: The Ledger", "Part III", "Prologue". Short, on its own, and not
+# a sentence.
+_NUMBER_WORDS = (
+    r"(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|"
+    r"sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|"
+    r"hundred|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|final)")
+_TXT_HEADING = re.compile(
+    r"^(?:chapter|part|book|act)\s+(?:\d{1,4}|[ivxlcdm]{1,8}|" + _NUMBER_WORDS + r"(?:[- ][a-z]+)?)\b[^\n]{0,70}$"
+    r"|^(?:prologue|epilogue|interlude|afterword|foreword|preface)\b[^\n]{0,50}$",
+    re.IGNORECASE)
+
+
+def _is_txt_heading(paragraph: str) -> bool:
+    text = (paragraph or "").strip()
+    if not text or len(text) > 80 or "\n" in text:
+        return False
+    if not _TXT_HEADING.match(text):
+        return False
+    # "Part of me wanted to leave." begins like a heading and is a sentence.
+    return not re.search(r"[.!?,;]$", text) or bool(re.match(r"^(?:chapter|part|book|act)\s+\d", text, re.I))
+
+
+def split_txt_chapters(paras: List[str], default_title: str) -> List[Chapter]:
+    """Split paragraphs at chapter headings.
+
+    A text file used to become one chapter whatever it contained, with its
+    "Chapter 2" lines read out as part of the story. Two or more heading lines
+    are needed before anything is split, so a story that merely contains the
+    word is left whole.
+    """
+    marks = [i for i, p in enumerate(paras) if _is_txt_heading(p)]
+    if len(marks) < 2:
+        return [Chapter(title=default_title, paragraphs=paras)] if paras else []
+    chapters: List[Chapter] = []
+    front = paras[:marks[0]]
+    # A title and a byline above the first heading are not a chapter of their
+    # own; they open the first one. A real foreword is.
+    front_is_brief = sum(len(p.split()) for p in front) < 40
+    if front and not front_is_brief:
+        chapters.append(Chapter(title="Beginning", paragraphs=front))
+    for n, start in enumerate(marks):
+        end = marks[n + 1] if n + 1 < len(marks) else len(paras)
+        body = paras[start + 1:end]
+        if n == 0 and front and front_is_brief:
+            body = front + body
+        if body:
+            chapters.append(Chapter(title=paras[start].strip(), paragraphs=body))
+    return chapters or [Chapter(title=default_title, paragraphs=paras)]
+
+
 def parse_txt(path) -> List[Chapter]:
-    with open(str(path), "r", encoding="utf-8", errors="replace") as f:
+    with open(str(path), "r", encoding="utf-8-sig", errors="replace") as f:
         # Read at most the cap so a huge .txt cannot balloon into memory or
         # produce a story far larger than the EPUB/PDF paths allow.
         text = f.read(MAX_PARSED_TEXT_CHARS)
@@ -99,4 +150,4 @@ def parse_txt(path) -> List[Chapter]:
     if not paras:
         # Preserve dialogue fragments down to 1 character (e.g., punctuation or "—")
         paras = [line.strip() for line in text.splitlines() if len(line.strip()) > 0]
-    return [Chapter(title=Path(str(path)).stem, paragraphs=paras)] if paras else []
+    return split_txt_chapters(paras, Path(str(path)).stem)

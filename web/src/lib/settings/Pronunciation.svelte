@@ -12,9 +12,13 @@
   function add(e: SubmitEvent) {
     e.preventDefault();
     if (!term.trim() || !soundsLike.trim()) return;
-    void updateSettings({
-      pronunciations: [...rules, { id: `p-${Date.now()}`, term: term.trim(), soundsLike: soundsLike.trim(), enabled: true }],
-    });
+    // A word that is already listed is corrected in place: two rules for one
+    // word left it to chance which of them the narrator used.
+    const same = (r: (typeof rules)[number]) => r.term.trim().toLowerCase() === term.trim().toLowerCase();
+    const next = rules.some(same)
+      ? rules.map((r) => (same(r) ? { ...r, soundsLike: soundsLike.trim(), enabled: true } : r))
+      : [...rules, { id: `p-${Date.now()}`, term: term.trim(), soundsLike: soundsLike.trim(), enabled: true }];
+    void updateSettings({ pronunciations: next });
     term = '';
     soundsLike = '';
   }

@@ -193,6 +193,17 @@ html.layout-desktop .toasts {
   left: calc(var(--side-w) + 12px);
   top: 18px;
 }
+/* A sheet is a centred window here, with its title and Close button where the
+   toasts appear. A toast on top of them swallowed the click for as long as it
+   was up (up to nine seconds for a long message). Let clicks through; only a
+   toast's own action button takes them. */
+html.layout-desktop .toasts .toast {
+  pointer-events: none;
+  opacity: 0.97;
+}
+html.layout-desktop .toasts .toast .act {
+  pointer-events: auto;
+}
 
 /* First run: a centred column instead of an edge-to-edge page. */
 html.layout-desktop .onb {

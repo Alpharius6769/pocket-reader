@@ -5,6 +5,7 @@
   import { bridge } from '../core';
   import { attempt } from '../actions';
   import { ui, openSheet, say, activeFilterCount } from '../stores/ui';
+  import { plural } from '../format';
   import ResultRow from './ResultRow.svelte';
   import Virtue from '../components/Virtue.svelte';
 
@@ -16,7 +17,10 @@
 
   async function run(page = 1) {
     const mine = ++latest;
-    patch({ loading: true });
+    // A new search starts from an empty list. Left in place, the previous
+    // results stayed on screen for the several seconds AO3 takes, with the
+    // only sign of activity below the fold: applying filters looked ignored.
+    patch(page === 1 ? { loading: true, results: [], total: undefined, hasMore: false } : { loading: true });
     if (page === 1) say('point', null);
     const res = await attempt(() => bridge().search({ ...$ui.ao3.query, page }));
     if (mine !== latest) return;
@@ -84,7 +88,7 @@
   </div>
 {:else}
   {#if $ui.ao3.total != null && !$ui.ao3.loading}
-    <p class="count faint" aria-live="polite">{$ui.ao3.total.toLocaleString()} works found</p>
+    <p class="count faint" aria-live="polite">{plural($ui.ao3.total, 'work')} found</p>
   {/if}
   <ul class="results">
     {#each $ui.ao3.results as r (r.key)}

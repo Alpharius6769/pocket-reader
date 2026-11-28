@@ -184,7 +184,7 @@ test('a neutral fallback file does not lock emotion when the position is known',
   // Every caller passes the position it already built for the plan lookup.
   assert.match(audio, /await window\.generateChunk\(text, cleanVoice, \{ storyTitle: title, chapIdx: c, paraIdx: p \}\);/);
   assert.match(audio, /await window\.generateChunk\(text, cleanVoice, \{ storyTitle: title, chapIdx, paraIdx \}\);/);
-  assert.match(audio, /\}, \{ storyTitle: title, chapIdx, paraIdx \}\)\n/);
+  assert.match(audio, /\}, \{ storyTitle: title, chapIdx, paraIdx \}\)\r?\n/);
   const buffer = await read('public/assets/js/buffer_manager.js');
   assert.match(buffer, /await window\.generateChunk\(task\.text, routedVoice,\s*\n\s*\{ storyTitle: task\.storyTitle, chapIdx: task\.chapIdx, paraIdx: task\.paraIdx \}\);/);
 });

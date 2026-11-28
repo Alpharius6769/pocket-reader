@@ -12,7 +12,7 @@
   import { attempt, openStory } from '../actions';
   import { library } from '../stores/library';
   import { closeSheet, say, toast } from '../stores/ui';
-  import { listenTime, percent, words } from '../format';
+  import { listenTime, percent, plural, statusLabel, words } from '../format';
   import { pickLine } from '../virtue/sprites';
   import Sheet from '../components/Sheet.svelte';
   import Cover from '../components/Cover.svelte';
@@ -66,7 +66,7 @@
       <div class="meta">
         <p class="author">{s.author}</p>
         <p class="facts">
-          {[words(s.words), `${s.chapterCount} chapters`, s.complete ? 'Complete' : 'Ongoing'].filter(Boolean).join(' · ')}
+          {[words(s.words), s.chapterCount ? plural(s.chapterCount, 'chapter') : '', statusLabel(s)].filter(Boolean).join(' · ')}
         </p>
         <p class="facts faint">About {listenTime(s.words)} to listen</p>
         {#if entry.progress > 0}
@@ -112,11 +112,14 @@
         <span class="lbl">Favourite</span>
         <Toggle label="Favourite" checked={entry.favourite} onchange={(v) => attempt(() => bridge().library.setFavourite(storyKey, v))} />
       </li>
-      <li>
-        <span class="ic"><Bell size={20} /></span>
-        <span class="lbl">New chapter alerts</span>
-        <Toggle label="New chapter alerts" checked={entry.subscribed} onchange={(v) => attempt(() => bridge().library.setSubscribed(storyKey, v))} />
-      </li>
+      {#if s.source === 'ao3'}
+        <!-- Only AO3 works can be followed; on anything else this switch did nothing. -->
+        <li>
+          <span class="ic"><Bell size={20} /></span>
+          <span class="lbl">New chapter alerts</span>
+          <Toggle label="New chapter alerts" checked={entry.subscribed} onchange={(v) => attempt(() => bridge().library.setSubscribed(storyKey, v))} />
+        </li>
+      {/if}
       <li>
         <span class="ic"><CloudDownload size={20} /></span>
         <span class="lbl">

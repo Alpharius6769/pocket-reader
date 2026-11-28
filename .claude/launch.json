@@ -11,6 +11,15 @@
       "port": 4173
     },
     {
+      "name": "pocket-reader-dist",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/serve_public.mjs",
+        "4174"
+      ],
+      "port": 4174
+    },
+    {
       "name": "pocket-reader-v2",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

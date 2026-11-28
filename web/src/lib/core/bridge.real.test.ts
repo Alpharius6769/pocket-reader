@@ -525,4 +525,188 @@ describe('RealBridge', () => {
       delete w.showSettingsModal;
     }
   });
+
+  /* ---- live-site pass, 2026-11-27 -------------------------------------- */
+
+  it('treats a fetch that left the previous story open as a failure, with the reason the cores gave', async () => {
+    const b = await makeBridge();
+    const previous = { storyKey: 's_old', title: 'Morning Light', url: 'https://archiveofourown.org/works/1', chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    w.currentStory = previous;
+    const notices: any[] = [];
+    b.on('notice', (n) => notices.push(n));
+    // The cores swallow a failed scrape: they say why and return.
+    w.loadStory = vi.fn(async () => {
+      fire(CORE_EVENT.NOTICE, { message: 'Could not find story text on SoFurry. The story may require login.' });
+    });
+    w.togglePlayState = vi.fn();
+    await expect(b.loadStory({ kind: 'url', url: 'https://www.sofurry.com/view/1703253' }, { autoplay: true }))
+      .rejects.toThrow('Could not find story text on SoFurry. The story may require login.');
+    // It used to resolve with "Morning Light" and start narrating it.
+    expect(w.togglePlayState).not.toHaveBeenCalled();
+    expect(w.currentStory).toBe(previous);
+    // One message (the rejection, which the UI toasts), not that and a core toast.
+    expect(notices).toEqual([]);
+    expect(b.getPendingStory()).toBeNull();
+  });
+
+  it('reopening the story that is already open is not mistaken for a failed load', async () => {
+    const b = await makeBridge();
+    const open = { storyKey: 's_1', title: 'The Lighthouse', url: 'https://archiveofourown.org/works/9', chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    w.currentStory = open;
+    w.loadStory = vi.fn(async () => {});
+    const loaded = await b.loadStory({ kind: 'key', key: 's_1' });
+    expect(loaded.title).toBe('The Lighthouse');
+  });
+
+  it('importing a file leaves the open story, and its position, as they were', async () => {
+    const b = await makeBridge();
+    const open = { storyKey: 's_1', title: 'The Lighthouse', chapters: [{ title: 'One', paragraphs: ['a', 'b', 'c'] }] };
+    w.currentStory = open;
+    w.currentChapterIndex = 0;
+    w.currentParagraphIndex = 2;
+    w.processUploadedFile = vi.fn(async () => {
+      const added = { storyKey: 's_up', title: 'Ledger', url: '/local-upload/s_up', chapters: [{ title: 'One', paragraphs: ['x'] }] };
+      w.userProfile.library.push(added);
+      // What the cores do: the imported document becomes the open story.
+      w.currentStory = added;
+      w.currentChapterIndex = 0;
+      w.currentParagraphIndex = 0;
+    });
+    const summary = await b.importFile(new File(['x'], 'ledger.txt', { type: 'text/plain' }));
+    expect(summary.title).toBe('Ledger');
+    expect(w.currentStory).toBe(open);
+    expect(w.currentParagraphIndex).toBe(2);
+    // With nothing open, nothing is left open either.
+    w.currentStory = null;
+    w.processUploadedFile = vi.fn(async () => {
+      const added = { storyKey: 's_up2', title: 'Second', url: '/local-upload/s_up2', chapters: [{ title: 'One', paragraphs: ['x'] }] };
+      w.userProfile.library.push(added);
+      w.currentStory = added;
+    });
+    await b.importFile(new File(['x'], 'second.txt', { type: 'text/plain' }));
+    expect(w.currentStory).toBeNull();
+  });
+
+  it('a voice change does not start a whole-story render, and stops one left running', async () => {
+    const b = await makeBridge();
+    w.currentStory = { storyKey: 's_1', title: 'T', chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    w.onVoiceSelectionChange = vi.fn(() => Promise.resolve());
+    w._stopCaching = vi.fn(() => { w.BufferManager.isActive = false; });
+    w.BufferManager = { isActive: true, paused: false, mode: 'Normal' };
+    try {
+      await b.setVoice('alba');
+      expect(w.onVoiceSelectionChange).toHaveBeenCalledWith('alba', { confirm: false, recache: false });
+      expect(w._stopCaching).toHaveBeenCalledTimes(1);
+      // An offline save the reader asked for is stopped too, and they are told.
+      const notices: any[] = [];
+      b.on('notice', (n) => notices.push(n.message));
+      w.BufferManager = { isActive: true, paused: false, mode: 'Permanent' };
+      await b.setVoice('paul');
+      expect(notices.some((m) => /Saving for offline stopped/.test(m))).toBe(true);
+    } finally {
+      delete w.BufferManager;
+      delete w._stopCaching;
+    }
+  });
+
+  it('an engine change mid-listen plays on at the same paragraph instead of waiting behind the gate', async () => {
+    const b = await makeBridge();
+    w.currentStory = { storyKey: 's_1', title: 'T', chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    w.isPlaying = true;
+    w.pausePlayback = vi.fn(() => { w.isPlaying = false; });
+    w.switchReaderVoiceEngine = vi.fn(async () => { w._resolveActiveEngine = () => 'kokoro'; });
+    w._releaseCurrentNarrationAudio = vi.fn();
+    w.cancelNarrationRunway = vi.fn();
+    let bypassSeen = false;
+    w.togglePlayState = vi.fn(() => { bypassSeen = w.__narrationRunwayBypassOnce === true; w.isPlaying = true; return Promise.resolve(); });
+    await b.setEngine('kokoro');
+    expect(w._releaseCurrentNarrationAudio).toHaveBeenCalled();
+    expect(w.togglePlayState).toHaveBeenCalledTimes(1);
+    expect(bypassSeen).toBe(true);
+  });
+
+  it('does not prepare the starting runway in the middle of a voice change', async () => {
+    const b = await makeBridge();
+    w.currentStory = { storyKey: 's_1', title: 'T', chapters: [{ title: 'One', paragraphs: ['a'] }] };
+    w.prepareNarrationRunway = vi.fn();
+    Object.defineProperty(globalThis, 'crossOriginIsolated', { value: true, configurable: true });
+    let during: boolean | undefined;
+    w.onVoiceSelectionChange = vi.fn(async () => { during = await b.prepareRunway(); });
+    try {
+      await b.setVoice('alba');
+      expect(during).toBe(true);
+      expect(w.prepareNarrationRunway).not.toHaveBeenCalled();
+      // Afterwards it prepares as usual.
+      await b.prepareRunway();
+      expect(w.prepareNarrationRunway).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (globalThis as Record<string, unknown>).crossOriginIsolated;
+      delete w.prepareNarrationRunway;
+    }
+  });
+
+  it('clearing saved narration clears all of it, and the "saved" marks with it', async () => {
+    const b = await makeBridge();
+    w.clearAudioCache = vi.fn(async () => {});
+    await b.clearAudioCache();
+    // includePermanent = true: false kept every story saved for offline.
+    expect(w.clearAudioCache).toHaveBeenCalledWith(true, true);
+  });
+
+  it('counts saved narration from what is stored, not from what is left over', async () => {
+    const b = await makeBridge();
+    w.getOfflineStoryUsage = vi.fn(async () => [{ story: 's_1', bytes: 1000 }, { story: 's_2', bytes: 500 }]);
+    Object.defineProperty(navigator, 'storage', { value: { estimate: async () => ({ usage: 900_000_000, quota: 2_000_000_000 }) }, configurable: true });
+    try {
+      const usage = await b.getStorageUsage();
+      expect(usage.audioCacheBytes).toBe(1500);
+      w.getOfflineStoryUsage = vi.fn(async () => []);
+      expect((await b.getStorageUsage()).audioCacheBytes).toBe(0);
+    } finally {
+      delete w.getOfflineStoryUsage;
+    }
+  });
+
+  it('reads the diagnostics log where the cores keep it', async () => {
+    const b = await makeBridge();
+    w.Diagnostics = { buffer: [
+      { timestamp: '2026-11-27T10:00:00.000Z', level: 'INFO', message: 'Play start 20ms (cache hit)' },
+      { timestamp: '2026-11-27T10:00:01.000Z', level: 'WARN', message: 'Narration had stalled; restarting the current paragraph' },
+      { timestamp: '2026-11-27T10:00:02.000Z', level: 'ERROR', message: 'loadStory failed' },
+    ] };
+    try {
+      const d = await b.getDiagnostics();
+      expect(d.recentLog.map((l) => l.level)).toEqual(['info', 'warn', 'error']);
+      expect(d.recentLog[1].message).toMatch(/stalled/);
+      expect(d.recentLog[0].at).toBe(Date.parse('2026-11-27T10:00:00.000Z'));
+    } finally {
+      delete w.Diagnostics;
+    }
+  });
+
+  it('keeps the old shell\'s loading announcements off the screen, and shortens its dialogs', async () => {
+    const b = await makeBridge();
+    const notices: string[] = [];
+    b.on('notice', (n) => notices.push(n.message));
+    fire(CORE_EVENT.NOTICE, { message: 'Pocket TTS loaded! Ready for high-quality narration.' });
+    fire(CORE_EVENT.COMPANION, { speech: 'Preparing neural voice (Paul)...' });
+    fire(CORE_EVENT.NOTICE, { message: 'Bookmark saved!' });
+    fire(CORE_EVENT.DIALOG, {
+      title: 'Cloudflare Shield Active',
+      bodyHtml: '<div><p>The site is blocking our backend.</p><p>Two ways to read this story anyway:</p><button>Open Story in New Tab</button><button>How to save &amp; load locally</button></div>',
+    });
+    expect(notices[0]).toBe('Bookmark saved!');
+    expect(notices[1]).toBe('The site is blocking our backend. Save the page and import it as a file instead.');
+    expect(notices).toHaveLength(2);
+  });
+
+  it('a story added from a finished search row is not listed as ongoing', async () => {
+    const b = await makeBridge();
+    w.addToLibrary = vi.fn((s: any) => { w.userProfile.library.push({ storyKey: 's_new', title: s.title, author: s.author, url: s.url, workComplete: false, declaredChapters: null }); });
+    const entry = await b.library.add(
+      { kind: 'url', url: 'https://archiveofourown.org/works/77' },
+      { key: 'https://archiveofourown.org/works/77', title: 'Done', author: 'A', source: 'ao3', url: 'https://archiveofourown.org/works/77', chapterCount: 3, complete: true },
+    );
+    expect(entry.story.complete).toBe(true);
+  });
 });

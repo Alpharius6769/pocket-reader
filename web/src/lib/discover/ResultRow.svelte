@@ -2,7 +2,7 @@
   import Heart from '@lucide/svelte/icons/heart';
   import Star from '@lucide/svelte/icons/star';
   import type { StorySummary } from '../core/bridge';
-  import { words } from '../format';
+  import { statusLabel, words } from '../format';
   import Cover from '../components/Cover.svelte';
 
   interface Props {
@@ -23,8 +23,8 @@
     <span class="facts">
       {#if story.rating}<span class="rt r-{RATING_SHORT[story.rating]}" title={story.rating}>{RATING_SHORT[story.rating]}</span>{/if}
       <span>{words(story.words)}</span>
-      <span>{story.chapterCount} ch</span>
-      <span>{story.complete ? 'Complete' : (story.status ?? 'Ongoing')}</span>
+      {#if story.chapterCount}<span>{story.chapterCount} ch</span>{/if}
+      {#if statusLabel(story)}<span>{statusLabel(story)}</span>{/if}
       {#if story.kudos}<span class="k"><Heart size={11} fill="currentColor" /> {story.kudos.toLocaleString()}</span>{/if}
       {#if story.communityRating}<span class="k"><Star size={11} fill="currentColor" /> {story.communityRating.toFixed(1)}</span>{/if}
     </span>

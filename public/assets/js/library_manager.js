@@ -1270,11 +1270,20 @@ export function removeStory(storyRef, options = {}) {
   const removedKey = removedStory.storyKey || getStoryStableKey(removedStory);
   if (removedStory) {
     _markDeletedStory(window.userProfile, removedStory);
+    // The text is stored under the key, the title and (uploads, refreshed
+    // stories) the address. Only the first two were deleted, so the text of a
+    // removed upload stayed on the device; and the narration rendered for the
+    // story was not deleted at all, although the confirmation says it is.
+    const chapterRefs = [...new Set([removedKey, removedStory.title, removedStory.url, removedStory.sourceUrl].filter(Boolean))];
     if (typeof window._deleteStoryChapters === 'function') {
-      Promise.allSettled([
-        window._deleteStoryChapters(removedKey),
-        window._deleteStoryChapters(removedStory.title),
-      ]).catch(() => {});
+      Promise.allSettled(chapterRefs.map((ref) => window._deleteStoryChapters(ref))).catch(() => {});
+    }
+    if (typeof window.deleteStoryAudio === 'function') {
+      // By title too (older renders were stored under it), unless another
+      // story in the library has the same title and would lose its own.
+      const titleShared = window.userProfile.library.some((s) => s !== removedStory && s.title === removedStory.title);
+      Promise.allSettled([...new Set([removedKey, titleShared ? null : removedStory.title].filter(Boolean))]
+        .map((ref) => window.deleteStoryAudio(ref))).catch(() => {});
     }
   }
   window.userProfile.library = window.userProfile.library.filter((s) => (s.storyKey || getStoryStableKey(s)) !== removedKey);

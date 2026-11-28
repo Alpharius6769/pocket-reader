@@ -10,6 +10,7 @@ import { MockBridge } from './lib/core/bridge.mock';
 import { createRealBridge } from './lib/core/bridge.real';
 import { connectStores } from './lib/stores/wire';
 import { applyDeepLink } from './lib/devlinks';
+import { keepStorage, watchInstall } from './lib/install';
 
 declare global {
   interface Window {
@@ -17,6 +18,10 @@ declare global {
     __pocketCoreBridge?: CoreBridge;
   }
 }
+
+// Before anything is awaited: the browser offers "install" once, early, and
+// an offer nobody is listening for is gone.
+watchInstall();
 
 const params = new URLSearchParams(location.search);
 const sim = params.get('sim') === 'iphone';
@@ -68,6 +73,11 @@ initLayout({
 });
 
 await applyDeepLink(location.hash, params);
+
+// The downloaded voices are hundreds of megabytes. Ask the browser not to
+// clear them when the device runs short of space (granted without a prompt to
+// installed apps and sites that are used; a no-op elsewhere).
+if (!useMock) void keepStorage();
 
 // The start screen from index.html is plain markup inside #app; mount() appends.
 document.getElementById('app')!.replaceChildren();

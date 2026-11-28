@@ -176,6 +176,25 @@ function stripHtml(html: string): string {
   return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
+/** Progress the cores announce that this UI already shows on the player. */
+const CORE_CHATTER = /^(?:Pocket|Kokoro) TTS loaded!|^Preparing neural voice\b|^Voice engine changed\. Recaching|^Voice changed - re-caching/i;
+
+/**
+ * The cores' dialogs carry buttons this UI does not have ("Open Story in New
+ * Tab", "How to save & load locally"). Flattened whole, their labels ran into
+ * the message as words. Keep the first paragraph, which is the explanation.
+ */
+function dialogSummary(title: string, bodyHtml: string): string {
+  const doc = new DOMParser().parseFromString(String(bodyHtml || ''), 'text/html');
+  doc.querySelectorAll('button, a, script, style').forEach((el) => el.remove());
+  const first = [...doc.querySelectorAll('p')].map((p) => (p.textContent || '').replace(/\s+/g, ' ').trim()).find(Boolean);
+  const body = first || (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+  if (/cloudflare shield/i.test(String(title || ''))) {
+    return `${body || 'The site is blocking downloads of this story.'} Save the page and import it as a file instead.`;
+  }
+  return [title, body].filter(Boolean).join(': ');
+}
+
 /* ------------------------------------------------------------- class */
 
 type Handler = (payload: never) => void;
@@ -218,6 +237,13 @@ export class RealBridge implements CoreBridge {
   private catalogCore: Record<string, any> = {};
   private pending: PendingStory | null = null;
   private resumeWatch: ReturnType<typeof setInterval> | null = null;
+  /** Core messages held back while a story is being opened (see coreNotice). */
+  private loadNotices: string[] | null = null;
+  /** A voice or engine change is in progress (see prepareRunway). */
+  private switching = false;
+  /** The voice sample that is playing, if one is. */
+  private preview: { audio: HTMLAudioElement; stop: () => void } | null = null;
+  private previewTurn = 0;
   private libCore: Record<string, AnyFn> = {};
 
   /** Called once by createRealBridge after the cores are loaded. */
@@ -273,12 +299,12 @@ export class RealBridge implements CoreBridge {
       this.scheduleLibrary();
     });
     on(E.LIBRARY, () => this.scheduleLibrary());
-    on(E.NOTICE, (d: any) => this.notice(d.tone === 'error' ? 'error' : 'info', d.message || d.title, undefined, d.actionLabel));
+    on(E.NOTICE, (d: any) => this.coreNotice(d.tone === 'error' ? 'error' : 'info', d.message || d.title, undefined, d.actionLabel));
     on(E.COMPANION, (d: any) => {
       if (d.beat) this.lastCompanionBeat = d.beat;
-      if (d.speech) this.notice('info', d.speech, moodFor(d.beat || this.lastCompanionBeat));
+      if (d.speech) this.coreNotice('info', d.speech, moodFor(d.beat || this.lastCompanionBeat));
     });
-    on(E.DIALOG, (d: any) => this.notice('info', [d.title, stripHtml(d.bodyHtml)].filter(Boolean).join(': ')));
+    on(E.DIALOG, (d: any) => this.coreNotice('info', dialogSummary(d.title, d.bodyHtml)));
     on(E.ENGINE, (d: any) => {
       if (d.what === 'state') {
         const status = d.state === 'ready' ? 'ready' : d.state === 'loading' ? 'loading' : d.state === 'failed' ? 'error' : 'idle';
@@ -426,6 +452,24 @@ export class RealBridge implements CoreBridge {
     this.emit('engine', { ...next });
   }
 
+  /**
+   * A message raised by the cores. While a story is being opened they explain
+   * a failure in their own words (and once as a dialog with buttons this UI
+   * does not have); those are collected so the load can report one clear
+   * reason instead of two toasts, or a toast for a load that then succeeded.
+   */
+  private coreNotice(level: Notice['level'], message: string, mood?: VirtueMood, actionLabel?: string) {
+    // The old shell announced each stage of loading a voice. Here the player
+    // shows those stages itself, and the announcements arrived as a stack of
+    // toasts over it, repeated for every voice tried.
+    if (!actionLabel && CORE_CHATTER.test(String(message || ''))) return;
+    if (this.loadNotices && !actionLabel) {
+      if (message) this.loadNotices.push(String(message));
+      return;
+    }
+    this.notice(level, message, mood, actionLabel);
+  }
+
   private notice(level: Notice['level'], message: string, mood?: VirtueMood, actionLabel?: string): Notice | null {
     if (!message) return null;
     const n: Notice = { id: `n${++this.noticeSeq}`, level, message: String(message), mood, actionLabel };
@@ -513,6 +557,10 @@ export class RealBridge implements CoreBridge {
 
   async prepareRunway(): Promise<boolean> {
     if (!w.currentStory) return false;
+    // A voice or engine change pauses for a moment and then plays on. Preparing
+    // here in that moment rendered the current paragraph a second time, at
+    // playback priority, against the one about to be played.
+    if (this.switching) return true;
     // The first narration of a session reloads into the fast (isolated)
     // session, and only a tap may do that: Play. Rendering before it would run
     // single-threaded and then be cut off by the reload.
@@ -574,6 +622,9 @@ export class RealBridge implements CoreBridge {
     // the Player has something to show from the tap onwards.
     const foreground = options.background !== true;
     if (foreground) this.setPending({ title: options.title || known?.title || '' });
+    const before = w.currentStory;
+    const wasPlaying = !!w.isPlaying;
+    if (foreground) this.loadNotices = [];
     try {
       if (w.isPlaying) w.pausePlayback?.();
       try {
@@ -581,17 +632,36 @@ export class RealBridge implements CoreBridge {
       } catch (error: any) {
         throw new BridgeError('network', error?.message || 'The story could not be opened.');
       }
+      const said = this.loadNotices || [];
+      this.loadNotices = null;
       const story = w.currentStory;
-      if (!story || !Array.isArray(story.chapters) || !story.chapters.length) {
-        throw new BridgeError('not-found', 'The story text could not be loaded.');
+      // The cores report a failed fetch by returning with the story that was
+      // open before still open. Reading that as success opened (and started
+      // narrating) the previous story under the new one's name.
+      const opened = !!story && Array.isArray(story.chapters) && story.chapters.length > 0
+        && (story !== before || this.storyMatches(story, target));
+      if (!opened) {
+        if (wasPlaying && before && w.currentStory === before) void this.play();
+        throw new BridgeError('not-found', said[said.length - 1] || 'That story could not be opened. Check the link, or try again in a moment.');
       }
+      // Anything the cores said on the way to a story that did open.
+      for (const message of said) this.notice('info', message);
       if (options.position) await this.seekToParagraph(options.position.paragraph, options.position.chapter);
       this.setState('paused');
       if (options.autoplay) void this.play();
       return toStory(story);
     } finally {
+      this.loadNotices = null;
       if (foreground && this.resumeWatch === null) this.setPending(null);
     }
+  }
+
+  /** The open story is the one a load asked for (by key, address or title). */
+  private storyMatches(story: any, target: string): boolean {
+    const norm = (u: unknown) => String(u || '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
+    const wanted = norm(target);
+    if (!wanted) return false;
+    return [keyOf(story), story?.url, story?.sourceUrl, story?.title].some((ref) => ref && norm(ref) === wanted);
   }
 
   async importFile(file: File): Promise<StorySummary> {
@@ -599,10 +669,23 @@ export class RealBridge implements CoreBridge {
       throw new BridgeError('unsupported-file', 'That file type is not supported. Try EPUB, PDF, TXT, HTML or DOCX.');
     }
     const before = new Set((w.userProfile?.library || []).map(keyOf));
+    // The cores make an imported document the open story. Left like that, the
+    // player went on showing the story it had while the cores held another: a
+    // narration in progress carried on into the imported text at the next
+    // paragraph, and removing the import closed the story still on screen.
+    const open = { story: w.currentStory, chapter: w.currentChapterIndex, paragraph: w.currentParagraphIndex };
     try {
       await w.processUploadedFile(file, null, { silent: true });
     } catch (error: any) {
       throw new BridgeError('unsupported-file', error?.message || 'That file could not be read.');
+    } finally {
+      // Also when nothing was open: the player shows nothing, so the cores
+      // must hold nothing, or Play acts on a story that is not on screen.
+      if (w.currentStory !== open.story) {
+        w.currentStory = open.story ?? null;
+        w.currentChapterIndex = open.story ? open.chapter : 0;
+        w.currentParagraphIndex = open.story ? open.paragraph : 0;
+      }
     }
     const library = w.userProfile?.library || [];
     const added = library.find((s: any) => !before.has(keyOf(s))) || w.currentStory;
@@ -682,6 +765,7 @@ export class RealBridge implements CoreBridge {
     if (this.continueGesture()) return;
     if (!w.currentStory) throw new BridgeError('not-found', 'Choose a story first.');
     if (w.isPlaying) return;
+    this.stopPreview(); // a voice sample must not talk over the story
     this.setState(this.engineStatusNow() === 'ready' ? 'buffering' : 'loading');
     // Called synchronously inside the tap so iOS keeps the user gesture that
     // unlocks audio; the deferred stub returns a promise for the rest.
@@ -797,12 +881,43 @@ export class RealBridge implements CoreBridge {
   async setEngine(engine: EngineId) {
     if (engine === activeEngine() && localStorage.getItem(ENGINE_OVERRIDE_KEY) === engine) return;
     const wasPlaying = !!w.isPlaying;
-    this.pause();
-    await w.ensureNarrationRuntime?.();
-    await w.switchReaderVoiceEngine(engine, true);
-    this.updateEngine({ status: this.engineStatusNow() });
-    this.emit('settings', this.settingsNow());
-    if (wasPlaying) await this.play();
+    this.switching = true;
+    try {
+      this.pause();
+      this.stopPreview();
+      this.stopStaleCacheJob();
+      await w.ensureNarrationRuntime?.();
+      await w.switchReaderVoiceEngine(engine, true);
+      w._releaseCurrentNarrationAudio?.();
+      w.cancelNarrationRunway?.();
+      this.updateEngine({ status: this.engineStatusNow() });
+      this.emit('settings', this.settingsNow());
+    } finally {
+      this.switching = false;
+    }
+    this.emit('runway', this.getRunway());
+    // Mid-listen the new engine takes over at this paragraph, as a voice
+    // change does; it used to stop and wait behind a ten-paragraph gate with
+    // nothing on screen saying why the story had gone quiet.
+    if (wasPlaying) {
+      w.__narrationRunwayBypassOnce = true;
+      await this.play();
+    }
+  }
+
+  /**
+   * A whole-story render that was running in the voice or engine being left.
+   * Carried across the change it was "re-pointed" at the new engine with a
+   * substituted voice, and rendered the story in a voice nobody chose while
+   * the paragraph being listened to waited behind it.
+   */
+  private stopStaleCacheJob() {
+    const job = w.BufferManager;
+    if (!job?.isActive && !job?.paused) return;
+    const explicit = job.mode === 'Permanent';
+    w._stopCaching?.();
+    if (explicit) this.notice('info', 'Saving for offline stopped because the voice changed. Save the story again to keep it in the new voice.');
+    this.scheduleLibrary();
   }
 
   async setVoice(voice: VoiceId) {
@@ -810,20 +925,30 @@ export class RealBridge implements CoreBridge {
     if (!v) throw new BridgeError('not-found', 'Unknown voice.');
     if (v.engine !== activeEngine()) await this.setEngine(v.engine);
     const wasPlaying = !!w.isPlaying;
-    if (wasPlaying) this.pause();
-    await w.ensureNarrationRuntime?.();
-    await w.onVoiceSelectionChange(voice, { confirm: false });
-    if (v.engine === 'pocket') {
-      settingsBag().pocketVoice = voice;
-      settingsBag().pocketVoiceChosen = true; // a later default change leaves it alone
-    } else settingsBag().kokoroVoice = voice;
-    save();
-    // Switch over now, not a paragraph later: drop the old-voice clip (Play
-    // used to resume it) and render the current paragraph again in the new
-    // voice. Live playback has priority over the re-cache that just started.
-    w._releaseCurrentNarrationAudio?.();
-    w.cancelNarrationRunway?.();
-    this.emit('settings', this.settingsNow());
+    this.switching = true;
+    try {
+      if (wasPlaying) this.pause();
+      this.stopPreview();
+      this.stopStaleCacheJob();
+      await w.ensureNarrationRuntime?.();
+      // recache: false -- the player renders ahead in the new voice itself. The
+      // cores' own answer to a voice change is to render the whole story again,
+      // once per voice tried.
+      await w.onVoiceSelectionChange(voice, { confirm: false, recache: false });
+      if (v.engine === 'pocket') {
+        settingsBag().pocketVoice = voice;
+        settingsBag().pocketVoiceChosen = true; // a later default change leaves it alone
+      } else settingsBag().kokoroVoice = voice;
+      save();
+      // Switch over now, not a paragraph later: drop the old-voice clip (Play
+      // used to resume it) and render the current paragraph again in the new
+      // voice.
+      w._releaseCurrentNarrationAudio?.();
+      w.cancelNarrationRunway?.();
+      this.emit('settings', this.settingsNow());
+    } finally {
+      this.switching = false;
+    }
     this.emit('runway', this.getRunway());
     this.notice('info', `Now reading as ${v.name}`, 'wink');
     // Mid-listen, the new voice takes over at the current paragraph without
@@ -853,12 +978,40 @@ export class RealBridge implements CoreBridge {
     await w.ensureNarrationRuntime?.();
     const sample = `Hello. I'm ${v.name}, and I'd be glad to read to you.`;
     const voiceId = v.engine === 'pocket' ? w.resolveVoiceWithSentiment?.('pocket', voice, sample) || voice : voice;
+    this.stopPreview();
+    const turn = this.previewTurn;
     const blob: Blob | null = await w.generateChunk(sample, voiceId);
     if (!blob) throw new BridgeError('engine-failed', 'The voice sample could not be rendered.');
+    // Another sample was asked for, or the story started, while this rendered.
+    if (turn !== this.previewTurn || w.isPlaying) return;
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
-    audio.onended = () => URL.revokeObjectURL(url);
-    await audio.play();
+    audio.playbackRate = Number(w.getEffectivePlaybackRate?.()) || 1;
+    const finished = new Promise<void>((resolve) => {
+      const done = () => {
+        URL.revokeObjectURL(url);
+        if (this.preview?.audio === audio) this.preview = null;
+        resolve();
+      };
+      audio.onended = done;
+      audio.onerror = done;
+      this.preview = { audio, stop: () => { audio.onended = audio.onerror = null; audio.pause(); done(); } };
+    });
+    try {
+      await audio.play();
+    } catch {
+      this.stopPreview();
+      throw new BridgeError('engine-failed', 'The voice sample could not be played.');
+    }
+    // Resolves when the sample has finished, so the button can show it playing.
+    await finished;
+  }
+
+  /** One sample at a time, and never over the story. */
+  private stopPreview() {
+    this.previewTurn += 1;
+    this.preview?.stop();
+    this.preview = null;
   }
 
   /* ----------------------------------------------------------- offline */
@@ -903,6 +1056,12 @@ export class RealBridge implements CoreBridge {
         });
         const added = this.libraryStoryByUrl(url);
         if (!added) throw new BridgeError('not-found', 'That story could not be added.');
+        // The row said the work was finished; the entry was created "ongoing".
+        if (summary.complete === true && summary.chapterCount) {
+          added.workComplete = true;
+          added.declaredChapters = summary.chapterCount;
+          save();
+        }
         this.scheduleLibrary();
         this.notice('success', `Added “${added.title}” to your library`, 'holding');
         return this.toEntry(added);
@@ -1311,16 +1470,32 @@ export class RealBridge implements CoreBridge {
       }
     } catch { /* Cache Storage unavailable */ }
     const total = Number(estimate?.usage) || 0;
+    // Counted, not inferred. "Everything that is not a model" put the app's
+    // own files and the browser's bookkeeping under saved narration, so it
+    // read 38 MB with nothing saved.
+    let audioCacheBytes = -1;
+    try {
+      const perStory: any[] = await w.getOfflineStoryUsage?.();
+      if (Array.isArray(perStory)) audioCacheBytes = perStory.reduce((n, s) => n + (Number(s?.bytes) || 0), 0);
+    } catch { /* fall back to the estimate */ }
     return {
       voiceModelsBytes,
-      audioCacheBytes: Math.max(0, total - voiceModelsBytes),
+      audioCacheBytes: audioCacheBytes >= 0 ? audioCacheBytes : Math.max(0, total - voiceModelsBytes),
       storiesBytes: new Blob([localStorage.getItem('pocketReaderData') || '']).size,
       quotaBytes: Number(estimate?.quota) || undefined,
     };
   }
 
   async clearAudioCache() {
-    await w.clearAudioCache?.(false, true);
+    // Everything, including stories saved for offline: that is what the button
+    // says. Passing false kept those, and left their "saved" marks standing
+    // over narration that had been deleted.
+    if (w.BufferManager?.isActive || w.BufferManager?.paused) w._stopCaching?.();
+    await w.clearAudioCache?.(true, true);
+    w._discardParagraphPreload?.();
+    w.cancelNarrationRunway?.();
+    this.emit('runway', this.getRunway());
+    this.scheduleLibrary();
   }
 
   async clearVoiceModels() {
@@ -1381,7 +1556,9 @@ export class RealBridge implements CoreBridge {
 
   async getDiagnostics(): Promise<Diagnostics> {
     const runtime = w.getPocketTtsRuntimeConfig?.() || {};
-    const logs: any[] = w.Diagnostics?.getRecent?.(40) || w.Diagnostics?.logs?.slice?.(-40) || [];
+    // The cores keep their log in `buffer`, stamped `timestamp`. This read two
+    // names that do not exist, so the log shown (and copied) was always empty.
+    const logs: any[] = (Array.isArray(w.Diagnostics?.buffer) ? w.Diagnostics.buffer : []).slice(-60);
     const controller = navigator.serviceWorker?.controller;
     return {
       appVersion: 'v2',
@@ -1394,7 +1571,7 @@ export class RealBridge implements CoreBridge {
       crossOriginIsolated: window.crossOriginIsolated === true,
       lockSessions: Array.isArray(w.getLockScreenReport?.()) ? w.getLockScreenReport() : [],
       recentLog: logs.map((l: any) => ({
-        at: Number(l.at || l.ts || l.time) || Date.now(),
+        at: Date.parse(l.timestamp) || Number(l.at || l.ts || l.time) || Date.now(),
         level: /err/i.test(l.level) ? 'error' : /warn/i.test(l.level) ? 'warn' : 'info',
         message: String(l.message || l.msg || ''),
       })),

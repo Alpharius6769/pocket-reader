@@ -5,11 +5,19 @@
   import { bridge, type CatalogEntry, type CatalogFacet, type CatalogQuery } from '../core';
   import { attempt } from '../actions';
   import { openSheet } from '../stores/ui';
+  import { plural } from '../format';
   import ResultRow from './ResultRow.svelte';
 
   let facets = $state<CatalogFacet[]>([]);
   let items = $state<CatalogEntry[]>([]);
   let loading = $state(true);
+  // The catalog answers a page at a time. Only the first page was ever asked
+  // for, and its length was shown as the number of matches: "20 stories" over
+  // a catalog of two thousand, with no way to reach the twenty-first.
+  let total = $state(0);
+  let page = $state(1);
+  let hasMore = $state(false);
+  let loadingMore = $state(false);
   let q = $state<CatalogQuery>({ search: '', sort: 'updated-desc', length: 'all' });
 
   const LENGTH_LABEL: Record<string, string> = {
@@ -35,13 +43,32 @@
     const query = $state.snapshot(q);
     loading = true;
     let live = true;
-    attempt(() => bridge().catalog.query(query)).then((page) => {
+    attempt(() => bridge().catalog.query(query)).then((res) => {
       if (!live) return;
-      items = page?.items ?? [];
+      items = res?.items ?? [];
+      total = res?.total ?? items.length;
+      hasMore = res?.hasMore ?? false;
+      page = 1;
       loading = false;
     });
     return () => (live = false);
   });
+
+  async function more() {
+    if (loadingMore || !hasMore) return;
+    loadingMore = true;
+    const asked = JSON.stringify($state.snapshot(q));
+    const res = await attempt(() => bridge().catalog.query({ ...$state.snapshot(q), page: page + 1 }));
+    loadingMore = false;
+    // The filters changed while this page was on its way: it belongs to a list
+    // that is no longer on screen.
+    if (!res || asked !== JSON.stringify($state.snapshot(q))) return;
+    const seen = new Set(items.map((e) => e.key));
+    items = [...items, ...res.items.filter((e) => !seen.has(e.key))];
+    page = res.page;
+    hasMore = res.hasMore;
+    total = res.total ?? total;
+  }
 
   type MultiKey = 'world' | 'species' | 'rating' | 'status';
 
@@ -93,7 +120,7 @@
 </div>
 
 <div class="bar">
-  <span class="faint" aria-live="polite">{loading ? 'Loading…' : `${items.length} stories`}</span>
+  <span class="faint" aria-live="polite">{loading ? 'Loading…' : plural(total, 'story', 'stories')}</span>
   <span class="right">
     {#if active}<button type="button" class="link" onclick={clearAll}>Clear {active}</button>{/if}
     <label class="sort">
@@ -111,11 +138,19 @@
     <li><ResultRow story={e} onclick={() => openSheet({ kind: 'preview', story: e })} /></li>
   {/each}
 </ul>
+{#if hasMore && !loading}
+  <button class="btn btn-plain btn-block more" type="button" disabled={loadingMore} onclick={more}>
+    {loadingMore ? 'Loading…' : `Load more (${items.length} of ${total.toLocaleString()})`}
+  </button>
+{/if}
 {#if !loading && !items.length}
   <p class="none muted">No stories match these filters.</p>
 {/if}
 
 <style>
+  .more {
+    margin-top: 8px;
+  }
   .intro {
     font-size: var(--t-foot);
     margin: 0 0 12px;

@@ -971,6 +971,24 @@ async function _persistOpenedStory() {
 
 let _activeLoadAbort = null;
 
+// What the reader is told when a story page could not be fetched. The scrape
+// loops used to throw the literal 'SCRAPE_FAILED', which is what the toast
+// then said, and discarded the reason the server had given.
+const SCRAPE_FAILED_MESSAGE = 'That story could not be fetched. The site may be down or blocking downloads: try again in a minute, or save the page and import it as a file.';
+
+async function _scrapeFailure(response) {
+  let detail = '';
+  try {
+    const body = await response.clone().json();
+    if (typeof body?.detail === 'string') detail = body.detail.trim();
+  } catch (_) { /* not JSON */ }
+  const status = Number(response?.status) || 0;
+  const definite = status >= 400 && status < 500 && status !== 408 && status !== 429;
+  const error = new Error(definite && detail ? detail.slice(0, 180) : SCRAPE_FAILED_MESSAGE);
+  error.definite = definite;
+  return error;
+}
+
 export async function loadStory(url, options = {}) {
   const preventNavigate = options.preventNavigate || false;
   // Start each load clean: a stale cancel flag from a prior fetch must not make
@@ -1268,7 +1286,11 @@ export async function loadStory(url, options = {}) {
           clearTimeout(timeoutId);
           ownAbort.signal.removeEventListener('abort', _propagateAbort);
           if (response.ok) break;
-          lastErr = new Error('SCRAPE_FAILED');
+          lastErr = await _scrapeFailure(response);
+          // 4xx is the server's answer about this story (needs a login, not a
+          // story page, unsupported site). Asking again gets the same answer
+          // after another long wait.
+          if (lastErr.definite) break;
         } catch (e) {
           clearTimeout(timeoutId);
           ownAbort.signal.removeEventListener('abort', _propagateAbort);
@@ -1288,7 +1310,7 @@ export async function loadStory(url, options = {}) {
         ui.say("Okay - I stopped loading that story.", 3500);
         return;
       }
-      if (!response || !response.ok) throw (lastErr || new Error('SCRAPE_FAILED'));
+      if (!response || !response.ok) throw (lastErr || new Error(SCRAPE_FAILED_MESSAGE));
 
       data = await _safeParseJson(response, 'General');
       if (data.cloudflare_blocked) {
@@ -1323,7 +1345,11 @@ export async function loadStory(url, options = {}) {
           clearTimeout(timeoutId);
           ownAbort.signal.removeEventListener('abort', _propagateAbort);
           if (response.ok) break;
-          lastErr = new Error('SCRAPE_FAILED');
+          lastErr = await _scrapeFailure(response);
+          // 4xx is the server's answer about this story (needs a login, not a
+          // story page, unsupported site). Asking again gets the same answer
+          // after another long wait.
+          if (lastErr.definite) break;
         } catch (e) {
           clearTimeout(timeoutId);
           ownAbort.signal.removeEventListener('abort', _propagateAbort);
@@ -1335,7 +1361,7 @@ export async function loadStory(url, options = {}) {
         if (ownAbort._supersededBySilent) ui.loaded();
         return;
       }
-      if (!response || !response.ok) throw (lastErr || new Error('SCRAPE_FAILED'));
+      if (!response || !response.ok) throw (lastErr || new Error(SCRAPE_FAILED_MESSAGE));
 
       data = await _safeParseJson(response, 'General');
       if (data.cloudflare_blocked) {
@@ -1364,7 +1390,14 @@ export async function loadStory(url, options = {}) {
       return;
     }
     if (preventNavigate) return;
-    const message = String(error?.message || error || 'Could not load that story.');
+    let message = String(error?.message || error || 'Could not load that story.');
+    // "Failed to fetch", "Load failed", "NetworkError when attempting…": the
+    // browser's own words for being offline or unable to reach the server.
+    if (/failed to fetch|load failed|networkerror|network request failed/i.test(message)) {
+      message = navigator.onLine === false
+        ? 'You are offline. Connect to the internet to fetch this story.'
+        : SCRAPE_FAILED_MESSAGE;
+    }
     window.Diagnostics?.log?.('ERROR', 'loadStory failed', { message, url: fetchUrl });
     ui.notify(message.slice(0, 180) || 'Could not load that story.', 6000);
     ui.companion('virtue_network_error');

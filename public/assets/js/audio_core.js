@@ -1583,7 +1583,7 @@ async function _loadPocketEngineOnce(options = {}) {
     ? {
       preference: 'wasm',
       selectedBackend: 'wasm',
-      threadCount: recommendedWasmThreadCount({
+      threadCount: _styleTts2ThreadCount(recommendedWasmThreadCount({
         crossOriginIsolated: window.crossOriginIsolated === true,
         hardwareConcurrency: Number(navigator.hardwareConcurrency || 0),
         mobile: isMobileLikePlatform(navigator.userAgent || ''),
@@ -1592,7 +1592,7 @@ async function _loadPocketEngineOnce(options = {}) {
         memoryGb: Number(navigator.deviceMemory || 0),
         saveData: styleTts2Connection?.saveData === true,
         lowMemoryMode: settings.lowMemoryMode === true,
-      }),
+      }), settings),
       eligibility: { eligible: false },
     }
     : await _preparePocketBackendPlan();
@@ -2358,6 +2358,14 @@ function _ensureBgKeepAlive() {
   _bgKeepAlive = new Audio(silWav);
   _bgKeepAlive.loop   = true;
   _bgKeepAlive.volume = 0.001; // near-inaudible but keeps session alive
+  _bgKeepAlive.playsInline = true;
+  _bgKeepAlive.setAttribute?.('playsinline', '');
+  // The narration element's clock stops between clips, which is exactly when a
+  // stalled hand-over needs noticing. This loop plays throughout, so it drives
+  // the same pump (lookahead, staging, and the stall watchdog).
+  _bgKeepAlive.addEventListener('timeupdate', () => {
+    if (typeof _onAudioClockPump === 'function') _onAudioClockPump();
+  });
   if (typeof document !== 'undefined' && document.body) {
     document.body.appendChild(_bgKeepAlive);
   }
@@ -2375,6 +2383,11 @@ export function preparePocketMobileMediaSession() {
   if (!_premiumAudio) {
     _premiumAudio = new Audio();
   }
+  // Declare the page a playback app where the browser lets it (Safari 16.4+).
+  // Left on "auto", iOS decides per element, and an element that is briefly
+  // between clips can be treated as ambient sound: silenced by the ring switch
+  // and first in line to be stopped when the screen locks.
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (_) {}
   _premiumAudio.preload = 'auto';
   _premiumAudio.playsInline = true;
   _premiumAudio.setAttribute?.('playsinline', '');
@@ -2507,7 +2520,7 @@ function _recoverStalledPlayback(reason) {
   if (!window.isPlaying || !window.currentStory) return false;
   if (!_isNeuralEngine(_resolveActiveEngine())) return false;
   if (window._pocketLiveSynthActive === true) return false;          // rendering this paragraph now
-  if (_activePocketStream) return false;                             // desktop streaming path
+  if (_activePocketStream && !_activePocketStream.stopped) return false; // desktop streaming path
   const audio = window.currentAudio;
   const narrating = audio instanceof HTMLAudioElement && audio.dataset?.pocketNarration === '1';
   if (narrating && !audio.paused && !audio.ended) return false;      // healthy
@@ -2523,6 +2536,15 @@ function _recoverStalledPlayback(reason) {
   });
   if (narrating && audio.paused && !audio.ended) {
     audio.play().catch(() => { _releaseCurrentAudio(); if (window.isPlaying) playCurrentParagraph(); });
+    return true;
+  }
+  // A clip that ended while it is still the CURRENT paragraph means the
+  // `ended` handler never ran (the page was suspended across it). Playing the
+  // current paragraph again would repeat what was just heard; move on instead.
+  if (narrating && audio.ended
+      && Number(audio.dataset.pocketChapter) === Number(window.currentChapterIndex)
+      && Number(audio.dataset.pocketParagraph) === Number(window.currentParagraphIndex)) {
+    _handleParagraphEnd();
     return true;
   }
   playCurrentParagraph();
@@ -2591,8 +2613,13 @@ function _closeLockSession() {
     ..._lockSession,
     shownAt: Date.now(),
     to: { chapter: window.currentChapterIndex || 0, paragraph: window.currentParagraphIndex || 0 },
-    // Was narration actually audible when the reader came back?
-    stillPlaying: Boolean(window.isPlaying && audio instanceof HTMLAudioElement && !audio.paused && !audio.ended),
+    // Was narration actually audible when the reader came back? On a desktop a
+    // paragraph that is not saved yet plays as a stream, with no media element;
+    // that was recorded as "stopped" over narration that never missed a word.
+    stillPlaying: Boolean(window.isPlaying && (
+      (audio instanceof HTMLAudioElement && !audio.paused && !audio.ended)
+      || (_activePocketStream && !_activePocketStream.stopped)
+      || window._pocketLiveSynthActive === true)),
     ended: 'returned',
   };
   _lockSession = null;
@@ -4331,6 +4358,19 @@ async function _playCurrentParagraphNow() {
   }
 }
 
+// Kokoro on a desktop. recommendedWasmThreadCount answers 2 for every desktop,
+// which suits Pocket (its WebGPU backend does the heavy part, and its WASM
+// thread count is then calibrated). Kokoro is WASM only and never calibrated,
+// so on a 16-core desktop it rendered on two threads at about the speed of
+// speech: the render-ahead could not get ahead. Four threads on a machine with
+// eight or more logical cores; phones, tablets and small machines are unchanged.
+function _styleTts2ThreadCount(recommended, settings = {}) {
+  const base = Math.max(1, Number(recommended) || 1);
+  if (window.crossOriginIsolated !== true || settings.lowMemoryMode === true) return base;
+  if (isMobileLikePlatform(navigator.userAgent || '') || (navigator.maxTouchPoints || 0) > 1) return base;
+  return Number(navigator.hardwareConcurrency || 0) >= 8 ? Math.max(base, 4) : base;
+}
+
 let _premiumAudio = window.__pocketMobileMediaElement || null;
 let _audioCtx = window.__pocketMobileAudioContext || null;
 let _pocketWorkletModulePromise = null;
@@ -4511,6 +4551,39 @@ export function _onAudioClockPump() {
   // runs on the audio clock, which keeps ticking when page timers do not.
   _preloadNextParagraphAudio();
   _ensurePlaybackLookahead();
+  _watchForStalledNarration(now);
+}
+
+// ── Stall watchdog ──────────────────────────────────────────────────────────
+// Recovery used to run only when the page became visible again or the listener
+// pressed Play on the lock screen: a hand-over that failed with the phone in a
+// pocket stayed failed until someone looked. The silent keep-alive loop plays
+// for as long as narration is on, so its clock is the one timer a locked phone
+// still honours. If it has ticked through several seconds in which narration
+// was neither audible nor being rendered, the current paragraph is started
+// again -- from here, without waiting for the screen.
+const NARRATION_STALL_MS = 6000;
+let _narrationStalledSince = 0;
+
+function _narrationIsMoving() {
+  if (window._pocketLiveSynthActive === true) return true;            // rendering the paragraph
+  if (_activePocketStream && !_activePocketStream.stopped) return true; // desktop stream
+  if (_playInFlight > 0 && Date.now() - _playInFlightSince < PLAY_IN_FLIGHT_STALE_MS) return true;
+  const audio = window.currentAudio;
+  if (typeof SpeechSynthesisUtterance !== 'undefined' && audio instanceof SpeechSynthesisUtterance) return true;
+  return audio instanceof HTMLAudioElement && audio.dataset?.pocketNarration === '1'
+    && !audio.paused && !audio.ended;
+}
+
+function _watchForStalledNarration(now = Date.now()) {
+  if (!window.isPlaying || !window.currentStory || _narrationIsMoving()) {
+    _narrationStalledSince = 0;
+    return;
+  }
+  if (!_narrationStalledSince) { _narrationStalledSince = now; return; }
+  if (now - _narrationStalledSince < NARRATION_STALL_MS) return;
+  _narrationStalledSince = 0;
+  _recoverStalledPlayback('audio-clock');
 }
 window._onAudioClockPump = _onAudioClockPump;
 
@@ -4821,7 +4894,22 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
           stream.end();
           streamedPlayback = true;
           if (typeof _setPlayBtnLoading === 'function') _setPlayBtnLoading(false);
-        } else stream.stop();
+        } else {
+          // The streamed render was rejected (quality guard) or failed after
+          // audio had already begun. Stopping the stream used to be the end of
+          // it: `streamedPlayback` stayed true, so nothing was played, nothing
+          // ended, and the player sat on this paragraph showing "playing" in
+          // silence until Play was toggled twice. Stop it, forget it, and fall
+          // through to a whole-paragraph render, which has the retry chain the
+          // streamed path lacks.
+          stream.stop();
+          if (_activePocketStream === stream) _activePocketStream = null;
+          streamedPlayback = false;
+          if (!audioBlob && window.isPlaying) {
+            window.Diagnostics?.log('WARN', 'Streamed paragraph was rejected; rendering it whole instead', { chapIdx, paraIdx });
+            audioBlob = await window.generateChunk(text, cleanVoice, { storyTitle: title, chapIdx, paraIdx });
+          }
+        }
       }
     } finally {
       window._playPriority = false;
@@ -4845,6 +4933,8 @@ async function _playGeneratedAudio(text, title, chapIdx, paraIdx, voice) {
         .catch(console.error);
     }
     if (streamedPlayback) {
+      _lockNote('played');
+      _lockNote('synthesized');
       // Streamed paragraph is playing and the worker is now idle — build the
       // lookahead runway (fire-and-forget; yields at once if not safe).
       if (window.isPlaying) _ensurePlaybackLookahead();
@@ -5300,7 +5390,14 @@ export function skipParagraph(offset) {
   window._readerHasScrolled = false;
   ui.paragraph();
   if (wasPlaying) {
+    // pausePlayback() above reported "paused" to the page and the lock screen
+    // and stopped the keep-alive loop. Only a cache miss put either back, so a
+    // skip made from the lock screen or a headset left the Now Playing card
+    // showing Play over audible narration (pressing it did nothing) and left
+    // the following gaps without the loop that keeps a locked phone awake.
     window.isPlaying = true;
+    _updatePlayButton(true);
+    startBgKeepAlive();
     playCurrentParagraph();
   }
 }
@@ -5323,7 +5420,14 @@ export function skipChapter(offset) {
   window._readerHasScrolled = false;
   ui.paragraph();
   if (wasPlaying) {
+    // pausePlayback() above reported "paused" to the page and the lock screen
+    // and stopped the keep-alive loop. Only a cache miss put either back, so a
+    // skip made from the lock screen or a headset left the Now Playing card
+    // showing Play over audible narration (pressing it did nothing) and left
+    // the following gaps without the loop that keeps a locked phone awake.
     window.isPlaying = true;
+    _updatePlayButton(true);
+    startBgKeepAlive();
     playCurrentParagraph();
   }
 }
@@ -5666,6 +5770,12 @@ window.onVoiceSelectionChange = function(newVoice, options = {}) {
 
   if (typeof window.saveLocalData === 'function') window.saveLocalData();
 
+  // options.recache === false: the v2 player renders ahead of the cursor in the
+  // new voice by itself. Starting a whole-story job here as well meant every
+  // tap in the voice list queued a full render of the story (six voices tried,
+  // six stories' worth of audio), competing with the paragraph being listened
+  // to and marking the story "saved for offline" in a voice nobody kept.
+  if (window.currentStory && options.recache === false) return;
   if (window.currentStory) {
     ui.say("Voice changed - re-caching this story. Playback will unlock when the starting buffer is ready.", 5000);
     if (engine === 'pocket') {
@@ -5735,7 +5845,7 @@ export function saveBookmark() {
     }
 
     ui.companion('virtue_favorite_story');
-    ui.say("Bookmark saved!I'll remember where we left off.", 4000);
+    ui.say("Bookmark saved! I'll remember where we left off.", 4000);
   }
 }
 window.saveBookmark = saveBookmark;
